@@ -240,11 +240,29 @@ ok("実物の列構成で出る（34列＋見出し）",
    await p.locator("#tpGrid table tr").count() === 35,
    await p.locator("#tpGrid table tr").count());
 const sum = await p.locator("#tpSum").innerText();
-ok("書き換える数と触らない数を言う",
-   /\d+ セル/.test(sum) && sum.indexOf("触らない") > 0, sum);
+ok("何を入れ、何を白に戻し、何を触らないかを言う", sum.indexOf("触らない") > 0, sum);
 const tpText = await p.locator("#tpGrid").innerText();
-ok("「た：」の列は触らない", tpText.indexOf("たんぽぽで受ける") >= 0);
-ok("支援員が付くコマも触らない", tpText.indexOf("支援員が付く") >= 0);
+ok("1コマがタイトルと担当者・場所の2つで出る",
+   await p.locator("#tpGrid td b, #tpGrid td i").count() > 0
+   && await p.locator("#tpGrid td u").count() > 0);
+ok("入れたコマは灰色（#DCDCDC）",
+   await p.evaluate(() => {
+     const e = document.querySelector("#tpGrid td.f-imported");
+     return e ? getComputedStyle(e).backgroundColor : "";
+   }) === "rgb(220, 220, 220)",
+   await p.evaluate(() => {
+     const e = document.querySelector("#tpGrid td.f-imported");
+     return e ? getComputedStyle(e).backgroundColor : "無し";
+   }));
+ok("「た」で始まるコマは白に戻す",
+   await p.evaluate(() => {
+     const e = document.querySelector("#tpGrid td.f-own");
+     return e ? getComputedStyle(e).backgroundColor : "";
+   }) === "rgb(255, 255, 255)");
+ok("たんぽぽの授業には中身を書かない", tpText.indexOf("たんぽぽの授業") >= 0);
+ok("支援員が付くコマは触らない", tpText.indexOf("支援員が付く") >= 0);
+ok("入れる・白に戻す・触らない の数を出す",
+   /入れる\s*\d+/.test(sum) && /白に戻す\s*\d+/.test(sum) && /触らない\s*\d+/.test(sum), sum);
 /* 編成に 4-4 を足したあとなので、4-4 の列にも入るようになっているはず。
    足す前は「編成に無いクラス」と出ていた（たんぽぽの列と編成のずれが見える） */
 ok("編成に足したクラスの列にも入るようになる",

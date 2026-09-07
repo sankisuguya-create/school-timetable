@@ -107,6 +107,14 @@ const Sheets = (function(){
   const isDate = v => !!v && typeof v === "object"
                    && typeof v.getMonth === "function" && typeof v.getDate === "function";
 
+  /* たんぽぽ時間割の塗り分け。**モノクロ印刷で見分けるための色。**
+       このサイトから入れたコマ  … 灰色
+       担当者・場所が「た」で始まる … 白（たんぽぽの中で受ける授業）
+     灰は #DCDCDC。白との明るさの差が 1.4 倍あり、黒い字は 12.7:1 で読める。
+     #F2F2F2 まで薄くすると差が 1.1 倍しかなく、トナーを節約する設定の
+     プリンタや白黒コピーで消える（実測して落とした）。 */
+  const TANPOPO_FILL = {imported: "#DCDCDC", own: "#FFFFFF"};
+
   function asClass(v){
     if(isDate(v)) return (v.getMonth() + 1) + "-" + v.getDate();
     return String(v == null ? "" : v).trim();
@@ -192,7 +200,7 @@ const Sheets = (function(){
     sh.getRange(rowNo, 1, 1, SPEC[name].cols.length).clearContent();
   }
 
-  return {SPEC, NAMES, CLASS_COLS, asClass, isDate,
+  return {SPEC, NAMES, CLASS_COLS, TANPOPO_FILL, asClass, isDate,
           setup, head, readAll, appendRows, toArray, setRow, blankRow, sheet};
 })();
 

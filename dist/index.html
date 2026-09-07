@@ -248,8 +248,24 @@ table.tp th,table.tp td{border:1px solid var(--line-soft);padding:3px 6px;
   white-space:nowrap;text-align:center}
 table.tp tr:first-child th{background:var(--bg);position:sticky;top:0;z-index:1}
 table.tp th{background:var(--bg);font-weight:600}
-table.tp td.w{background:var(--fill-a);color:var(--ink)}
-table.tp td.s{color:var(--tx-sub);font-size:11px}
+/* **紙の上の見え方をそのまま出す。** 灰＝このサイトから入れた、白＝たんぽぽの授業。
+   モノクロ印刷で見分けるための塗りなので、プレビューも色相を使わない。 */
+table.tp td{padding:2px 5px;line-height:1.3}
+table.tp td b{display:block;font-weight:600;color:#1A1A1A;font-size:12px}
+table.tp td i{display:block;font-style:normal;color:var(--tx-sub);font-size:10.5px}
+table.tp td u{display:block;text-decoration:none;color:#5A6773;font-size:10px;
+  border-top:1px dotted var(--line);margin-top:2px;padding-top:1px}
+table.tp td.f-imported{background:#DCDCDC}
+table.tp td.f-own{background:#FFFFFF;box-shadow:inset 0 0 0 1px var(--line)}
+table.tp td.f-none{background:repeating-linear-gradient(135deg,transparent 0 4px,
+  var(--line-soft) 4px 5px)}
+#tpSum{display:inline-flex;gap:14px;align-items:center;font-size:12px}
+#tpSum .k{display:inline-block;width:13px;height:13px;border-radius:3px;
+  border:1px solid var(--line);vertical-align:-2px;margin-right:5px}
+#tpSum .k.f-imported{background:#DCDCDC}
+#tpSum .k.f-own{background:#FFFFFF}
+#tpSum .k.f-none{background:repeating-linear-gradient(135deg,transparent 0 3px,
+  var(--line) 3px 4px)}
 table.tp tr.staff{opacity:.55}
 ul.owlist{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:9px}
 ul.owlist li{border:1px solid var(--line);border-left:4px solid var(--cat-clash);
@@ -652,10 +668,12 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   <div class="row"><span>曜日</span><div class="seg" id="tpDays"></div>
     <span id="tpSum"></span></div>
   <div id="tpGrid" class="tpwrap"></div>
-  <p style="margin-top:10px">実物の列構成（B〜AA が児童ごとの列、AB 以降が支援員・ボランティア）。
-     <b>担当の行が「交：」か空のときだけ書く。</b>「た：」「支：」は触らない。<br>
-     <span style="color:var(--ink-alert)">担当は見本の仮置き。</span>実物ではシートの担当行を読むので、
-     入り方はそちらで決まる。</p>
+  <p style="margin-top:10px">上が<b>タイトル（授業）</b>、下が<b>担当者・場所</b>。1コマはこの2つで1組。<br>
+     <b>灰色＝このサイトから入れたコマ。白＝たんぽぽの中で受ける授業。</b>
+     担当者・場所の<b>左端が「た」</b>なら白に戻す（前の週の灰色を残さない）。<br>
+     <b>モノクロで刷ったときに一目で分かるための塗り分け</b>なので、色相は使わない。<br>
+     実物の列構成（B〜AA が児童ごとの列、AB 以降が支援員・ボランティア）。
+     <span style="color:var(--ink-alert)">担当者・場所は見本の仮置き。</span>実物ではシートのその行を読む。</p>
 
   <hr>
   <h3>シートの形（1日16行に揃える）</h3>
@@ -678,10 +696,11 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
     <li>形が合わない日に書くと、<b>別の校時の行に授業名が入る</b>。落ちないので気づかない</li>
   </ul>
 
-  <h3>交流か在籍かは、担当の行で決める</h3>
+  <h3>交流か在籍かは、担当者・場所の行で決める</h3>
   <ul>
-    <li><b>交：◯◯</b> または空 → 交流学級の授業名を<b>書く</b></li>
-    <li><b>た：◯◯</b>（たんぽぽで受ける）／<b>支：◯◯</b>（支援員が付く）→ <b>書かない</b></li>
+    <li><b>交：◯◯</b> または空 → 交流学級の授業名を<b>書いて灰色</b>にする</li>
+    <li><b>た：◯◯</b>（たんぽぽで受ける）→ 中身は書かず、<b>塗りを白に戻す</b></li>
+    <li><b>支：◯◯</b>（支援員が付く）→ <b>触らない</b></li>
     <li>授業名の字では判断しない。<b>「た」で始まる語を見る方法はやめた</b>——「たしかめ」のような語で誤る</li>
   </ul>
 
@@ -690,7 +709,11 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
     <li>列見出しは<b>日ブロックごとに読み直す</b>。曜日で交流学級が変わる</li>
     <li>正規化して「学年-組」になる列だけ。<b>支援員・ボランティアの列には書かない</b></li>
     <li><b>クラス名が日付に化けていても戻して読む</b>（1-1 は1月1日、6-3 は6月3日として取り込まれる）</li>
-    <li><b>授業名の行だけ。</b>担当の行と、支援員を表すセルの色には触れない</li>
+    <li><b>タイトル（授業）の行だけ書く。</b>担当者・場所の行には触れない</li>
+    <li>塗りは<b>入れたコマを灰色（#DCDCDC）</b>にし、
+        <b>担当者・場所が「た」で始まるコマは白</b>に戻す。
+        白は #F2F2F2 まで薄くすると白地との差が 1.1 倍しかなく、
+        トナーを節約する設定のプリンタや白黒コピーで消える（実測して #DCDCDC にした）</li>
     <li><b>こちらが空のコマには書かない。</b>空で上書きすると、前の週の書き込みが毎週消えて打ち直しになる</li>
     <li>確認は「何日ぶん・何セル書き換えるか」の数だけ出して<b>1回で確定</b></li>
   </ul>
@@ -2152,17 +2175,23 @@ const TANPOPO_DUTY = ["交：丸山", "た：桝村", "交：星川", "た：西
 const TANPOPO_SLOTS = ["p1", "p2", "p3", "p4", "p5", "p6"];
 let tpDay = 0;
 
-/* 1セルぶんの判定。docs/spec.md 7節の規則そのまま */
+/* 1セルぶんの判定。docs/spec.md 7節の規則そのまま。
+   戻すのは {fill, title, duty, why}。fill は紙の上の塗り。
+     imported … このサイトから入れた（灰色）
+     own      … たんぽぽの中で受ける（白）
+     none     … 触らない（いまのまま） */
 function tanpopoCell(colIdx, col, slotId){
-  if(col.staff) return {skip:"支援員の列"};
-  const duty = TANPOPO_DUTY[(colIdx * 3 + TANPOPO_SLOTS.indexOf(slotId) * 5) % TANPOPO_DUTY.length];
-  if(duty.indexOf("た：") === 0) return {skip:"たんぽぽで受ける", duty};
-  if(duty.indexOf("支：") === 0) return {skip:"支援員が付く",     duty};
-  if(allClasses().indexOf(col.cls) < 0) return {skip:"編成に無いクラス", duty};
-  const c = compose(col.cls, tpDay, slotId);
-  const t = plain(c.title).trim();
-  if(!t) return {skip:"こちらが空", duty};
-  return {write:t, duty};
+  const duty = col.staff ? ""
+    : TANPOPO_DUTY[(colIdx * 3 + TANPOPO_SLOTS.indexOf(slotId) * 5) % TANPOPO_DUTY.length];
+  if(col.staff)              return {fill:"none", why:"支援員の列"};
+  /* **担当者・場所の左端が「た」なら白。** たんぽぽの中で受ける授業なので、
+     こちらは中身に触らず、塗りだけ白に戻す（前の週の灰色を残さない）。 */
+  if(duty.charAt(0) === "た") return {fill:"own",  duty, why:"たんぽぽの授業"};
+  if(duty.charAt(0) === "支") return {fill:"none", duty, why:"支援員が付く"};
+  if(allClasses().indexOf(col.cls) < 0) return {fill:"none", duty, why:"編成に無いクラス"};
+  const t = plain(compose(col.cls, tpDay, slotId).title).trim();
+  if(!t) return {fill:"none", duty, why:"こちらが空"};
+  return {fill:"imported", title:t, duty};
 }
 
 function openTanpopoDlg(){
@@ -2176,22 +2205,25 @@ function drawTanpopo(){
   for(const b of $("tpDays").querySelectorAll("button"))
     b.onclick = () => { tpDay = +b.dataset.d; drawTanpopo(); };
 
-  let write = 0, skip = 0;
+  let imported = 0, own = 0, none = 0;
   const head = "<tr><th>列</th><th>交流学級</th>"
     + TANPOPO_SLOTS.map(s => "<th>" + SLOT_BY_ID[s].name + "</th>").join("") + "</tr>";
   const body = TANPOPO_COLS.map((col, i) => {
     const cells = TANPOPO_SLOTS.map(s => {
       const r = tanpopoCell(i, col, s);
-      if(r.write){ write++; return "<td class='w'><b>" + escText(r.write) + "</b></td>"; }
-      skip++;
-      return "<td class='s'>" + escText(r.skip) + "</td>";
+      if(r.fill === "imported") imported++; else if(r.fill === "own") own++; else none++;
+      const top = r.title ? "<b>" + escText(r.title) + "</b>"
+                          : "<i>" + escText(r.why || "") + "</i>";
+      const bot = r.duty ? "<u>" + escText(r.duty) + "</u>" : "<u>&nbsp;</u>";
+      return "<td class='f-" + r.fill + "'>" + top + bot + "</td>";
     }).join("");
     return "<tr" + (col.staff ? " class='staff'" : "") + "><th>" + col.col + "</th>"
          + "<th>" + escText(col.cls) + "</th>" + cells + "</tr>";
   }).join("");
   $("tpGrid").innerHTML = "<table class='tp'>" + head + body + "</table>";
-  $("tpSum").innerHTML = "この曜日は <b>" + write + " セル</b>を書き換え、"
-    + "<b>" + skip + " セル</b>は触らない。";
+  $("tpSum").innerHTML = "<span class='k f-imported'></span>入れる <b>" + imported + "</b>　"
+    + "<span class='k f-own'></span>白に戻す <b>" + own + "</b>　"
+    + "<span class='k f-none'></span>触らない <b>" + none + "</b>";
 }
 /* ▲ src/js/dialogs.js ▲ */
 /* ▼ src/js/main.js ▼ */

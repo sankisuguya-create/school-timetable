@@ -231,17 +231,23 @@ const TANPOPO_DUTY = ["交：丸山", "た：桝村", "交：星川", "た：西
 const TANPOPO_SLOTS = ["p1", "p2", "p3", "p4", "p5", "p6"];
 let tpDay = 0;
 
-/* 1セルぶんの判定。docs/spec.md 7節の規則そのまま */
+/* 1セルぶんの判定。docs/spec.md 7節の規則そのまま。
+   戻すのは {fill, title, duty, why}。fill は紙の上の塗り。
+     imported … このサイトから入れた（灰色）
+     own      … たんぽぽの中で受ける（白）
+     none     … 触らない（いまのまま） */
 function tanpopoCell(colIdx, col, slotId){
-  if(col.staff) return {skip:"支援員の列"};
-  const duty = TANPOPO_DUTY[(colIdx * 3 + TANPOPO_SLOTS.indexOf(slotId) * 5) % TANPOPO_DUTY.length];
-  if(duty.indexOf("た：") === 0) return {skip:"たんぽぽで受ける", duty};
-  if(duty.indexOf("支：") === 0) return {skip:"支援員が付く",     duty};
-  if(allClasses().indexOf(col.cls) < 0) return {skip:"編成に無いクラス", duty};
-  const c = compose(col.cls, tpDay, slotId);
-  const t = plain(c.title).trim();
-  if(!t) return {skip:"こちらが空", duty};
-  return {write:t, duty};
+  const duty = col.staff ? ""
+    : TANPOPO_DUTY[(colIdx * 3 + TANPOPO_SLOTS.indexOf(slotId) * 5) % TANPOPO_DUTY.length];
+  if(col.staff)              return {fill:"none", why:"支援員の列"};
+  /* **担当者・場所の左端が「た」なら白。** たんぽぽの中で受ける授業なので、
+     こちらは中身に触らず、塗りだけ白に戻す（前の週の灰色を残さない）。 */
+  if(duty.charAt(0) === "た") return {fill:"own",  duty, why:"たんぽぽの授業"};
+  if(duty.charAt(0) === "支") return {fill:"none", duty, why:"支援員が付く"};
+  if(allClasses().indexOf(col.cls) < 0) return {fill:"none", duty, why:"編成に無いクラス"};
+  const t = plain(compose(col.cls, tpDay, slotId).title).trim();
+  if(!t) return {fill:"none", duty, why:"こちらが空"};
+  return {fill:"imported", title:t, duty};
 }
 
 function openTanpopoDlg(){
@@ -255,20 +261,23 @@ function drawTanpopo(){
   for(const b of $("tpDays").querySelectorAll("button"))
     b.onclick = () => { tpDay = +b.dataset.d; drawTanpopo(); };
 
-  let write = 0, skip = 0;
+  let imported = 0, own = 0, none = 0;
   const head = "<tr><th>列</th><th>交流学級</th>"
     + TANPOPO_SLOTS.map(s => "<th>" + SLOT_BY_ID[s].name + "</th>").join("") + "</tr>";
   const body = TANPOPO_COLS.map((col, i) => {
     const cells = TANPOPO_SLOTS.map(s => {
       const r = tanpopoCell(i, col, s);
-      if(r.write){ write++; return "<td class='w'><b>" + escText(r.write) + "</b></td>"; }
-      skip++;
-      return "<td class='s'>" + escText(r.skip) + "</td>";
+      if(r.fill === "imported") imported++; else if(r.fill === "own") own++; else none++;
+      const top = r.title ? "<b>" + escText(r.title) + "</b>"
+                          : "<i>" + escText(r.why || "") + "</i>";
+      const bot = r.duty ? "<u>" + escText(r.duty) + "</u>" : "<u>&nbsp;</u>";
+      return "<td class='f-" + r.fill + "'>" + top + bot + "</td>";
     }).join("");
     return "<tr" + (col.staff ? " class='staff'" : "") + "><th>" + col.col + "</th>"
          + "<th>" + escText(col.cls) + "</th>" + cells + "</tr>";
   }).join("");
   $("tpGrid").innerHTML = "<table class='tp'>" + head + body + "</table>";
-  $("tpSum").innerHTML = "この曜日は <b>" + write + " セル</b>を書き換え、"
-    + "<b>" + skip + " セル</b>は触らない。";
+  $("tpSum").innerHTML = "<span class='k f-imported'></span>入れる <b>" + imported + "</b>　"
+    + "<span class='k f-own'></span>白に戻す <b>" + own + "</b>　"
+    + "<span class='k f-none'></span>触らない <b>" + none + "</b>";
 }
