@@ -198,6 +198,53 @@ ok("2026年度は変わらない（既定のまま20学級）",
    Object.keys(r26.classes).reduce((a,g) => a + r26.classes[g].length, 0) === 20);
 ok("2027年度の専科は1つ", r27.specials.length === 1, r27.specials);
 
+console.log("\n■ たんぽぽ交流級の印");
+ev(`Store.writeRoster(2028, {"3":["3-1","3-2","3-3"]},
+    [{code:"ongaku", label:"音楽"}], "2028-04-03", ["3-1","3-3"])`);
+const r28 = ev("Store.readRoster(2028)");
+ok("印を付けたクラスだけ返る",
+   JSON.stringify(r28.tanpopo) === JSON.stringify(["3-1","3-3"]), r28.tanpopo);
+ok("印はクラス表の欄で持つ（コードに書かない）",
+   ev('Sheets.head("クラス").at["たんぽぽ交流級"]') >= 0,
+   ev('Sheets.head("クラス").cols'));
+/* シートに手で ○ 以外を書いても通す。消したいときは空にする */
+(function(){
+  const at = ev('Sheets.head("クラス").at');
+  for(const row of SHEETS["クラス"])
+    if(String(row[at["年度"]]) === "2028" && String(row[at["クラス"]]) === "3-2")
+      row[at["たんぽぽ交流級"]] = "あり";
+})();
+ok("○ でなくても、空でなければ印として読む",
+   ev("Store.readRoster(2028).tanpopo").indexOf("3-2") >= 0,
+   ev("Store.readRoster(2028).tanpopo"));
+
+console.log("\n■ 学級編成を直しても、人が入れた欄を消さない");
+(function(){
+  const at = ev('Sheets.head("クラス").at');
+  for(const row of SHEETS["クラス"])
+    if(String(row[at["年度"]]) === "2028" && String(row[at["クラス"]]) === "3-1")
+      row[at["担任メール"]] = "tanaka@edu.nishi.or.jp";
+  const sat = ev('Sheets.head("専科").at');
+  for(const row of SHEETS["専科"])
+    if(String(row[sat["年度"]]) === "2028") row[sat["メール"]] = "sp@edu.nishi.or.jp";
+})();
+ev(`Store.writeRoster(2028, {"3":["3-1","3-2","3-3","3-4"]},
+    [{code:"ongaku", label:"音楽"}], "2028-04-03", ["3-1"])`);
+ok("担任メールは残る", (function(){
+     const at = ev('Sheets.head("クラス").at');
+     return SHEETS["クラス"].some(r => String(r[at["年度"]]) === "2028"
+       && String(r[at["クラス"]]) === "3-1"
+       && String(r[at["担任メール"]]) === "tanaka@edu.nishi.or.jp");
+   })() === true);
+ok("専科のメールも残る", (function(){
+     const at = ev('Sheets.head("専科").at');
+     return SHEETS["専科"].some(r => String(r[at["年度"]]) === "2028"
+       && String(r[at["メール"]]) === "sp@edu.nishi.or.jp");
+   })() === true);
+ok("印は書き直したとおりになる",
+   JSON.stringify(ev("Store.readRoster(2028).tanpopo")) === JSON.stringify(["3-1"]),
+   ev("Store.readRoster(2028).tanpopo"));
+
 console.log("\n■ 基本時間割");
 ev(`Store.writeBase(2026, "3-3", "A", {"0|p1":{title:"国語", subject:"kokugo"},
                                        "0|p2":{title:"算数", subject:"sansu"}})`);

@@ -53,7 +53,8 @@ await p.addInitScript(() => {
       roster: {
         classes: {"1":["1-1","1-2"], "5":["5-1","5-2","5-3","5-4"]},
         specials: [{code:"ongaku", label:"音楽"}],
-        week1: "2026-04-06"
+        week1: "2026-04-06",
+        tanpopo: ["5-1"]
       },
       base: {"5-1": {A: {"0|p1": {title:"国語", subject:"kokugo"}}}}
     },
@@ -81,7 +82,7 @@ await p.addInitScript(() => {
           at[[q.date, q.slot, q.layer, q.target].join("|")] = q.remove ? 0 : 1700000000000;
         setTimeout(() => okFn({at, count:patches.length}), 0);
       },
-      apiWriteRoster(y, c, s, w){ call("apiWriteRoster", [y, c, s, w]); setTimeout(() => okFn({}), 0); },
+      apiWriteRoster(y, c, s, w, tp){ call("apiWriteRoster", [y, c, s, w, tp]); setTimeout(() => okFn({}), 0); },
       apiWriteBase(y, c, v, bank){ call("apiWriteBase", [y, c, v, bank]); setTimeout(() => okFn(true), 0); }
     };
     return api;
@@ -121,8 +122,8 @@ ok("1年が2クラス・5年が4クラス",
    && await p.evaluate(() => classesOfGrade("5").length) === 4,
    await p.evaluate(() => Y().classes));
 ok("入口のタイルもその数",
-   await p.locator(".tile:not(.none):not(.sp)").count() === 6,
-   await p.locator(".tile:not(.none):not(.sp)").count());
+   await p.locator(".tile.cls").count() === 6,
+   await p.locator(".tile.cls").count());
 ok("専科は1つ", await p.locator(".tile.sp").count() === 1);
 ok("見本の基本時間割を入れない（シートが正本）",
    await p.evaluate(() => Object.keys(Y().base).join(",")) === "5-1",
@@ -192,8 +193,24 @@ const rq = await lastCall("apiWriteRoster");
 ok("apiWriteRoster が呼ばれる", !!rq);
 ok("直した編成が届く", rq && rq.args[1]["1"].length === 3, rq && rq.args[1]);
 
-console.log("\n■ 週を動かすと、その週を読みに行く");
 await p.locator("#rsClose").click(); await p.waitForTimeout(200);
+
+console.log("\n■ たんぽぽ交流級もシートで持つ");
+ok("シートの印がそのまま選択になる",
+   JSON.stringify(await p.evaluate(() => tpChosen())) === JSON.stringify(["5-1"]),
+   await p.evaluate(() => tpChosen()));
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".master.tp").click(); await p.waitForTimeout(300);
+await p.locator("#tpSel .tpchip[data-c='5-2']").click(); await p.waitForTimeout(300);
+const tq = await lastCall("apiWriteRoster");
+ok("選び直すとシートへ書く",
+   !!tq && JSON.stringify(tq.args[4]) === JSON.stringify(["5-1","5-2"]),
+   tq && tq.args[4]);
+await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(300);
+
+console.log("\n■ 週を動かすと、その週を読みに行く");
 await p.evaluate(() => { window.__calls.length = 0; });
 await p.locator("#nextWk").click();
 await p.waitForTimeout(500);

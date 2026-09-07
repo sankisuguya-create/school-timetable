@@ -27,13 +27,13 @@ await p.waitForTimeout(400);
 
 console.log("■ 入口");
 ok("学級が20（1〜4年は3クラス・5年6年だけ4クラス）",
-   await p.locator(".tile:not(.none):not(.sp)").count() === 20,
-   await p.locator(".tile:not(.none):not(.sp)").count());
+   await p.locator(".tile.cls").count() === 20,
+   await p.locator(".tile.cls").count());
 ok("5年に 5-4 がある", await p.locator(".tile[data-c='5-4']").count() === 1);
 ok("6年に 6-4 がある", await p.locator(".tile[data-c='6-4']").count() === 1);
 ok("4年に 4-4 は無い", await p.locator(".tile[data-c='4-4']").count() === 0);
-ok("学年マスターが6つ＋全学年", await p.locator(".master").count() === 7,
-   await p.locator(".master").count());
+ok("学年マスターが6つ＋全学年", await p.locator(".master:not(.tp)").count() === 7,
+   await p.locator(".master:not(.tp)").count());
 ok("専科が4つ（音楽・図工・理科・外国語）",
    await p.locator(".tile.sp").count() === 4,
    await p.locator(".tile.sp").count());
@@ -236,14 +236,65 @@ await p.locator(".tile[data-c='3-3']").click(); await p.waitForTimeout(500);
 ok("同じ上書きについては二度出ない",
    await p.locator("#owDlg").evaluate(d => d.open) === false);
 
-console.log("\n■ たんぽぽのプレビュー");
-await p.locator("[data-act='tanpopo']").click(); await p.waitForTimeout(400);
+console.log("\n■ たんぽぽ（交流級を選ぶところから出す）");
+await p.locator("[data-act='gate']").click(); await p.waitForTimeout(250);
+ok("他のクラスの画面に反映ボタンは無い",
+   await p.locator("[data-act='tanpopo']").count() === 0,
+   await p.locator("[data-act='tanpopo']").count());
+ok("入口のいちばん下にたんぽぽがある", await p.locator(".master.tp").count() === 1);
+await p.locator(".master.tp").click(); await p.waitForTimeout(400);
+ok("たんぽぽの面が出る", await p.locator("#tpView").isVisible() === true);
+ok("週案の紙は引っこむ", await p.locator("#stage").isHidden() === true);
+ok("入力パネルも引っこむ", await p.locator(".panel").isHidden() === true);
+ok("紙から出す操作（印刷・時数）も伏せる",
+   await p.locator("[data-act='print']").isHidden() === true
+   && await p.locator("[data-act='tally']").isHidden() === true);
+ok("交流級はすべての学級から選べる",
+   await p.locator("#tpSel .tpchip").count()
+     === await p.evaluate(() => allClasses().length),
+   await p.locator("#tpSel .tpchip").count());
+ok("選ぶまでは出せない", await p.locator("#tpGo").isDisabled() === true);
+ok("まだ選んでいないと言う",
+   (await p.locator("#tpWarn").innerText()).indexOf("選んでいません") >= 0,
+   await p.locator("#tpWarn").innerText());
+
+/* 3-3 は担任が書いた週。1-1 は基本時間割のまま。3-1 は学年の予定だけ。 */
+await p.locator("#tpSel .tpchip[data-c='3-3']").click(); await p.waitForTimeout(200);
+ok("予定が入っているクラスだけなら知らせは出ない",
+   (await p.locator("#tpWarn").innerText()).indexOf("基本時間割のまま") < 0,
+   await p.locator("#tpWarn").innerText());
+await p.locator("#tpSel .tpchip[data-c='1-1']").click(); await p.waitForTimeout(200);
+await p.locator("#tpSel .tpchip[data-c='3-1']").click(); await p.waitForTimeout(200);
+const tpWarn = await p.locator("#tpWarn").innerText();
+ok("基本時間割から動いていないクラスを知らせる",
+   tpWarn.indexOf("1-1") >= 0 && tpWarn.indexOf("基本時間割のまま") >= 0, tpWarn);
+ok("上位の予定しか入っていないクラスも知らせる",
+   tpWarn.indexOf("3-1") >= 0 && tpWarn.indexOf("担任は未着手") >= 0, tpWarn);
+ok("選んだ数を出す",
+   (await p.locator("#tpCount").innerText()).indexOf("3 クラス") >= 0,
+   await p.locator("#tpCount").innerText());
+ok("選んだクラスは入口にも出る",
+   await p.evaluate(() => tpChosen().length) === 3,
+   await p.evaluate(() => tpChosen()));
+
+/* 出す。**たんぽぽ側の直しが消えること**を先に言ってから開く。 */
+let tpAsked = null;
+const onTpDialog = async d => { tpAsked = d.message(); await d.accept(); };
+p.on("dialog", onTpDialog);
+await p.locator("#tpGo").click(); await p.waitForTimeout(500);
+p.off("dialog", onTpDialog);
+ok("出す前に聞く", typeof tpAsked === "string" && tpAsked.length > 0, tpAsked);
+ok("どの交流級を出すかを言う", !!tpAsked && tpAsked.indexOf("3-3") >= 0, tpAsked);
+ok("基本時間割のままのクラスも言う", !!tpAsked && tpAsked.indexOf("1-1") >= 0, tpAsked);
+ok("たんぽぽ側の直しが消えることを言う",
+   !!tpAsked && tpAsked.indexOf("消えます") >= 0, tpAsked);
+
+ok("プレビューが開く", await p.locator("#tpDlg").evaluate(d => d.open) === true);
 ok("実物の列構成で出る（34列＋見出し）",
    await p.locator("#tpGrid table tr").count() === 35,
    await p.locator("#tpGrid table tr").count());
-const sum = await p.locator("#tpSum").innerText();
-ok("何を入れ、何を白に戻し、何を触らないかを言う", sum.indexOf("触らない") > 0, sum);
 const tpText = await p.locator("#tpGrid").innerText();
+const sum = await p.locator("#tpSum").innerText();
 ok("1コマがタイトルと担当者・場所の2つで出る",
    await p.locator("#tpGrid td b, #tpGrid td i").count() > 0
    && await p.locator("#tpGrid td u").count() > 0);
@@ -256,22 +307,28 @@ ok("入れたコマは灰色（#DCDCDC）",
      const e = document.querySelector("#tpGrid td.f-imported");
      return e ? getComputedStyle(e).backgroundColor : "無し";
    }));
-ok("「た」で始まるコマは白に戻す",
+ok("担当者・場所が「た」で始まるコマは白",
    await p.evaluate(() => {
      const e = document.querySelector("#tpGrid td.f-own");
      return e ? getComputedStyle(e).backgroundColor : "";
    }) === "rgb(255, 255, 255)");
-ok("たんぽぽの授業には中身を書かない", tpText.indexOf("たんぽぽの授業") >= 0);
-ok("支援員が付くコマは触らない", tpText.indexOf("支援員が付く") >= 0);
-ok("入れる・白に戻す・触らない の数を出す",
-   /入れる\s*\d+/.test(sum) && /白に戻す\s*\d+/.test(sum) && /触らない\s*\d+/.test(sum), sum);
-/* 編成に 4-4 を足したあとなので、4-4 の列にも入るようになっているはず。
-   足す前は「編成に無いクラス」と出ていた（たんぽぽの列と編成のずれが見える） */
-ok("編成に足したクラスの列にも入るようになる",
-   tpText.indexOf("編成に無いクラス") < 0, tpText.slice(0, 200));
-ok("支援員の列そのものも書かない",
+ok("選んだ交流級の列は、空のコマも含めて全部入れる",
+   await p.evaluate(() => {
+     const cols = TANPOPO_COLS.map((c, i) => [i, c])
+       .filter(([, c]) => !c.staff && c.cls === "3-3");
+     return cols.length > 0 && cols.every(([i, c]) =>
+       TANPOPO_SLOTS.every(s => tanpopoCell(i, c, s).fill !== "none"));
+   }) === true);
+ok("選んでいない交流級の列には書かない", tpText.indexOf("選んでいない交流級") >= 0);
+ok("支援員の列には書かない", tpText.indexOf("支援員の列") >= 0);
+ok("支援員の列そのものは8列",
    (await p.locator("#tpGrid tr.staff").count()) === 8,
    await p.locator("#tpGrid tr.staff").count());
+/* 編成に 4-4 を足したあとなので、4-4 の列も「編成に無い」ではなくなっている */
+ok("編成に足したクラスの列は「編成に無い」と出なくなる",
+   tpText.indexOf("編成に無いクラス") < 0, tpText.slice(0, 200));
+ok("入れる（灰）・入れる（白）・書かない の数を出す",
+   /入れる（灰）\s*\d+/.test(sum) && /白）\s*\d+/.test(sum) && /書かない\s*\d+/.test(sum), sum);
 await p.locator("#tpDays button").nth(2).click(); await p.waitForTimeout(250);
 ok("曜日を変えると中身が変わる",
    (await p.locator("#tpGrid").innerText()) !== tpText);

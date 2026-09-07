@@ -19,6 +19,7 @@ function viewName(){
     const x = specials().find(s => s.code === view.sp);
     return x ? x.label : "専科";
   }
+  if(view.kind === "tanpopo") return "たんぽぽ";
   return "";
 }
 function viewWhere(){
@@ -27,6 +28,7 @@ function viewWhere(){
   if(view.kind === "school")  return "書いたものは全クラスに入る";
   if(view.kind === "special") return "コマにクラスを入れると、そのクラスに「"
                                    + viewName() + "」として入る";
+  if(view.kind === "tanpopo") return "交流級を選んで、たんぽぽ時間割へ出す";
   return "";
 }
 
@@ -113,6 +115,23 @@ function cellFor(d, s){
   c.over  = e ? overriders(d, s) : [];
   c.clash = null;
   return c;
+}
+
+/* そのクラスの今週が、基本時間割から動いているか。
+   **動いていないクラスをたんぽぽへ出すと、担任がまだ書いていない予定を
+   本物のように配ることになる。** 出す前に知らせる。 */
+function planState(cls){
+  const w = week(), g = gradeOf(cls);
+  let upper = false, own = false;
+  for(let d = 0; d < 5; d++) for(const sl of SLOTS){
+    const key = ck(d, sl.id);
+    if(w.school[key] || (w.grade[g] || {})[key]) upper = true;
+    if((w.home[cls] || {})[key] || (w.special[cls] || {})[key]) own = true;
+    if(upper && own) return "ok";
+  }
+  if(own)   return "ok";
+  if(upper) return "upper";        /* 上位だけ入っている。担任は未着手 */
+  return "base";                   /* どの層からも1つも入っていない */
 }
 
 /* ── 書く ────────────────────────────────────── */

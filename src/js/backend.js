@@ -109,6 +109,9 @@ const Backend = (function(){
           if(r.roster.classes && Object.keys(r.roster.classes).length) Yr.classes = r.roster.classes;
           if(r.roster.specials && r.roster.specials.length)            Yr.specials = r.roster.specials;
           if(r.roster.week1) Yr.week1 = r.roster.week1;
+          /* たんぽぽ交流級は空も答えのうち（全部外した年度がある）。
+             有無ではなく、配列が返ってきたかどうかで見る */
+          if(Array.isArray(r.roster.tanpopo)) Yr.tanpopo = r.roster.tanpopo;
         }
         Yr.base = r.base || {};
         loadedYear[y] = true;
@@ -145,7 +148,7 @@ const Backend = (function(){
     const Yr = Y();
     google.script.run
       .withFailureHandler(e => notify("学級編成を保存できなかった（" + (e && e.message) + "）"))
-      .apiWriteRoster(fy(), Yr.classes, Yr.specials, Yr.week1);
+      .apiWriteRoster(fy(), Yr.classes, Yr.specials, Yr.week1, Yr.tanpopo || []);
   }
   function saveBase(cls, variant){
     if(!onGas) return save();

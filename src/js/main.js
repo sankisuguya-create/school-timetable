@@ -43,6 +43,7 @@ function refreshWeek(){
   const n = weekNo();
   $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
+  if(view.kind === "tanpopo"){ drawTanpopoView(); return; }
   buildSheet();
   autoFit();
 }
@@ -103,6 +104,7 @@ function wire(){
   on("abB","click", () => setVariant("B"));
   on("toGate","click", showGate);
   on("target","change", e => onTargetChange(e.target.value));
+  on("tpGo","click", reflectTanpopo);
   on("gClose","click", () => { if(lastTarget) openView(lastTarget); });
 
   for(const b of document.querySelectorAll("[data-act]"))
@@ -113,7 +115,7 @@ function wire(){
       if(a === "base")    return openBaseDlg();
       if(a === "roster")  return openRosterDlg();
       if(a === "tally")   return openTallyDlg();
-      if(a === "tanpopo") return openTanpopoDlg();
+      if(a === "tanpopo") return openView({kind:"tanpopo"});
       if(a === "paper")   return $("setDlg").showModal();
       if(a === "print")   return window.print();
     });

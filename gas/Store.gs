@@ -64,11 +64,22 @@ const Store = (function(){
     return out;
   }
 
+  /* たんぽぽ児童がいる交流級の印。○ でも 1 でも「はい」でも通す。
+     消したいときに空にするのが自然なので、**空だけを「いいえ」**とする。 */
+  const marked = v => {
+    const t = String(v == null ? "" : v).trim().toLowerCase();
+    return t !== "" && t !== "false" && t !== "0" && t !== "×" && t !== "x" && t !== "-";
+  };
+
   /* 年度の欄が空の行は「どの年度でも使う既定」。年度を書いた行があれば、そちらが勝つ。 */
   function readRoster(year){
+    const tanpopo = [];
     const classes = pickYear_("クラス", year).reduce((a, r) => {
       const g = Sheets.asClass(r["学年"]), c = Sheets.asClass(r["クラス"]);
-      if(g && c) (a[g] || (a[g] = [])).push(c);
+      if(g && c){
+        (a[g] || (a[g] = [])).push(c);
+        if(marked(r["たんぽぽ交流級"]) && tanpopo.indexOf(c) < 0) tanpopo.push(c);
+      }
       return a;
     }, {});
     const specials = pickYear_("専科", year)
@@ -79,7 +90,7 @@ const Store = (function(){
     let week1 = "";
     for(const r of Sheets.readAll("年設定").rows)
       if(String(r["年度"]) === String(year) && r["第1週の月曜"]) week1 = ymd(r["第1週の月曜"]);
-    return {classes, specials, week1};
+    return {classes, specials, week1, tanpopo};
   }
   function pickYear_(name, year){
     const rows = Sheets.readAll(name).rows;
@@ -163,22 +174,41 @@ const Store = (function(){
   }
 
   /* 学級編成。**その年度の行だけ入れ替える。** 前の年度の行には触らない。 */
-  function writeRoster(year, classes, specials, week1){
+  function writeRoster(year, classes, specials, week1, tanpopo){
     const lock = LockService.getScriptLock();
     lock.waitLock(20000);
     try{
+      const tp = tanpopo || [];
+      /* **人の手で入れた欄を消さない。** 画面が持っていないのは
+         担任メールと専科のメールだけなので、いまの行から引き継ぐ。
+         引き継がないと、学級編成を1回直すたびに連絡先が全部消える。 */
+      const mailOf = keep_("クラス", year, r => Sheets.asClass(r["クラス"]), r => String(r["担任メール"] || ""));
+      const spMail = keep_("専科", year, r => String(r["教科コード"] || "").trim(), r => String(r["メール"] || ""));
       const clsRows = [];
       for(const g of Object.keys(classes || {}).sort())
-        for(const c of classes[g]) clsRows.push({"年度":year, "学年":g, "クラス":c, "担任メール":""});
+        for(const c of classes[g]) clsRows.push({
+          "年度":year, "学年":g, "クラス":c, "担任メール": mailOf[c] || "",
+          "たんぽぽ交流級": tp.indexOf(c) >= 0 ? "○" : ""
+        });
       replaceYear_("クラス", year, clsRows);
       replaceYear_("専科", year, (specials || []).map(s =>
-        ({"年度":year, "教科コード":s.code, "表示名":s.label, "メール":""})));
+        ({"年度":year, "教科コード":s.code, "表示名":s.label, "メール": spMail[s.code] || ""})));
       if(week1) replaceYear_("年設定", year, [{"年度":year, "第1週の月曜":week1}]);
       SpreadsheetApp.flush();
       return readRoster(year);
     } finally {
       lock.releaseLock();
     }
+  }
+  /* いまその年度で使っている行から、画面が持たない欄を拾っておく。
+     年度の行が無ければ既定（年度が空）の行から拾う。 */
+  function keep_(name, year, keyOf_, valOf_){
+    const out = {};
+    for(const r of pickYear_(name, year)){
+      const k = keyOf_(r), v = valOf_(r);
+      if(k && v) out[k] = v;
+    }
+    return out;
   }
   function replaceYear_(name, year, objs){
     for(const r of Sheets.readAll(name).rows)
@@ -241,9 +271,9 @@ function apiWriteCells(year, patches){
   Gate.check();
   return Store.writeCells(year, patches);
 }
-function apiWriteRoster(year, classes, specials, week1){
+function apiWriteRoster(year, classes, specials, week1, tanpopo){
   Gate.check();
-  return Store.writeRoster(year, classes, specials, week1);
+  return Store.writeRoster(year, classes, specials, week1, tanpopo);
 }
 function apiWriteBase(year, cls, variant, bank){
   Gate.check();

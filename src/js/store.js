@@ -75,7 +75,9 @@ function newYear(y){
        基本時間割は引き継がない。**毎年変わるものを黙って持ち越さない。** */
     classes:  prev ? clone(prev.classes)  : clone(DEFAULT_CLASSES),
     specials: prev ? clone(prev.specials) : clone(DEFAULT_SPECIALS),
-    base:{}, weeks:{}, week1: firstMonday(y)
+    base:{}, weeks:{}, week1: firstMonday(y),
+    /* たんぽぽ児童がいる交流級。ここで選んだクラスだけを たんぽぽ時間割へ出す */
+    tanpopo: prev ? clone(prev.tanpopo || []) : []
   };
 }
 /* 読むだけ。**ここでは保存しない**（描画のたびに呼ばれるため）。
@@ -89,6 +91,7 @@ function Y(){
   if(!Yr.base)  Yr.base  = {};
   if(!Yr.weeks) Yr.weeks = {};
   if(!Yr.week1) Yr.week1 = firstMonday(+y);
+  if(!Array.isArray(Yr.tanpopo)) Yr.tanpopo = [];
   return Yr;
 }
 const knownYears = () => Object.keys(db.years).sort();

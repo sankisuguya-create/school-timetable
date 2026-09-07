@@ -18,6 +18,7 @@ button,select,input,textarea{font:inherit;color:inherit}
    別に「だれとして書くか」を選ばせない。 */
 /* 4つとも置き場所を明示する。入口だけ位置を指定すると、
    自動配置が押し出されて中央と右パネルが下の行へ落ちる。 */
+.work.no-panel{grid-template-columns:228px minmax(0,1fr)}
 .work{display:grid;grid-template-columns:228px minmax(0,1fr) 312px;
   grid-template-rows:minmax(0,1fr);min-height:0}
 .side{grid-area:1/1/2/2;background:var(--card);border-right:1px solid var(--line);overflow:auto;
@@ -77,6 +78,33 @@ button,select,input,textarea{font:inherit;color:inherit}
 
 .stage{overflow:auto;padding:10px;display:flex;justify-content:center;
   align-items:flex-start;min-height:0;min-width:0}
+.stage[hidden]{display:none!important}
+
+/* たんぽぽの面。週案の紙ではないので、紙と入れ替えて出す */
+.tpview{grid-area:1/1/2/2;overflow:auto;padding:22px 26px;display:flex;
+  flex-direction:column;gap:18px;min-height:0}
+.tphead h2{margin:0 0 6px;font-size:19px}
+.tphead p{margin:0;font-size:12.5px;color:var(--tx-sub);line-height:1.85;max-width:70ch}
+.tphead p b{color:var(--tx)}
+.tpsel{display:flex;flex-direction:column;gap:8px}
+.tprow{display:grid;grid-template-columns:56px 1fr;gap:10px;align-items:center}
+.tprow>span{font-size:12.5px;color:var(--tx-sub)}
+.tpchips{display:flex;flex-wrap:wrap;gap:6px}
+.tpchip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;font-size:13px;
+  border:1px solid var(--line);border-radius:15px;background:var(--card);cursor:pointer;
+  font-variant-numeric:tabular-nums}
+.tpchip:hover{background:var(--hover)}
+.tpchip[aria-pressed=true]{background:var(--tint);border-color:var(--ink-link);
+  color:var(--ink-link);font-weight:600}
+.tpchip i{width:9px;height:9px;border-radius:50%;background:var(--line);flex:none}
+.tpchip[aria-pressed=true] i{background:var(--ink-link)}
+.tpchip.warn i{background:var(--cat-clash)}
+.tpwarn{display:flex;flex-direction:column;gap:8px}
+.tpwarn .box{border:1px solid var(--line);border-left:4px solid var(--cat-clash);
+  border-radius:var(--r-sm);padding:11px 13px;font-size:13px;line-height:1.75}
+.tpwarn .box b{color:var(--tx)}
+.tpwarn .box.ok{border-left-color:var(--ok,#2F6E4E);color:var(--tx-sub)}
+.tpact{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .hint{font-size:11.5px;color:var(--tx-sub);line-height:1.75;margin:0}
 .hint b{color:var(--tx)}
 /* アイコン付きの1行。文を割らないよう、文字はまとめて1つの箱に入れる */
@@ -150,6 +178,10 @@ button,select,input,textarea{font:inherit;color:inherit}
 .master:hover{background:var(--hover);border-color:var(--tx-sub)}
 .master i{position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--cat-grade)}
 .master.all i{background:var(--cat-school)}
+.master.tp i{background:var(--cat-clash)}
+.tile.note{background:transparent;border:0;box-shadow:none;color:var(--tx-sub);
+  font-size:12px;font-weight:400;display:flex;align-items:center;padding-left:4px}
+.tile.note:hover{transform:none;box-shadow:none}
 .tile{background:var(--sheet);color:var(--ink);border:1px solid var(--line);
   border-radius:var(--r);padding:12px;font-size:15px;font-weight:600;cursor:pointer;
   font-variant-numeric:tabular-nums;box-shadow:0 1px 2px var(--shade);

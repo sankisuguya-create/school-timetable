@@ -19,7 +19,7 @@ function drawGate(){
            + "<i></i>" + escText(gr) + "年</button>");
     for(let i = 0; i < cols; i++)
       out.push(cs[i]
-        ? "<button class='tile' data-go='class' data-c='" + escText(cs[i]) + "'>"
+        ? "<button class='tile cls' data-go='class' data-c='" + escText(cs[i]) + "'>"
           + escText(cs[i]) + "</button>"
         : "<span class='tile none'></span>");
   }
@@ -30,6 +30,12 @@ function drawGate(){
       ? "<button class='tile sp' data-go='special' data-s='" + escText(sp[i].code) + "'>"
         + "<i></i>" + escText(sp[i].label) + "</button>"
       : "<span class='tile none'></span>");
+  /* いちばん下にたんぽぽ。ここで交流級を選び、ここからだけ出す */
+  out.push("<button class='master tp' data-go='tanpopo'><i></i>たんぽぽ</button>");
+  const tpN = tpChosen().filter(c => allClasses().indexOf(c) >= 0).length;
+  out.push("<span class='tile note' style='grid-column:span " + cols + "'>"
+    + (tpN ? "交流級 " + tpN + " クラスを選んでいる" : "交流級をまだ選んでいない")
+    + "</span>");
   g.innerHTML = out.join("");
 
   for(const b of g.querySelectorAll("[data-go]")){
@@ -38,6 +44,7 @@ function drawGate(){
       openView(k === "class"   ? {kind:"class",   cls:b.dataset.c}
              : k === "grade"   ? {kind:"grade",   grade:b.dataset.g}
              : k === "special" ? {kind:"special", sp:b.dataset.s}
+             : k === "tanpopo" ? {kind:"tanpopo"}
              : {kind:"school"});
     };
   }
@@ -59,16 +66,27 @@ function openView(v){
     lastTarget = v;
     selCell = null;
     $("gate").hidden = true;
+    /* たんぽぽの面は週案の紙ではない。紙と入力パネルを引っこめて入れ替える */
+    const tp = v.kind === "tanpopo";
+    $("stage").hidden = tp;
+    $("tpView").hidden = !tp;
+    document.querySelector(".panel").hidden = tp;
+    document.querySelector(".work").classList.toggle("no-panel", tp);
+    /* たんぽぽの面には紙が無い。紙から出す操作（印刷・時数）は伏せる */
+    for(const a of ["print", "tally"])
+      document.querySelector("[data-act='" + a + "']").hidden = tp;
     paintHeader();
-    drawPalette();
+    if(!tp) drawPalette();
     refreshWeek();
-    fillPanel();
+    if(!tp) fillPanel();
   });
 }
 function showGate(){
   view = {kind:"gate"};
   selCell = null;
   $("gate").hidden = false;
+  for(const a of ["print", "tally"])
+    document.querySelector("[data-act='" + a + "']").hidden = false;
   drawGate();
   paintHeader();
 }
@@ -91,12 +109,13 @@ function drawTargetSelect(){
     ["学級",  allClasses().map(c => ["class:" + c, c])],
     ["学年",  grades().map(g => ["grade:" + g, g + "年"])],
     ["専科",  specials().map(s => ["special:" + s.code, s.label])],
-    ["学校",  [["school:", "全学年"]]]
+    ["学校",  [["school:", "全学年"], ["tanpopo:", "たんぽぽ"]]]
   ];
   const cur = view.kind === "class"   ? "class:" + view.cls
             : view.kind === "grade"   ? "grade:" + view.grade
             : view.kind === "special" ? "special:" + view.sp
-            : view.kind === "school"  ? "school:" : "";
+            : view.kind === "school"  ? "school:"
+            : view.kind === "tanpopo" ? "tanpopo:" : "";
   sel.innerHTML = groups.map(([label, items]) =>
     "<optgroup label='" + label + "'>" + items.map(([v, t]) =>
       "<option value='" + escText(v) + "'" + (v === cur ? " selected" : "") + ">"
@@ -108,5 +127,6 @@ function onTargetChange(v){
   openView(kind === "class"   ? {kind:"class",   cls:rest}
          : kind === "grade"   ? {kind:"grade",   grade:rest}
          : kind === "special" ? {kind:"special", sp:rest}
+         : kind === "tanpopo" ? {kind:"tanpopo"}
          : {kind:"school"});
 }
