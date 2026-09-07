@@ -1,0 +1,175 @@
+/* 層の合成と書き込み。**この画面のいちばん大事な決まりがここにある。**
+
+   勝つのは「最後に書かれたもの」。層は勝ち負けを決めない。
+   時刻で決めないと、上位があとから入れた予定が、先に入っていた担任の予定に負ける。
+   それでは学年主任が学年体育を入れても反映されず、入れた本人にも見えない。
+   （層の順で組んだ初版を実際に動かして見つけた欠陥） */
+
+/* いま何を開いているか。**開いたものが層を決める。**
+   「だれとして書くか」を別に選ばせない。 */
+let view = {kind:"gate"};
+const LAYER_OF = {class:"home", grade:"grade", school:"school", special:"special"};
+const layerOf = () => LAYER_OF[view.kind];
+
+function viewName(){
+  if(view.kind === "class")   return view.cls;
+  if(view.kind === "grade")   return view.grade + "年";
+  if(view.kind === "school")  return "全学年";
+  if(view.kind === "special"){
+    const x = specials().find(s => s.code === view.sp);
+    return x ? x.label : "専科";
+  }
+  return "";
+}
+function viewWhere(){
+  if(view.kind === "class")   return "書いたものは " + view.cls + " だけに入る";
+  if(view.kind === "grade")   return "書いたものは " + view.grade + "年の全クラスに入る";
+  if(view.kind === "school")  return "書いたものは全クラスに入る";
+  if(view.kind === "special") return "コマにクラスを入れると、そのクラスに「"
+                                   + viewName() + "」として入る";
+  return "";
+}
+
+/* ── 合成 ────────────────────────────────────── */
+
+function baseCell(cls, d, s){
+  const v = ((Y().base[cls] || {})[week().variant] || {})[ck(d, s)];
+  if(!v) return null;
+  return {title:escText(v.title || ""), note:"", subject:v.subject || null, layer:"base", at:0};
+}
+
+/* クラスの1コマ。基本時間割・全体・学年・専科・担任 を時刻順に重ねる。 */
+function compose(cls, d, s){
+  const w = week(), key = ck(d, s), g = gradeOf(cls);
+  const cand = [];
+  const b = baseCell(cls, d, s);
+  if(b) cand.push(b);
+  const push = (e, layer) => { if(e) cand.push(Object.assign({}, e, {layer, at:e.at || 0})); };
+  push(w.school[key], "school");
+  push((w.grade[g] || {})[key], "grade");
+  push((w.special[cls] || {})[key], "special");
+  push((w.home[cls] || {})[key], "home");
+
+  if(!cand.length) return {title:"", note:"", subject:null, layer:"base", clash:null};
+  if(cand.length > 1)
+    cand.sort((x, y) => (x.at - y.at) || (RANK[x.layer] - RANK[y.layer]));
+
+  const cur  = Object.assign({}, cand[cand.length - 1]);
+  const lost = cand.slice(0, -1)
+    .filter(e => e.layer !== "base" && (plain(e.title) || plain(e.note)));
+  cur.clash = lost.length ? lost : null;
+  return cur;
+}
+
+/* マスターを開いているときは、**その層が入れたものだけ**を出す。
+   下の層まで混ぜると、どのクラスのものを見ているのか分からなくなる。 */
+function masterBank(){
+  const w = week();
+  if(view.kind === "school") return w.school;
+  if(view.kind === "grade")  return (w.grade[view.grade] || (w.grade[view.grade] = {}));
+  return null;
+}
+const scopeClasses = () => view.kind === "school" ? allClasses()
+                         : view.kind === "grade"  ? classesOfGrade(view.grade) : [];
+
+/* このマスターのコマを、あとから直したクラスを拾う。
+   compose を回さず、その週の表を直に引く（クラス数×コマ数の掛け算を避ける）。 */
+function overriders(d, s){
+  const bank = masterBank();
+  const mine = bank && bank[ck(d, s)];
+  if(!mine) return [];
+  const w = week(), key = ck(d, s), t = mine.at || 0;
+  const out = [];
+  for(const c of scopeClasses()){
+    const h  = (w.home[c]    || {})[key];
+    const sp = (w.special[c] || {})[key];
+    if((h && (h.at || 0) > t) || (sp && (sp.at || 0) > t)){ out.push(c); continue; }
+    if(view.kind === "school"){
+      const g = (w.grade[gradeOf(c)] || {})[key];
+      if(g && (g.at || 0) > t) out.push(c);
+    }
+  }
+  return out;
+}
+
+/* 専科の自分の週。同じデータを、教科名ではなくクラス名で見る。 */
+function ownCell(d, s){
+  const w = week(), key = ck(d, s);
+  for(const c of allClasses()){
+    const e = (w.special[c] || {})[key];
+    if(e && e.sp === view.sp)
+      return {title:escText(c), note:e.note || "", layer:"special", cls:c, clash:null};
+  }
+  return {title:"", note:"", layer:"base", clash:null};
+}
+
+/* いま開いている面から見た1コマ。画面はこれだけを見る。 */
+function cellFor(d, s){
+  if(view.kind === "class")   return compose(view.cls, d, s);
+  if(view.kind === "special") return ownCell(d, s);
+  const e = (masterBank() || {})[ck(d, s)];
+  const c = e ? Object.assign({}, e, {layer:view.kind})
+              : {title:"", note:"", layer:"base"};
+  c.over  = e ? overriders(d, s) : [];
+  c.clash = null;
+  return c;
+}
+
+/* ── 書く ────────────────────────────────────── */
+
+/* クラスを開いているときだけ、1コマを学年や全校へ広げられる。
+   **コマを選ぶたびに「この学級のみ」へ戻す。**
+   持ち越すと、次のコマを直したときに気づかないまま全校へ広がる。 */
+let scope = "self";
+
+function targetStore(){
+  const w = week();
+  if(view.kind === "school") return w.school;
+  if(view.kind === "grade")  return (w.grade[view.grade] || (w.grade[view.grade] = {}));
+  if(scope === "school")     return w.school;
+  if(scope === "grade"){
+    const g = gradeOf(view.cls);
+    return (w.grade[g] || (w.grade[g] = {}));
+  }
+  return (w.home[view.cls] || (w.home[view.cls] = {}));
+}
+
+function writeCell(d, s, patch){
+  const w = week(), key = ck(d, s);
+
+  /* 専科の週では、コマの中身は「どのクラスへ行くか」 */
+  if(view.kind === "special"){
+    const cur = ownCell(d, s);
+    let target = ("cls" in patch) ? patch.cls : cur.cls;
+    if("title" in patch && !("cls" in patch)) target = normCls(plain(patch.title));
+    for(const c of allClasses()){          /* 行き先が変わるので一度どける */
+      const e = (w.special[c] || {})[key];
+      if(e && e.sp === view.sp) delete w.special[c][key];
+    }
+    if(target && allClasses().indexOf(target) >= 0){
+      const sub = SUB_BY_CODE[view.sp];
+      (w.special[target] || (w.special[target] = {}))[key] = {
+        title: escText(sub ? sub.name : viewName()),
+        subject: view.sp, sp: view.sp,
+        note: ("note" in patch) ? clean(patch.note) : (cur.note || ""),
+        at: Date.now(), by: viewName()
+      };
+    }
+    return save();
+  }
+
+  const st  = targetStore();
+  const cur = cellFor(d, s);
+  const e   = st[key] || {
+    title:   cur.layer === "base" ? cur.title   : "",
+    note:    "",
+    subject: cur.layer === "base" ? cur.subject : null
+  };
+  if("title"   in patch) e.title   = clean(patch.title);
+  if("note"    in patch) e.note    = clean(patch.note);
+  if("subject" in patch) e.subject = patch.subject;
+  e.by = viewName();
+  e.at = Date.now();
+  if(isEmptyCell(e)) delete st[key]; else st[key] = e;
+  return save();
+}

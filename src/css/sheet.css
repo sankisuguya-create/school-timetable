@@ -1,0 +1,124 @@
+/* 紙。**刷られる面はここだけ。** 印刷の版面は動かさない。
+   教務必携の週案枠に糊で貼るので、枠の形は手帳に合わせてある。
+
+   画面でも刷ったときと同じ mm で並べる。--k で全体が伸縮する。 */
+.sheet{
+  --k:1;
+  --pw:182mm; --ph:257mm; --pm:8mm;      /* B5・余白。設定から動く */
+  --labw:15mm;                            /* 時程の列（校時と時刻） */
+  --wkw:20mm;                             /* 土日の列 */
+  --h-head:8mm;
+  --h-break:6mm;
+  --h-title:8mm;
+  --h-note:21mm;
+  --h-foot:33mm;
+  --fs:8.5pt;
+  --fs-s:6pt;
+
+  background:var(--sheet); color:var(--ink);
+  width:calc(var(--pw) - var(--pm)*2);
+  min-height:calc(var(--ph) - var(--pm)*2);
+  display:grid;
+  grid-template-columns:calc(var(--labw)*var(--k)) repeat(5,1fr) calc(var(--wkw)*var(--k));
+  border:1.2px solid var(--rule-week);
+  border-radius:2px;
+  box-shadow:0 1px 3px var(--shade),0 10px 28px var(--shade);
+  font-size:calc(var(--fs)*var(--k));
+}
+.sheet>*{border-right:.6px solid var(--rule);border-bottom:.6px solid var(--rule);
+  min-width:0;position:relative}
+.sheet>.lastcol{border-right:none}
+
+/* 見出しの行 */
+.hd{display:flex;align-items:center;justify-content:center;gap:.35em;
+  height:calc(var(--h-head)*var(--k));font-weight:700;
+  border-bottom:1.2px solid var(--rule-week)}
+.hd .dow{font-size:calc(var(--fs-s)*var(--k));color:var(--ink-sub);font-weight:400}
+.hd.sat .dow{color:var(--ink-link)}
+
+/* 時程の列。校時の数字の下に時刻を小さく置く（画面でも紙でも同じ） */
+.lab{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;font-size:calc(var(--fs-s)*var(--k));color:var(--ink-sub);
+  line-height:1.2;padding:0 1px;gap:.15em}
+.lab .no{font-size:calc(11pt*var(--k));font-weight:700;color:var(--ink);line-height:1}
+.lab .tm{font-size:calc(5pt*var(--k));letter-spacing:-.02em;white-space:nowrap}
+.row-break .lab,.row-break{background:var(--band)}
+
+/* コマ */
+.cell{display:flex;flex-direction:column;overflow:hidden}
+.cell.lesson{height:calc((var(--h-title) + var(--h-note))*var(--k))}
+.cell.brk{height:calc(var(--h-break)*var(--k))}
+.cell .t,.cell .n{padding:1px calc(1.4mm*var(--k));outline:none;overflow:hidden;
+  word-break:break-word;line-height:1.25}
+.cell .t{height:calc(var(--h-title)*var(--k));display:flex;align-items:center;font-weight:600}
+.cell.brk .t{height:100%;font-weight:400;font-size:calc(var(--fs-s)*var(--k))}
+.cell .n{flex:1;font-size:calc(var(--fs-s)*var(--k));color:var(--ink-sub);
+  border-top:.6px dashed var(--rule-soft);padding-top:calc(.6mm*var(--k))}
+.cell .t:focus,.cell .n:focus{background:#FFFBEA;
+  box-shadow:inset 0 0 0 1.6px var(--ink-link)}
+.cell.sel{box-shadow:inset 0 0 0 1.6px var(--ink-link)}
+.cell.drop{outline:2px dashed var(--ink-link);outline-offset:-3px;background:var(--fill-a)}
+
+/* 出どころ。塗りは2色しか使わない。層はラベルの文字が運ぶ */
+.cell.from-base .t{color:var(--ink-sub);font-weight:500}
+.cell.upper{background:var(--fill-a)}
+.cell.clash{background:var(--fill-b)}
+.cell.upper::before,.cell.clash::before{content:"";position:absolute;
+  left:0;top:0;bottom:0;width:calc(1.6mm*var(--k));background:var(--cat-none)}
+.cell[data-layer=school]::before{background:var(--cat-school)}
+.cell[data-layer=grade]::before {background:var(--cat-grade)}
+.cell[data-layer=special]::before{background:var(--cat-special)}
+.cell.clash::before{background:var(--cat-clash)}
+.tag{position:absolute;right:0;top:0;font-size:calc(5pt*var(--k));line-height:1.35;
+  padding:0 .35em;color:#fff;background:var(--cat-none);border-bottom-left-radius:3px;
+  letter-spacing:.02em;z-index:1;max-width:70%;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.cell[data-layer=school] .tag{background:var(--cat-school)}
+.cell[data-layer=grade]  .tag{background:var(--cat-grade)}
+.cell[data-layer=special] .tag{background:var(--cat-special)}
+.cell.clash .tag{background:var(--cat-clash)}
+
+/* リンクは文字に付く。1つのコマにいくつでも */
+.cell a,.wk a,.foot a{color:var(--ink-link);text-decoration:underline;
+  text-decoration-color:var(--ink-link);text-underline-offset:1.5px;cursor:pointer}
+
+/* 土日の列 */
+.wk{display:flex;flex-direction:column}
+.wk .cap{font-size:calc(var(--fs-s)*var(--k));color:var(--ink-sub);text-align:center;
+  border-bottom:.6px dashed var(--rule-soft);padding:1px 0}
+.wk .t{flex:1;padding:1px calc(1.2mm*var(--k));outline:none;
+  font-size:calc(var(--fs-s)*var(--k));overflow:hidden;word-break:break-word}
+.wk .t:focus{background:#FFFBEA;box-shadow:inset 0 0 0 1.6px var(--ink-link)}
+
+/* 下の帯 */
+.foot{grid-column:1/8;min-height:calc(var(--h-foot)*var(--k));display:grid;
+  grid-template-columns:calc(var(--labw)*var(--k)) 1fr;border-right:none}
+.foot .lab{border-right:.6px solid var(--rule)}
+.foot .t{padding:calc(1mm*var(--k)) calc(1.6mm*var(--k));outline:none;
+  font-size:calc(var(--fs-s)*var(--k));line-height:1.6;
+  background:repeating-linear-gradient(to bottom,transparent 0,transparent
+    calc(4.8mm*var(--k) - .6px),var(--rule-soft) calc(4.8mm*var(--k)))}
+
+/* ── 刷るとき ─────────────────────────────────────
+   画面のものは何も刷らない。層の色も印も刷らない。
+   リンクは下線だけ残す。URL は刷らない。 */
+@media print{
+  .topbar,.side,.panel,.gate,.toast,.center>.bar,.center>.hint-row{display:none!important}
+  /* 時刻は画面だけのもの。紙の版面は教務必携の枠に合わせたまま動かさない
+     （時程の列は 9mm。ここを広げると曜日の列がその分だけ痩せる） */
+  .sheet{--labw:9mm}
+  .lab .tm{display:none}
+  /* 選んでいる印・打ち込み中の色も刷らない */
+  .cell.sel{box-shadow:none}
+  .cell .t:focus,.cell .n:focus,.wk .t:focus{background:transparent;box-shadow:none}
+  .app,.work,.center{display:block!important;height:auto!important;overflow:visible!important}
+  .stage{display:block!important;padding:0!important;overflow:visible!important;background:#fff}
+  .paper{zoom:1!important}
+  body{background:#fff}
+  .sheet{box-shadow:none;border-radius:0;width:auto;min-height:0;border-color:#000}
+  .cell.upper,.cell.clash,.cell.drop{background:transparent;outline:none}
+  .row-break,.row-break .lab{background:#EFEFEF}
+  .cell.upper::before,.cell.clash::before,.tag{display:none}
+  .cell.from-base .t{color:#1A1A1A;font-weight:600}
+  .cell a,.wk a,.foot a{color:#1A1A1A;text-decoration-color:#1A1A1A}
+}
