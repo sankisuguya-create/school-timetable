@@ -134,6 +134,68 @@ function targetStore(){
   return (w.home[view.cls] || (w.home[view.cls] = {}));
 }
 
+/* ── 上書きの見張り ──────────────────────────────
+   いま書こうとしているコマに、**別の人が入れた予定**が出ているか。
+   基本時間割は数えない（それを直すのがふだんの作業で、毎回聞かれても困る）。
+   戻すのは [{cls, from}]。空なら誰の予定も潰さない。 */
+function wouldOverwrite(d, s){
+  const hit = [], layer = layerOfStore(), target = targetOfStore();
+  const list = view.kind === "special" ? []
+             : view.kind === "class" && scope === "self" ? [view.cls]
+             : view.kind === "class" && scope === "grade" ? classesOfGrade(gradeOf(view.cls))
+             : view.kind === "class" ? allClasses()
+             : view.kind === "grade" ? classesOfGrade(view.grade)
+             : allClasses();
+  for(const c of list){
+    const cur = compose(c, d, s);
+    if(cur.layer === "base") continue;                 /* 基本時間割は潰してよい */
+    if(cur.layer === layer && sameTarget(cur.layer, c, target)) continue;  /* 自分の続き */
+    const t = plain(cur.title).trim();
+    if(t) hit.push({cls:c, from:t, by:LAYER_FULL[cur.layer]});
+  }
+  return hit;
+}
+function sameTarget(layer, cls, target){
+  if(layer === "school") return target === "";
+  if(layer === "grade")  return target === gradeOf(cls);
+  return target === cls;
+}
+
+/* **自分が入れた予定が、あとから誰かに上書きされたコマ。**
+   開いたときに知らせる。開いている面の持ちぶんだけを見る。 */
+function overwrittenHere(){
+  const out = [], mine = layerOfStore(), w = week();
+  for(let d = 0; d < 5; d++) for(const sl of SLOTS){
+    const key = ck(d, sl.id);
+    if(view.kind === "class"){
+      const cur = compose(view.cls, d, sl.id);
+      if(!cur.clash) continue;
+      for(const lost of cur.clash)
+        if(lost.layer === "home")
+          out.push({d, s:sl.id, cls:view.cls, from:plain(lost.title),
+                    to:plain(cur.title), by:LAYER_FULL[cur.layer]});
+    }else if(view.kind === "special"){
+      const own = ownCell(d, sl.id);
+      if(!own.cls) continue;
+      const cur = compose(own.cls, d, sl.id);
+      if(cur.layer !== "special")
+        out.push({d, s:sl.id, cls:own.cls, from:plain(own.title || ""),
+                  to:plain(cur.title), by:LAYER_FULL[cur.layer]});
+    }else{
+      const bank = masterBank(), me = bank && bank[key];
+      if(!me) continue;
+      for(const c of scopeClasses()){
+        const cur = compose(c, d, sl.id);
+        if(cur.layer === view.kind) continue;
+        if((cur.at || 0) <= (me.at || 0)) continue;
+        out.push({d, s:sl.id, cls:c, from:plain(me.title),
+                  to:plain(cur.title), by:LAYER_FULL[cur.layer]});
+      }
+    }
+  }
+  return out;
+}
+
 function writeCell(d, s, patch){
   const w = week(), key = ck(d, s);
 

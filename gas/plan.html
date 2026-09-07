@@ -71,29 +71,14 @@ body{margin:0;background:var(--bg);color:var(--tx);
 button,select,input,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--ink-link);outline-offset:2px}
 
-.app{display:grid;grid-template-rows:auto 1fr;height:100%}
-
-/* ── 上の帯 ──────────────────────────────────── */
-.topbar{display:flex;align-items:center;gap:22px;padding:0 16px;height:52px;
-  background:var(--card);border-bottom:1px solid var(--line)}
-.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;
-  letter-spacing:.02em;white-space:nowrap}
-.brand svg{flex:none}
-.tabs{display:flex;gap:4px}
-.tab{display:flex;align-items:center;gap:6px;padding:7px 14px;border:0;border-radius:var(--r-sm);
-  background:transparent;color:var(--tx-sub);font-size:13.5px;cursor:pointer}
-.tab:hover{background:var(--hover)}
-.tab[aria-selected=true]{background:var(--tint);color:var(--ink-link);font-weight:600}
-.topbar .who{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;
-  color:var(--tx-sub);white-space:nowrap}
-.topbar .who b{color:var(--tx);font-weight:600}
+.app{display:grid;grid-template-rows:minmax(0,1fr);height:100%}
 
 /* ── 左のサイドバー ───────────────────────────
    ここに並ぶものが、そのまま「どこに入るか」の層になっている。
    別に「だれとして書くか」を選ばせない。 */
 /* 4つとも置き場所を明示する。入口だけ位置を指定すると、
    自動配置が押し出されて中央と右パネルが下の行へ落ちる。 */
-.work{display:grid;grid-template-columns:214px minmax(0,1fr) 312px;
+.work{display:grid;grid-template-columns:228px minmax(0,1fr) 312px;
   grid-template-rows:minmax(0,1fr);min-height:0}
 .side{grid-area:1/1/2/2;background:var(--card);border-right:1px solid var(--line);overflow:auto;
   padding:14px 10px;display:flex;flex-direction:column;gap:4px}
@@ -109,11 +94,20 @@ button,select,input,textarea{font:inherit;color:inherit}
 .nav svg{flex:none;opacity:.72}
 .nav[aria-current=true] svg{opacity:1}
 .side hr{border:0;border-top:1px solid var(--line-soft);margin:10px 6px}
+.side .wk{display:flex;flex-direction:column;gap:7px;padding:0 4px}
+.side .pill{justify-content:space-between}
+.side .pill .date{font-size:14px;padding:4px 6px}
+.side .wkrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.side .seg button{padding:5px 10px;font-size:12.5px}
+.side .target{width:100%}
+.side .legend{flex-direction:column;align-items:flex-start;gap:7px;padding:0 8px}
 .side .foot-note{margin-top:auto;padding:10px 8px 2px;font-size:11px;color:var(--tx-sub);
   line-height:1.7}
 
 /* ── 中央 ────────────────────────────────────── */
-.center{grid-area:1/2/2/3;display:grid;grid-template-rows:auto minmax(0,1fr) auto;
+/* **紙の上下には何も置かない。** 週の移動も凡例も左へ寄せてある。
+   置くたびに紙が縮み、いちばん見たいものが小さくなる。 */
+.center{grid-area:1/2/2/3;display:grid;grid-template-rows:minmax(0,1fr);
   min-width:0;min-height:0}
 .bar{display:flex;align-items:center;gap:12px;padding:12px 16px;flex-wrap:wrap}
 .pill{display:flex;align-items:center;gap:2px;background:var(--card);
@@ -133,7 +127,7 @@ button,select,input,textarea{font:inherit;color:inherit}
 .target{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
   padding:7px 10px;font-size:13.5px;min-width:11em}
 .legend{display:flex;gap:14px;align-items:center;font-size:11.5px;color:var(--tx-sub);
-  flex-wrap:wrap}
+  flex-wrap:wrap;margin:0}
 .legend span{display:flex;align-items:center;gap:5px}
 .legend i{width:13px;height:13px;border-radius:4px;border:1px solid var(--rule-soft);
   background:var(--sheet)}
@@ -141,7 +135,7 @@ button,select,input,textarea{font:inherit;color:inherit}
 .legend i.cl{background:var(--fill-b)}
 .legend i.bs{background:var(--sheet)}
 
-.stage{overflow:auto;padding:0 16px 8px;display:flex;justify-content:center;
+.stage{overflow:auto;padding:10px;display:flex;justify-content:center;
   align-items:flex-start;min-height:0;min-width:0}
 .hint{font-size:11.5px;color:var(--tx-sub);line-height:1.75;margin:0}
 .hint b{color:var(--tx)}
@@ -248,6 +242,20 @@ dialog::backdrop{background:rgba(20,28,38,.42)}
 .dlg hr{border:0;border-top:1px solid var(--line-soft);margin:16px 0}
 .dlg ul{margin:0;padding-left:1.15em;font-size:12.5px;line-height:1.9;color:var(--tx-sub)}
 .dlg ul b{color:var(--tx)}
+.tpwrap{overflow:auto;max-height:46vh;border:1px solid var(--line);border-radius:var(--r-sm)}
+table.tp{border-collapse:collapse;font-size:12px;width:100%}
+table.tp th,table.tp td{border:1px solid var(--line-soft);padding:3px 6px;
+  white-space:nowrap;text-align:center}
+table.tp tr:first-child th{background:var(--bg);position:sticky;top:0;z-index:1}
+table.tp th{background:var(--bg);font-weight:600}
+table.tp td.w{background:var(--fill-a);color:var(--ink)}
+table.tp td.s{color:var(--tx-sub);font-size:11px}
+table.tp tr.staff{opacity:.55}
+ul.owlist{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:9px}
+ul.owlist li{border:1px solid var(--line);border-left:4px solid var(--cat-clash);
+  border-radius:var(--r-sm);padding:9px 11px;font-size:13px;line-height:1.7;color:var(--tx)}
+ul.owlist s{color:var(--tx-sub)}
+ul.owlist .who{font-size:11.5px;color:var(--tx-sub)}
 pre.mono{background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);
   padding:11px 13px;font:12px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;
   overflow:auto;max-height:230px;white-space:pre;color:var(--tx)}
@@ -263,10 +271,8 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .toast b{color:#FFC9BC}
 
 @media (max-width:1180px){
-  .work{grid-template-columns:64px minmax(0,1fr) 280px}
-  .side h2 span,.nav span,.side h3,.side .foot-note{display:none}
-  .side{align-items:center;padding:14px 6px}
-  .nav{justify-content:center;padding:9px 0}
+  .work{grid-template-columns:200px minmax(0,1fr) 268px}
+  .side .foot-note,.side .legend{display:none}
 }
 /* ▲ src/css/app.css ▲ */
 /* ▼ src/css/sheet.css ▼ */
@@ -375,7 +381,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
    画面のものは何も刷らない。層の色も印も刷らない。
    リンクは下線だけ残す。URL は刷らない。 */
 @media print{
-  .topbar,.side,.panel,.gate,.toast,.center>.bar,.center>.hint-row{display:none!important}
+  .side,.panel,.gate,.toast{display:none!important}
   /* 時刻は画面だけのもの。紙の版面は教務必携の枠に合わせたまま動かさない
      （時程の列は 9mm。ここを広げると曜日の列がその分だけ痩せる） */
   .sheet{--labw:9mm}
@@ -443,24 +449,30 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 </svg>
 
 <div class="app">
-
-  <header class="topbar">
-    <span class="brand"><svg width="21" height="21"><use href="#i-school"/></svg>週案</span>
-    <nav class="tabs">
-      <button class="tab" aria-selected="true"><svg width="16" height="16"><use href="#i-grid"/></svg>時間割</button>
-      <button class="tab" data-act="paper"><svg width="16" height="16"><use href="#i-gear"/></svg>設定</button>
-    </nav>
-    <span class="who"><svg width="17" height="17"><use href="#i-user"/></svg>
-      <b id="whoName"></b><span id="whoRole"></span></span>
-  </header>
-
   <div class="work">
 
     <aside class="side">
-      <h2><svg width="19" height="19"><use href="#i-grid"/></svg><span>時間割</span></h2>
+      <h2><svg width="19" height="19"><use href="#i-school"/></svg><span>週案</span></h2>
 
+      <!-- 週。**紙の上下には何も置かない**ので、ここに寄せる -->
+      <div class="wk">
+        <div class="pill">
+          <button class="ico" id="prevWk" aria-label="前の週"><svg width="18" height="18"><use href="#i-left"/></svg></button>
+          <span class="date" id="weekLabel"></span>
+          <button class="ico" id="nextWk" aria-label="次の週"><svg width="18" height="18"><use href="#i-right"/></svg></button>
+        </div>
+        <div class="wkrow">
+          <span class="wkno" id="weekNo"></span>
+          <div class="seg" role="group" aria-label="基本時間割のA週・B週">
+            <button id="abA" aria-pressed="true">A週</button><button id="abB">B週</button>
+          </div>
+        </div>
+        <select class="target" id="target" aria-label="開いているもの"></select>
+      </div>
+
+      <hr>
       <button class="nav" data-screen="gate" data-act="gate">
-        <svg width="17" height="17"><use href="#i-layers"/></svg><span>週案をひらく</span></button>
+        <svg width="17" height="17"><use href="#i-layers"/></svg><span>ほかの週案をひらく</span></button>
       <button class="nav" data-screen="plan" data-act="open" id="navOpen" hidden>
         <svg width="17" height="17"><use href="#i-cal"/></svg>
         <span>いま：<b id="navOpenName"></b></span></button>
@@ -483,33 +495,19 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
       <button class="nav" data-act="paper">
         <svg width="17" height="17"><use href="#i-gear"/></svg><span>用紙・印刷</span></button>
 
-      <p class="foot-note">白い紙に出ているものだけが刷られる。<br>まわりの操作は刷られない。</p>
+      <hr>
+      <h3>紙の上の見え方</h3>
+      <div class="legend">
+        <span><i class="up"></i>上位から降りてきた</span>
+        <span><i class="cl"></i>2つ以上入っている</span>
+        <span><i class="bs"></i>基本時間割のまま</span>
+      </div>
+      <p class="foot-note">白い紙に出ているものだけが刷られる。<br>
+        文字を選んでリンクを付けると、紙の上でその文字を押して開ける。</p>
     </aside>
 
     <main class="center" id="centerWrap">
-      <div class="bar">
-        <div class="pill">
-          <button class="ico" id="prevWk" aria-label="前の週"><svg width="18" height="18"><use href="#i-left"/></svg></button>
-          <span class="date" id="weekLabel"></span>
-          <button class="ico" id="nextWk" aria-label="次の週"><svg width="18" height="18"><use href="#i-right"/></svg></button>
-        </div>
-        <span class="wkno" id="weekNo"></span>
-        <div class="seg" role="group" aria-label="基本時間割のA週・B週">
-          <button id="abA" aria-pressed="true">A週</button><button id="abB">B週</button>
-        </div>
-        <select class="target" id="target" aria-label="開いているもの"></select>
-        <span class="grow"></span>
-        <div class="legend">
-          <span><i class="up"></i>上位から降りてきた</span>
-          <span><i class="cl"></i>2つ以上入っている</span>
-          <span><i class="bs"></i>基本時間割のまま</span>
-        </div>
-      </div>
-
       <div class="stage" id="stage"><div class="paper" id="paper"><div class="sheet" id="sheet"></div></div></div>
-
-      <div class="hint-row"><svg width="15" height="15"><use href="#i-info"/></svg>
-        <p class="hint">文字を選んで<b>リンク</b>を付けると、紙の上でその文字を押して開ける。刷ると下線だけ残る。</p></div>
     </main>
 
     <aside class="panel">
@@ -650,6 +648,16 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
      木曜に各担任から週案を集めて金曜に打ち替える作業を、この1操作に置き換える。<br>
      <b>下書きを入れる操作</b>で、入れたあとにたんぽぽ担当が上書きして直す前提。</p>
 
+  <h3>入るところ・入らないところ</h3>
+  <div class="row"><span>曜日</span><div class="seg" id="tpDays"></div>
+    <span id="tpSum"></span></div>
+  <div id="tpGrid" class="tpwrap"></div>
+  <p style="margin-top:10px">実物の列構成（B〜AA が児童ごとの列、AB 以降が支援員・ボランティア）。
+     <b>担当の行が「交：」か空のときだけ書く。</b>「た：」「支：」は触らない。<br>
+     <span style="color:var(--ink-alert)">担当は見本の仮置き。</span>実物ではシートの担当行を読むので、
+     入り方はそちらで決まる。</p>
+
+  <hr>
   <h3>シートの形（1日16行に揃える）</h3>
   <pre class="mono">日ブロック            ブロックの先頭からの相対行
   行  1   見出し        +0   日付／その日の交流学級
@@ -681,6 +689,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   <ul>
     <li>列見出しは<b>日ブロックごとに読み直す</b>。曜日で交流学級が変わる</li>
     <li>正規化して「学年-組」になる列だけ。<b>支援員・ボランティアの列には書かない</b></li>
+    <li><b>クラス名が日付に化けていても戻して読む</b>（1-1 は1月1日、6-3 は6月3日として取り込まれる）</li>
     <li><b>授業名の行だけ。</b>担当の行と、支援員を表すセルの色には触れない</li>
     <li><b>こちらが空のコマには書かない。</b>空で上書きすると、前の週の書き込みが毎週消えて打ち直しになる</li>
     <li>確認は「何日ぶん・何セル書き換えるか」の数だけ出して<b>1回で確定</b></li>
@@ -690,6 +699,16 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
      上の規則のとおりに書く口だけ作ってある（docs/spec.md 7節）。<br>
      先に<b>日ブロックを16行に揃える</b>ところまでをシート側でやる。</p>
   <div class="end"><button class="btn go" data-close="tpDlg">閉じる</button></div>
+</div></dialog>
+
+<dialog id="owDlg"><div class="dlg">
+  <h2>あなたの予定が上書きされています</h2>
+  <p>あなたが入れたコマに、<b>あとから別の予定が入りました。</b>
+     いま紙に出ているのはあとから入ったほうです。<br>
+     戻したいときは、そのコマをもう一度入れ直す（あとから書いたほうが出ます）。<br>
+     この窓は<b>同じ上書きについては1回だけ</b>出ます。</p>
+  <ul id="owList" class="owlist"></ul>
+  <div class="end"><button class="btn go" data-close="owDlg">確かめた</button></div>
 </div></dialog>
 
 <dialog id="warnDlg"><div class="dlg">
@@ -1343,6 +1362,68 @@ function targetStore(){
   return (w.home[view.cls] || (w.home[view.cls] = {}));
 }
 
+/* ── 上書きの見張り ──────────────────────────────
+   いま書こうとしているコマに、**別の人が入れた予定**が出ているか。
+   基本時間割は数えない（それを直すのがふだんの作業で、毎回聞かれても困る）。
+   戻すのは [{cls, from}]。空なら誰の予定も潰さない。 */
+function wouldOverwrite(d, s){
+  const hit = [], layer = layerOfStore(), target = targetOfStore();
+  const list = view.kind === "special" ? []
+             : view.kind === "class" && scope === "self" ? [view.cls]
+             : view.kind === "class" && scope === "grade" ? classesOfGrade(gradeOf(view.cls))
+             : view.kind === "class" ? allClasses()
+             : view.kind === "grade" ? classesOfGrade(view.grade)
+             : allClasses();
+  for(const c of list){
+    const cur = compose(c, d, s);
+    if(cur.layer === "base") continue;                 /* 基本時間割は潰してよい */
+    if(cur.layer === layer && sameTarget(cur.layer, c, target)) continue;  /* 自分の続き */
+    const t = plain(cur.title).trim();
+    if(t) hit.push({cls:c, from:t, by:LAYER_FULL[cur.layer]});
+  }
+  return hit;
+}
+function sameTarget(layer, cls, target){
+  if(layer === "school") return target === "";
+  if(layer === "grade")  return target === gradeOf(cls);
+  return target === cls;
+}
+
+/* **自分が入れた予定が、あとから誰かに上書きされたコマ。**
+   開いたときに知らせる。開いている面の持ちぶんだけを見る。 */
+function overwrittenHere(){
+  const out = [], mine = layerOfStore(), w = week();
+  for(let d = 0; d < 5; d++) for(const sl of SLOTS){
+    const key = ck(d, sl.id);
+    if(view.kind === "class"){
+      const cur = compose(view.cls, d, sl.id);
+      if(!cur.clash) continue;
+      for(const lost of cur.clash)
+        if(lost.layer === "home")
+          out.push({d, s:sl.id, cls:view.cls, from:plain(lost.title),
+                    to:plain(cur.title), by:LAYER_FULL[cur.layer]});
+    }else if(view.kind === "special"){
+      const own = ownCell(d, sl.id);
+      if(!own.cls) continue;
+      const cur = compose(own.cls, d, sl.id);
+      if(cur.layer !== "special")
+        out.push({d, s:sl.id, cls:own.cls, from:plain(own.title || ""),
+                  to:plain(cur.title), by:LAYER_FULL[cur.layer]});
+    }else{
+      const bank = masterBank(), me = bank && bank[key];
+      if(!me) continue;
+      for(const c of scopeClasses()){
+        const cur = compose(c, d, sl.id);
+        if(cur.layer === view.kind) continue;
+        if((cur.at || 0) <= (me.at || 0)) continue;
+        out.push({d, s:sl.id, cls:c, from:plain(me.title),
+                  to:plain(cur.title), by:LAYER_FULL[cur.layer]});
+      }
+    }
+  }
+  return out;
+}
+
 function writeCell(d, s, patch){
   const w = week(), key = ck(d, s);
 
@@ -1472,6 +1553,11 @@ function cellEl(d, s){
   if(n) n.addEventListener("focus", focus);
 
   t.addEventListener("input", () => {
+    /* 打ち始めた1打目で聞く。«いいえ»なら元に戻す */
+    if(!okToOverwrite(d, s.id, plain(t.innerHTML))){
+      t.innerHTML = (cellFor(d, s.id).title || "");
+      return;
+    }
     typing = t;
     const sub = SUB_BY_NAME[plain(t.innerHTML).trim()];
     writeCell(d, s.id, {title:t.innerHTML, subject:sub ? sub.code : null});
@@ -1497,7 +1583,7 @@ function cellEl(d, s){
 /* 中身を流し込む。el を渡すとそのコマだけ塗り直す。 */
 function paintSheet(one){
   const list = one ? [one] : [...document.querySelectorAll("#sheet .cell")];
-  const mine = layerOf(), clashes = [];
+  const mine = layerOf();
 
   for(const e of list){
     const d = +e.dataset.d, s = e.dataset.s;
@@ -1520,34 +1606,32 @@ function paintSheet(one){
     tag.hidden = !name;
     tag.textContent = name;
 
-    if(c.clash) clashes.push({d, s, c});
   }
-  if(!one) warnClashes(clashes);
+  if(!one) warnOverwritten();
 }
 
-/* 重なりの警告。**開いたとき1回だけ。** 毎回出る警告は読まれなくなる。 */
-function warnClashes(list){
+/* **自分の予定が上書きされていたら、開いたときに知らせる。**
+   自分に関係のない層どうしの重なりは出さない（読まれない警告は機能しない）。
+   同じ上書きについては1回だけ。中身が変わったら出し直す。 */
+function warnOverwritten(){
+  const list = overwrittenHere();
   if(!list.length) return;
   const w = week();
-  const sig = c => viewName() + "|" + ck(c.d, c.s) + "|" + plain(c.c.title) + "|"
-                 + c.c.clash.map(p => p.layer + ":" + plain(p.title)).join(",");
-  const fresh = list.filter(c => w.acked.indexOf(sig(c)) < 0);
+  const sig = x => [viewName(), x.d, x.s, x.cls, x.from, x.to].join("|");
+  const fresh = list.filter(x => w.acked.indexOf(sig(x)) < 0);
   if(!fresh.length) return;
 
-  $("warnList").innerHTML = fresh.map(c => {
-    const dt = addDays(monday, c.d), sl = SLOT_BY_ID[c.s];
-    const prev = c.c.clash
-      .map(p => LAYER_FULL[p.layer] + "「" + (escText(plain(p.title)) || "（空）") + "」")
-      .join(" / ");
-    return "<li>" + md(dt) + "(" + DOW[c.d] + ") " + sl.name
-      + (sl.kind === "lesson" ? "校時" : "") + "　" + escText(viewName()) + "<br>"
-      + "　出ていない予定：<b>" + prev + "</b><br>"
-      + "　いま出ている：" + LAYER_FULL[c.c.layer]
-      + "「" + (escText(plain(c.c.title)) || "（空）") + "」</li>";
+  $("owList").innerHTML = fresh.map(x => {
+    const dt = addDays(monday, x.d), sl = SLOT_BY_ID[x.s];
+    const when = md(dt) + "(" + DOW[x.d] + ") " + sl.name + (sl.kind === "lesson" ? "校時" : "");
+    const who  = (view.kind === "class") ? "" : escText(x.cls) + " の ";
+    return "<li>" + who + "<b>" + when + "</b> が "
+      + "<s>" + (escText(x.from) || "（空）") + "</s> → <b>" + (escText(x.to) || "（空）")
+      + "</b> に上書きされました<br><span class=\"who\">" + escText(x.by) + "が入れたもの</span></li>";
   }).join("");
-  const dlg = $("warnDlg");
+  const dlg = $("owDlg");
   dlg.showModal();
-  dlg.onclose = () => { fresh.forEach(c => w.acked.push(sig(c))); save(); };
+  dlg.onclose = () => { fresh.forEach(x => w.acked.push(sig(x))); save(); };
 }
 /* ▲ src/js/sheet.js ▲ */
 /* ▼ src/js/panel.js ▼ */
@@ -1586,6 +1670,25 @@ function drawPalette(){
   }
 }
 
+/* 書く前に一度だけ聞く。**別の人の予定を潰すときだけ。**
+   基本時間割を直すのはふだんの作業なので聞かない。
+   一度«はい»と答えたコマは、その画面を開いている間は聞き直さない。 */
+const askedCells = {};
+function okToOverwrite(d, sid, to){
+  const hit = wouldOverwrite(d, sid);
+  if(!hit.length) return true;
+  const key = viewName() + "|" + ck(d, sid);
+  if(askedCells[key]) return true;
+  const dt = addDays(monday, d), sl = SLOT_BY_ID[sid];
+  const when = md(dt) + "(" + DOW[d] + ") " + sl.name + (sl.kind === "lesson" ? "校時" : "");
+  const lines = hit.map(h => "　" + h.cls + " の「" + h.from + "」（" + h.by + "）");
+  const yes = confirm(
+    when + "\n\n次の予定を「" + (plain(to) || "（空）") + "」に上書きします。\n\n"
+    + lines.join("\n") + "\n\nつづけますか？");
+  if(yes) askedCells[key] = true;
+  return yes;
+}
+
 function applyPalette(d, sid, v, e){
   if(view.kind === "special"){
     writeCell(d, sid, {cls:v});
@@ -1595,6 +1698,7 @@ function applyPalette(d, sid, v, e){
   }
   const sub = SUB_BY_CODE[v];
   if(!sub) return;
+  if(!okToOverwrite(d, sid, sub.name)) return;
   writeCell(d, sid, {title:escText(sub.name), subject:sub.code});
   paintSheet(); selectCell(d, sid, e || cellAt(d, sid));
   toast(sub.name + " を入れた");
@@ -1783,8 +1887,6 @@ function paintHeader(){
   $("navOpenName").textContent = open ? viewName() : "";
   for(const b of document.querySelectorAll(".nav[data-screen]"))
     b.setAttribute("aria-current", String(b.dataset.screen === (open ? "plan" : "gate")));
-  $("whoName").textContent = open ? viewName() : "週案";
-  $("whoRole").textContent = open ? "（" + viewWhere() + "）" : "";
   drawTargetSelect();
 }
 
@@ -2025,6 +2127,72 @@ function fillSelect(sel, arr, val){
   sel.innerHTML = arr.map(o => "<option value='" + escText(o.v) + "'"
     + (o.v === val ? " selected" : "") + ">" + escText(o.t) + "</option>").join("");
 }
+
+/* ── たんぽぽ時間割のプレビュー ─────────────────
+   実物（たんぽぽ時間割 週案シート）の列構成をそのまま使う。
+   B〜AA が児童ごとの列（見出しはその日の交流学級）、AB 以降は支援員・ボランティア。
+   **担当の行（交：／た：／支：）が、書くか書かないかを決める**（docs/spec.md 7節）。 */
+
+const TANPOPO_COLS = [
+  {col:"B", cls:"1-3"}, {col:"C", cls:"2-3"}, {col:"D", cls:"3-2"}, {col:"E", cls:"4-1"},
+  {col:"F", cls:"4-4"}, {col:"G", cls:"5-4"}, {col:"H", cls:"1-1"}, {col:"I", cls:"1-3"},
+  {col:"J", cls:"1-2"}, {col:"K", cls:"1-2"}, {col:"L", cls:"4-2"}, {col:"M", cls:"4-3"},
+  {col:"N", cls:"4-4"}, {col:"O", cls:"5-2"}, {col:"P", cls:"5-3"}, {col:"Q", cls:"5-3"},
+  {col:"R", cls:"5-4"}, {col:"S", cls:"6-3"}, {col:"T", cls:"6-3"}, {col:"U", cls:"2-1"},
+  {col:"V", cls:"2-2"}, {col:"W", cls:"3-1"}, {col:"X", cls:"3-1"}, {col:"Y", cls:"3-3"},
+  {col:"Z", cls:"3-3"}, {col:"AA", cls:"6-1"},
+  {col:"AB", cls:"大屋", staff:true},   {col:"AC", cls:"丸山", staff:true},
+  {col:"AD", cls:"日外", staff:true},   {col:"AE", cls:"喜田", staff:true},
+  {col:"AF", cls:"星川", staff:true},   {col:"AG", cls:"秋山", staff:true},
+  {col:"AH", cls:"内田", staff:true},   {col:"AI", cls:"ボランティア", staff:true}
+];
+/* 担当の見本。**実物ではシートの担当行を読む。** ここは見え方を確かめるための仮置き */
+const TANPOPO_DUTY = ["交：丸山", "た：桝村", "交：星川", "た：西本",
+                      "", "交：朝倉", "支：大屋", "た：安部"];
+const TANPOPO_SLOTS = ["p1", "p2", "p3", "p4", "p5", "p6"];
+let tpDay = 0;
+
+/* 1セルぶんの判定。docs/spec.md 7節の規則そのまま */
+function tanpopoCell(colIdx, col, slotId){
+  if(col.staff) return {skip:"支援員の列"};
+  const duty = TANPOPO_DUTY[(colIdx * 3 + TANPOPO_SLOTS.indexOf(slotId) * 5) % TANPOPO_DUTY.length];
+  if(duty.indexOf("た：") === 0) return {skip:"たんぽぽで受ける", duty};
+  if(duty.indexOf("支：") === 0) return {skip:"支援員が付く",     duty};
+  if(allClasses().indexOf(col.cls) < 0) return {skip:"編成に無いクラス", duty};
+  const c = compose(col.cls, tpDay, slotId);
+  const t = plain(c.title).trim();
+  if(!t) return {skip:"こちらが空", duty};
+  return {write:t, duty};
+}
+
+function openTanpopoDlg(){
+  drawTanpopo();
+  $("tpDlg").showModal();
+}
+function drawTanpopo(){
+  $("tpDays").innerHTML = DOW.map((d, i) =>
+    "<button" + (i === tpDay ? " aria-pressed='true'" : "") + " data-d='" + i + "'>"
+    + d + "</button>").join("");
+  for(const b of $("tpDays").querySelectorAll("button"))
+    b.onclick = () => { tpDay = +b.dataset.d; drawTanpopo(); };
+
+  let write = 0, skip = 0;
+  const head = "<tr><th>列</th><th>交流学級</th>"
+    + TANPOPO_SLOTS.map(s => "<th>" + SLOT_BY_ID[s].name + "</th>").join("") + "</tr>";
+  const body = TANPOPO_COLS.map((col, i) => {
+    const cells = TANPOPO_SLOTS.map(s => {
+      const r = tanpopoCell(i, col, s);
+      if(r.write){ write++; return "<td class='w'><b>" + escText(r.write) + "</b></td>"; }
+      skip++;
+      return "<td class='s'>" + escText(r.skip) + "</td>";
+    }).join("");
+    return "<tr" + (col.staff ? " class='staff'" : "") + "><th>" + col.col + "</th>"
+         + "<th>" + escText(col.cls) + "</th>" + cells + "</tr>";
+  }).join("");
+  $("tpGrid").innerHTML = "<table class='tp'>" + head + body + "</table>";
+  $("tpSum").innerHTML = "この曜日は <b>" + write + " セル</b>を書き換え、"
+    + "<b>" + skip + " セル</b>は触らない。";
+}
 /* ▲ src/js/dialogs.js ▲ */
 /* ▼ src/js/main.js ▼ */
 /* 起動と結線。ここだけが DOM のイベントを束ねる。 */
@@ -2142,7 +2310,7 @@ function wire(){
       if(a === "base")    return openBaseDlg();
       if(a === "roster")  return openRosterDlg();
       if(a === "tally")   return openTallyDlg();
-      if(a === "tanpopo") return $("tpDlg").showModal();
+      if(a === "tanpopo") return openTanpopoDlg();
       if(a === "paper")   return $("setDlg").showModal();
       if(a === "print")   return window.print();
     });
@@ -2240,7 +2408,10 @@ function wire(){
   on("pAll","click", () => {
     if(!selCell) return;
     const c = cellFor(selCell.d, selCell.s);
-    for(let d = 0; d < 5; d++) writeCell(d, selCell.s, {title:c.title, note:c.note || ""});
+    for(let d = 0; d < 5; d++){
+      if(!okToOverwrite(d, selCell.s, plain(c.title))) continue;
+      writeCell(d, selCell.s, {title:c.title, note:c.note || ""});
+    }
     paintSheet(); fillPanel();
     toast("5日とも「" + (escText(plain(c.title)) || "（空）") + "」にした");
   });
@@ -2250,6 +2421,9 @@ function wire(){
       const f = $(id);
       typing = f;
       if(id === "pTitle"){
+        if(!okToOverwrite(selCell.d, selCell.s, plain(f.innerHTML))){
+          f.innerHTML = (cellFor(selCell.d, selCell.s).title || ""); typing = null; return;
+        }
         const sub = SUB_BY_NAME[plain(f.innerHTML).trim()];
         writeCell(selCell.d, selCell.s, {title:f.innerHTML, subject:sub ? sub.code : null});
       }else{

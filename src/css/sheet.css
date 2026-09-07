@@ -103,7 +103,7 @@
    画面のものは何も刷らない。層の色も印も刷らない。
    リンクは下線だけ残す。URL は刷らない。 */
 @media print{
-  .topbar,.side,.panel,.gate,.toast,.center>.bar,.center>.hint-row{display:none!important}
+  .side,.panel,.gate,.toast{display:none!important}
   /* 時刻は画面だけのもの。紙の版面は教務必携の枠に合わせたまま動かさない
      （時程の列は 9mm。ここを広げると曜日の列がその分だけ痩せる） */
   .sheet{--labw:9mm}

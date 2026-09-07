@@ -113,7 +113,7 @@ function wire(){
       if(a === "base")    return openBaseDlg();
       if(a === "roster")  return openRosterDlg();
       if(a === "tally")   return openTallyDlg();
-      if(a === "tanpopo") return $("tpDlg").showModal();
+      if(a === "tanpopo") return openTanpopoDlg();
       if(a === "paper")   return $("setDlg").showModal();
       if(a === "print")   return window.print();
     });
@@ -211,7 +211,10 @@ function wire(){
   on("pAll","click", () => {
     if(!selCell) return;
     const c = cellFor(selCell.d, selCell.s);
-    for(let d = 0; d < 5; d++) writeCell(d, selCell.s, {title:c.title, note:c.note || ""});
+    for(let d = 0; d < 5; d++){
+      if(!okToOverwrite(d, selCell.s, plain(c.title))) continue;
+      writeCell(d, selCell.s, {title:c.title, note:c.note || ""});
+    }
     paintSheet(); fillPanel();
     toast("5日とも「" + (escText(plain(c.title)) || "（空）") + "」にした");
   });
@@ -221,6 +224,9 @@ function wire(){
       const f = $(id);
       typing = f;
       if(id === "pTitle"){
+        if(!okToOverwrite(selCell.d, selCell.s, plain(f.innerHTML))){
+          f.innerHTML = (cellFor(selCell.d, selCell.s).title || ""); typing = null; return;
+        }
         const sub = SUB_BY_NAME[plain(f.innerHTML).trim()];
         writeCell(selCell.d, selCell.s, {title:f.innerHTML, subject:sub ? sub.code : null});
       }else{

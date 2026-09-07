@@ -13,13 +13,13 @@ const Store = (function(){
 
   const TZ  = "Asia/Tokyo";
   const ymd = d => Utilities.formatDate(
-    (d instanceof Date) ? d : new Date(String(d)), TZ, "yyyy-MM-dd");
+    Sheets.isDate(d) ? d : new Date(String(d)), TZ, "yyyy-MM-dd");
 
   /* 層と対象の組で1コマが決まる。
        school  対象なし   ／ grade   対象=学年
        special 対象=クラス ／ home    対象=クラス          */
   const keyOf = r => [r["日付"], r["時程"], r["層"], r["対象"]].join("\t");
-  const keyOfPatch = (date, p) => [date, p.slot, p.layer, String(p.target || "")].join("\t");
+  const keyOfPatch = (date, p) => [date, p.slot, p.layer, Sheets.asClass(p.target)].join("\t");
 
   /* ── 読む ────────────────────────────────────── */
 
@@ -35,11 +35,11 @@ const Store = (function(){
         title:   String(r["題名"] || ""),
         note:    String(r["詳細"] || ""),
         subject: String(r["教科コード"] || "") || null,
-        at:      (r["更新時刻"] instanceof Date) ? r["更新時刻"].getTime() : 0,
+        at:      Sheets.isDate(r["更新時刻"]) ? r["更新時刻"].getTime() : 0,
         by:      String(r["更新者"] || "")
       };
       const k = date + "|" + r["時程"];      /* 画面は 日付|時程 で持つ */
-      const layer = String(r["層"]), target = String(r["対象"] || "");
+      const layer = String(r["層"]), target = Sheets.asClass(r["対象"]);
       if(layer === "school")       w.school[k] = cell;
       else if(layer === "grade")   (w.grade[target]   || (w.grade[target]   = {}))[k] = cell;
       else if(layer === "special"){ cell.sp = String(r["担当"] || "");
@@ -54,7 +54,7 @@ const Store = (function(){
     const out = {};
     for(const r of rows){
       if(String(r["年度"]) !== String(year)) continue;
-      const cls = String(r["クラス"]), v = String(r["週"] || "A");
+      const cls = Sheets.asClass(r["クラス"]), v = String(r["週"] || "A");
       const k = String(r["曜日"]) + "|" + String(r["時程"]);
       const bank = out[cls] || (out[cls] = {});
       (bank[v] || (bank[v] = {}))[k] = {
@@ -67,7 +67,7 @@ const Store = (function(){
   /* 年度の欄が空の行は「どの年度でも使う既定」。年度を書いた行があれば、そちらが勝つ。 */
   function readRoster(year){
     const classes = pickYear_("クラス", year).reduce((a, r) => {
-      const g = String(r["学年"] || "").trim(), c = String(r["クラス"] || "").trim();
+      const g = Sheets.asClass(r["学年"]), c = Sheets.asClass(r["クラス"]);
       if(g && c) (a[g] || (a[g] = [])).push(c);
       return a;
     }, {});
@@ -133,7 +133,7 @@ const Store = (function(){
       const me = (function(){ try{ return Gate.activeEmail(); }catch(e){ return ""; } })();
 
       for(const p of patches){
-        const date = ymd(p.date), target = String(p.target || "");
+        const date = ymd(p.date), target = Sheets.asClass(p.target);
         const k = keyOfPatch(date, p), rowNo = index[k];
         const outKey = [date, p.slot, p.layer, target].join("|");
         const empty = !String(p.title || "").trim() && !String(p.note || "").trim();
@@ -191,7 +191,7 @@ const Store = (function(){
     lock.waitLock(20000);
     try{
       for(const r of Sheets.readAll("基本時間割").rows)
-        if(String(r["年度"]) === String(year) && String(r["クラス"]) === String(cls)
+        if(String(r["年度"]) === String(year) && Sheets.asClass(r["クラス"]) === Sheets.asClass(cls)
         && String(r["週"]) === String(variant)) Sheets.blankRow("基本時間割", r.__row);
       const adds = [];
       for(const k in (bank || {})){

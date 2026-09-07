@@ -33,6 +33,25 @@ function drawPalette(){
   }
 }
 
+/* 書く前に一度だけ聞く。**別の人の予定を潰すときだけ。**
+   基本時間割を直すのはふだんの作業なので聞かない。
+   一度«はい»と答えたコマは、その画面を開いている間は聞き直さない。 */
+const askedCells = {};
+function okToOverwrite(d, sid, to){
+  const hit = wouldOverwrite(d, sid);
+  if(!hit.length) return true;
+  const key = viewName() + "|" + ck(d, sid);
+  if(askedCells[key]) return true;
+  const dt = addDays(monday, d), sl = SLOT_BY_ID[sid];
+  const when = md(dt) + "(" + DOW[d] + ") " + sl.name + (sl.kind === "lesson" ? "校時" : "");
+  const lines = hit.map(h => "　" + h.cls + " の「" + h.from + "」（" + h.by + "）");
+  const yes = confirm(
+    when + "\n\n次の予定を「" + (plain(to) || "（空）") + "」に上書きします。\n\n"
+    + lines.join("\n") + "\n\nつづけますか？");
+  if(yes) askedCells[key] = true;
+  return yes;
+}
+
 function applyPalette(d, sid, v, e){
   if(view.kind === "special"){
     writeCell(d, sid, {cls:v});
@@ -42,6 +61,7 @@ function applyPalette(d, sid, v, e){
   }
   const sub = SUB_BY_CODE[v];
   if(!sub) return;
+  if(!okToOverwrite(d, sid, sub.name)) return;
   writeCell(d, sid, {title:escText(sub.name), subject:sub.code});
   paintSheet(); selectCell(d, sid, e || cellAt(d, sid));
   toast(sub.name + " を入れた");

@@ -56,24 +56,30 @@
 </svg>
 
 <div class="app">
-
-  <header class="topbar">
-    <span class="brand"><svg width="21" height="21"><use href="#i-school"/></svg>週案</span>
-    <nav class="tabs">
-      <button class="tab" aria-selected="true"><svg width="16" height="16"><use href="#i-grid"/></svg>時間割</button>
-      <button class="tab" data-act="paper"><svg width="16" height="16"><use href="#i-gear"/></svg>設定</button>
-    </nav>
-    <span class="who"><svg width="17" height="17"><use href="#i-user"/></svg>
-      <b id="whoName"></b><span id="whoRole"></span></span>
-  </header>
-
   <div class="work">
 
     <aside class="side">
-      <h2><svg width="19" height="19"><use href="#i-grid"/></svg><span>時間割</span></h2>
+      <h2><svg width="19" height="19"><use href="#i-school"/></svg><span>週案</span></h2>
 
+      <!-- 週。**紙の上下には何も置かない**ので、ここに寄せる -->
+      <div class="wk">
+        <div class="pill">
+          <button class="ico" id="prevWk" aria-label="前の週"><svg width="18" height="18"><use href="#i-left"/></svg></button>
+          <span class="date" id="weekLabel"></span>
+          <button class="ico" id="nextWk" aria-label="次の週"><svg width="18" height="18"><use href="#i-right"/></svg></button>
+        </div>
+        <div class="wkrow">
+          <span class="wkno" id="weekNo"></span>
+          <div class="seg" role="group" aria-label="基本時間割のA週・B週">
+            <button id="abA" aria-pressed="true">A週</button><button id="abB">B週</button>
+          </div>
+        </div>
+        <select class="target" id="target" aria-label="開いているもの"></select>
+      </div>
+
+      <hr>
       <button class="nav" data-screen="gate" data-act="gate">
-        <svg width="17" height="17"><use href="#i-layers"/></svg><span>週案をひらく</span></button>
+        <svg width="17" height="17"><use href="#i-layers"/></svg><span>ほかの週案をひらく</span></button>
       <button class="nav" data-screen="plan" data-act="open" id="navOpen" hidden>
         <svg width="17" height="17"><use href="#i-cal"/></svg>
         <span>いま：<b id="navOpenName"></b></span></button>
@@ -96,33 +102,19 @@
       <button class="nav" data-act="paper">
         <svg width="17" height="17"><use href="#i-gear"/></svg><span>用紙・印刷</span></button>
 
-      <p class="foot-note">白い紙に出ているものだけが刷られる。<br>まわりの操作は刷られない。</p>
+      <hr>
+      <h3>紙の上の見え方</h3>
+      <div class="legend">
+        <span><i class="up"></i>上位から降りてきた</span>
+        <span><i class="cl"></i>2つ以上入っている</span>
+        <span><i class="bs"></i>基本時間割のまま</span>
+      </div>
+      <p class="foot-note">白い紙に出ているものだけが刷られる。<br>
+        文字を選んでリンクを付けると、紙の上でその文字を押して開ける。</p>
     </aside>
 
     <main class="center" id="centerWrap">
-      <div class="bar">
-        <div class="pill">
-          <button class="ico" id="prevWk" aria-label="前の週"><svg width="18" height="18"><use href="#i-left"/></svg></button>
-          <span class="date" id="weekLabel"></span>
-          <button class="ico" id="nextWk" aria-label="次の週"><svg width="18" height="18"><use href="#i-right"/></svg></button>
-        </div>
-        <span class="wkno" id="weekNo"></span>
-        <div class="seg" role="group" aria-label="基本時間割のA週・B週">
-          <button id="abA" aria-pressed="true">A週</button><button id="abB">B週</button>
-        </div>
-        <select class="target" id="target" aria-label="開いているもの"></select>
-        <span class="grow"></span>
-        <div class="legend">
-          <span><i class="up"></i>上位から降りてきた</span>
-          <span><i class="cl"></i>2つ以上入っている</span>
-          <span><i class="bs"></i>基本時間割のまま</span>
-        </div>
-      </div>
-
       <div class="stage" id="stage"><div class="paper" id="paper"><div class="sheet" id="sheet"></div></div></div>
-
-      <div class="hint-row"><svg width="15" height="15"><use href="#i-info"/></svg>
-        <p class="hint">文字を選んで<b>リンク</b>を付けると、紙の上でその文字を押して開ける。刷ると下線だけ残る。</p></div>
     </main>
 
     <aside class="panel">
@@ -263,6 +255,16 @@
      木曜に各担任から週案を集めて金曜に打ち替える作業を、この1操作に置き換える。<br>
      <b>下書きを入れる操作</b>で、入れたあとにたんぽぽ担当が上書きして直す前提。</p>
 
+  <h3>入るところ・入らないところ</h3>
+  <div class="row"><span>曜日</span><div class="seg" id="tpDays"></div>
+    <span id="tpSum"></span></div>
+  <div id="tpGrid" class="tpwrap"></div>
+  <p style="margin-top:10px">実物の列構成（B〜AA が児童ごとの列、AB 以降が支援員・ボランティア）。
+     <b>担当の行が「交：」か空のときだけ書く。</b>「た：」「支：」は触らない。<br>
+     <span style="color:var(--ink-alert)">担当は見本の仮置き。</span>実物ではシートの担当行を読むので、
+     入り方はそちらで決まる。</p>
+
+  <hr>
   <h3>シートの形（1日16行に揃える）</h3>
   <pre class="mono">日ブロック            ブロックの先頭からの相対行
   行  1   見出し        +0   日付／その日の交流学級
@@ -294,6 +296,7 @@
   <ul>
     <li>列見出しは<b>日ブロックごとに読み直す</b>。曜日で交流学級が変わる</li>
     <li>正規化して「学年-組」になる列だけ。<b>支援員・ボランティアの列には書かない</b></li>
+    <li><b>クラス名が日付に化けていても戻して読む</b>（1-1 は1月1日、6-3 は6月3日として取り込まれる）</li>
     <li><b>授業名の行だけ。</b>担当の行と、支援員を表すセルの色には触れない</li>
     <li><b>こちらが空のコマには書かない。</b>空で上書きすると、前の週の書き込みが毎週消えて打ち直しになる</li>
     <li>確認は「何日ぶん・何セル書き換えるか」の数だけ出して<b>1回で確定</b></li>
@@ -303,6 +306,16 @@
      上の規則のとおりに書く口だけ作ってある（docs/spec.md 7節）。<br>
      先に<b>日ブロックを16行に揃える</b>ところまでをシート側でやる。</p>
   <div class="end"><button class="btn go" data-close="tpDlg">閉じる</button></div>
+</div></dialog>
+
+<dialog id="owDlg"><div class="dlg">
+  <h2>あなたの予定が上書きされています</h2>
+  <p>あなたが入れたコマに、<b>あとから別の予定が入りました。</b>
+     いま紙に出ているのはあとから入ったほうです。<br>
+     戻したいときは、そのコマをもう一度入れ直す（あとから書いたほうが出ます）。<br>
+     この窓は<b>同じ上書きについては1回だけ</b>出ます。</p>
+  <ul id="owList" class="owlist"></ul>
+  <div class="end"><button class="btn go" data-close="owDlg">確かめた</button></div>
 </div></dialog>
 
 <dialog id="warnDlg"><div class="dlg">

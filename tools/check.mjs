@@ -171,6 +171,92 @@ ok("学年ごとのクラス数を表から変えられる",
    await p.evaluate(() => classesOfGrade("4")));
 await p.locator("#rsClose").click(); await p.waitForTimeout(250);
 
+console.log("\n■ 上書きの警告（書く側）");
+/* 学年マスターで 3年 の木3校時に「学年体育」を入れる。
+   3-3 には担任の「総合」が入っているので、聞かれるはず */
+await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='3-3']").click(); await p.waitForTimeout(300);
+await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").click(); await p.waitForTimeout(150);
+await p.locator(".pal[data-v='kokugo']").click(); await p.waitForTimeout(250);
+await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".master[data-g='3']").click(); await p.waitForTimeout(300);
+
+let asked = null, answer = true;
+const onDialog = async d => { asked = d.message(); await (answer ? d.accept() : d.dismiss()); };
+p.on("dialog", onDialog);
+await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").click(); await p.waitForTimeout(150);
+await p.locator(".pal[data-v='taiiku']").click(); await p.waitForTimeout(300);
+ok("別の人の予定を潰すときは聞く", typeof asked === "string" && asked.length > 0, asked);
+ok("どのクラスの何を何に変えるかを言う",
+   !!asked && asked.indexOf("3-3") >= 0 && asked.indexOf("国語") >= 0
+   && asked.indexOf("体育") >= 0, asked);
+ok("«はい»なら入る",
+   (await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText()).trim() === "体育");
+
+asked = null;
+await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").click(); await p.waitForTimeout(150);
+await p.locator(".pal[data-v='sansu']").click(); await p.waitForTimeout(250);
+ok("同じコマでは聞き直さない", asked === null, asked);
+
+/* 誰の予定も潰さないコマでは聞かない */
+asked = null;
+await p.locator("#sheet .cell[data-d='0'][data-s='p6'] .t").click(); await p.waitForTimeout(150);
+await p.locator(".pal[data-v='sogo']").click(); await p.waitForTimeout(250);
+ok("誰の予定も潰さないときは聞かない", asked === null, asked);
+
+/* «いいえ»なら入らない */
+answer = false; asked = null;
+await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(300);
+const beforeCancel = (await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText()).trim();
+await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").click(); await p.waitForTimeout(150);
+await p.locator(".pal[data-v='katei']").click(); await p.waitForTimeout(300);
+ok("«いいえ»なら入らない",
+   (await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText()).trim() === beforeCancel,
+   [beforeCancel, await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText()]);
+p.off("dialog", onDialog);
+answer = true;
+
+console.log("\n■ 上書きされた側への知らせ");
+/* 3-3 の担任が入れた「国語」は、学年の「体育」に上書きされている */
+await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='3-3']").click(); await p.waitForTimeout(500);
+ok("開いたときに知らせが出る", await p.locator("#owDlg").evaluate(d => d.open) === true);
+const owText = await p.locator("#owList").innerText();
+ok("いつ・何が・何に上書きされたかを言う",
+   /\d+\/\d+\(.\)\s*\S+校時/.test(owText)
+   && owText.indexOf("国語") >= 0 && owText.indexOf("→") > 0
+   && owText.indexOf("上書きされました") > 0, owText);
+ok("誰が入れたかも言う", owText.indexOf("学年") >= 0, owText);
+await p.locator("#owDlg .btn").click(); await p.waitForTimeout(300);
+await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='3-3']").click(); await p.waitForTimeout(500);
+ok("同じ上書きについては二度出ない",
+   await p.locator("#owDlg").evaluate(d => d.open) === false);
+
+console.log("\n■ たんぽぽのプレビュー");
+await p.locator("[data-act='tanpopo']").click(); await p.waitForTimeout(400);
+ok("実物の列構成で出る（34列＋見出し）",
+   await p.locator("#tpGrid table tr").count() === 35,
+   await p.locator("#tpGrid table tr").count());
+const sum = await p.locator("#tpSum").innerText();
+ok("書き換える数と触らない数を言う",
+   /\d+ セル/.test(sum) && sum.indexOf("触らない") > 0, sum);
+const tpText = await p.locator("#tpGrid").innerText();
+ok("「た：」の列は触らない", tpText.indexOf("たんぽぽで受ける") >= 0);
+ok("支援員が付くコマも触らない", tpText.indexOf("支援員が付く") >= 0);
+/* 編成に 4-4 を足したあとなので、4-4 の列にも入るようになっているはず。
+   足す前は「編成に無いクラス」と出ていた（たんぽぽの列と編成のずれが見える） */
+ok("編成に足したクラスの列にも入るようになる",
+   tpText.indexOf("編成に無いクラス") < 0, tpText.slice(0, 200));
+ok("支援員の列そのものも書かない",
+   (await p.locator("#tpGrid tr.staff").count()) === 8,
+   await p.locator("#tpGrid tr.staff").count());
+await p.locator("#tpDays button").nth(2).click(); await p.waitForTimeout(250);
+ok("曜日を変えると中身が変わる",
+   (await p.locator("#tpGrid").innerText()) !== tpText);
+await p.locator("[data-close='tpDlg']").click(); await p.waitForTimeout(200);
+
 console.log("\n■ 時数のコピー");
 await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-3']").click(); await p.waitForTimeout(300);

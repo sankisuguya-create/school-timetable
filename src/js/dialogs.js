@@ -206,3 +206,69 @@ function fillSelect(sel, arr, val){
   sel.innerHTML = arr.map(o => "<option value='" + escText(o.v) + "'"
     + (o.v === val ? " selected" : "") + ">" + escText(o.t) + "</option>").join("");
 }
+
+/* ── たんぽぽ時間割のプレビュー ─────────────────
+   実物（たんぽぽ時間割 週案シート）の列構成をそのまま使う。
+   B〜AA が児童ごとの列（見出しはその日の交流学級）、AB 以降は支援員・ボランティア。
+   **担当の行（交：／た：／支：）が、書くか書かないかを決める**（docs/spec.md 7節）。 */
+
+const TANPOPO_COLS = [
+  {col:"B", cls:"1-3"}, {col:"C", cls:"2-3"}, {col:"D", cls:"3-2"}, {col:"E", cls:"4-1"},
+  {col:"F", cls:"4-4"}, {col:"G", cls:"5-4"}, {col:"H", cls:"1-1"}, {col:"I", cls:"1-3"},
+  {col:"J", cls:"1-2"}, {col:"K", cls:"1-2"}, {col:"L", cls:"4-2"}, {col:"M", cls:"4-3"},
+  {col:"N", cls:"4-4"}, {col:"O", cls:"5-2"}, {col:"P", cls:"5-3"}, {col:"Q", cls:"5-3"},
+  {col:"R", cls:"5-4"}, {col:"S", cls:"6-3"}, {col:"T", cls:"6-3"}, {col:"U", cls:"2-1"},
+  {col:"V", cls:"2-2"}, {col:"W", cls:"3-1"}, {col:"X", cls:"3-1"}, {col:"Y", cls:"3-3"},
+  {col:"Z", cls:"3-3"}, {col:"AA", cls:"6-1"},
+  {col:"AB", cls:"大屋", staff:true},   {col:"AC", cls:"丸山", staff:true},
+  {col:"AD", cls:"日外", staff:true},   {col:"AE", cls:"喜田", staff:true},
+  {col:"AF", cls:"星川", staff:true},   {col:"AG", cls:"秋山", staff:true},
+  {col:"AH", cls:"内田", staff:true},   {col:"AI", cls:"ボランティア", staff:true}
+];
+/* 担当の見本。**実物ではシートの担当行を読む。** ここは見え方を確かめるための仮置き */
+const TANPOPO_DUTY = ["交：丸山", "た：桝村", "交：星川", "た：西本",
+                      "", "交：朝倉", "支：大屋", "た：安部"];
+const TANPOPO_SLOTS = ["p1", "p2", "p3", "p4", "p5", "p6"];
+let tpDay = 0;
+
+/* 1セルぶんの判定。docs/spec.md 7節の規則そのまま */
+function tanpopoCell(colIdx, col, slotId){
+  if(col.staff) return {skip:"支援員の列"};
+  const duty = TANPOPO_DUTY[(colIdx * 3 + TANPOPO_SLOTS.indexOf(slotId) * 5) % TANPOPO_DUTY.length];
+  if(duty.indexOf("た：") === 0) return {skip:"たんぽぽで受ける", duty};
+  if(duty.indexOf("支：") === 0) return {skip:"支援員が付く",     duty};
+  if(allClasses().indexOf(col.cls) < 0) return {skip:"編成に無いクラス", duty};
+  const c = compose(col.cls, tpDay, slotId);
+  const t = plain(c.title).trim();
+  if(!t) return {skip:"こちらが空", duty};
+  return {write:t, duty};
+}
+
+function openTanpopoDlg(){
+  drawTanpopo();
+  $("tpDlg").showModal();
+}
+function drawTanpopo(){
+  $("tpDays").innerHTML = DOW.map((d, i) =>
+    "<button" + (i === tpDay ? " aria-pressed='true'" : "") + " data-d='" + i + "'>"
+    + d + "</button>").join("");
+  for(const b of $("tpDays").querySelectorAll("button"))
+    b.onclick = () => { tpDay = +b.dataset.d; drawTanpopo(); };
+
+  let write = 0, skip = 0;
+  const head = "<tr><th>列</th><th>交流学級</th>"
+    + TANPOPO_SLOTS.map(s => "<th>" + SLOT_BY_ID[s].name + "</th>").join("") + "</tr>";
+  const body = TANPOPO_COLS.map((col, i) => {
+    const cells = TANPOPO_SLOTS.map(s => {
+      const r = tanpopoCell(i, col, s);
+      if(r.write){ write++; return "<td class='w'><b>" + escText(r.write) + "</b></td>"; }
+      skip++;
+      return "<td class='s'>" + escText(r.skip) + "</td>";
+    }).join("");
+    return "<tr" + (col.staff ? " class='staff'" : "") + "><th>" + col.col + "</th>"
+         + "<th>" + escText(col.cls) + "</th>" + cells + "</tr>";
+  }).join("");
+  $("tpGrid").innerHTML = "<table class='tp'>" + head + body + "</table>";
+  $("tpSum").innerHTML = "この曜日は <b>" + write + " セル</b>を書き換え、"
+    + "<b>" + skip + " セル</b>は触らない。";
+}

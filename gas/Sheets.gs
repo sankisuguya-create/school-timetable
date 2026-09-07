@@ -87,6 +87,31 @@ const Sheets = (function(){
 
   const NAMES = Object.keys(SPEC);
 
+  /* **クラス名は日付に化ける。**
+     スプレッドシートは 1-1 を「1月1日」、6-3 を「6月3日」として取り込む。
+     打ち込んでも、スクリプトから setValue しても同じ。放っておくと
+     クラス「1-1」が Date になり、String() すると "Sat Jan 01 ..." になる。
+
+     塞ぎ方は2枚。
+       1. その列を**書式「書式なしテキスト」**にしておく（作るときに1回）
+       2. 読むときに、Date で来たら **月-日 に戻す**（すでに化けたシートも直る）
+     1-1 は1月1日、6-3 は6月3日なので、月と日から元の字にそのまま戻せる。 */
+  const CLASS_COLS = {
+    "クラス":     ["クラス"],
+    "基本時間割": ["クラス"],
+    "週案":       ["対象"]
+  };
+
+  /* 日付かどうかは **形で見る**。instanceof は、違う実行環境から来た値では
+     必ず外れる（同じ Date でも別物として扱われる）。 */
+  const isDate = v => !!v && typeof v === "object"
+                   && typeof v.getMonth === "function" && typeof v.getDate === "function";
+
+  function asClass(v){
+    if(isDate(v)) return (v.getMonth() + 1) + "-" + v.getDate();
+    return String(v == null ? "" : v).trim();
+  }
+
   function sheet(name){
     const ss = SpreadsheetApp.getActive();
     return ss.getSheetByName(name);
@@ -105,6 +130,11 @@ const Sheets = (function(){
       sh.getRange(1, 1, rows.length, spec.cols.length).setValues(rows);
       sh.getRange(1, 1, 1, spec.cols.length).setFontWeight("bold");
       sh.setFrozenRows(1);
+      /* クラス名の列は「書式なしテキスト」にして、日付に化けないようにする */
+      for(const col of (CLASS_COLS[name] || [])){
+        const i = spec.cols.indexOf(col);
+        if(i >= 0) sh.getRange(1, i + 1, sh.getMaxRows(), 1).setNumberFormat("@");
+      }
       made.push(name);
     }
     return {made, kept};
@@ -131,10 +161,11 @@ const Sheets = (function(){
     if(last < 2) return {rows: [], at};
     const w = Math.max(1, sh.getLastColumn());
     const v = sh.getRange(2, 1, last - 1, w).getValues();
-    const rows = [];
+    const rows = [], fix = CLASS_COLS[name] || [];
     for(let i = 0; i < v.length; i++){
       const o = {__row: i + 2};
       for(const k in at) o[k] = v[i][at[k]];
+      for(const col of fix) if(col in o) o[col] = asClass(o[col]);   /* 化けていたら戻す */
       if(String(o[SPEC[name].cols[0]]).trim() === "" &&
          String(o[SPEC[name].cols[1]] || "").trim() === "") continue;   /* 空行は飛ばす */
       rows.push(o);
@@ -161,7 +192,8 @@ const Sheets = (function(){
     sh.getRange(rowNo, 1, 1, SPEC[name].cols.length).clearContent();
   }
 
-  return {SPEC, NAMES, setup, head, readAll, appendRows, toArray, setRow, blankRow, sheet};
+  return {SPEC, NAMES, CLASS_COLS, asClass, isDate,
+          setup, head, readAll, appendRows, toArray, setRow, blankRow, sheet};
 })();
 
 /* シートを作る。エディタから1回実行する。 */

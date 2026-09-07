@@ -12,6 +12,7 @@ const fs = require("fs"), path = require("path"), vm = require("vm");
 
 /* ── 偽のスプレッドシート ─────────────────────── */
 const SHEETS = {};                       /* 名前 → 二次元配列 */
+const FORMATS = {};                      /* 名前/列 → 表示形式 */
 const WIDE = 20;                         /* 偽物の最大列数 */
 
 function ensure(grid, r, c){
@@ -51,9 +52,14 @@ function fakeSheet(name){
             grid[r - 1 + i][c - 1 + j] = "";
           return this;
         },
-        setFontWeight(){ return this; }
+        setFontWeight(){ return this; },
+        setNumberFormat(f){
+          for(let j = 0; j < nc; j++) FORMATS[name + "/" + (c + j)] = f;
+          return this;
+        }
       };
     },
+    getMaxRows(){ return Math.max(1000, grid.length); },
     setFrozenRows(){}
   };
 }
@@ -218,6 +224,48 @@ EMAIL = "tanaka@edu.nishi.or.jp";
 ok("教職員は apiBoot を通る", typeof ev("apiBoot()").me === "string");
 ok("apiBoot が時程と教科を渡す",
    ev("apiBoot()").slots.length === 10 && ev("apiBoot()").subjects.length === 17);
+
+console.log("\n■ クラス表記が日付に化けるのを防ぐ");
+ok("クラス列は書式なしテキストにしてある", FORMATS["クラス/3"] === "@", FORMATS);
+ok("基本時間割のクラス列も同じ", FORMATS["基本時間割/2"] === "@");
+ok("週案の対象列も同じ", FORMATS["週案/5"] === "@");
+ok("1-1 は Date で来ても 1-1 に戻る",
+   ev('Sheets.asClass(new Date(2026, 0, 1))') === "1-1",
+   ev('Sheets.asClass(new Date(2026, 0, 1))'));
+ok("6-3 は Date で来ても 6-3 に戻る", ev('Sheets.asClass(new Date(2026, 5, 3))') === "6-3");
+ok("5-4 は Date で来ても 5-4 に戻る", ev('Sheets.asClass(new Date(2026, 4, 4))') === "5-4");
+ok("ふつうの字はそのまま", ev('Sheets.asClass(" 3-2 ")') === "3-2");
+
+/* すでに化けているシートでも読めるか。クラス列に Date を直に入れて確かめる */
+(function(){
+  const grid = SHEETS["クラス"];
+  const at = ev('Sheets.head("クラス").at');
+  for(const row of grid.slice(1)){
+    if(String(row[at["クラス"]]) === "6-3") row[at["クラス"]] = new Date(2026, 5, 3);
+    if(String(row[at["クラス"]]) === "1-1") row[at["クラス"]] = new Date(2026, 0, 1);
+  }
+})();
+const fixed = ev("Store.readRoster(2026)");
+ok("化けたシートでも 6-3 が読める",
+   (fixed.classes["6"] || []).indexOf("6-3") >= 0, fixed.classes["6"]);
+ok("化けたシートでも 1-1 が読める",
+   (fixed.classes["1"] || []).indexOf("1-1") >= 0, fixed.classes["1"]);
+ok("化けても学級数は変わらない",
+   Object.keys(fixed.classes).reduce((a,g) => a + fixed.classes[g].length, 0) === 20);
+
+/* 週案の対象が化けていても、同じコマとして扱えるか */
+ev(`Store.writeCells(2026, [{date:"2026-12-01", slot:"p1", layer:"home", target:"6-3", title:"社会"}])`);
+(function(){
+  const at = ev('Sheets.head("週案").at');
+  for(const row of SHEETS["週案"]) if(String(row[at["対象"]]) === "6-3")
+    row[at["対象"]] = new Date(2026, 5, 3);
+})();
+const rows0 = rowsOf("週案").length;
+ev(`Store.writeCells(2026, [{date:"2026-12-01", slot:"p1", layer:"home", target:"6-3", title:"理科"}])`);
+ok("対象が化けていても同じ行を直す（行が増えない）",
+   rowsOf("週案").length === rows0, rowsOf("週案").length - rows0);
+ok("読み直すと 6-3 のコマとして戻る",
+   ev('Store.readWeek(2026, "2026-11-30")').home["6-3"]["2026-12-01|p1"].title === "理科");
 
 console.log("\n■ ロック");
 ok("書き込みのあとロックは残らない", locks.held === 0, locks.held);

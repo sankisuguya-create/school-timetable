@@ -3,6 +3,7 @@ const exe = process.env.PLAYWRIGHT_CHROMIUM;
 const b = await chromium.launch(exe ? {executablePath: exe} : {});
 const p = await b.newPage({viewport:{width:1520, height:950}, deviceScaleFactor:2});
 p.on("pageerror", e => console.log("ERR", e.message));
+p.on("dialog", d => d.accept());
 await p.goto("file:///home/user/school-timetable/dist/index.html");
 await p.waitForTimeout(400);
 const D = process.env.OUT || "/tmp";
@@ -24,11 +25,16 @@ await p.evaluate(() => {
   save(); buildSheet();
 });
 await p.waitForTimeout(400);
-if(await p.locator("#warnDlg").evaluate(d => d.open)) await p.locator("#warnDlg .btn").click();
+for(const id of ["owDlg", "warnDlg"])
+  if(await p.locator("#" + id).evaluate(d => d.open).catch(() => false))
+    await p.locator("#" + id + " .btn").click();
 await p.waitForTimeout(200);
 await p.locator("#sheet .cell[data-d='0'][data-s='p2'] .t").click();
 await p.waitForTimeout(300);
 await p.screenshot({path:D + "/editor.png"});
+await p.locator("[data-act='tanpopo']").click(); await p.waitForTimeout(400);
+await p.screenshot({path:D + "/tanpopo.png"});
+await p.locator("[data-close='tpDlg']").click(); await p.waitForTimeout(200);
 await p.emulateMedia({media:"print"});
 await p.waitForTimeout(250);
 await p.locator("#sheet").screenshot({path:D + "/print.png"});

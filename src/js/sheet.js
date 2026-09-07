@@ -69,6 +69,11 @@ function cellEl(d, s){
   if(n) n.addEventListener("focus", focus);
 
   t.addEventListener("input", () => {
+    /* 打ち始めた1打目で聞く。«いいえ»なら元に戻す */
+    if(!okToOverwrite(d, s.id, plain(t.innerHTML))){
+      t.innerHTML = (cellFor(d, s.id).title || "");
+      return;
+    }
     typing = t;
     const sub = SUB_BY_NAME[plain(t.innerHTML).trim()];
     writeCell(d, s.id, {title:t.innerHTML, subject:sub ? sub.code : null});
@@ -94,7 +99,7 @@ function cellEl(d, s){
 /* 中身を流し込む。el を渡すとそのコマだけ塗り直す。 */
 function paintSheet(one){
   const list = one ? [one] : [...document.querySelectorAll("#sheet .cell")];
-  const mine = layerOf(), clashes = [];
+  const mine = layerOf();
 
   for(const e of list){
     const d = +e.dataset.d, s = e.dataset.s;
@@ -117,32 +122,30 @@ function paintSheet(one){
     tag.hidden = !name;
     tag.textContent = name;
 
-    if(c.clash) clashes.push({d, s, c});
   }
-  if(!one) warnClashes(clashes);
+  if(!one) warnOverwritten();
 }
 
-/* 重なりの警告。**開いたとき1回だけ。** 毎回出る警告は読まれなくなる。 */
-function warnClashes(list){
+/* **自分の予定が上書きされていたら、開いたときに知らせる。**
+   自分に関係のない層どうしの重なりは出さない（読まれない警告は機能しない）。
+   同じ上書きについては1回だけ。中身が変わったら出し直す。 */
+function warnOverwritten(){
+  const list = overwrittenHere();
   if(!list.length) return;
   const w = week();
-  const sig = c => viewName() + "|" + ck(c.d, c.s) + "|" + plain(c.c.title) + "|"
-                 + c.c.clash.map(p => p.layer + ":" + plain(p.title)).join(",");
-  const fresh = list.filter(c => w.acked.indexOf(sig(c)) < 0);
+  const sig = x => [viewName(), x.d, x.s, x.cls, x.from, x.to].join("|");
+  const fresh = list.filter(x => w.acked.indexOf(sig(x)) < 0);
   if(!fresh.length) return;
 
-  $("warnList").innerHTML = fresh.map(c => {
-    const dt = addDays(monday, c.d), sl = SLOT_BY_ID[c.s];
-    const prev = c.c.clash
-      .map(p => LAYER_FULL[p.layer] + "「" + (escText(plain(p.title)) || "（空）") + "」")
-      .join(" / ");
-    return "<li>" + md(dt) + "(" + DOW[c.d] + ") " + sl.name
-      + (sl.kind === "lesson" ? "校時" : "") + "　" + escText(viewName()) + "<br>"
-      + "　出ていない予定：<b>" + prev + "</b><br>"
-      + "　いま出ている：" + LAYER_FULL[c.c.layer]
-      + "「" + (escText(plain(c.c.title)) || "（空）") + "」</li>";
+  $("owList").innerHTML = fresh.map(x => {
+    const dt = addDays(monday, x.d), sl = SLOT_BY_ID[x.s];
+    const when = md(dt) + "(" + DOW[x.d] + ") " + sl.name + (sl.kind === "lesson" ? "校時" : "");
+    const who  = (view.kind === "class") ? "" : escText(x.cls) + " の ";
+    return "<li>" + who + "<b>" + when + "</b> が "
+      + "<s>" + (escText(x.from) || "（空）") + "</s> → <b>" + (escText(x.to) || "（空）")
+      + "</b> に上書きされました<br><span class=\"who\">" + escText(x.by) + "が入れたもの</span></li>";
   }).join("");
-  const dlg = $("warnDlg");
+  const dlg = $("owDlg");
   dlg.showModal();
-  dlg.onclose = () => { fresh.forEach(c => w.acked.push(sig(c))); save(); };
+  dlg.onclose = () => { fresh.forEach(x => w.acked.push(sig(x))); save(); };
 }

@@ -76,8 +76,6 @@ function paintHeader(){
   $("navOpenName").textContent = open ? viewName() : "";
   for(const b of document.querySelectorAll(".nav[data-screen]"))
     b.setAttribute("aria-current", String(b.dataset.screen === (open ? "plan" : "gate")));
-  $("whoName").textContent = open ? viewName() : "週案";
-  $("whoRole").textContent = open ? "（" + viewWhere() + "）" : "";
   drawTargetSelect();
 }
 
