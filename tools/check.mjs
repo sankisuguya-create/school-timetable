@@ -34,7 +34,9 @@ ok("6年に 6-4 がある", await p.locator(".tile[data-c='6-4']").count() === 1
 ok("4年に 4-4 は無い", await p.locator(".tile[data-c='4-4']").count() === 0);
 ok("学年マスターが6つ＋全学年", await p.locator(".master").count() === 7,
    await p.locator(".master").count());
-ok("専科が3つ", await p.locator(".tile.sp").count() === 3);
+ok("専科が4つ（音楽・図工・理科・外国語）",
+   await p.locator(".tile.sp").count() === 4,
+   await p.locator(".tile.sp").count());
 
 console.log("\n■ 週案をひらく");
 await p.locator(".tile[data-c='3-3']").click();

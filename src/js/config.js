@@ -85,9 +85,10 @@ const DEFAULT_CLASSES = {
   "6":["6-1","6-2","6-3","6-4"]
 };
 const DEFAULT_SPECIALS = [
-  {code:"ongaku", label:"音楽"},
-  {code:"zuko",   label:"図工"},
-  {code:"rika",   label:"理科"}
+  {code:"ongaku",  label:"音楽"},
+  {code:"zuko",    label:"図工"},
+  {code:"rika",    label:"理科"},
+  {code:"gaikoku", label:"外国語"}
 ];
 
 /* 層。**層は出どころの表示だけで、勝ち負けは決めない**（勝ち負けは書かれた時刻）。

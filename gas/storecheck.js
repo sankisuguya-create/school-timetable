@@ -135,7 +135,9 @@ ok("1〜4年が3クラス", [1,2,3,4].every(g => n(g) === 3), [n(1),n(2),n(3),n(
 ok("5年6年が4クラス", n(5) === 4 && n(6) === 4, [n(5), n(6)]);
 ok("合計20学級",
    Object.keys(roster.classes).reduce((a,g) => a + n(g), 0) === 20);
-ok("専科が3つ", roster.specials.length === 3, roster.specials);
+ok("専科が4つ（音楽・図工・理科・外国語）",
+   roster.specials.length === 4
+   && roster.specials.map(s => s.code).indexOf("gaikoku") >= 0, roster.specials);
 
 console.log("\n■ 週案を書いて読み直す");
 let res = ev(`Store.writeCells(2026, [

@@ -832,9 +832,10 @@ const DEFAULT_CLASSES = {
   "6":["6-1","6-2","6-3","6-4"]
 };
 const DEFAULT_SPECIALS = [
-  {code:"ongaku", label:"音楽"},
-  {code:"zuko",   label:"図工"},
-  {code:"rika",   label:"理科"}
+  {code:"ongaku",  label:"音楽"},
+  {code:"zuko",    label:"図工"},
+  {code:"rika",    label:"理科"},
+  {code:"gaikoku", label:"外国語"}
 ];
 
 /* 層。**層は出どころの表示だけで、勝ち負けは決めない**（勝ち負けは書かれた時刻）。
@@ -1879,6 +1880,10 @@ function drawGate(){
   $("gFy").textContent   = fy() + "年度";
   const n = weekNo();
   $("gNo").textContent = n ? "第" + n + "週" : "";
+  /* 左の週表示も合わせる。入口を開いている間だけ空になると、
+     どの週を選んでいるのかが2か所で食い違って見える */
+  $("weekLabel").textContent = $("gWeek").textContent;
+  $("weekNo").textContent    = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
   $("gClose").hidden = !lastTarget;   /* まだ何も開いていなければ戻る先が無い */
 }
