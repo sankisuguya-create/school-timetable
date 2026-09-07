@@ -42,12 +42,12 @@ function drawBaseGrid(){
     const s = SUB_BY_CODE[e.value];
     if(s) bank[e.dataset.k] = {title:s.name, subject:s.code};
     else delete bank[e.dataset.k];
-    save();
+    save(); Backend.saveBase(c, baseVar);
   };
   for(const e of $("baseGrid").querySelectorAll("input")) e.onchange = () => {
     if(e.value.trim()) bank[e.dataset.k] = {title:e.value.trim(), subject:null};
     else delete bank[e.dataset.k];
-    save();
+    save(); Backend.saveBase(c, baseVar);
   };
   $("bvA").setAttribute("aria-pressed", String(baseVar === "A"));
   $("bvB").setAttribute("aria-pressed", String(baseVar === "B"));
@@ -85,7 +85,7 @@ function drawRoster(){
         + "消しても中身は残りますが、画面からは開けなくなります。"))
         return;
       delete Y().classes[g];
-      save(); drawRoster(); afterRosterChange();
+      save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
     };
 }
 /* 「1-1, 1-2, 1-3」を配列にする。空と重複は落とす。 */
@@ -100,7 +100,7 @@ function setGradeClasses(g, text){
   if(gone.length && !confirm(gone.join("・") + " を外します。\n"
     + "書き込みは残りますが、画面からは開けなくなります。")) { drawRoster(); return; }
   Y().classes[g] = out;
-  save(); drawRoster(); afterRosterChange();
+  save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
 }
 /* そのクラスに何か入っているか（外す前に知らせるため） */
 function hasAnyData(c){

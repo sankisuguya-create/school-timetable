@@ -146,6 +146,9 @@ function writeCell(d, s, patch){
       const e = (w.special[c] || {})[key];
       if(e && e.sp === view.sp) delete w.special[c][key];
     }
+    for(const c of allClasses()){            /* どけたぶんをサーバにも伝える */
+      if(c !== target) Backend.cellChanged("special", c, d, s, null);
+    }
     if(target && allClasses().indexOf(target) >= 0){
       const sub = SUB_BY_CODE[view.sp];
       (w.special[target] || (w.special[target] = {}))[key] = {
@@ -154,6 +157,7 @@ function writeCell(d, s, patch){
         note: ("note" in patch) ? clean(patch.note) : (cur.note || ""),
         at: Date.now(), by: viewName()
       };
+      Backend.cellChanged("special", target, d, s, w.special[target][key]);
     }
     return save();
   }
@@ -171,5 +175,18 @@ function writeCell(d, s, patch){
   e.by = viewName();
   e.at = Date.now();
   if(isEmptyCell(e)) delete st[key]; else st[key] = e;
+  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s, st[key] || null);
   return save();
+}
+
+/* いまの書き込み先を、サーバの言葉（層・対象）に直す */
+function layerOfStore(){
+  if(view.kind === "school") return "school";
+  if(view.kind === "grade")  return "grade";
+  return scope === "school" ? "school" : scope === "grade" ? "grade" : "home";
+}
+function targetOfStore(){
+  if(view.kind === "school") return "";
+  if(view.kind === "grade")  return view.grade;
+  return scope === "school" ? "" : scope === "grade" ? gradeOf(view.cls) : view.cls;
 }

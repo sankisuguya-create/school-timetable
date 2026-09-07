@@ -5,11 +5,14 @@
 | | |
 |---|---|
 | `Gate.gs` | **誰が入れるかを決める唯一の場所。** 教職員だけを通す |
+| `Sheets.gs` | シートの形と、読み書きの道具。`setupSheets` でシート8枚を作る |
+| `Store.gs` | 週案・基本時間割・学級編成の読み書き。画面から呼ぶ口（`api…`） |
 | `gatecheck.js` | 手元で関門を試す（`node gas/gatecheck.js`）。貼らない |
+| `storecheck.js` | 手元でシートの読み書きを試す（`node gas/storecheck.js`）。貼らない |
 | `appsscript.json` | タイムゾーンとデプロイ設定 |
 | `plan.html` | 画面（**生成物**。`python3 build.py` が `src/` から作る） |
 
-Step 4 以降で `Setup.gs`・`Store.gs`・`Tally.gs`・`Tanpopo.gs` が増える。
+Step 6 以降で `Tally.gs`・`Tanpopo.gs`・`Events.gs` が増える。
 
 **`plan.html` は直さない。** `src/` を直して `python3 build.py` を回す。
 
@@ -68,8 +71,14 @@ node gas/gatecheck.js
 2. **共有は「特定のユーザー」で教職員だけ。** ここを先に決める
 3. 拡張機能 → Apps Script
 4. ⚙ プロジェクトの設定 →「`appsscript.json` マニフェスト ファイルをエディタで表示する」
-5. `Gate` をスクリプトとして作って貼る（`gatecheck.js` と `README.md` は貼らない）
-6. デプロイ → 新しいデプロイ → **ウェブアプリ**
+5. スクリプトを作って貼る：`Gate` `Sheets` `Store`
+   （`gatecheck.js` `storecheck.js` `README.md` は貼らない）
+6. HTML を作って貼る：`plan`（`plan.html` の中身）
+7. `setupSheets` を実行 → シートが8枚できる。**何度走らせても同じ**
+8. 「クラス」「専科」「時程」「教科」「設定」を実物に合わせて直す
+   - クラスは1行1クラス。**年度の欄が空の行は「どの年度でも使う既定」**
+   - 年度を書いた行が1つでもあれば、その年度はそちらが勝つ
+9. デプロイ → 新しいデプロイ → **ウェブアプリ**
    - 次のユーザーとして実行：**自分**
    - アクセスできるユーザー：**同じ組織内の全員**
 

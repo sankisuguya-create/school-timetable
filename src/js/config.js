@@ -3,7 +3,7 @@
 
 /* 時程。行を固定しない（学校ごとに違う）。
    tally = 時数集計表のどの列に当たるか。chips = 教科を選べるか。 */
-const SLOTS = [
+let SLOTS = [
   {id:"am1", name:"朝休み", kind:"brk",    time:"8:10〜8:25"},
   {id:"am2", name:"朝学習", kind:"brk",    time:"8:25〜8:40", tally:"朝", chips:true},
   {id:"p1",  name:"1",     kind:"lesson", time:"8:45〜9:30",  tally:"1校時"},
@@ -15,11 +15,11 @@ const SLOTS = [
   {id:"p5",  name:"5",     kind:"lesson", time:"13:25〜14:10",tally:"5校時"},
   {id:"p6",  name:"6",     kind:"lesson", time:"14:20〜15:05",tally:"6校時"}
 ];
-const SLOT_BY_ID = Object.fromEntries(SLOTS.map(s => [s.id, s]));
+let SLOT_BY_ID = Object.fromEntries(SLOTS.map(s => [s.id, s]));
 
 /* short = 時数集計表に入れる1文字。
    count:false の教科は空にする。**書くと Excel 側の出現数の集計が増える。** */
-const SUBJECTS = [
+let SUBJECTS = [
   {code:"kokugo",  name:"国語",  short:"国", count:true},
   {code:"shakai",  name:"社会",  short:"社", count:true},
   {code:"sansu",   name:"算数",  short:"算", count:true},
@@ -38,8 +38,40 @@ const SUBJECTS = [
   {code:"club",    name:"クラブ",short:"",   count:false},
   {code:"iinkai",  name:"委員会",short:"",   count:false}
 ];
-const SUB_BY_NAME = Object.fromEntries(SUBJECTS.map(s => [s.name, s]));
-const SUB_BY_CODE = Object.fromEntries(SUBJECTS.map(s => [s.code, s]));
+let SUB_BY_NAME = Object.fromEntries(SUBJECTS.map(s => [s.name, s]));
+let SUB_BY_CODE = Object.fromEntries(SUBJECTS.map(s => [s.code, s]));
+
+/* 本番では「時程」「教科」シートが正本。ここの値は、シートが空のときだけ使う。 */
+function setSlots(list){
+  SLOTS = list;
+  SLOT_BY_ID = Object.fromEntries(SLOTS.map(s => [s.id, s]));
+}
+function setSubjects(list){
+  SUBJECTS = list;
+  SUB_BY_NAME = Object.fromEntries(SUBJECTS.map(s => [s.name, s]));
+  SUB_BY_CODE = Object.fromEntries(SUBJECTS.map(s => [s.code, s]));
+}
+/* 「設定」シートの値を画面の設定へ移す。空欄はいまの値のまま */
+function applyConfig(cfg){
+  const t = db.settings.tally, put = (k, fn) => {
+    const v = cfg[k];
+    if(v !== undefined && v !== null && String(v).trim() !== "") fn(v);
+  };
+  put("印刷用紙",        v => db.settings.paper  = String(v).trim());
+  put("印刷余白mm",      v => db.settings.margin = +v || 8);
+  put("印刷倍率",        v => db.settings.k      = +v || 1);
+  put("時数_貼る先",     v => t.anchor  = String(v).trim());
+  put("時数_クラスの順", v => t.classes = String(v));
+  put("時数_1日の行数",  v => t.block   = +v || 10);
+  put("時数_列のずれ",   v => {
+    const cols = {};
+    for(const part of String(v).split(/[,、\s]+/)){
+      const kv = part.split(":");
+      if(kv.length === 2 && kv[0].trim()) cols[kv[0].trim()] = +kv[1] || 0;
+    }
+    if(Object.keys(cols).length) t.cols = cols;
+  });
+}
 
 /* クラス編成。学年でクラス数が違う（**5年・6年だけ4クラス**）ので数を決め打ちしない。
    本番では「クラス」シートが正本（1行1クラス：年度・学年・クラス）。

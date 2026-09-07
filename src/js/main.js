@@ -50,8 +50,11 @@ function goWeek(n){
   monday = addDays(monday, n);
   const fresh = !db.years[String(fy())];
   clearSelection();
-  if(view.kind === "gate") drawGate(); else refreshWeek();
-  if(fresh) save();               /* 新しい年度をその場で1回だけ書き出す */
+  /* 本番では、その年度と週をシートから読んでから描く。手元では即その場で続く。 */
+  Backend.ready(() => {
+    if(view.kind === "gate") drawGate(); else refreshWeek();
+    if(fresh) save();             /* 新しい年度をその場で1回だけ書き出す */
+  });
 }
 function setVariant(v){ week().variant = v; save();
   if(view.kind === "gate") drawGate(); else refreshWeek(); }
@@ -134,14 +137,14 @@ function wire(){
     const c = $("baseCls").value, B = Y().base;
     if(!B[c]) B[c] = {};
     B[c].B = clone(B[c].A || {});
-    save(); baseVar = "B"; drawBaseGrid();
+    save(); Backend.saveBase(c, "B"); baseVar = "B"; drawBaseGrid();
     toast(c + " のA週をB週へ写した。違うところだけ直す");
   });
   on("basePrev","click", () => {
     const c = $("baseCls").value, prev = db.years[String(fy() - 1)];
     if(!prev || !prev.base[c]) return toast("前年度に " + escText(c) + " の基本時間割が無い");
     Y().base[c] = clone(prev.base[c]);
-    save(); drawBaseGrid();
+    save(); Backend.saveBase(c, "A"); Backend.saveBase(c, "B"); drawBaseGrid();
     toast("前年度の " + escText(c) + " を写した");
   });
   on("baseClose","click", () => { $("baseDlg").close(); if(view.kind !== "gate") buildSheet(); });
@@ -153,7 +156,7 @@ function wire(){
     if(Y().classes[g]) return toast("その学年はもうある");
     Y().classes[g] = [];
     $("rsNewG").value = "";
-    save(); drawRoster(); afterRosterChange();
+    save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
   });
   on("rsSp","change", e => {
     const seen = {}, out = [];
@@ -164,12 +167,12 @@ function wire(){
       const known = SUB_BY_NAME[label];
       out.push({code: known ? known.code : "sp_" + out.length, label});
     }
-    Y().specials = out; save(); drawRoster(); afterRosterChange();
+    Y().specials = out; save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
   });
   on("rsW1","change", e => {
     const v = String(e.target.value).trim();
     if(!parseISO(v)) return toast("日付は 2026-04-06 の形で書く");
-    Y().week1 = v; save();
+    Y().week1 = v; save(); Backend.saveRoster();
     if(view.kind === "gate") drawGate(); else refreshWeek();
   });
   on("rsPrev","click", () => {
@@ -177,7 +180,7 @@ function wire(){
     if(!prev) return toast("前年度のデータがまだ無い");
     Y().classes  = clone(prev.classes);
     Y().specials = clone(prev.specials);
-    save(); drawRoster(); afterRosterChange();
+    save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
     toast("前年度の編成を写した");
   });
   on("rsClose","click", () => $("rosterDlg").close());
@@ -232,14 +235,19 @@ function wire(){
 function start(){
   loadDb();
   onStoreError = why => toast("<b>保存できていない</b>　" + escText(why));
+  Backend.setNotifier(why => toast("<b>" + escText(why) + "</b>"));
   wire();
-
-  if(!Object.keys(Y().base).length){ seedBase(); save(); }   /* 手元で触れるだけの見本 */
-  else save();                                                /* 新しい年度をその場で書き出す */
   if(storeBroken) toast("<b>" + escText(storeBroken) + "</b>");
 
-  applyPaper();
-  showGate();
+  /* 本番は「設定」「時程」「教科」シートを先に読み、続けてその年度と週を読む。
+     手元（localStorage）ではどちらも素通りして、そのまま次へ進む。 */
+  Backend.boot(() => Backend.ready(() => {
+    /* 見本の基本時間割は手元でだけ入れる。本番はシートが正本で、空なら空のまま */
+    if(!Backend.isGas() && !Object.keys(Y().base).length) seedBase();
+    if(!Backend.isGas()) save();
+    applyPaper();
+    showGate();
+  }));
 }
 
 /* 見本の基本時間割。本番では基本時間割シートから来る。 */

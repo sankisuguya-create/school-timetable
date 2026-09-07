@@ -50,14 +50,16 @@ function drawGate(){
 }
 
 function openView(v){
-  view = v;
-  lastTarget = v;
-  selCell = null;
-  $("gate").hidden = true;
-  paintHeader();
-  drawPalette();
-  refreshWeek();
-  fillPanel();
+  Backend.ready(() => {
+    view = v;
+    lastTarget = v;
+    selCell = null;
+    $("gate").hidden = true;
+    paintHeader();
+    drawPalette();
+    refreshWeek();
+    fillPanel();
+  });
 }
 function showGate(){
   view = {kind:"gate"};
