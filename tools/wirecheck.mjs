@@ -81,7 +81,10 @@ await p.addInitScript(() => {
         setTimeout(() => okFn(r), 0);
       },
       apiReadYear(y){ const r = call("apiReadYear", [y], DATA.year); setTimeout(() => okFn(r), 0); },
-      apiReadWeek(y, m, t){ const r = call("apiReadWeek", [y, m, t], DATA.week); setTimeout(() => okFn(r), 0); },
+      apiReadWeek(y, m, t){
+        const r = call("apiReadWeek", [y, m, t], DATA.week);
+        setTimeout(() => okFn(r), window.__slow || 0);
+      },
       apiWriteCells(y, patches){
         call("apiWriteCells", [y, patches]);
         /* __hang のあいだは返事をしない（送れないまま閉じた形を作る） */
@@ -171,6 +174,22 @@ ok("読むのは 全校・その学年・そのクラス の3枚だけ",
      {layer:"school", target:""}, {layer:"grade", target:"5"},
      {layer:"home", target:"5-1"}]),
    rw && rw.args[2]);
+
+console.log("\n■ シートが届くのを待たずに紙を出す");
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
+await p.evaluate(() => { window.__slow = 1500; });      /* 返事が遅い回線 */
+await p.locator(".tile[data-c='5-2']").click();
+await p.waitForTimeout(300);                            /* まだ返事は来ていない */
+ok("押してすぐ紙が出る（返事を待たない）",
+   await p.locator("#sheet .cell").count() > 0
+   && await p.locator("#gate").isHidden() === true,
+   await p.locator("#sheet .cell").count());
+ok("読み込み中だと分かるようにする", await p.locator("#busy").isVisible() === true);
+await p.waitForTimeout(1600);
+ok("届いたら印は消える", await p.locator("#busy").isHidden() === true);
+await p.evaluate(() => { window.__slow = 0; });
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(400);
 
 console.log("\n■ 書いても、押すまで送らない");
 ok("紙は5行ぶんになる", await p.locator("#sheet .cell").count() === 25,

@@ -223,6 +223,12 @@ const Backend = (function(){
       if(Array.isArray(r.roster.tanpopo)) Yr.tanpopo = r.roster.tanpopo;
     }
     Yr.base = r.base || {};
+    /* **読めなかった行は黙って捨てない。** 入っていないのか読めていないのかが
+       分からないと、シートを見ながら何度も書き直すことになる */
+    if(r.warn && r.warn.length)
+      notify("<b>基本時間割シートに読めない行がある</b>（" + r.warn.length + "行）：<br>"
+           + r.warn.slice(0, 3).map(escText).join("<br>")
+           + (r.warn.length > 3 ? "<br>ほか " + (r.warn.length - 3) + "行" : ""));
     loadedYear[y] = true;
   }
 

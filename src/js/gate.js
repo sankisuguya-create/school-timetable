@@ -60,6 +60,9 @@ function drawGate(){
   $("gClose").hidden = !lastTarget;   /* まだ何も開いていなければ戻る先が無い */
 }
 
+/* **待たせない。** シートが届くのを待ってから描くと、押してから紙が出るまで
+   何も起きない時間ができる。先にこの端末の控えで描いて、届いたら描き直す。
+   届くまでは「読み込み中」を出しておく（古いものを見ているかもしれないため）。 */
 function openView(v){
   Backend.flush();                /* いまの画面を出る前に、書いたぶんを送る */
   /* **どこを開くかを先に決める。** そのあとで、その画面に要るシートだけを読む
@@ -67,10 +70,12 @@ function openView(v){
   view = v;
   lastTarget = v;
   selCell = null;
-  Backend.ready(() => {
+
+  const tp = v.kind === "tanpopo";
+  const draw = () => {
+    if(view !== v) return;        /* もう別のところを開いている */
     $("gate").hidden = true;
     /* たんぽぽの面は週案の紙ではない。紙と入力パネルを引っこめて入れ替える */
-    const tp = v.kind === "tanpopo";
     $("stage").hidden = tp;
     $("tpView").hidden = !tp;
     document.querySelector(".panel").hidden = tp;
@@ -82,7 +87,19 @@ function openView(v){
     if(!tp) drawPalette();
     refreshWeek();
     if(!tp) fillPanel();
+  };
+
+  let landed = false, drawn = false;
+  Backend.ready(() => {
+    landed = true;
+    if(!drawn) return;            /* すぐ返った（手元・読み込みずみ）。下で1回描く */
+    setBusy(false);
+    draw();
   });
+  if(!landed) setBusy(true);
+  draw();
+  drawn = true;
+  if(landed) setBusy(false);
 }
 function showGate(){
   Backend.flush();

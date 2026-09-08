@@ -83,11 +83,30 @@ function goWeek(n){
   monday = addDays(monday, n);
   const fresh = !db.years[String(fy())];
   clearSelection();
-  /* 本番では、その年度と週をシートから読んでから描く。手元では即その場で続く。 */
-  Backend.ready(() => {
+  /* **待たせない。** 手元の控えで先に描いて、シートが届いたら描き直す */
+  const draw = () => {
     if(view.kind === "gate") drawGate(); else refreshWeek();
     if(fresh) save();             /* 新しい年度をその場で1回だけ書き出す */
+  };
+  let landed = false, drawn = false;
+  Backend.ready(() => {
+    landed = true;
+    if(!drawn) return;
+    setBusy(false);
+    draw();
   });
+  if(!landed) setBusy(true);
+  draw();
+  drawn = true;
+  if(landed) setBusy(false);
+}
+
+/* 読み込み中の印。**画面は止めない。**
+   止めると、開いたのに何も出ない時間ができる。古いものを見ているかもしれない
+   ことだけを小さく出しておく。 */
+function setBusy(on){
+  const e = $("busy");
+  if(e) e.hidden = !on;
 }
 function setVariant(v){ week().variant = v; save();
   if(view.kind === "gate") drawGate(); else refreshWeek(); }

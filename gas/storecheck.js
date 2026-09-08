@@ -65,7 +65,11 @@ function fakeSheet(name){
       };
     },
     getMaxRows(){ return Math.max(1000, grid.length); },
-    setFrozenRows(){}
+    setFrozenRows(){},
+    getDataRange(){
+      const r = this.getLastRow(), c = this.getLastColumn();
+      return this.getRange(1, 1, Math.max(1, r), Math.max(1, c));
+    }
   };
 }
 /* たんぽぽ時間割（別のファイル）。openById で開く先 */
@@ -100,7 +104,11 @@ function fakeSheetOn(grid, name){
       };
     },
     getMaxRows(){ return Math.max(200, grid.length); },
-    setFrozenRows(){}
+    setFrozenRows(){},
+    getDataRange(){
+      const r = s0.getLastRow(), c = s0.getLastColumn();
+      return s0.getRange(1, 1, Math.max(1, r), Math.max(1, c));
+    }
   };
   return s0;
 }
@@ -412,6 +420,58 @@ ev(`Store.writeBase(2026, "3-3", "A", {"0|p1":{title:"社会", subject:"shakai"}
 base = ev("Store.readBase(2026)");
 ok("A週を入れ替えてもB週は残る",
    Object.keys(base["3-3"].A).length === 1 && base["3-3"].B["0|p1"].title === "体育");
+
+console.log("\n■ 基本時間割は、人が手で書いた行も読む");
+(function(){
+  const cols = ev('Sheets.SPEC["基本時間割"].cols');
+  const at = {}; cols.forEach((c, i) => at[c] = i);
+  const g = SHEETS["基本時間割"];
+  const put = o => {
+    const row = new Array(20).fill("");
+    for(const k in o) row[at[k]] = o[k];
+    g.push(row);
+  };
+  /* 人が書くときは「月」と書く。0 とは書かない */
+  put({"年度":2026, "クラス":"1-1", "週":"A", "曜日":"月", "時程":"p1",
+       "教科コード":"kokugo", "表示名":"国語"});
+  put({"年度":2026, "クラス":"1-1", "週":"B", "曜日":"火曜日", "時程":"p2",
+       "教科コード":"sansu", "表示名":"算数"});
+  /* 時程を数字で書いた行 */
+  put({"年度":2026, "クラス":"1-1", "週":"A", "曜日":"水", "時程":"3",
+       "教科コード":"taiiku", "表示名":"体育"});
+  /* 昔の書き方（0〜4）も読めること */
+  put({"年度":2026, "クラス":"1-1", "週":"A", "曜日":0, "時程":"p4",
+       "教科コード":"ongaku", "表示名":"音楽"});
+  /* 読めない行 */
+  put({"年度":2026, "クラス":"1-1", "週":"A", "曜日":"げつ", "時程":"p5",
+       "教科コード":"rika", "表示名":"理科"});
+})();
+const bw = [];
+const hb = ev("Store.readBase(2026, [])") && (function(){
+  const warn = [];
+  sandbox.__warn = warn;
+  const r = ev("Store.readBase(2026, __warn)");
+  bw.push.apply(bw, warn);
+  return r;
+})();
+ok("「月」と書いた行が読める", !!hb["1-1"].A["0|p1"], hb["1-1"].A);
+ok("「火曜日」と書いた行も読める", !!hb["1-1"].B["1|p2"], hb["1-1"].B);
+ok("時程を数字で書いた行も読める（授業の行の上から数える）",
+   !!hb["1-1"].A["2|p3"], hb["1-1"].A);
+ok("0〜4 で書いた古い行も読める", !!hb["1-1"].A["0|p4"], hb["1-1"].A);
+ok("読めない行は捨てずに知らせる",
+   bw.length === 1 && bw[0].indexOf("曜日") >= 0, bw);
+/* 書くときは人が読める曜日にする */
+ev(`Store.writeBase(2026, "2-2", "A", {"3|p1":{title:"社会", subject:"shakai"}})`);
+ok("書くときは「木」と書く（隣にならって手で書き足せるように）", (function(){
+     const cols = ev('Sheets.SPEC["基本時間割"].cols');
+     const at = {}; cols.forEach((c, i) => at[c] = i);
+     return SHEETS["基本時間割"].some(r => String(r[at["クラス"]]) === "2-2"
+       && String(r[at["曜日"]]) === "木");
+   })() === true);
+ok("書いたものは読み直せる",
+   !!ev("Store.readBase(2026)")["2-2"].A["3|p1"],
+   ev("Store.readBase(2026)")["2-2"]);
 
 console.log("\n■ 固定時間割をまとめて入れる");
 ev(`Store.writeBaseAll(2026, {

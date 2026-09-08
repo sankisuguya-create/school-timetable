@@ -142,23 +142,36 @@ const Sheets = (function(){
   /* 週案シートを読む。無ければ空。**日付は文字に直して返す。**
      シートに入れた "2026-09-07" は日付として取り込まれ、読むと Date で返る。
      文字のまま比べると、書いた行を二度と見つけられなくなる。 */
-  function readPlan(name, ymdFn){
-    const sh = sheet(name);
+  /* **1枚につき、シートを開く1回と読む1回だけ。**
+     GAS は API を呼ぶたびに待つ。行数・列数・見出し・中身を別々に取りに行くと、
+     1枚あたり5往復になり、3枚で15往復ぶん待たされる。
+     getDataRange は「字の入っている範囲」を1回で返す。 */
+  function readPlan(name, ymdFn, all){
+    const sh = (all && all[name]) || sheet(name);
     if(!sh) return [];
-    const last = sh.getLastRow();
-    if(last < 2) return [];
-    const head = sh.getRange(1, 1, 1, Math.max(1, sh.getLastColumn())).getValues()[0];
+    const v = sh.getDataRange().getValues();
+    if(v.length < 2) return [];
     const at = {};
-    head.forEach((v, i) => { const k = String(v).trim(); if(k) at[k] = i; });
-    const v = sh.getRange(2, 1, last - 1, head.length).getValues();
+    v[0].forEach((h, i) => { const k = String(h).trim(); if(k) at[k] = i; });
     const out = [];
-    for(const row of v){
+    for(let i = 1; i < v.length; i++){
+      const row = v[i];
       const o = {};
       for(const k of PLAN_COLS) o[k] = (k in at) ? row[at[k]] : "";
       o["日付"] = ymdFn(o["日付"]);
       o["対象"] = asClass(o["対象"]);
       if(!o["日付"] || !String(o["時程"]).trim()) continue;    /* 空行は飛ばす */
       out.push(o);
+    }
+    return out;
+  }
+
+  /* 名前 → シート の対応を1回で作る。**シートを1枚ずつ探しに行かない。** */
+  function planMap(){
+    const out = {};
+    for(const sh of SpreadsheetApp.getActive().getSheets()){
+      const n = sh.getName();
+      if(n.indexOf(PLAN_PREFIX) === 0) out[n] = sh;
     }
     return out;
   }
@@ -321,7 +334,7 @@ const Sheets = (function(){
 
   return {SPEC, NAMES, PASTE, CLASS_COLS, TANPOPO_FILL, asClass, isDate, readGrid,
           PLAN_PREFIX, PLAN_ALL, PLAN_COLS, planName, ensurePlan, readPlan, writePlan,
-          planNames,
+          planNames, planMap,
           setup, head, readAll, appendRows, toArray, setRow, blankRow, sheet};
 })();
 

@@ -41,8 +41,10 @@ const Store = (function(){
     } else {
       for(const n of Sheets.planNames()) names[n] = true;
     }
+    const all = Sheets.planMap();          /* シートを1枚ずつ探しに行かない */
     for(const name in names){
-      for(const r of Sheets.readPlan(name, ymd)){
+      if(!all[name]) continue;             /* まだ1度も書いていないクラス */
+      for(const r of Sheets.readPlan(name, ymd, all)){
         if(String(r["年度"]) !== String(year)) continue;
         const date = r["日付"];
         if(date < start || date > end) continue;
@@ -65,15 +67,48 @@ const Store = (function(){
     return w;
   }
 
-  function readBase(year){
+  /* ── 人が手で書いた行も読む ────────────────────
+     基本時間割シートは**人が直接書く場所**でもある。
+     機械が書いた形しか読めないと、手で書き足した行が黙って無視される。
+     入っていないのか読めていないのかが画面から分からず、いちばん困る。
+
+     曜日は「月」でも 0 でも読む。時程は「p1」でも「1」でも読む。 */
+  const DOW_JP = ["月", "火", "水", "木", "金"];
+  function dayIndex(v){
+    if(v === 0) return 0;
+    const t = String(v == null ? "" : v).normalize("NFKC").trim();
+    if(/^[0-4]$/.test(t)) return +t;
+    for(let i = 0; i < DOW_JP.length; i++)
+      if(t.charAt(0) === DOW_JP[i]) return i;     /* 月・月曜・月曜日 */
+    return -1;
+  }
+  /* 時程。IDそのままが基本。数字だけなら、授業の行の上から数える */
+  function slotId(v, lessons){
+    const t = String(v == null ? "" : v).normalize("NFKC").trim();
+    if(!t) return "";
+    if(lessons.indexOf(t) >= 0) return t;
+    if(/^[1-9]$/.test(t) && lessons[+t - 1]) return lessons[+t - 1];
+    return t;                                     /* 休み時間などはそのまま */
+  }
+
+  function readBase(year, warn){
     const rows = Sheets.readAll("基本時間割").rows;
+    const ids = Sheets.readAll("時程").rows
+      .filter(r => String(r["種別"]).indexOf("授業") >= 0)
+      .map(r => String(r["ID"]).trim());
     const out = {};
     for(const r of rows){
       if(String(r["年度"]) !== String(year)) continue;
-      const cls = Sheets.asClass(r["クラス"]), v = String(r["週"] || "A");
-      const k = String(r["曜日"]) + "|" + String(r["時程"]);
+      const cls = Sheets.asClass(r["クラス"]), v = String(r["週"] || "A").trim() || "A";
+      const d = dayIndex(r["曜日"]), sl = slotId(r["時程"], ids);
+      if(d < 0 || !sl || !cls){
+        if(warn) warn.push(r.__row + "行目：" + (!cls ? "クラス" : d < 0 ? "曜日" : "時程")
+                         + "「" + String(!cls ? r["クラス"] : d < 0 ? r["曜日"] : r["時程"])
+                         + "」が読めない");
+        continue;
+      }
       const bank = out[cls] || (out[cls] = {});
-      (bank[v] || (bank[v] = {}))[k] = {
+      (bank[v] || (bank[v] = {}))[d + "|" + sl] = {
         title: String(r["表示名"] || ""), subject: String(r["教科コード"] || "") || null
       };
     }
@@ -486,8 +521,11 @@ const Store = (function(){
       const adds = [];
       for(const k in (bank || {})){
         const p = k.split("|");
+        /* **曜日は「月」で書く。** 人が直接書き足す場所なので、
+           0〜4 で書くと、隣の行にならって書いた行が読めなくなる */
         adds.push(Sheets.toArray("基本時間割", {
-          "年度":year, "クラス":cls, "週":variant, "曜日":p[0], "時程":p[1],
+          "年度":year, "クラス":cls, "週":variant,
+          "曜日":(DOW_JP[+p[0]] || p[0]), "時程":p[1],
           "教科コード":bank[k].subject || "", "表示名":bank[k].title || ""
         }));
       }
@@ -518,7 +556,8 @@ const Store = (function(){
           for(const k in bank){
             const p = k.split("|");
             adds.push(Sheets.toArray("基本時間割", {
-              "年度":year, "クラス":cls, "週":v, "曜日":p[0], "時程":p[1],
+              "年度":year, "クラス":cls, "週":v,
+              "曜日":(DOW_JP[+p[0]] || p[0]), "時程":p[1],
               "教科コード":bank[k].subject || "", "表示名":bank[k].title || ""
             }));
           }
@@ -562,15 +601,19 @@ function apiBoot(year){
     subjects: Store.readSubjects()
   };
   if(year){
+    const warn = [];
     out.year   = +year;
     out.roster = Store.readRoster(+year);
-    out.base   = Store.readBase(+year);
+    out.base   = Store.readBase(+year, warn);
+    out.warn   = warn;
   }
   return out;
 }
 function apiReadYear(year){
   Gate.check();
-  return {roster: Store.readRoster(year), base: Store.readBase(year)};
+  const warn = [];
+  const base = Store.readBase(year, warn);
+  return {roster: Store.readRoster(year), base, warn};
 }
 function apiReadWeek(year, mondayISO, targets){
   Gate.check();

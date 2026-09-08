@@ -291,6 +291,11 @@ dialog::backdrop{background:rgba(20,28,38,.42)}
 .dlg hr{border:0;border-top:1px solid var(--line-soft);margin:16px 0}
 .dlg ul{margin:0;padding-left:1.15em;font-size:12.5px;line-height:1.9;color:var(--tx-sub)}
 .dlg ul b{color:var(--tx)}
+/* 読み込み中。**紙の上に浮かせる。** 版面を動かさない（紙の外に置くと紙が縮む） */
+.busy{position:absolute;left:50%;top:8px;transform:translateX(-50%);z-index:5;
+  padding:5px 13px;border-radius:999px;font-size:12px;
+  background:var(--tx);color:var(--card);opacity:.82;pointer-events:none}
+.center{position:relative}
 .tpwrap{overflow:auto;max-height:46vh;border:1px solid var(--line);border-radius:var(--r-sm)}
 table.tp{border-collapse:collapse;font-size:12px;width:100%}
 table.tp th,table.tp td{border:1px solid var(--line-soft);padding:3px 6px;
@@ -610,6 +615,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
     </aside>
 
     <main class="center" id="centerWrap">
+      <div class="busy" id="busy" hidden>シートから読み込み中…</div>
       <div class="stage" id="stage"><div class="paper" id="paper"><div class="sheet" id="sheet"></div></div></div>
 
       <!-- たんぽぽの面。週案の紙ではないので、紙の代わりにここを出す -->
@@ -1457,6 +1463,12 @@ const Backend = (function(){
       if(Array.isArray(r.roster.tanpopo)) Yr.tanpopo = r.roster.tanpopo;
     }
     Yr.base = r.base || {};
+    /* **読めなかった行は黙って捨てない。** 入っていないのか読めていないのかが
+       分からないと、シートを見ながら何度も書き直すことになる */
+    if(r.warn && r.warn.length)
+      notify("<b>基本時間割シートに読めない行がある</b>（" + r.warn.length + "行）：<br>"
+           + r.warn.slice(0, 3).map(escText).join("<br>")
+           + (r.warn.length > 3 ? "<br>ほか " + (r.warn.length - 3) + "行" : ""));
     loadedYear[y] = true;
   }
 
@@ -2798,6 +2810,9 @@ function drawGate(){
   $("gClose").hidden = !lastTarget;   /* まだ何も開いていなければ戻る先が無い */
 }
 
+/* **待たせない。** シートが届くのを待ってから描くと、押してから紙が出るまで
+   何も起きない時間ができる。先にこの端末の控えで描いて、届いたら描き直す。
+   届くまでは「読み込み中」を出しておく（古いものを見ているかもしれないため）。 */
 function openView(v){
   Backend.flush();                /* いまの画面を出る前に、書いたぶんを送る */
   /* **どこを開くかを先に決める。** そのあとで、その画面に要るシートだけを読む
@@ -2805,10 +2820,12 @@ function openView(v){
   view = v;
   lastTarget = v;
   selCell = null;
-  Backend.ready(() => {
+
+  const tp = v.kind === "tanpopo";
+  const draw = () => {
+    if(view !== v) return;        /* もう別のところを開いている */
     $("gate").hidden = true;
     /* たんぽぽの面は週案の紙ではない。紙と入力パネルを引っこめて入れ替える */
-    const tp = v.kind === "tanpopo";
     $("stage").hidden = tp;
     $("tpView").hidden = !tp;
     document.querySelector(".panel").hidden = tp;
@@ -2820,7 +2837,19 @@ function openView(v){
     if(!tp) drawPalette();
     refreshWeek();
     if(!tp) fillPanel();
+  };
+
+  let landed = false, drawn = false;
+  Backend.ready(() => {
+    landed = true;
+    if(!drawn) return;            /* すぐ返った（手元・読み込みずみ）。下で1回描く */
+    setBusy(false);
+    draw();
   });
+  if(!landed) setBusy(true);
+  draw();
+  drawn = true;
+  if(landed) setBusy(false);
 }
 function showGate(){
   Backend.flush();
@@ -3302,11 +3331,30 @@ function goWeek(n){
   monday = addDays(monday, n);
   const fresh = !db.years[String(fy())];
   clearSelection();
-  /* 本番では、その年度と週をシートから読んでから描く。手元では即その場で続く。 */
-  Backend.ready(() => {
+  /* **待たせない。** 手元の控えで先に描いて、シートが届いたら描き直す */
+  const draw = () => {
     if(view.kind === "gate") drawGate(); else refreshWeek();
     if(fresh) save();             /* 新しい年度をその場で1回だけ書き出す */
+  };
+  let landed = false, drawn = false;
+  Backend.ready(() => {
+    landed = true;
+    if(!drawn) return;
+    setBusy(false);
+    draw();
   });
+  if(!landed) setBusy(true);
+  draw();
+  drawn = true;
+  if(landed) setBusy(false);
+}
+
+/* 読み込み中の印。**画面は止めない。**
+   止めると、開いたのに何も出ない時間ができる。古いものを見ているかもしれない
+   ことだけを小さく出しておく。 */
+function setBusy(on){
+  const e = $("busy");
+  if(e) e.hidden = !on;
 }
 function setVariant(v){ week().variant = v; save();
   if(view.kind === "gate") drawGate(); else refreshWeek(); }
