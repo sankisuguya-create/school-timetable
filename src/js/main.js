@@ -74,6 +74,7 @@ function refreshWeek(){
   const n = weekNo();
   $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
+  paintArchive();                 /* 週をまたぐと年度が変わる。**そのつど見る** */
   if(view.kind === "tanpopo"){ drawTanpopoView(); return; }
   buildSheet();
   autoFit();
@@ -218,6 +219,13 @@ function wire(){
   on("target","change", e => onTargetChange(e.target.value));
   on("tpGo","click", reflectTanpopo);
   on("ckGo","click", runCheck);
+  on("arCount","click",  arRunCount);
+  on("arVerify","click", arRunVerify);
+  on("arGo","click",     arRunPurge);
+  /* 年度を打ち込むまで押せない。**誤クリックで消えない。** */
+  on("arTyped","input", () => {
+    $("arGo").disabled = !arChecked || $("arTyped").value.trim() !== String(arChecked.year);
+  });
 
   /* 上書きの窓。**閉じ方が何であれ「変更しない」に落ちる。**
      Esc も、外側を押したときも、返事をしないまま消えたときも同じ */

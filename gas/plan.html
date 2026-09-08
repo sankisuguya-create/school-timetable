@@ -116,8 +116,16 @@ button,select,input,textarea{font:inherit;color:inherit}
 /* ── 中央 ────────────────────────────────────── */
 /* **紙の上下には何も置かない。** 週の移動も凡例も左へ寄せてある。
    置くたびに紙が縮み、いちばん見たいものが小さくなる。 */
-.center{grid-area:1/2/2/3;display:grid;grid-template-rows:minmax(0,1fr);
+.center{grid-area:1/2/2/3;display:grid;grid-template-rows:auto minmax(0,1fr);
   min-width:0;min-height:0}
+
+/* 退避ずみの年度の知らせ。**紙の外**（刷られない）。隠れているあいだは高さ0 */
+.arc{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin:10px 16px 0;padding:9px 13px;border-radius:var(--r);
+  background:var(--fill-b);border:1px solid var(--cat-grade);
+  font-size:12.5px;line-height:1.6}
+.arc b{font-size:13px}
+.arc a{color:var(--ink-link);text-underline-offset:2px}
 .bar{display:flex;align-items:center;gap:12px;padding:12px 16px;flex-wrap:wrap}
 .pill{display:flex;align-items:center;gap:2px;background:var(--card);
   border:1px solid var(--line);border-radius:var(--r);padding:3px}
@@ -446,6 +454,10 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   .side .foot-note,.side .legend{display:none}
   .side .admin{margin-top:auto}
 }
+
+/* 退避の手順。**番号のまま読ませる。** 箇条書きにすると順番が消える */
+.steps{margin:6px 0 10px;padding-left:1.5em;font-size:12.5px;line-height:1.9}
+.steps li{margin:2px 0}
 /* ▲ src/css/app.css ▲ */
 /* ▼ src/css/sheet.css ▼ */
 /* 紙。**刷られる面はここだけ。** 印刷の版面は動かさない。
@@ -578,7 +590,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
    画面のものは何も刷らない。層の色も印も刷らない。
    リンクは下線だけ残す。URL は刷らない。 */
 @media print{
-  .side,.panel,.gate,.toast,.tpview,.busy{display:none!important}
+  .side,.panel,.gate,.toast,.tpview,.busy,.arc{display:none!important}
   .app::before{display:none!important}   /* 待っている印は刷らない */
   /* 時刻は画面だけのもの。紙の版面は教務必携の枠に合わせたまま動かさない
      （時程の列は 9mm。ここを広げると曜日の列がその分だけ痩せる） */
@@ -724,6 +736,12 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
     </aside>
 
     <main class="center" id="centerWrap">
+      <!-- 退避ずみの年度を開いたときの知らせ。**紙の外に置く**（刷られない）。
+           これを出さないと、基本時間割だけの紙を見て「週案が全部消えた」と言われる -->
+      <div class="arc" id="arcBar" hidden>
+        <b id="arcTitle"></b><span id="arcNote"></span>
+        <a id="arcLink" target="_blank" rel="noopener">保管庫をひらく</a>
+      </div>
       <div class="stage" id="stage"><div class="paper" id="paper"><div class="sheet" id="sheet"></div></div></div>
 
       <!-- たんぽぽの面。週案の紙ではないので、紙の代わりにここを出す -->
@@ -1005,6 +1023,41 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   <div class="row"><button class="btn go" id="ckGo">この年度を検査する</button>
     <span class="hint" id="ckStat"></span></div>
   <div id="ckOut"></div>
+  <hr>
+  <h3 style="margin:12px 0 4px;font-size:14px">年度の退避</h3>
+  <p>年度末に1回。<b>本体のURLは変わりません。</b>新年度も、教員は今までと同じURLを開きます。<br>
+     複製した写しが保管庫になり、本体からはその年度の行だけが消えます。
+     基本時間割・クラス・専科は残るので「前年度から写す」はそのまま使えます。</p>
+  <div class="row"><span>退避する年度</span>
+    <input type="number" id="arYear" style="width:7em" step="1">
+    <button class="btn" id="arCount">① 数える</button>
+    <span class="hint" id="arStat"></span></div>
+  <div id="arOut"></div>
+
+  <div id="arStep2" hidden>
+    <h4 style="margin:14px 0 4px;font-size:13px">② 複製する（ドライブでの手作業）</h4>
+    <ol class="steps">
+      <li>ドライブで <b id="arFile"></b> を右クリック →「<b>コピーを作成</b>」</li>
+      <li>名前を <b id="arName"></b> にする</li>
+      <li>共有を<b>管理者だけ</b>にする（教員には配らない）</li>
+      <li>コピーの Apps Script は<b>デプロイしない</b>（デプロイは複製されないので、放っておけば動きません）</li>
+      <li>コピーのURLを下に貼る</li>
+    </ol>
+    <div class="row"><span>退避先のURL</span>
+      <input type="text" id="arUrl" style="flex:1;min-width:18em"
+             placeholder="https://docs.google.com/spreadsheets/d/… （そのまま貼ってよい）">
+      <button class="btn" id="arVerify">③ 照合する</button></div>
+    <div id="arWhy" class="tpwarn"></div>
+  </div>
+
+  <div id="arStep4" hidden>
+    <h4 style="margin:14px 0 4px;font-size:13px">④ 本体から消す</h4>
+    <p><b>消すのは、その年度の週案の行だけ。</b>シートも見出しも残ります。
+       押した直後にもう一度照合し、そのあいだに増えた行があれば1行も消しません。</p>
+    <div class="row"><span>年度を打ち込む</span>
+      <input type="text" id="arTyped" style="width:7em" placeholder="2026">
+      <button class="btn danger" id="arGo" disabled>本体から消す</button></div>
+  </div>
   <div class="end"><button class="btn go" data-close="adminDlg">閉じる</button></div>
 </div></dialog>
 
@@ -1048,7 +1101,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.1.0";
+let APP_VERSION = "1.2.0";
 let BUILD_DATE  = "2026-09-08";
 
 /* 時程。行を固定しない（学校ごとに違う）。
@@ -1646,7 +1699,7 @@ const Backend = (function(){
   const waiters = [];
   /* 立ち上がりでもらった、**自分と置き場所のこと**。管理画面に出す。
      手元で開いているときは空のまま（サーバに聞いていないので分からない）。 */
-  let bootInfo = {me:"", file:""};
+  let bootInfo = {me:"", file:"", archived:{}};
 
   /* **保存にかかった時間を、最近のぶんだけ覚える。**
      長くなってきたことに、誰かが困る前に気づくため。
@@ -1671,12 +1724,16 @@ const Backend = (function(){
             cells: worst(pick(x => x.cells)), sheets: worst(pick(x => x.sheets))};
   }
   const info = () => ({me: bootInfo.me, file: bootInfo.file, gas: !!onGas,
-                       times: saveTimes()});
+                      archived: bootInfo.archived || {}, times: saveTimes()});
+  /* その年度は退避ずみか。**退避ずみの年度に、何も言わずに紙を出さない。**
+     週案の行はもう本体に無いので、基本時間割だけの紙が出る。
+     それを黙って出すと「週案が全部消えた」と言われる。 */
+  const archivedYear = y => (bootInfo.archived || {})[String(y)] || null;
   function boot(after){
     if(!onGas){ booted = true; return after(); }
     google.script.run
       .withSuccessHandler(b => {
-        bootInfo = {me: b.me || "", file: b.file || ""};
+        bootInfo = {me: b.me || "", file: b.file || "", archived: b.archived || {}};
         if(b.slots    && b.slots.length)    setSlots(b.slots);
         if(b.subjects && b.subjects.length) setSubjects(b.subjects);
         if(b.config)  applyConfig(b.config);
@@ -1863,6 +1920,35 @@ const Backend = (function(){
       .apiWriteBaseAll(fy(), table);
   }
 
+  /* 年度の退避。**数える／照合する／消す の3つに分けてある。**
+     1つにまとめると、確かめずに消せてしまう。 */
+  function archiveCount(year, ok, ng){
+    if(!onGas) return ng("手元ではシートにつながっていないので、退避できない");
+    google.script.run
+      .withSuccessHandler(r => ok(r))
+      .withFailureHandler(e => ng("数えられなかった（" + (e && e.message) + "）"))
+      .apiArchiveCount(+year);
+  }
+  function archiveVerify(year, url, ok, ng){
+    if(!onGas) return ng("手元ではシートにつながっていないので、照合できない");
+    google.script.run
+      .withSuccessHandler(r => ok(r))
+      .withFailureHandler(e => ng("照合できなかった（" + (e && e.message) + "）"))
+      .apiArchiveVerify(+year, url);
+  }
+  function archivePurge(year, url, typed, ok, ng){
+    if(!onGas) return ng("手元ではシートにつながっていないので、消せない");
+    google.script.run
+      .withSuccessHandler(r => {
+        /* 消したら、その年度は退避ずみになる。**画面にもすぐ映す** */
+        (bootInfo.archived || (bootInfo.archived = {}))[String(year)] =
+          {url:r.url, at:r.at, by:r.by};
+        ok(r);
+      })
+      .withFailureHandler(e => ng(String((e && e.message) || "消せなかった")))
+      .apiArchivePurge(+year, url, typed);
+  }
+
   /* 年度の検査。**4月に開けたとき、何が足りないかを1画面で言う。**
      手元では見られない（シートを読まなければ、足りないものが分からない）。 */
   function checkYear(ok, ng){
@@ -1922,7 +2008,8 @@ const Backend = (function(){
 
   return {isGas, info, setNotifier, setDirtyWatcher, unsaved, prefetchWeek,
           cellChanged, flush, boot, ready, readyYear,
-          saveRoster, saveBase, saveBaseAll, readPaste, checkYear,
+          saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
+          archiveCount, archiveVerify, archivePurge,
           exportTanpopo, shapeTanpopo, buildTanpopo};
 })();
 /* ▲ src/js/backend.js ▲ */
@@ -3349,6 +3436,7 @@ function openView(v){
     refreshWeek();
     if(!tp) fillPanel();
     applyLock();                  /* 画面ごとにロックを持つ */
+    paintArchive();               /* 退避ずみの年度なら、そう言う */
   };
 
   let landed = false, drawn = false;
@@ -3374,6 +3462,7 @@ function showGate(){
     document.querySelector("[data-act='" + a + "']").hidden = false;
   drawGate();
   paintHeader();
+  paintArchive();
 }
 
 /* 上の帯・左の並び・中央のセレクトの「いま」を合わせる */
@@ -3798,6 +3887,7 @@ function openAdminDlg(){
     "週案 " + APP_VERSION + "（" + (BUILD_DATE || "日付なし") + "）／"
     + (b.gas ? "本番" : "手元") + "／" + fy() + "年度";
   $("ckOut").innerHTML = "";
+  drawArchive();
   $("ckStat").textContent = b.gas ? "" : "手元では検査できない（シートを読まないと分からない）";
   $("ckGo").disabled = !b.gas;
   $("adminDlg").showModal();
@@ -3825,6 +3915,118 @@ function runCheck(){
   Backend.checkYear(
     r => { $("ckGo").disabled = false; drawCheck(r); },
     why => { $("ckGo").disabled = false; $("ckStat").textContent = why; });
+}
+
+/* ── 年度の退避 ──────────────────────────────
+   **年度末に、人がドライブでファイルを丸ごと複製する。**
+   画面は数える・照合する・消すの3つだけ。複製をコードで書かないので、
+   コピー漏れが原理的に起きない。本体のURLは変わらない。
+
+   段ごとに別のボタンにしてある。**1つにまとめない。**
+   まとめると、確かめずに消せてしまう。 */
+let arChecked = null;          /* 照合の通った {year, url}。ここが埋まるまで消させない */
+
+function drawArchive(){
+  const b = Backend.info();
+  $("arYear").value = fy() - 1;             /* 既定は「1つ前の年度」 */
+  $("arYear").disabled = !b.gas;
+  $("arCount").disabled = !b.gas;
+  $("arStat").textContent = b.gas ? "" : "手元では退避できない";
+  $("arOut").innerHTML = "";
+  $("arStep2").hidden = true;
+  $("arStep4").hidden = true;
+  $("arWhy").textContent = "";
+  arChecked = null;
+}
+function arYear(){ return +$("arYear").value || fy() - 1; }
+
+/* ① 数える */
+function arRunCount(){
+  const y = arYear();
+  $("arStat").textContent = "数えています…";
+  $("arStep2").hidden = true; $("arStep4").hidden = true; arChecked = null;
+  Backend.archiveCount(y, r => {
+    const done = r.done;
+    $("arStat").textContent = done ? y + "年度は退避ずみ" : "";
+    $("arOut").innerHTML =
+      "<table class=\"sys\">"
+      + "<tr><th>年度</th><td>" + r.year + "年度</td></tr>"
+      + "<tr><th>週案の行</th><td>" + r.rows + " 行（" + r.sheets.length + " シート）</td></tr>"
+      + "<tr><th>入っているコマ</th><td>" + r.cells + " コマ</td></tr>"
+      + "<tr><th>日付の範囲</th><td>" + (r.from ? escText(r.from) + " 〜 " + escText(r.to) : "—")
+      + "</td></tr>"
+      + (r.sheets.length
+         ? "<tr><th>内わけ</th><td>" + r.sheets.map(s =>
+             escText(s.name) + " " + s.rows + "行").join("　") + "</td></tr>" : "")
+      + (done ? "<tr><th>退避ずみ</th><td>" + escText(done.at) + "　"
+                + escText(whoName(done.by)) + "</td></tr>" : "")
+      + "</table>";
+    if(!r.rows){
+      $("arStat").textContent = y + "年度の週案は1行もない。退避するものがない";
+      return;
+    }
+    $("arFile").textContent = r.file;
+    $("arName").textContent = "週案 保存 " + r.year + "年度";
+    $("arStep2").hidden = false;
+  }, why => { $("arStat").textContent = why; });
+}
+
+/* ③ 照合する。**ここが通るまで、消すボタンは出さない。** */
+function arRunVerify(){
+  const y = arYear(), url = $("arUrl").value.trim();
+  if(!url) return void ($("arWhy").textContent = "退避先のURLを貼る");
+  $("arWhy").textContent = "照合しています…";
+  $("arStep4").hidden = true; arChecked = null;
+  Backend.archiveVerify(y, url, r => {
+    if(!r.ok){
+      $("arWhy").innerHTML = "<b>合っていない。消せません。</b><ul>"
+        + r.why.map(w => "<li>" + escText(w) + "</li>").join("") + "</ul>";
+      return;
+    }
+    arChecked = {year:y, url};
+    $("arWhy").innerHTML = "<b>合っている。</b>"
+      + escText(r.there.file) + " に " + r.there.rows + " 行そろっている。";
+    $("arTyped").value = "";
+    $("arGo").disabled = true;
+    $("arStep4").hidden = false;
+  }, why => { $("arWhy").textContent = why; });
+}
+
+/* ④ 消す。年度を打ち込ませる。**誤クリックで消えない。** */
+function arRunPurge(){
+  if(!arChecked) return;
+  const typed = $("arTyped").value.trim();
+  $("arGo").disabled = true;
+  $("arWhy").textContent = "消しています…";
+  Backend.archivePurge(arChecked.year, arChecked.url, typed, r => {
+    $("arWhy").innerHTML = "<b>" + r.year + "年度を退避した。</b>"
+      + r.rows + " 行（" + r.cells + " コマ・" + r.sheets + " シート）を本体から消した。"
+      + "中身は保管庫に残っている。";
+    $("arStep4").hidden = true;
+    arChecked = null;
+    paintArchive();
+    toast(r.year + "年度を退避した。本体のURLは変わっていない");
+  }, why => {
+    $("arWhy").innerHTML = "<b>消さなかった。</b><br>" + escText(why).replace(/\n/g, "<br>");
+    $("arGo").disabled = false;
+  });
+}
+
+/* 退避ずみの年度を開いているあいだ、紙の上に出しておく知らせ。
+   **これが無いと、基本時間割だけの紙を見て「週案が全部消えた」と言われる。** */
+function paintArchive(){
+  const bar = $("arcBar");
+  if(!bar) return;
+  const a = Backend.archivedYear ? Backend.archivedYear(fy()) : null;
+  if(!a || view.kind === "gate" || view.kind === "tanpopo"){ bar.hidden = true; return; }
+  bar.hidden = false;
+  $("arcTitle").textContent = fy() + "年度は退避ずみです";
+  $("arcNote").textContent =
+    "この年度の週案は保管庫に移してあります。ここに出ているのは基本時間割です。"
+    + (a.at ? "（" + a.at + "　" + whoName(a.by) + "）" : "");
+  const link = $("arcLink");
+  if(a.url){ link.href = a.url; link.hidden = false; }
+  else link.hidden = true;
 }
 /* ▲ src/js/dialogs.js ▲ */
 /* ▼ src/js/main.js ▼ */
@@ -3904,6 +4106,7 @@ function refreshWeek(){
   const n = weekNo();
   $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
+  paintArchive();                 /* 週をまたぐと年度が変わる。**そのつど見る** */
   if(view.kind === "tanpopo"){ drawTanpopoView(); return; }
   buildSheet();
   autoFit();
@@ -4048,6 +4251,13 @@ function wire(){
   on("target","change", e => onTargetChange(e.target.value));
   on("tpGo","click", reflectTanpopo);
   on("ckGo","click", runCheck);
+  on("arCount","click",  arRunCount);
+  on("arVerify","click", arRunVerify);
+  on("arGo","click",     arRunPurge);
+  /* 年度を打ち込むまで押せない。**誤クリックで消えない。** */
+  on("arTyped","input", () => {
+    $("arGo").disabled = !arChecked || $("arTyped").value.trim() !== String(arChecked.year);
+  });
 
   /* 上書きの窓。**閉じ方が何であれ「変更しない」に落ちる。**
      Esc も、外側を押したときも、返事をしないまま消えたときも同じ */

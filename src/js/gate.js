@@ -87,6 +87,7 @@ function openView(v){
     refreshWeek();
     if(!tp) fillPanel();
     applyLock();                  /* 画面ごとにロックを持つ */
+    paintArchive();               /* 退避ずみの年度なら、そう言う */
   };
 
   let landed = false, drawn = false;
@@ -112,6 +113,7 @@ function showGate(){
     document.querySelector("[data-act='" + a + "']").hidden = false;
   drawGate();
   paintHeader();
+  paintArchive();
 }
 
 /* 上の帯・左の並び・中央のセレクトの「いま」を合わせる */

@@ -288,6 +288,168 @@ const Store = (function(){
     return {year: y, items, ng, warn: warn2, file: Sheets.bookName()};
   }
 
+  /* ── 年度の退避 ──────────────────────────────
+     **年度末に、人がドライブでファイルを丸ごと複製する。**
+     こちらは「数える」「照合する」「消す」の3つだけをやる。
+
+     複製をコードで書かないのは、**コピー漏れを原理的に起こさないため**。
+     Drive への書き込み権限も要らない。複製は人の手のほうが安全で、速い。
+
+     消すのは週案シートの、その年度の行だけ。**シートも見出しも消さない。**
+     基本時間割・クラス・専科は残す（「前年度から写す」がそのまま使える）。
+
+     本体のURLは変わらない。**新年度も教員は今までと同じURLを開く。**
+     複製のほうが保管庫になる。 */
+
+  /* 週案シートを年度で数える。**読むだけ。** */
+  function archiveCount(year){
+    const y = String(year);
+    const all = Sheets.planMap();
+    const sheets = [];
+    let rows = 0, cells = 0, from = "", to = "";
+    for(const name in all){
+      let n = 0, c = 0;
+      for(const r of Sheets.readPlan(name, ymd, all)){
+        if(String(r["年度"]) !== y) continue;
+        n++;
+        if(String(r["題名"] || "").trim() || String(r["詳細"] || "").trim()) c++;
+        const d = r["日付"];
+        if(!from || d < from) from = d;
+        if(!to   || d > to)   to = d;
+      }
+      if(n){ sheets.push({name, rows:n, cells:c}); rows += n; cells += c; }
+    }
+    sheets.sort(function(a, b){ return a.name < b.name ? -1 : 1; });
+    return {year: +year, sheets, rows, cells, from, to,
+            file: Sheets.bookName(), done: archiveDone(year)};
+  }
+
+  /* 退避ずみか。**この行があれば退避ずみ。** 無いシートも読める（readAllSoft） */
+  function archiveDone(year){
+    const y = String(year);
+    let hit = null;
+    for(const r of Sheets.readAllSoft("退避").rows)
+      if(String(r["年度"]).trim() === y)
+        hit = {year:+y, url:String(r["退避先URL"] || ""),
+               at:String(r["退避日"] || ""), by:String(r["退避した人"] || ""),
+               rows:+r["行数"] || 0, cells:+r["コマ数"] || 0};
+    return hit;
+  }
+  function archivedAll(){
+    const out = {};
+    for(const r of Sheets.readAllSoft("退避").rows){
+      const y = String(r["年度"]).trim();
+      if(y) out[y] = {url:String(r["退避先URL"] || ""), at:String(r["退避日"] || ""),
+                      by:String(r["退避した人"] || "")};
+    }
+    return out;
+  }
+
+  /* 退避先と突き合わせる。**読むだけ。合わなければ消させない。** */
+  function archiveVerify(year, url){
+    const y = String(year);
+    const mine = archiveCount(year);
+    const id = fileId(url, "退避先のURL");
+    const here = Sheets.book().getId();
+    if(id === here)
+      return {ok:false, why:["貼られたURLが、いま開いているファイルそのものです。"
+                           + "複製のほうのURLを貼ってください"], mine};
+
+    let ss;
+    try{ ss = SpreadsheetApp.openById(id); }
+    catch(e){
+      return {ok:false, why:["退避先を開けません（" + String(e && e.message) + "）。"
+                           + "複製が管理者に共有されているか確かめてください"], mine};
+    }
+
+    /* 退避先の週案シートを、同じやり方で数える */
+    const there = {};
+    for(const sh of ss.getSheets()){
+      const name = sh.getName();
+      if(name.indexOf(Sheets.PLAN_PREFIX) !== 0) continue;
+      const v = sh.getDataRange().getValues();
+      if(v.length < 2) continue;
+      const at = {};
+      v[0].forEach(function(h, i){ const k = String(h).trim(); if(k) at[k] = i; });
+      if(!("年度" in at) || !("日付" in at) || !("時程" in at)) continue;
+      let n = 0, c = 0;
+      for(let i = 1; i < v.length; i++){
+        const row = v[i];
+        if(String(row[at["年度"]]) !== y) continue;
+        if(!ymd(row[at["日付"]]) || !String(row[at["時程"]]).trim()) continue;
+        n++;
+        const t = ("題名" in at) ? String(row[at["題名"]] || "").trim() : "";
+        const d = ("詳細" in at) ? String(row[at["詳細"]] || "").trim() : "";
+        if(t || d) c++;
+      }
+      if(n) there[name] = {rows:n, cells:c};
+    }
+
+    /* シートごとに突き合わせる。**1枚でも足りなければ止める。** */
+    const why = [];
+    for(const s of mine.sheets){
+      const t = there[s.name];
+      if(!t) why.push("退避先に「" + s.name + "」の " + y + "年度の行がありません");
+      else if(t.rows !== s.rows)
+        why.push("「" + s.name + "」の行数が合いません（本体 " + s.rows
+               + " ／ 退避先 " + t.rows + "）");
+      else if(t.cells !== s.cells)
+        why.push("「" + s.name + "」のコマ数が合いません（本体 " + s.cells
+               + " ／ 退避先 " + t.cells + "）");
+    }
+    if(!mine.rows) why.push(y + "年度の週案が、本体に1行もありません（退避するものがない）");
+
+    return {ok: why.length === 0, why, mine,
+            there: {file: ss.getName(), id,
+                    rows: Object.keys(there).reduce(function(a, k){ return a + there[k].rows; }, 0),
+                    sheets: Object.keys(there).length}};
+  }
+
+  /* 本体から、その年度の行だけを消す。**押す直前にもう一度照合する。**
+     貼ってから押すまでのあいだに、誰かが書き足しているかもしれない。 */
+  function archivePurge(year, url, typed){
+    const y = String(year);
+    if(String(typed || "").trim() !== y)
+      throw new Error("消す前に、年度（" + y + "）をそのまま打ち込んでください");
+
+    const v = archiveVerify(year, url);
+    if(!v.ok) throw new Error("退避先と合っていないので、1行も消しません。\n・"
+                            + v.why.join("\n・"));
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try{
+      /* **消す直前にもう一度数える。** ここで増えていたら、その増えたぶんは
+         退避先に入っていない。消せば、書いた本人にも見えないまま消える。 */
+      const now = archiveCount(year);
+      if(now.rows !== v.mine.rows || now.cells !== v.mine.cells)
+        throw new Error("確かめてから押すまでのあいだに、" + y + "年度の週案が変わりました"
+                      + "（" + v.mine.rows + " 行 → " + now.rows + " 行）。"
+                      + "複製をやり直してください。1行も消していません。");
+
+      const all = Sheets.planMap();
+      const gone = [];
+      for(const s of now.sheets){
+        const keep = Sheets.readPlan(s.name, ymd, all)
+                       .filter(function(r){ return String(r["年度"]) !== y; });
+        Sheets.writePlan(s.name, keep);
+        gone.push(s.name);
+      }
+      const me = (function(){ try{ return Gate.activeEmail(); }catch(e){ return ""; } })();
+      const when = Utilities.formatDate(new Date(), TZ, "yyyy-MM-dd HH:mm");
+      Sheets.setup();                    /* 「退避」シートがまだ無い学校でも書ける */
+      Sheets.appendRows("退避", [Sheets.toArray("退避", {
+        "年度": +y, "退避先URL": String(url || ""), "退避日": when,
+        "退避した人": me, "行数": now.rows, "コマ数": now.cells
+      })]);
+      SpreadsheetApp.flush();
+      return {year:+y, sheets:gone.length, rows:now.rows, cells:now.cells,
+              at:when, by:me, url:String(url || "")};
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
   /* ── 書く ────────────────────────────────────── */
 
   /* patches = [{date, slot, layer, target, title, note, subject, sp, remove}]
@@ -878,7 +1040,8 @@ const Store = (function(){
 
   return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects,
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste,
-          exportTanpopo, shapeTanpopo, buildTanpopo, migratePlan, checkYear, ymd};
+          exportTanpopo, shapeTanpopo, buildTanpopo, migratePlan, checkYear,
+          archiveCount, archiveVerify, archivePurge, archivedAll, ymd};
 })();
 
 /* ── 画面から呼ぶ口。**すべて1行目で Gate.check()。** ───────── */
@@ -891,6 +1054,9 @@ function apiBoot(year){
   const out = {
     me:       me.email,
     file:     Sheets.bookName(),        /* 管理画面に出す。どのファイルを開いているか */
+    /* **退避ずみの年度。** これを渡さないと、退避した年度を開いた人に
+       基本時間割だけの紙が出て、「週案が全部消えた」と言われる。 */
+    archived: Store.archivedAll(),
     config:   Store.readConfig(),
     slots:    Store.readSlots(),
     subjects: Store.readSubjects()
@@ -909,6 +1075,20 @@ function apiBoot(year){
 function apiCheckYear(year){
   Gate.check();
   return Store.checkYear(year || new Date().getFullYear());
+}
+/* 年度の退避。**3つに分けてある。数える／照合する／消す。**
+   1つのボタンにまとめない。まとめると、確かめずに消せてしまう。 */
+function apiArchiveCount(year){
+  Gate.check();
+  return Store.archiveCount(year);
+}
+function apiArchiveVerify(year, url){
+  Gate.check();
+  return Store.archiveVerify(year, url);
+}
+function apiArchivePurge(year, url, typed){
+  Gate.check();
+  return Store.archivePurge(year, url, typed);
 }
 function apiReadYear(year){
   Gate.check();

@@ -379,6 +379,7 @@ function openAdminDlg(){
     "週案 " + APP_VERSION + "（" + (BUILD_DATE || "日付なし") + "）／"
     + (b.gas ? "本番" : "手元") + "／" + fy() + "年度";
   $("ckOut").innerHTML = "";
+  drawArchive();
   $("ckStat").textContent = b.gas ? "" : "手元では検査できない（シートを読まないと分からない）";
   $("ckGo").disabled = !b.gas;
   $("adminDlg").showModal();
@@ -406,4 +407,116 @@ function runCheck(){
   Backend.checkYear(
     r => { $("ckGo").disabled = false; drawCheck(r); },
     why => { $("ckGo").disabled = false; $("ckStat").textContent = why; });
+}
+
+/* ── 年度の退避 ──────────────────────────────
+   **年度末に、人がドライブでファイルを丸ごと複製する。**
+   画面は数える・照合する・消すの3つだけ。複製をコードで書かないので、
+   コピー漏れが原理的に起きない。本体のURLは変わらない。
+
+   段ごとに別のボタンにしてある。**1つにまとめない。**
+   まとめると、確かめずに消せてしまう。 */
+let arChecked = null;          /* 照合の通った {year, url}。ここが埋まるまで消させない */
+
+function drawArchive(){
+  const b = Backend.info();
+  $("arYear").value = fy() - 1;             /* 既定は「1つ前の年度」 */
+  $("arYear").disabled = !b.gas;
+  $("arCount").disabled = !b.gas;
+  $("arStat").textContent = b.gas ? "" : "手元では退避できない";
+  $("arOut").innerHTML = "";
+  $("arStep2").hidden = true;
+  $("arStep4").hidden = true;
+  $("arWhy").textContent = "";
+  arChecked = null;
+}
+function arYear(){ return +$("arYear").value || fy() - 1; }
+
+/* ① 数える */
+function arRunCount(){
+  const y = arYear();
+  $("arStat").textContent = "数えています…";
+  $("arStep2").hidden = true; $("arStep4").hidden = true; arChecked = null;
+  Backend.archiveCount(y, r => {
+    const done = r.done;
+    $("arStat").textContent = done ? y + "年度は退避ずみ" : "";
+    $("arOut").innerHTML =
+      "<table class=\"sys\">"
+      + "<tr><th>年度</th><td>" + r.year + "年度</td></tr>"
+      + "<tr><th>週案の行</th><td>" + r.rows + " 行（" + r.sheets.length + " シート）</td></tr>"
+      + "<tr><th>入っているコマ</th><td>" + r.cells + " コマ</td></tr>"
+      + "<tr><th>日付の範囲</th><td>" + (r.from ? escText(r.from) + " 〜 " + escText(r.to) : "—")
+      + "</td></tr>"
+      + (r.sheets.length
+         ? "<tr><th>内わけ</th><td>" + r.sheets.map(s =>
+             escText(s.name) + " " + s.rows + "行").join("　") + "</td></tr>" : "")
+      + (done ? "<tr><th>退避ずみ</th><td>" + escText(done.at) + "　"
+                + escText(whoName(done.by)) + "</td></tr>" : "")
+      + "</table>";
+    if(!r.rows){
+      $("arStat").textContent = y + "年度の週案は1行もない。退避するものがない";
+      return;
+    }
+    $("arFile").textContent = r.file;
+    $("arName").textContent = "週案 保存 " + r.year + "年度";
+    $("arStep2").hidden = false;
+  }, why => { $("arStat").textContent = why; });
+}
+
+/* ③ 照合する。**ここが通るまで、消すボタンは出さない。** */
+function arRunVerify(){
+  const y = arYear(), url = $("arUrl").value.trim();
+  if(!url) return void ($("arWhy").textContent = "退避先のURLを貼る");
+  $("arWhy").textContent = "照合しています…";
+  $("arStep4").hidden = true; arChecked = null;
+  Backend.archiveVerify(y, url, r => {
+    if(!r.ok){
+      $("arWhy").innerHTML = "<b>合っていない。消せません。</b><ul>"
+        + r.why.map(w => "<li>" + escText(w) + "</li>").join("") + "</ul>";
+      return;
+    }
+    arChecked = {year:y, url};
+    $("arWhy").innerHTML = "<b>合っている。</b>"
+      + escText(r.there.file) + " に " + r.there.rows + " 行そろっている。";
+    $("arTyped").value = "";
+    $("arGo").disabled = true;
+    $("arStep4").hidden = false;
+  }, why => { $("arWhy").textContent = why; });
+}
+
+/* ④ 消す。年度を打ち込ませる。**誤クリックで消えない。** */
+function arRunPurge(){
+  if(!arChecked) return;
+  const typed = $("arTyped").value.trim();
+  $("arGo").disabled = true;
+  $("arWhy").textContent = "消しています…";
+  Backend.archivePurge(arChecked.year, arChecked.url, typed, r => {
+    $("arWhy").innerHTML = "<b>" + r.year + "年度を退避した。</b>"
+      + r.rows + " 行（" + r.cells + " コマ・" + r.sheets + " シート）を本体から消した。"
+      + "中身は保管庫に残っている。";
+    $("arStep4").hidden = true;
+    arChecked = null;
+    paintArchive();
+    toast(r.year + "年度を退避した。本体のURLは変わっていない");
+  }, why => {
+    $("arWhy").innerHTML = "<b>消さなかった。</b><br>" + escText(why).replace(/\n/g, "<br>");
+    $("arGo").disabled = false;
+  });
+}
+
+/* 退避ずみの年度を開いているあいだ、紙の上に出しておく知らせ。
+   **これが無いと、基本時間割だけの紙を見て「週案が全部消えた」と言われる。** */
+function paintArchive(){
+  const bar = $("arcBar");
+  if(!bar) return;
+  const a = Backend.archivedYear ? Backend.archivedYear(fy()) : null;
+  if(!a || view.kind === "gate" || view.kind === "tanpopo"){ bar.hidden = true; return; }
+  bar.hidden = false;
+  $("arcTitle").textContent = fy() + "年度は退避ずみです";
+  $("arcNote").textContent =
+    "この年度の週案は保管庫に移してあります。ここに出ているのは基本時間割です。"
+    + (a.at ? "（" + a.at + "　" + whoName(a.by) + "）" : "");
+  const link = $("arcLink");
+  if(a.url){ link.href = a.url; link.hidden = false; }
+  else link.hidden = true;
 }

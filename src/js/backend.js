@@ -190,7 +190,7 @@ const Backend = (function(){
   const waiters = [];
   /* 立ち上がりでもらった、**自分と置き場所のこと**。管理画面に出す。
      手元で開いているときは空のまま（サーバに聞いていないので分からない）。 */
-  let bootInfo = {me:"", file:""};
+  let bootInfo = {me:"", file:"", archived:{}};
 
   /* **保存にかかった時間を、最近のぶんだけ覚える。**
      長くなってきたことに、誰かが困る前に気づくため。
@@ -215,12 +215,16 @@ const Backend = (function(){
             cells: worst(pick(x => x.cells)), sheets: worst(pick(x => x.sheets))};
   }
   const info = () => ({me: bootInfo.me, file: bootInfo.file, gas: !!onGas,
-                       times: saveTimes()});
+                      archived: bootInfo.archived || {}, times: saveTimes()});
+  /* その年度は退避ずみか。**退避ずみの年度に、何も言わずに紙を出さない。**
+     週案の行はもう本体に無いので、基本時間割だけの紙が出る。
+     それを黙って出すと「週案が全部消えた」と言われる。 */
+  const archivedYear = y => (bootInfo.archived || {})[String(y)] || null;
   function boot(after){
     if(!onGas){ booted = true; return after(); }
     google.script.run
       .withSuccessHandler(b => {
-        bootInfo = {me: b.me || "", file: b.file || ""};
+        bootInfo = {me: b.me || "", file: b.file || "", archived: b.archived || {}};
         if(b.slots    && b.slots.length)    setSlots(b.slots);
         if(b.subjects && b.subjects.length) setSubjects(b.subjects);
         if(b.config)  applyConfig(b.config);
@@ -407,6 +411,35 @@ const Backend = (function(){
       .apiWriteBaseAll(fy(), table);
   }
 
+  /* 年度の退避。**数える／照合する／消す の3つに分けてある。**
+     1つにまとめると、確かめずに消せてしまう。 */
+  function archiveCount(year, ok, ng){
+    if(!onGas) return ng("手元ではシートにつながっていないので、退避できない");
+    google.script.run
+      .withSuccessHandler(r => ok(r))
+      .withFailureHandler(e => ng("数えられなかった（" + (e && e.message) + "）"))
+      .apiArchiveCount(+year);
+  }
+  function archiveVerify(year, url, ok, ng){
+    if(!onGas) return ng("手元ではシートにつながっていないので、照合できない");
+    google.script.run
+      .withSuccessHandler(r => ok(r))
+      .withFailureHandler(e => ng("照合できなかった（" + (e && e.message) + "）"))
+      .apiArchiveVerify(+year, url);
+  }
+  function archivePurge(year, url, typed, ok, ng){
+    if(!onGas) return ng("手元ではシートにつながっていないので、消せない");
+    google.script.run
+      .withSuccessHandler(r => {
+        /* 消したら、その年度は退避ずみになる。**画面にもすぐ映す** */
+        (bootInfo.archived || (bootInfo.archived = {}))[String(year)] =
+          {url:r.url, at:r.at, by:r.by};
+        ok(r);
+      })
+      .withFailureHandler(e => ng(String((e && e.message) || "消せなかった")))
+      .apiArchivePurge(+year, url, typed);
+  }
+
   /* 年度の検査。**4月に開けたとき、何が足りないかを1画面で言う。**
      手元では見られない（シートを読まなければ、足りないものが分からない）。 */
   function checkYear(ok, ng){
@@ -466,6 +499,7 @@ const Backend = (function(){
 
   return {isGas, info, setNotifier, setDirtyWatcher, unsaved, prefetchWeek,
           cellChanged, flush, boot, ready, readyYear,
-          saveRoster, saveBase, saveBaseAll, readPaste, checkYear,
+          saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
+          archiveCount, archiveVerify, archivePurge,
           exportTanpopo, shapeTanpopo, buildTanpopo};
 })();

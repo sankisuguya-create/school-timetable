@@ -117,6 +117,25 @@ function fakeSheetOn(grid, name){
   return s0;
 }
 
+/* 退避先（人がドライブで丸ごと複製したもの）。openById で開く先。
+   複製なので、中身は本体のシートの写しになる。 */
+const BOOKID = "1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";   /* 本体のID */
+const ARCID  = "1BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";   /* 退避先のID */
+const ARCFILE = {name:"週案 保存 2026年度", sheets:{}};
+const arcSheet = name => fakeSheetOn(ARCFILE.sheets[name], name);
+/* 人がドライブで「コピーを作成」したのと同じことをする */
+const activeBook = () => ({
+  getId: () => BOOKID,
+  getName: () => "週案 2026年度",
+  getSheetByName: n => (n in SHEETS) ? fakeSheet(n) : null,
+  insertSheet(n){ SHEETS[n] = []; return fakeSheet(n); },
+  getSheets(){ return Object.keys(SHEETS).map(fakeSheet); }
+});
+function copyBook(){
+  ARCFILE.sheets = {};
+  for(const n in SHEETS) ARCFILE.sheets[n] = SHEETS[n].map(r => r.slice());
+}
+
 let EMAIL = "tanaka@edu.nishi.or.jp";
 const locks = {held:0};
 
@@ -130,12 +149,15 @@ const sandbox = {
                  setRanges(){ return r; }, build(){ return {}; }};
       return r;
     },
-    getActive: () => ({
-      getSheetByName: n => (n in SHEETS) ? fakeSheet(n) : null,
-      insertSheet(n){ SHEETS[n] = []; return fakeSheet(n); },
-      getSheets(){ return Object.keys(SHEETS).map(fakeSheet); }
-    }),
+    getActive: () => activeBook(),
     openById(id){
+      if(id === BOOKID) return activeBook();      /* 同じファイルのURLを貼った形 */
+      if(id === ARCID) return {
+        getId: () => ARCID,
+        getName: () => ARCFILE.name,
+        getSheets: () => Object.keys(ARCFILE.sheets).map(arcSheet),
+        getSheetByName: n => (n in ARCFILE.sheets) ? arcSheet(n) : null
+      };
       if(id !== TPID) throw new Error("そんなファイルは無い: " + id);
       return {
         getName: () => TPFILE.name,
@@ -185,10 +207,10 @@ const rowsOf = name => SHEETS[name].filter(r => r.some(v => v !== "" && v != nul
 /* ── シートを作る ─────────────────────────────── */
 console.log("■ シートを作る");
 let made = ev("Sheets.setup()");
-ok("8枚＋貼り付け用の1枚ができる", made.made.length === 9, made.made);
+ok("9枚＋貼り付け用の1枚ができる", made.made.length === 10, made.made);
 made = ev("Sheets.setup()");
 ok("2回目は何も作らない（何度走らせても同じ）",
-   made.made.length === 0 && made.kept.length === 8, made);
+   made.made.length === 0 && made.kept.length === 9, made);
 ok("列は名前で引ける", Object.keys(ev('Sheets.head("週案").at')).length >= 11);
 
 console.log("\n■ 既定値の読み取り");
@@ -782,6 +804,90 @@ ok("担当者・場所の行は空のまま（たんぽぽ担当が書く）",
 
 /* **消さずに退避する**のと、**形が分からないときは書かない**のは、
    外へ出すところ全部で同じにする。1本に寄せてある（Sheets.stash / shapeOk）。 */
+/* **年度末に、人がドライブでファイルを丸ごと複製する。**
+   こちらは数える・照合する・消すだけ。複製をコードで書かないので、
+   コピー漏れが原理的に起きない。本体のURLは変わらない。 */
+console.log("\n■ 年度の退避（数える → 照合する → 消す）");
+/* 2025年度と2026年度の週案を1コマずつ入れておく */
+ev(`Store.writeCells(2025, [{date:"2025-06-10", slot:"p1", layer:"home",
+  target:"3-3", title:"むかしの国語", note:"", subject:"kokugo"}])`);
+ev(`Store.writeCells(2025, [{date:"2025-06-11", slot:"p2", layer:"grade",
+  target:"3", title:"むかしの学年行事", note:"", subject:null}])`);
+ev(`Store.writeCells(2026, [{date:"2026-06-10", slot:"p1", layer:"home",
+  target:"3-3", title:"いまの国語", note:"", subject:"kokugo"}])`);
+
+let ac = ev("Store.archiveCount(2025)");
+ok("その年度の行だけを数える", ac.rows === 2 && ac.cells === 2, ac);
+ok("シートごとの内訳を出す", ac.sheets.length === 2, ac.sheets);
+ok("いちばん古い日付と新しい日付を出す",
+   ac.from === "2025-06-10" && ac.to === "2025-06-11", ac);
+ok("まだ退避していないと言う", ac.done === null, ac.done);
+/* いまの年度は、この検査より前に書いたぶんが入っている。**数えて覚えておく** */
+const now2026 = ev("Store.archiveCount(2026)").rows;
+ok("別の年度は数に入れない", now2026 >= 1 && now2026 !== ac.rows, [now2026, ac.rows]);
+
+/* **複製する前は、照合が通らない** */
+let av = ev(`Store.archiveVerify(2025, "${ARCID}")`);
+ok("複製していなければ止める", av.ok === false && av.why.length >= 1, av.why);
+
+/* 同じファイルのURLを貼る事故 */
+av = ev(`Store.archiveVerify(2025, "https://docs.google.com/spreadsheets/d/${BOOKID}/edit")`);
+ok("いま開いているファイルそのものを貼ったら止める",
+   av.ok === false && av.why.join("").indexOf("そのもの") >= 0, av.why);
+
+/* 開けないファイル */
+av = ev(`Store.archiveVerify(2025, "1CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC")`);
+ok("開けない退避先は、理由を言って止める",
+   av.ok === false && av.why.join("").indexOf("開けません") >= 0, av.why);
+
+/* ここで人が複製する */
+copyBook();
+av = ev(`Store.archiveVerify(2025, "https://docs.google.com/spreadsheets/d/${ARCID}/edit")`);
+ok("複製したあとは照合が通る", av.ok === true, av.why);
+ok("URLをそのまま貼っても通る（IDを抜かせない）", av.there.id === ARCID, av.there);
+ok("退避先のファイル名を出す", av.there.file === "週案 保存 2026年度", av.there);
+
+/* 複製したあとに本体へ書き足すと、退避先に無い行ができる */
+ev(`Store.writeCells(2025, [{date:"2025-06-12", slot:"p3", layer:"home",
+  target:"3-3", title:"あとから足した", note:"", subject:null}])`);
+av = ev(`Store.archiveVerify(2025, "${ARCID}")`);
+ok("複製したあとに増えた行があれば止める",
+   av.ok === false && av.why.join("").indexOf("行数が合いません") >= 0, av.why);
+let threw = "";
+try{ ev(`Store.archivePurge(2025, "${ARCID}", "2025")`); }catch(e){ threw = e.message; }
+ok("合わないときは1行も消さない", ev("Store.archiveCount(2025)").rows === 3, threw);
+ok("そのとき何が合わないかを言う", threw.indexOf("行数が合いません") >= 0, threw);
+
+/* 複製し直せば通る */
+copyBook();
+threw = "";
+try{ ev(`Store.archivePurge(2025, "${ARCID}", "2024")`); }catch(e){ threw = e.message; }
+ok("年度を打ち間違えたら消さない", threw.indexOf("打ち込んで") >= 0, threw);
+ok("そのときも1行も消えていない", ev("Store.archiveCount(2025)").rows === 3);
+
+const pg = ev(`Store.archivePurge(2025, "${ARCID}", "2025")`);
+ok("年度を打ち込めば消える", pg.rows === 3 && pg.sheets === 2, pg);
+ok("消したのはその年度だけ", ev("Store.archiveCount(2025)").rows === 0);
+ok("いまの年度は1行も減っていない",
+   ev("Store.archiveCount(2026)").rows === now2026,
+   [ev("Store.archiveCount(2026)").rows, now2026]);
+ok("シートは消さない（見出しは残る）",
+   !!SHEETS["週案 3-3"] && String(SHEETS["週案 3-3"][0][0]) === "年度",
+   SHEETS["週案 3-3"] && SHEETS["週案 3-3"][0]);
+ok("消しても退避先はそのまま", ARCFILE.sheets["週案 3-3"].length >= 2);
+
+const dn = ev("Store.archiveCount(2025).done");
+ok("退避したことを記録する", !!dn && dn.rows === 3, dn);
+ok("誰がいつ退避したかを残す",
+   dn.by === "tanaka@edu.nishi.or.jp" && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(dn.at), dn);
+ok("退避先のURLを残す", dn.url.indexOf(ARCID) >= 0, dn.url);
+ok("立ち上がりで、退避ずみの年度を画面へ渡す",
+   !!ev("apiBoot(2026).archived")["2025"], ev("apiBoot(2026).archived"));
+ok("退避していない年度は渡さない", !ev("apiBoot(2026).archived")["2026"]);
+/* 退避したあとも、基本時間割とクラスは残る（「前年度から写す」が使える） */
+ok("基本時間割は消さない", ev("Store.readRoster(2025)").classes["3"].length === 3,
+   ev("Store.readRoster(2025)").classes);
+
 console.log("\n■ 退避と、形の見分け（外へ出すところ共通）");
 TPFILE.sheets["退避テスト"] = [["見出し"], ["中身"]];
 const st = ev(`Sheets.stash(SpreadsheetApp.openById("${TPID}").getSheetByName("退避テスト"), "前の形")`);
@@ -810,7 +916,7 @@ TPFILE.sheets["からっぽ"] = [[""]];
   for(const row of SHEETS["設定"])
     if(String(row[at["キー"]]) === "たんぽぽシート名") row[at["値"]] = "からっぽ";
 })();
-let threw = "";
+threw = "";
 try{ ev(`Store.exportTanpopo(2026, "2026-11-16", {}, {"3-3":1})`); }
 catch(e){ threw = e.message; }
 ok("形が分からないシートへは書かない", threw.indexOf("形が読めません") >= 0, threw);

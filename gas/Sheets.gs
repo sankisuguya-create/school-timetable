@@ -101,6 +101,16 @@ const Sheets = (function(){
     "年設定": {
       cols: ["年度", "第1週の月曜"],
       seed: []
+    },
+    /* 退避の記録。**この行がある年度＝退避ずみ。**
+
+       「年設定」に列を足す形にしない。head() は列が1つ足りないだけで
+       例外を投げるので、列を足した版を貼った瞬間、まだ列を足していない
+       学校では全員が立ち上がらなくなる。**新しいシートなら誰も壊れない**
+       （setup は無いシートを作るだけで、あるシートには触らない）。 */
+    "退避": {
+      cols: ["年度", "退避先URL", "退避日", "退避した人", "行数", "コマ数"],
+      seed: []
     }
   };
 
@@ -329,6 +339,15 @@ const Sheets = (function(){
 
   /* 表を丸ごと読んで、行オブジェクトの配列にする。
      GAS は API を1回呼ぶたびに待つので、**まとめて1回で読む。** */
+  /* まだ無いシートも読む。**無いことを「例外」にしない。**
+     退避の記録のように、あとから足したシートは、古い学校にはまだ無い。
+     無いだけで立ち上がらなくなるほうが、よほど困る。 */
+  function readAllSoft(name){
+    if(!sheet(name)) return {rows: [], at: {}};
+    try{ return readAll(name); }
+    catch(e){ return {rows: [], at: {}}; }     /* 列が足りない古い形も、無いものとして扱う */
+  }
+
   function readAll(name){
     const {sh, at} = head(name);
     const last = sh.getLastRow();
@@ -378,7 +397,7 @@ const Sheets = (function(){
   }
 
   return {SPEC, NAMES, PASTE, CLASS_COLS, TANPOPO_FILL, asClass, isDate, readGrid,
-          book, bookName, stash, shapeOk, shapeError,
+          book, bookName, stash, shapeOk, shapeError, readAllSoft,
           PLAN_PREFIX, PLAN_ALL, PLAN_COLS, planName, ensurePlan, readPlan, writePlan,
           planNames, planMap,
           setup, head, readAll, appendRows, toArray, setRow, blankRow, sheet};

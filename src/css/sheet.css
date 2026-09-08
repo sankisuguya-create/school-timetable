@@ -128,7 +128,7 @@
    画面のものは何も刷らない。層の色も印も刷らない。
    リンクは下線だけ残す。URL は刷らない。 */
 @media print{
-  .side,.panel,.gate,.toast,.tpview,.busy{display:none!important}
+  .side,.panel,.gate,.toast,.tpview,.busy,.arc{display:none!important}
   .app::before{display:none!important}   /* 待っている印は刷らない */
   /* 時刻は画面だけのもの。紙の版面は教務必携の枠に合わせたまま動かさない
      （時程の列は 9mm。ここを広げると曜日の列がその分だけ痩せる） */

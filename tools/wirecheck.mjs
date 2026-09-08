@@ -148,6 +148,32 @@ await p.addInitScript(() => {
         call("apiWriteBaseAll", [y, table]);
         setTimeout(() => okFn({classes:Object.keys(table).length}), 0);
       },
+      /* 年度の退避。**数える → 照合する → 消す**。
+         照合は、退避先のURLが貼られていて、それが本体と違うときだけ通す */
+      apiArchiveCount(y){
+        call("apiArchiveCount", [y]);
+        setTimeout(() => okFn({year:y, rows:1200, cells:1100, file:"週案 2026年度",
+          from:"2025-04-07", to:"2026-03-20", done:window.__arcDone || null,
+          sheets:[{name:"週案 5-3", rows:800, cells:760},
+                  {name:"週案 5年",  rows:400, cells:340}]}), 0);
+      },
+      apiArchiveVerify(y, url){
+        call("apiArchiveVerify", [y, url]);
+        const same = String(url).indexOf("HONTAI") >= 0;
+        setTimeout(() => okFn(same
+          ? {ok:false, why:["貼られたURLが、いま開いているファイルそのものです"]}
+          : {ok:true, why:[], there:{file:"週案 保存 2025年度", id:"COPY", rows:1200}}), 0);
+      },
+      apiArchivePurge(y, url, typed){
+        call("apiArchivePurge", [y, url, typed]);
+        if(String(typed) !== String(y))
+          return void setTimeout(() => ngFn(
+            new Error("消す前に、年度（" + y + "）をそのまま打ち込んでください")), 0);
+        window.__arcDone = {year:y, url, at:"2027-03-28 17:20",
+                            by:"tanaka@edu.nishi.or.jp", rows:1200, cells:1100};
+        setTimeout(() => okFn({year:y, sheets:2, rows:1200, cells:1100,
+          at:"2027-03-28 17:20", by:"tanaka@edu.nishi.or.jp", url}), 0);
+      },
       apiCheckYear(y){
         call("apiCheckYear", [y]);
         setTimeout(() => okFn({year:y, ng:1, warn:1, file:"週案 2026（高木北）", items:[
@@ -703,6 +729,109 @@ ok("何コマ・何シートだったかも出す",
    (await p.locator("#sysTbl").innerText()).indexOf("シート") >= 0,
    await p.locator("#sysTbl").innerText());
 await p.locator("#adminDlg [data-close]").click(); await p.waitForTimeout(200);
+
+/* **年度末に、人がドライブで丸ごと複製する。**
+   画面は数える・照合する・消すだけ。本体のURLは変わらない。 */
+console.log("\n■ 年度の退避（①数える ②複製 ③照合 ④消す）");
+await p.locator(".side .admin").click(); await p.waitForTimeout(250);
+ok("既定は1つ前の年度",
+   await p.evaluate(() => +document.getElementById("arYear").value) === 2025,
+   await p.evaluate(() => document.getElementById("arYear").value));
+ok("いきなり消せない（②③④は出ていない）",
+   await p.evaluate(() => document.getElementById("arStep2").hidden
+                       && document.getElementById("arStep4").hidden) === true);
+
+await p.locator("#arCount").click(); await p.waitForTimeout(300);
+ok("① 数えると、行数とコマ数と日付の範囲を出す", await (async () => {
+     const t = await p.locator("#arOut").innerText();
+     return t.indexOf("1200") >= 0 && t.indexOf("1100") >= 0 && t.indexOf("2025-04-07") >= 0;
+   })() === true, await p.locator("#arOut").innerText());
+ok("シートごとの内わけも出す",
+   (await p.locator("#arOut").innerText()).indexOf("週案 5-3") >= 0,
+   await p.locator("#arOut").innerText());
+ok("数えたあとに ② の手順が出る",
+   await p.evaluate(() => !document.getElementById("arStep2").hidden) === true);
+ok("複製の名前をこちらで決めて見せる",
+   (await p.locator("#arName").innerText()).indexOf("週案 保存 2025年度") >= 0,
+   await p.locator("#arName").innerText());
+ok("複製元のファイル名も見せる",
+   (await p.locator("#arFile").innerText()).indexOf("週案 2026年度") >= 0,
+   await p.locator("#arFile").innerText());
+ok("デプロイしないことを手順に書く",
+   (await p.locator("#arStep2").innerText()).indexOf("デプロイしない") >= 0,
+   await p.locator("#arStep2").innerText());
+ok("数えただけでは、まだ消せない",
+   await p.evaluate(() => document.getElementById("arStep4").hidden) === true);
+
+/* 本体そのもののURLを貼る事故 */
+await p.locator("#arUrl").fill("https://docs.google.com/spreadsheets/d/HONTAI/edit");
+await p.locator("#arVerify").click(); await p.waitForTimeout(300);
+ok("③ 本体そのものを貼ったら止める",
+   (await p.locator("#arWhy").innerText()).indexOf("そのもの") >= 0,
+   await p.locator("#arWhy").innerText());
+ok("止まったときは ④ を出さない",
+   await p.evaluate(() => document.getElementById("arStep4").hidden) === true);
+
+await p.locator("#arUrl").fill("https://docs.google.com/spreadsheets/d/COPY/edit");
+await p.locator("#arVerify").click(); await p.waitForTimeout(300);
+ok("③ 合っていれば ④ が出る",
+   await p.evaluate(() => !document.getElementById("arStep4").hidden) === true);
+ok("何行そろっているかを言う",
+   (await p.locator("#arWhy").innerText()).indexOf("1200") >= 0,
+   await p.locator("#arWhy").innerText());
+ok("年度を打ち込むまで押せない", await p.locator("#arGo").isDisabled() === true);
+await p.locator("#arTyped").fill("2026"); await p.waitForTimeout(150);
+ok("違う年度を打っても押せない", await p.locator("#arGo").isDisabled() === true);
+await p.locator("#arTyped").fill("2025"); await p.waitForTimeout(150);
+ok("年度が合えば押せる", await p.locator("#arGo").isDisabled() === false);
+
+await p.locator("#arGo").click(); await p.waitForTimeout(400);
+ok("④ 消したら、何を消したかを言う", await (async () => {
+     const t = await p.locator("#arWhy").innerText();
+     return t.indexOf("1200") >= 0 && t.indexOf("保管庫") >= 0;
+   })() === true, await p.locator("#arWhy").innerText());
+ok("消したあとは ④ を引っこめる",
+   await p.evaluate(() => document.getElementById("arStep4").hidden) === true);
+ok("退避先のURLをそのまま渡す",
+   (await lastCall("apiArchivePurge")).args[1].indexOf("COPY") >= 0,
+   await lastCall("apiArchivePurge"));
+await p.locator("#adminDlg [data-close]").click(); await p.waitForTimeout(200);
+
+/* **退避した年度を開いたら、黙って紙を出さない。**
+   週案の行はもう無いので、基本時間割だけの紙が出る。それを黙って出すと
+   「週案が全部消えた」と言われる。 */
+console.log("\n■ 退避ずみの年度を開いたら、そう言う");
+ok("いまの年度（退避していない）では出さない",
+   await p.locator("#arcBar").evaluate(e => e.hidden) === true);
+await p.evaluate(() => { for(let i = 0; i < 52; i++) goWeek(-7); });
+await p.waitForTimeout(600);
+ok("週をさかのぼって前年度に入ると出る",
+   await p.locator("#arcBar").evaluate(e => e.hidden) === false,
+   await p.evaluate(() => fy()));
+ok("何年度が退避ずみかを言う",
+   (await p.locator("#arcTitle").innerText()).indexOf("2025年度") >= 0,
+   await p.locator("#arcTitle").innerText());
+ok("いま出ているのが基本時間割だと言う",
+   (await p.locator("#arcNote").innerText()).indexOf("基本時間割") >= 0,
+   await p.locator("#arcNote").innerText());
+ok("誰がいつ退避したかも言う",
+   (await p.locator("#arcNote").innerText()).indexOf("2027-03-28") >= 0,
+   await p.locator("#arcNote").innerText());
+ok("保管庫へのリンクを出す",
+   (await p.locator("#arcLink").getAttribute("href")).indexOf("COPY") >= 0,
+   await p.locator("#arcLink").getAttribute("href"));
+ok("刷るときは出さない（紙の外）", await (async () => {
+     await p.emulateMedia({media:"print"});
+     const v = await p.evaluate(() =>
+       getComputedStyle(document.getElementById("arcBar")).display);
+     await p.emulateMedia({media:"screen"});
+     return v === "none";
+   })() === true);
+await p.evaluate(() => { for(let i = 0; i < 52; i++) goWeek(7); });
+await p.waitForTimeout(600);
+ok("いまの年度へ戻すと消える",
+   await p.locator("#arcBar").evaluate(e => e.hidden) === true,
+   await p.evaluate(() => fy()));
 
 console.log("\n■ 本番では、古い週の控えを間引く");
 ok("いま見ている週は、間引いても残る", await p.evaluate(() => {

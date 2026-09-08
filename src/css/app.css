@@ -56,8 +56,16 @@ button,select,input,textarea{font:inherit;color:inherit}
 /* ── 中央 ────────────────────────────────────── */
 /* **紙の上下には何も置かない。** 週の移動も凡例も左へ寄せてある。
    置くたびに紙が縮み、いちばん見たいものが小さくなる。 */
-.center{grid-area:1/2/2/3;display:grid;grid-template-rows:minmax(0,1fr);
+.center{grid-area:1/2/2/3;display:grid;grid-template-rows:auto minmax(0,1fr);
   min-width:0;min-height:0}
+
+/* 退避ずみの年度の知らせ。**紙の外**（刷られない）。隠れているあいだは高さ0 */
+.arc{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin:10px 16px 0;padding:9px 13px;border-radius:var(--r);
+  background:var(--fill-b);border:1px solid var(--cat-grade);
+  font-size:12.5px;line-height:1.6}
+.arc b{font-size:13px}
+.arc a{color:var(--ink-link);text-underline-offset:2px}
 .bar{display:flex;align-items:center;gap:12px;padding:12px 16px;flex-wrap:wrap}
 .pill{display:flex;align-items:center;gap:2px;background:var(--card);
   border:1px solid var(--line);border-radius:var(--r);padding:3px}
@@ -386,3 +394,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   .side .foot-note,.side .legend{display:none}
   .side .admin{margin-top:auto}
 }
+
+/* 退避の手順。**番号のまま読ませる。** 箇条書きにすると順番が消える */
+.steps{margin:6px 0 10px;padding-left:1.5em;font-size:12.5px;line-height:1.9}
+.steps li{margin:2px 0}

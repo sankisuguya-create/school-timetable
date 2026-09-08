@@ -133,6 +133,12 @@
     </aside>
 
     <main class="center" id="centerWrap">
+      <!-- 退避ずみの年度を開いたときの知らせ。**紙の外に置く**（刷られない）。
+           これを出さないと、基本時間割だけの紙を見て「週案が全部消えた」と言われる -->
+      <div class="arc" id="arcBar" hidden>
+        <b id="arcTitle"></b><span id="arcNote"></span>
+        <a id="arcLink" target="_blank" rel="noopener">保管庫をひらく</a>
+      </div>
       <div class="stage" id="stage"><div class="paper" id="paper"><div class="sheet" id="sheet"></div></div></div>
 
       <!-- たんぽぽの面。週案の紙ではないので、紙の代わりにここを出す -->
@@ -414,6 +420,41 @@
   <div class="row"><button class="btn go" id="ckGo">この年度を検査する</button>
     <span class="hint" id="ckStat"></span></div>
   <div id="ckOut"></div>
+  <hr>
+  <h3 style="margin:12px 0 4px;font-size:14px">年度の退避</h3>
+  <p>年度末に1回。<b>本体のURLは変わりません。</b>新年度も、教員は今までと同じURLを開きます。<br>
+     複製した写しが保管庫になり、本体からはその年度の行だけが消えます。
+     基本時間割・クラス・専科は残るので「前年度から写す」はそのまま使えます。</p>
+  <div class="row"><span>退避する年度</span>
+    <input type="number" id="arYear" style="width:7em" step="1">
+    <button class="btn" id="arCount">① 数える</button>
+    <span class="hint" id="arStat"></span></div>
+  <div id="arOut"></div>
+
+  <div id="arStep2" hidden>
+    <h4 style="margin:14px 0 4px;font-size:13px">② 複製する（ドライブでの手作業）</h4>
+    <ol class="steps">
+      <li>ドライブで <b id="arFile"></b> を右クリック →「<b>コピーを作成</b>」</li>
+      <li>名前を <b id="arName"></b> にする</li>
+      <li>共有を<b>管理者だけ</b>にする（教員には配らない）</li>
+      <li>コピーの Apps Script は<b>デプロイしない</b>（デプロイは複製されないので、放っておけば動きません）</li>
+      <li>コピーのURLを下に貼る</li>
+    </ol>
+    <div class="row"><span>退避先のURL</span>
+      <input type="text" id="arUrl" style="flex:1;min-width:18em"
+             placeholder="https://docs.google.com/spreadsheets/d/… （そのまま貼ってよい）">
+      <button class="btn" id="arVerify">③ 照合する</button></div>
+    <div id="arWhy" class="tpwarn"></div>
+  </div>
+
+  <div id="arStep4" hidden>
+    <h4 style="margin:14px 0 4px;font-size:13px">④ 本体から消す</h4>
+    <p><b>消すのは、その年度の週案の行だけ。</b>シートも見出しも残ります。
+       押した直後にもう一度照合し、そのあいだに増えた行があれば1行も消しません。</p>
+    <div class="row"><span>年度を打ち込む</span>
+      <input type="text" id="arTyped" style="width:7em" placeholder="2026">
+      <button class="btn danger" id="arGo" disabled>本体から消す</button></div>
+  </div>
   <div class="end"><button class="btn go" data-close="adminDlg">閉じる</button></div>
 </div></dialog>
 
