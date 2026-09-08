@@ -186,10 +186,15 @@ const Backend = (function(){
      別々に取りに行くと、入口が出るまでにその回数だけ待つことになる。 */
   let booted = false;
   const waiters = [];
+  /* 立ち上がりでもらった、**自分と置き場所のこと**。管理画面に出す。
+     手元で開いているときは空のまま（サーバに聞いていないので分からない）。 */
+  let bootInfo = {me:"", file:""};
+  const info = () => ({me: bootInfo.me, file: bootInfo.file, gas: !!onGas});
   function boot(after){
     if(!onGas){ booted = true; return after(); }
     google.script.run
       .withSuccessHandler(b => {
+        bootInfo = {me: b.me || "", file: b.file || ""};
         if(b.slots    && b.slots.length)    setSlots(b.slots);
         if(b.subjects && b.subjects.length) setSubjects(b.subjects);
         if(b.config)  applyConfig(b.config);
@@ -423,7 +428,7 @@ const Backend = (function(){
     }
   });
 
-  return {isGas, setNotifier, setDirtyWatcher, unsaved, prefetchWeek,
+  return {isGas, info, setNotifier, setDirtyWatcher, unsaved, prefetchWeek,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveBase, saveBaseAll, readPaste,
           exportTanpopo, shapeTanpopo, buildTanpopo};

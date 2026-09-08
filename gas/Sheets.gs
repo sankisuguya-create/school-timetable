@@ -189,6 +189,12 @@ const Sheets = (function(){
       sh.getRange(body.length + 2, 1, last - body.length - 1, w).clearContent();
   }
 
+  /* いま開いているファイル。**年度でファイルを分ける日が来たら、
+     差し替えるのはここ1か所**にする。呼ぶ側は「どのファイルか」を知らない。
+     いまは1ファイルのままなので、中身は getActive() そのもの。 */
+  function book(){ return SpreadsheetApp.getActive(); }
+  function bookName(){ try{ return book().getName(); }catch(e){ return ""; } }
+
   /* いまある週案シートの名前。**移行や書き出しで、全部を見たいときに使う。** */
   function planNames(){
     return SpreadsheetApp.getActive().getSheets()
@@ -334,6 +340,7 @@ const Sheets = (function(){
   }
 
   return {SPEC, NAMES, PASTE, CLASS_COLS, TANPOPO_FILL, asClass, isDate, readGrid,
+          book, bookName,
           PLAN_PREFIX, PLAN_ALL, PLAN_COLS, planName, ensurePlan, readPlan, writePlan,
           planNames, planMap,
           setup, head, readAll, appendRows, toArray, setRow, blankRow, sheet};

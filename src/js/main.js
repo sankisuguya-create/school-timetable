@@ -229,6 +229,7 @@ function wire(){
       if(a === "tally")   return openTallyDlg();
       if(a === "tanpopo") return openView({kind:"tanpopo"});
       if(a === "paper")   return $("setDlg").showModal();
+      if(a === "admin")   return openAdminDlg();
       if(a === "print")   return window.print();
     });
   for(const b of document.querySelectorAll("[data-close]"))
@@ -392,6 +393,9 @@ function start(){
      別々に取りに行くと、その回数だけ待つことになる。 */
   Backend.boot(() => {
     applyPaper();
+    /* **本番では、古い週の控えをここで間引く。** 溢れてから慌てない。
+       捨てた週はシートに残っているので、開けば読み直される。 */
+    if(pruneWeeks(KEEP_WEEKS)) save();
     if(view.kind === "gate") drawGate();
   });
 }

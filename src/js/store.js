@@ -45,15 +45,58 @@ function loadDb(){
   db.years = (got.years && typeof got.years === "object") ? got.years : {};
 }
 
+/* ── 古い週の間引き ──────────────────────────
+   **本番でだけ間引く。手元だけで使っているときは、ここが正本なので消さない。**
+
+   1クラス週30コマで、手元の控えは年に 2〜3MB 増える。localStorage の上限は
+   5MB 前後なので、**2年目に必ず溢れる**（30人が同じ日に書けなくなる）。
+   本番ではシートが正本で、消した週は次に開いたときに読み直されるだけなので、
+   古い週は捨ててよい。
+
+   捨てるのは「いま見ている週から遠い順」。年度はまたいで数える。 */
+const KEEP_WEEKS = 60;              /* 平常時に手元へ残す週の数（およそ1年半） */
+
+function onSheet(){
+  return typeof Backend !== "undefined" && Backend.isGas && Backend.isGas();
+}
+function pruneWeeks(keep){
+  if(!onSheet()) return 0;                 /* 手元では消さない */
+  if(typeof Backend.unsaved === "function" && Backend.unsaved() > 0) return 0;
+  const all = [];
+  for(const y in db.years)
+    for(const k in (db.years[y].weeks || {})) all.push({y, k});
+  if(all.length <= keep) return 0;
+  const here = wkKey();
+  const far = (a) => Math.abs(new Date(a.k) - new Date(here)) || 0;
+  all.sort((a, b) => far(a) - far(b));     /* 近い順。うしろから捨てる */
+  let n = 0;
+  for(const x of all.slice(keep)){
+    if(x.k === here) continue;             /* いま見ている週は残す */
+    delete db.years[x.y].weeks[x.k];
+    n++;
+  }
+  return n;
+}
+
 /* 保存できなかったことを黙って飲み込まない。
    飲み込むと、教師は書けたつもりで書けていない状態のまま週を進める。 */
 let onStoreError = () => {};
+function put_(){ localStorage.setItem(KEY, JSON.stringify(db)); }
 function save(){
   try{
-    localStorage.setItem(KEY, JSON.stringify(db));
+    put_();
     if(storeBroken){ storeBroken = ""; }
     return true;
   }catch(e){
+    /* 溢れたときは、**まず古い週を捨ててもう一度書く**。
+       本番ならシートが正本なので、捨てた週は次に開けば戻る。
+       それでも書けなければ、はじめて教師に知らせる。 */
+    if(e && e.name === "QuotaExceededError"){
+      for(const keep of [KEEP_WEEKS, 12]){
+        if(!pruneWeeks(keep)) continue;
+        try{ put_(); storeBroken = ""; return true; }catch(_){}
+      }
+    }
     storeBroken = (e && e.name === "QuotaExceededError")
       ? "端末の保存領域がいっぱいで、これ以上保存できない"
       : "保存できなかった（" + ((e && e.name) || "原因不明") + "）";

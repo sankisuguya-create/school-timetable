@@ -125,6 +125,11 @@
       </div>
       <p class="foot-note">白い紙に出ているものだけが刷られる。<br>
         文字を選んでリンクを付けると、紙の上でその文字を押して開ける。</p>
+
+      <!-- 管理。**担任は使わない。** 学校で3人だけが押す。
+           目立たせない代わりに、隠しもしない（探して見つからないほうが困る） -->
+      <button class="admin" data-act="admin">
+        <svg width="13" height="13"><use href="#i-info"/></svg><span>管理・システム</span></button>
     </aside>
 
     <main class="center" id="centerWrap">
@@ -394,6 +399,15 @@
      入るところをプレビューで見せている（docs/spec.md 7節）。<br>
      先に<b>日ブロックを16行に揃える</b>ところまでをシート側でやる。</p>
   <div class="end"><button class="btn go" data-close="tpDlg">閉じる</button></div>
+</div></dialog>
+
+<dialog id="adminDlg"><div class="dlg">
+  <h2>管理・システム</h2>
+  <p><b>担任の操作はここにありません。</b>版と置き場所を確かめるところです。<br>
+     不具合を知らせるときは、下の1行をそのまま伝えると原因が早く分かります。</p>
+  <table class="sys" id="sysTbl"></table>
+  <p class="hint" id="sysLine"></p>
+  <div class="end"><button class="btn go" data-close="adminDlg">閉じる</button></div>
 </div></dialog>
 
 <dialog id="owDlg"><div class="dlg">

@@ -106,6 +106,12 @@ button,select,input,textarea{font:inherit;color:inherit}
 .side .legend{flex-direction:column;align-items:flex-start;gap:7px;padding:0 8px}
 .side .foot-note{margin-top:auto;padding:10px 8px 2px;font-size:11px;color:var(--tx-sub);
   line-height:1.7}
+/* 管理の入口。**担任の操作と同じ重さにしない。**
+   左メニューの一番下、字も小さく、色も落としてある */
+.side .admin{display:flex;align-items:center;gap:6px;margin:6px 4px 2px;padding:6px 8px;
+  background:none;border:0;border-radius:var(--r);font-size:11.5px;color:var(--tx-sub);
+  cursor:pointer;text-align:left;font-family:inherit}
+.side .admin:hover{background:var(--card);color:var(--tx)}
 
 /* ── 中央 ────────────────────────────────────── */
 /* **紙の上下には何も置かない。** 週の移動も凡例も左へ寄せてある。
@@ -415,9 +421,17 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   line-height:1.6}
 .toast b{color:#FFC9BC}
 
+/* 管理・システムの表。読むだけの1列。数字は等幅で縦に揃える */
+.sys{border-collapse:collapse;width:100%;font-size:13px;margin:4px 0 10px}
+.sys th,.sys td{border-bottom:1px solid var(--rule-soft);padding:7px 8px;text-align:left;
+  vertical-align:top}
+.sys th{width:14em;color:var(--tx-sub);font-weight:600;white-space:nowrap}
+.sys td{font-variant-numeric:tabular-nums}
+
 @media (max-width:1180px){
   .work{grid-template-columns:200px minmax(0,1fr) 400px}
   .side .foot-note,.side .legend{display:none}
+  .side .admin{margin-top:auto}
 }
 /* ▲ src/css/app.css ▲ */
 /* ▼ src/css/sheet.css ▼ */
@@ -689,6 +703,11 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
       </div>
       <p class="foot-note">白い紙に出ているものだけが刷られる。<br>
         文字を選んでリンクを付けると、紙の上でその文字を押して開ける。</p>
+
+      <!-- 管理。**担任は使わない。** 学校で3人だけが押す。
+           目立たせない代わりに、隠しもしない（探して見つからないほうが困る） -->
+      <button class="admin" data-act="admin">
+        <svg width="13" height="13"><use href="#i-info"/></svg><span>管理・システム</span></button>
     </aside>
 
     <main class="center" id="centerWrap">
@@ -960,6 +979,15 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   <div class="end"><button class="btn go" data-close="tpDlg">閉じる</button></div>
 </div></dialog>
 
+<dialog id="adminDlg"><div class="dlg">
+  <h2>管理・システム</h2>
+  <p><b>担任の操作はここにありません。</b>版と置き場所を確かめるところです。<br>
+     不具合を知らせるときは、下の1行をそのまま伝えると原因が早く分かります。</p>
+  <table class="sys" id="sysTbl"></table>
+  <p class="hint" id="sysLine"></p>
+  <div class="end"><button class="btn go" data-close="adminDlg">閉じる</button></div>
+</div></dialog>
+
 <dialog id="owDlg"><div class="dlg">
   <h2>あなたの予定が上書きされています</h2>
   <p>あなたが入れたコマに、<b>あとから別の予定が入りました。</b>
@@ -983,6 +1011,12 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* ▼ src/js/config.js ▼ */
 /* 既定値。**本番ではシートから読む。コードに書かない。**
    ここにあるのは、シートが空のときの初期値だけ。 */
+
+/* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
+   src を直接ブラウザで開いたときだけ dev のまま見える。
+   直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
+let APP_VERSION = "1.0.0";
+let BUILD_DATE  = "2026-09-08";
 
 /* 時程。行を固定しない（学校ごとに違う）。
    tally = 時数集計表のどの列に当たるか。chips = 教科を選べるか。
@@ -1240,15 +1274,58 @@ function loadDb(){
   db.years = (got.years && typeof got.years === "object") ? got.years : {};
 }
 
+/* ── 古い週の間引き ──────────────────────────
+   **本番でだけ間引く。手元だけで使っているときは、ここが正本なので消さない。**
+
+   1クラス週30コマで、手元の控えは年に 2〜3MB 増える。localStorage の上限は
+   5MB 前後なので、**2年目に必ず溢れる**（30人が同じ日に書けなくなる）。
+   本番ではシートが正本で、消した週は次に開いたときに読み直されるだけなので、
+   古い週は捨ててよい。
+
+   捨てるのは「いま見ている週から遠い順」。年度はまたいで数える。 */
+const KEEP_WEEKS = 60;              /* 平常時に手元へ残す週の数（およそ1年半） */
+
+function onSheet(){
+  return typeof Backend !== "undefined" && Backend.isGas && Backend.isGas();
+}
+function pruneWeeks(keep){
+  if(!onSheet()) return 0;                 /* 手元では消さない */
+  if(typeof Backend.unsaved === "function" && Backend.unsaved() > 0) return 0;
+  const all = [];
+  for(const y in db.years)
+    for(const k in (db.years[y].weeks || {})) all.push({y, k});
+  if(all.length <= keep) return 0;
+  const here = wkKey();
+  const far = (a) => Math.abs(new Date(a.k) - new Date(here)) || 0;
+  all.sort((a, b) => far(a) - far(b));     /* 近い順。うしろから捨てる */
+  let n = 0;
+  for(const x of all.slice(keep)){
+    if(x.k === here) continue;             /* いま見ている週は残す */
+    delete db.years[x.y].weeks[x.k];
+    n++;
+  }
+  return n;
+}
+
 /* 保存できなかったことを黙って飲み込まない。
    飲み込むと、教師は書けたつもりで書けていない状態のまま週を進める。 */
 let onStoreError = () => {};
+function put_(){ localStorage.setItem(KEY, JSON.stringify(db)); }
 function save(){
   try{
-    localStorage.setItem(KEY, JSON.stringify(db));
+    put_();
     if(storeBroken){ storeBroken = ""; }
     return true;
   }catch(e){
+    /* 溢れたときは、**まず古い週を捨ててもう一度書く**。
+       本番ならシートが正本なので、捨てた週は次に開けば戻る。
+       それでも書けなければ、はじめて教師に知らせる。 */
+    if(e && e.name === "QuotaExceededError"){
+      for(const keep of [KEEP_WEEKS, 12]){
+        if(!pruneWeeks(keep)) continue;
+        try{ put_(); storeBroken = ""; return true; }catch(_){}
+      }
+    }
     storeBroken = (e && e.name === "QuotaExceededError")
       ? "端末の保存領域がいっぱいで、これ以上保存できない"
       : "保存できなかった（" + ((e && e.name) || "原因不明") + "）";
@@ -1532,10 +1609,15 @@ const Backend = (function(){
      別々に取りに行くと、入口が出るまでにその回数だけ待つことになる。 */
   let booted = false;
   const waiters = [];
+  /* 立ち上がりでもらった、**自分と置き場所のこと**。管理画面に出す。
+     手元で開いているときは空のまま（サーバに聞いていないので分からない）。 */
+  let bootInfo = {me:"", file:""};
+  const info = () => ({me: bootInfo.me, file: bootInfo.file, gas: !!onGas});
   function boot(after){
     if(!onGas){ booted = true; return after(); }
     google.script.run
       .withSuccessHandler(b => {
+        bootInfo = {me: b.me || "", file: b.file || ""};
         if(b.slots    && b.slots.length)    setSlots(b.slots);
         if(b.subjects && b.subjects.length) setSubjects(b.subjects);
         if(b.config)  applyConfig(b.config);
@@ -1769,7 +1851,7 @@ const Backend = (function(){
     }
   });
 
-  return {isGas, setNotifier, setDirtyWatcher, unsaved, prefetchWeek,
+  return {isGas, info, setNotifier, setDirtyWatcher, unsaved, prefetchWeek,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveBase, saveBaseAll, readPaste,
           exportTanpopo, shapeTanpopo, buildTanpopo};
@@ -3537,6 +3619,32 @@ function fillSelect(sel, arr, val){
   sel.innerHTML = arr.map(o => "<option value='" + escText(o.v) + "'"
     + (o.v === val ? " selected" : "") + ">" + escText(o.t) + "</option>").join("");
 }
+
+/* ── 管理・システム ──────────────────────────
+   **担任の操作をここに増やさない。** 増やすと、担任が「自分の操作が
+   どこにあるか」を毎回2か所から選ぶことになる。ここは
+   「いまどの版が、どのファイルにつないで動いているか」を見るところ。 */
+function openAdminDlg(){
+  const b = Backend.info();
+  const weeks = Object.keys(db.years).reduce(
+    (n, y) => n + Object.keys(db.years[y].weeks || {}).length, 0);
+  const rows = [
+    ["版",         APP_VERSION],
+    ["版の日付",   BUILD_DATE || "（無し）"],
+    ["つないでいる先", b.gas ? "スプレッドシート（本番）" : "この端末だけ（手元）"],
+    ["ファイル",   b.file || (b.gas ? "（読めていない）" : "—")],
+    ["自分",       b.me   || "—"],
+    ["開いている年度", fy() + "年度"],
+    ["この端末に残っている週", weeks + " 週（" + KEEP_WEEKS + " 週を超えたら古い順に捨てる）"],
+    ["まだ送っていないコマ", Backend.unsaved() + " コマ"]
+  ];
+  $("sysTbl").innerHTML = rows
+    .map(r => "<tr><th>" + r[0] + "</th><td>" + escText(String(r[1])) + "</td></tr>").join("");
+  $("sysLine").textContent =
+    "週案 " + APP_VERSION + "（" + (BUILD_DATE || "日付なし") + "）／"
+    + (b.gas ? "本番" : "手元") + "／" + fy() + "年度";
+  $("adminDlg").showModal();
+}
 /* ▲ src/js/dialogs.js ▲ */
 /* ▼ src/js/main.js ▼ */
 /* 起動と結線。ここだけが DOM のイベントを束ねる。 */
@@ -3770,6 +3878,7 @@ function wire(){
       if(a === "tally")   return openTallyDlg();
       if(a === "tanpopo") return openView({kind:"tanpopo"});
       if(a === "paper")   return $("setDlg").showModal();
+      if(a === "admin")   return openAdminDlg();
       if(a === "print")   return window.print();
     });
   for(const b of document.querySelectorAll("[data-close]"))
@@ -3933,6 +4042,9 @@ function start(){
      別々に取りに行くと、その回数だけ待つことになる。 */
   Backend.boot(() => {
     applyPaper();
+    /* **本番では、古い週の控えをここで間引く。** 溢れてから慌てない。
+       捨てた週はシートに残っているので、開けば読み直される。 */
+    if(pruneWeeks(KEEP_WEEKS)) save();
     if(view.kind === "gate") drawGate();
   });
 }

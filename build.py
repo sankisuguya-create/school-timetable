@@ -23,11 +23,51 @@
 import sys, pathlib, re
 
 ROOT = pathlib.Path(__file__).resolve().parent
+VER  = ROOT / "VERSION"
 SRC  = ROOT / "src"
 OUT  = ROOT / "dist" / "index.html"
 GAS  = ROOT / "gas" / "plan.html"
 
 INCLUDE = re.compile(r'^([ \t]*)/\* @include ([\w./\-]+) \*/[ \t]*$', re.M)
+
+
+def version():
+    """VERSION に書いてある版と日付を読む。
+
+    **ビルドした日を埋めない。** 埋めると、翌日 --check が落ちる
+    （生成物は変わらないのに中身だけ日付で変わるため）。
+    版を上げるときに人が VERSION を書き替える。
+    """
+    out = {"version": "0.0.0", "date": ""}
+    if VER.exists():
+        for line in VER.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if ":" in line:
+                k, v = line.split(":", 1)
+                if k.strip() in out:
+                    out[k.strip()] = v.strip()
+    return out
+
+STAMP = re.compile(r'^(let (?:APP_VERSION|BUILD_DATE)\s*=\s*)"[^"]*"(;)', re.M)
+
+
+def stamp(html: str) -> str:
+    """src/js/config.js の APP_VERSION / BUILD_DATE を VERSION の値にする。
+
+    2行そろって見つからなければ止める。**黙って古い版を配らない。**
+    """
+    v = version()
+    def sub(m):
+        key = "version" if "APP_VERSION" in m.group(1) else "date"
+        return '%s"%s"%s' % (m.group(1), v[key], m.group(2))
+    out, n = STAMP.subn(sub, html)
+    if n != 2:
+        raise SystemExit(
+            "APP_VERSION / BUILD_DATE が src/js/config.js に見当たらない（%d 行）" % n)
+    return out
+
 
 BANNER = ("<!-- このファイルは src/ から build.py が作る。\n"
           "     直すのは src/ のほう。ここを直しても次のビルドで消える。 -->\n")
@@ -80,7 +120,7 @@ def render(entry: pathlib.Path):
 def main():
     check = "--check" in sys.argv
     built, seen = render(SRC / "index.html")
-    built = BANNER + built
+    built = BANNER + stamp(built)
     bad = []
     for dest in (OUT, GAS):
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -94,7 +134,9 @@ def main():
     print("生成物を確認" if check else "生成")
     for n in sorted(seen):
         print("  src/%s" % n)
-    print("  → dist/index.html ・ gas/plan.html   (%d 行)" % built.count("\n"))
+    v = version()
+    print("  → dist/index.html ・ gas/plan.html   (%d 行)   版 %s（%s）"
+          % (built.count("\n"), v["version"], v["date"] or "日付なし"))
     if check:
         if bad:
             print("\nsrc と一致しない: " + ", ".join(bad))

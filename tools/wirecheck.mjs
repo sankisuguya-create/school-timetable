@@ -30,6 +30,7 @@ await p.addInitScript(() => {
   const DATA = {
     boot: {
       me: "tanaka@edu.nishi.or.jp",
+      file: "週案 2026（高木北）",
       config: {
         "印刷用紙":"A4", "印刷余白mm":12, "印刷倍率":0.95,
         "時数_貼る先":"D3", "時数_クラスの順":"5-1,5-2,5-3,5-4",
@@ -587,6 +588,41 @@ ok("開き直しても、書いたコマが出る（基本時間割に戻らな�
 ok("入れた層のまま戻る（担任が入れたものとして出る）",
    await p.locator("#sheet .cell[data-d='2'][data-s='p1']").getAttribute("data-layer") === "home",
    await p.locator("#sheet .cell[data-d='2'][data-s='p1']").getAttribute("data-layer"));
+
+console.log("\n■ 管理・システム（本番では、どこにつないでいるかが出る）");
+await p.locator(".side .admin").click();
+await p.waitForTimeout(250);
+ok("本番につないでいると言う",
+   (await p.locator("#sysTbl").innerText()).indexOf("スプレッドシート") >= 0,
+   await p.locator("#sysTbl").innerText());
+ok("つないでいるファイルの名前が出る",
+   (await p.locator("#sysTbl").innerText()).indexOf("週案 2026（高木北）") >= 0,
+   await p.locator("#sysTbl").innerText());
+ok("開いている人のメールが出る",
+   (await p.locator("#sysTbl").innerText()).indexOf("tanaka@edu.nishi.or.jp") >= 0,
+   await p.locator("#sysTbl").innerText());
+await p.locator("#adminDlg .btn.go").click();
+await p.waitForTimeout(200);
+
+console.log("\n■ 本番では、古い週の控えを間引く");
+ok("いま見ている週は、間引いても残る", await p.evaluate(() => {
+     const y = String(fy()), W = db.years[y].weeks, here = wkKey();
+     const blank = () => ({school:{},grade:{},special:{},home:{},acked:[],variant:"A"});
+     W[here] = W[here] || blank();
+     for(const d of ["2000-01-03","2000-01-10","2000-01-17"]) W[d] = blank();
+     const n = pruneWeeks(1);
+     return n >= 3 && !!W[here] && !W["2000-01-03"];
+   }) === true, await p.evaluate(() => Object.keys(db.years[String(fy())].weeks)));
+ok("まだ送っていないコマがあるときは、何も捨てない", await p.evaluate(() => {
+     const y = String(fy()), W = db.years[y].weeks;
+     W["2000-01-03"] = {school:{},grade:{},special:{},home:{},acked:[],variant:"A"};
+     /* 未送信を1件作る。**送る前に捨てると、書いた本人にも見えないまま消える** */
+     Backend.cellChanged("home", "5-3", 0, "p1");
+     const n = pruneWeeks(0);
+     const kept = !!W["2000-01-03"];
+     delete W["2000-01-03"];
+     return n === 0 && kept;
+   }) === true);
 
 console.log(errs.length ? "\n【エラー】\n" + errs.join("\n") : "\nJSエラーなし");
 if(errs.length) ng += errs.length;

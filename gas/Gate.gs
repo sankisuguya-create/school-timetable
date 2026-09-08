@@ -136,16 +136,6 @@ function doGet(e){
 }
 
 /* 画面から呼ぶ関数は、**すべて1行目で Gate.check() を呼ぶ**。
-   doGet を守っただけでは、URL を開ける人がここを直接叩ける。 */
-function loadWeek(monday){
-  Gate.check();
-  return Store.readWeek(monday);        /* Step 5 で作る */
-}
-function saveCell(patch){
-  const me = Gate.check();
-  return Store.writeCell(patch, me.email);
-}
-function loadRoster(year){
-  Gate.check();
-  return Store.readRoster(year);
-}
+   doGet を守っただけでは、URL を開ける人がここを直接叩ける。
+   本体は gas/Store.gs の api… にある。呼び忘れは
+   `node gas/apicheck.js` が見つける。 */

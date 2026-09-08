@@ -652,6 +652,56 @@ ok("刷るとき、選んでいる印も消える",
      return !e || getComputedStyle(e).boxShadow === "none";
    }));
 
+await p.emulateMedia({media:"screen"});      /* 刷るときの見え方から画面へ戻す */
+
+console.log("\n■ 管理・システム（版が分かる）");
+ok("版が dev のまま配られていない",
+   await p.evaluate(() => APP_VERSION) !== "0.0.0-dev",
+   await p.evaluate(() => APP_VERSION));
+ok("版の日付が入っている",
+   /^\d{4}-\d{2}-\d{2}$/.test(await p.evaluate(() => BUILD_DATE)),
+   await p.evaluate(() => BUILD_DATE));
+ok("管理の入口は左メニューの一番下にある",
+   await p.locator(".side .admin").count() === 1);
+ok("管理の入口は担任の操作より小さく出す", await p.evaluate(() => {
+     const a = parseFloat(getComputedStyle(document.querySelector(".side .admin")).fontSize);
+     const n = parseFloat(getComputedStyle(document.querySelector(".side .nav")).fontSize);
+     return a < n;
+   }) === true);
+await p.locator(".side .admin").click();
+await p.waitForTimeout(250);
+ok("管理の窓が開く", await p.locator("#adminDlg[open]").count() === 1);
+ok("窓に版と日付が出る", await (async () => {
+     const t = await p.locator("#sysTbl").innerText();
+     const v = await p.evaluate(() => APP_VERSION), d = await p.evaluate(() => BUILD_DATE);
+     return t.indexOf(v) >= 0 && t.indexOf(d) >= 0;
+   })() === true, await p.locator("#sysTbl").innerText());
+ok("窓に開いている年度が出る",
+   (await p.locator("#sysTbl").innerText()).indexOf(await p.evaluate(() => fy() + "年度")) >= 0,
+   await p.locator("#sysTbl").innerText());
+ok("手元で開いているときは、そう言う",
+   (await p.locator("#sysTbl").innerText()).indexOf("この端末だけ") >= 0,
+   await p.locator("#sysTbl").innerText());
+ok("そのまま伝えられる1行がある",
+   (await p.locator("#sysLine").innerText()).indexOf(await p.evaluate(() => APP_VERSION)) >= 0,
+   await p.locator("#sysLine").innerText());
+ok("管理に担任の操作を置いていない", await (async () => {
+     const t = await p.locator("#adminDlg").innerText();
+     return ["基本時間割", "学級編成", "印刷", "たんぽぽ"].every(w => t.indexOf(w) < 0);
+   })() === true, await p.locator("#adminDlg").innerText());
+await p.locator("#adminDlg .btn.go").click();
+await p.waitForTimeout(200);
+
+console.log("\n■ 手元だけで使っているときは、古い週を捨てない");
+ok("本番につないでいないときは間引かない", await p.evaluate(() => {
+     const y = String(fy());
+     db.years[y].weeks["2000-01-03"] = {school:{},grade:{},special:{},home:{},acked:[],variant:"A"};
+     const n = pruneWeeks(0);
+     const kept = !!db.years[y].weeks["2000-01-03"];
+     delete db.years[y].weeks["2000-01-03"];
+     return n === 0 && kept;
+   }) === true);
+
 console.log(errs.length ? "\n【エラー】\n" + errs.join("\n") : "\nJSエラーなし");
 if(errs.length) ng += errs.length;
 console.log(ng ? "\n× " + ng + " 件だめだった" : "\n○ ぜんぶ通った");

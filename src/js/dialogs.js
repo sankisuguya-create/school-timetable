@@ -339,3 +339,29 @@ function fillSelect(sel, arr, val){
   sel.innerHTML = arr.map(o => "<option value='" + escText(o.v) + "'"
     + (o.v === val ? " selected" : "") + ">" + escText(o.t) + "</option>").join("");
 }
+
+/* ── 管理・システム ──────────────────────────
+   **担任の操作をここに増やさない。** 増やすと、担任が「自分の操作が
+   どこにあるか」を毎回2か所から選ぶことになる。ここは
+   「いまどの版が、どのファイルにつないで動いているか」を見るところ。 */
+function openAdminDlg(){
+  const b = Backend.info();
+  const weeks = Object.keys(db.years).reduce(
+    (n, y) => n + Object.keys(db.years[y].weeks || {}).length, 0);
+  const rows = [
+    ["版",         APP_VERSION],
+    ["版の日付",   BUILD_DATE || "（無し）"],
+    ["つないでいる先", b.gas ? "スプレッドシート（本番）" : "この端末だけ（手元）"],
+    ["ファイル",   b.file || (b.gas ? "（読めていない）" : "—")],
+    ["自分",       b.me   || "—"],
+    ["開いている年度", fy() + "年度"],
+    ["この端末に残っている週", weeks + " 週（" + KEEP_WEEKS + " 週を超えたら古い順に捨てる）"],
+    ["まだ送っていないコマ", Backend.unsaved() + " コマ"]
+  ];
+  $("sysTbl").innerHTML = rows
+    .map(r => "<tr><th>" + r[0] + "</th><td>" + escText(String(r[1])) + "</td></tr>").join("");
+  $("sysLine").textContent =
+    "週案 " + APP_VERSION + "（" + (BUILD_DATE || "日付なし") + "）／"
+    + (b.gas ? "本番" : "手元") + "／" + fy() + "年度";
+  $("adminDlg").showModal();
+}

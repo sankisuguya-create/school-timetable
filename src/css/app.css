@@ -46,6 +46,12 @@ button,select,input,textarea{font:inherit;color:inherit}
 .side .legend{flex-direction:column;align-items:flex-start;gap:7px;padding:0 8px}
 .side .foot-note{margin-top:auto;padding:10px 8px 2px;font-size:11px;color:var(--tx-sub);
   line-height:1.7}
+/* 管理の入口。**担任の操作と同じ重さにしない。**
+   左メニューの一番下、字も小さく、色も落としてある */
+.side .admin{display:flex;align-items:center;gap:6px;margin:6px 4px 2px;padding:6px 8px;
+  background:none;border:0;border-radius:var(--r);font-size:11.5px;color:var(--tx-sub);
+  cursor:pointer;text-align:left;font-family:inherit}
+.side .admin:hover{background:var(--card);color:var(--tx)}
 
 /* ── 中央 ────────────────────────────────────── */
 /* **紙の上下には何も置かない。** 週の移動も凡例も左へ寄せてある。
@@ -355,7 +361,15 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   line-height:1.6}
 .toast b{color:#FFC9BC}
 
+/* 管理・システムの表。読むだけの1列。数字は等幅で縦に揃える */
+.sys{border-collapse:collapse;width:100%;font-size:13px;margin:4px 0 10px}
+.sys th,.sys td{border-bottom:1px solid var(--rule-soft);padding:7px 8px;text-align:left;
+  vertical-align:top}
+.sys th{width:14em;color:var(--tx-sub);font-weight:600;white-space:nowrap}
+.sys td{font-variant-numeric:tabular-nums}
+
 @media (max-width:1180px){
   .work{grid-template-columns:200px minmax(0,1fr) 400px}
   .side .foot-note,.side .legend{display:none}
+  .side .admin{margin-top:auto}
 }

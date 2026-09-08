@@ -784,6 +784,7 @@ function apiBoot(year){
   const me = Gate.check();
   const out = {
     me:       me.email,
+    file:     Sheets.bookName(),        /* 管理画面に出す。どのファイルを開いているか */
     config:   Store.readConfig(),
     slots:    Store.readSlots(),
     subjects: Store.readSubjects()

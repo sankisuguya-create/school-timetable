@@ -89,16 +89,8 @@ EMAIL = "12345678@kyoiku.edu.nishi.or.jp";
 let threw = false;
 try{ ev("Gate.check()"); }catch(e){ threw = true; }
 ok("児童が呼ぶと Gate.check() が止める", threw === true, "止まらなかった");
-EMAIL = "12345678@kyoiku.edu.nishi.or.jp";
-threw = false;
-try{ ev("loadWeek('2026-11-16')"); }catch(e){ threw = true; }
-ok("児童が loadWeek を直接叩いても止まる", threw === true, "止まらなかった");
-threw = false;
-try{ ev("saveCell({})"); }catch(e){ threw = true; }
-ok("児童が saveCell を直接叩いても止まる", threw === true, "止まらなかった");
-threw = false;
-try{ ev("loadRoster(2026)"); }catch(e){ threw = true; }
-ok("児童が loadRoster を直接叩いても止まる", threw === true, "止まらなかった");
+/* 画面から呼ぶ関数そのものを児童が叩けないことは、gas/apicheck.js が見る
+   （あちらは Store.gs も読み込むので、api… を実際に叩ける）。 */
 EMAIL = "tanaka@edu.nishi.or.jp";
 ok("教職員は Gate.check() を通る", ev("Gate.check().ok") === true, ev("Gate.check()"));
 
