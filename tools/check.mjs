@@ -53,6 +53,17 @@ await p.waitForTimeout(400);
 ok("入口が閉じる", await p.locator("#gate").isHidden());
 ok("紙が出る（11行×5日）", await p.locator("#sheet .cell").count() === 55,
    await p.locator("#sheet .cell").count());
+ok("放課後のほうが週メモより縦に広い（余りは放課後に回す）",
+   await p.evaluate(() => {
+     const a = document.querySelector("#sheet .cell[data-s='after']").getBoundingClientRect();
+     const f = document.querySelector("#sheet .foot").getBoundingClientRect();
+     return a.height > f.height * 1.8;
+   }) === true,
+   await p.evaluate(() => {
+     const a = document.querySelector("#sheet .cell[data-s='after']").getBoundingClientRect();
+     const f = document.querySelector("#sheet .foot").getBoundingClientRect();
+     return [Math.round(a.height), Math.round(f.height)];
+   }));
 ok("放課後を選ぶと、右も備考だけになる", await (async () => {
   await p.locator("#sheet .cell[data-d='2'][data-s='after'] .n").click();
   await p.waitForTimeout(150);

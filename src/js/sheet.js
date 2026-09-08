@@ -9,8 +9,13 @@ let typing = null;
 function buildSheet(){
   const sh = $("sheet");
   sh.textContent = "";
-  /* 最後の行（週のメモ）に余りを渡す。渡さないと紙の下端に隙間が残る */
-  sh.style.gridTemplateRows = "auto repeat(" + SLOTS.length + ",auto) 1fr";
+  /* 紙の高さは決まっている。**余りをどの行に渡すかで、どこが広くなるかが決まる。**
+     放課後（備考だけの行）があればそこに渡す。無ければ週のメモに渡す。
+     どこにも渡さないと、紙の下端に隙間が残る。 */
+  const after = SLOTS.filter(s => s.kind === "note").length > 0;
+  sh.style.gridTemplateRows = "auto "
+    + SLOTS.map(s => s.kind === "note" ? "1fr" : "auto").join(" ")
+    + (after ? " auto" : " 1fr");
 
   const add = (node) => { sh.appendChild(node); return node; };
   add(el("div", "lab"));                                  /* 左上の角 */
