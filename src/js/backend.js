@@ -180,7 +180,13 @@ const Backend = (function(){
         applyYear(y, r);
         after();
       })
-      .withFailureHandler(e => notify("年度の設定を読めなかった（" + escText(String(e && e.message)) + "）"))
+      /* **読めなくても先へ進む。** 進まないと、開いたつもりの画面が出ないまま
+         前の画面が残り、どこを見ているのか分からなくなる。
+         中身は手元の控えのまま。読めなかったことは帯で言う。 */
+      .withFailureHandler(e => {
+        notify("年度の設定を読めなかった（" + escText(String(e && e.message)) + "）");
+        after();
+      })
       .apiReadYear(+y);
   }
 
@@ -206,7 +212,11 @@ const Backend = (function(){
         }
         after();
       })
-      .withFailureHandler(e => notify("この週を読めなかった（" + escText(String(e && e.message)) + "）"))
+      .withFailureHandler(e => {
+        notify("この週を読めなかった（" + escText(String(e && e.message))
+             + "）。<b>この週はまだ書かない</b>");
+        after();
+      })
       .apiReadWeek(fy(), wkKey(), want);
   }
   const weekTag = t => fy() + "/" + wkKey() + "/" + t.layer + "/" + (t.target || "");
