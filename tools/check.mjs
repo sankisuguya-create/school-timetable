@@ -38,6 +38,31 @@ ok("専科が4つ（音楽・図工・理科・外国語）",
    await p.locator(".tile.sp").count() === 4,
    await p.locator(".tile.sp").count());
 
+console.log("\n■ 入口には週の表示を置かない（左のメニューにある）");
+ok("入口の帯は無い", await p.locator("#gate .head").count() === 0);
+ok("週・年度・A週B週は左に1つだけ",
+   await p.locator("#weekLabel").count() === 1
+   && await p.locator("#weekNo").count() === 1
+   && await p.locator("#abA").count() === 1, [
+     await p.locator("#weekLabel").count(), await p.locator("#abA").count()]);
+ok("入口を出しているときも、左の週表示は合っている",
+   /\d+\/\d+ → \d+\/\d+/.test(await p.locator("#weekLabel").innerText())
+   && (await p.locator("#weekNo").innerText()).indexOf("年度") >= 0,
+   [await p.locator("#weekLabel").innerText(), await p.locator("#weekNo").innerText()]);
+ok("入口からでも週を動かせる", await (async () => {
+  const before = await p.locator("#weekLabel").innerText();
+  await p.locator("#nextWk").click(); await p.waitForTimeout(300);
+  const after = await p.locator("#weekLabel").innerText();
+  await p.locator("#prevWk").click(); await p.waitForTimeout(300);
+  return before !== after;
+})() === true);
+ok("入口からでもA週B週を変えられる", await (async () => {
+  await p.locator("#abB").click(); await p.waitForTimeout(200);
+  const v = await p.evaluate(() => week().variant);
+  await p.locator("#abA").click(); await p.waitForTimeout(200);
+  return v === "B";
+})() === true);
+
 console.log("\n■ 手の届くところ");
 ok("「週案」の右にグリッドメニューのボタンがある",
    await p.locator(".side h2 #gridBtn").count() === 1);

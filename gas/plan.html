@@ -244,9 +244,6 @@ button,select,input,textarea{font:inherit;color:inherit}
 .gate{grid-area:1/2/2/4;z-index:5;background:var(--bg);overflow:auto;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:28px 20px;gap:20px;min-width:0}
-.gate .head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;justify-content:center}
-.gate .head b{font-size:17px;letter-spacing:.14em}
-.gate .head .fy{font-size:12px;color:var(--tx-sub);letter-spacing:.06em}
 .grid{display:grid;gap:8px;grid-template-columns:auto repeat(var(--cols),minmax(88px,1fr));
   max-width:min(94vw,780px);width:100%}
 .master{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
@@ -686,17 +683,8 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 
     <!-- 入口。この表がそのまま層になっている -->
     <div class="gate" id="gate">
-      <div class="head">
-        <b>週案をひらく</b>
-        <span class="fy" id="gFy"></span>
-        <div class="pill">
-          <button class="ico" id="gPrev" aria-label="前の週"><svg width="18" height="18"><use href="#i-left"/></svg></button>
-          <span class="date" id="gWeek"></span>
-          <button class="ico" id="gNext" aria-label="次の週"><svg width="18" height="18"><use href="#i-right"/></svg></button>
-        </div>
-        <span class="wkno" id="gNo"></span>
-        <div class="seg"><button id="gA" aria-pressed="true">A週</button><button id="gB">B週</button></div>
-      </div>
+      <!-- 週と年度とA週B週は左のメニューにある。ここには置かない。
+           同じものを2か所に置くと、どちらを見ればよいかを毎回考えることになる -->
       <div class="grid" id="grid"></div>
       <p class="note">開いたものが<b>どこに入るか</b>を決める。
         <b>◯年</b>を開くとその学年の全クラスに、<b>全学年</b>を開くと全クラスに入る。<br>
@@ -2798,13 +2786,9 @@ function drawGate(){
              : {kind:"school"});
     };
   }
-  $("gWeek").textContent = md(monday) + " → " + md(addDays(monday, 4));
-  $("gFy").textContent   = fy() + "年度";
+  /* 週・年度・A週B週は**左のメニューだけが持つ。** ここには出さない */
   const n = weekNo();
-  $("gNo").textContent = n ? "第" + n + "週" : "";
-  /* 左の週表示も合わせる。入口を開いている間だけ空になると、
-     どの週を選んでいるのかが2か所で食い違って見える */
-  $("weekLabel").textContent = $("gWeek").textContent;
+  $("weekLabel").textContent = md(monday) + " → " + md(addDays(monday, 4));
   $("weekNo").textContent    = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
   $("gClose").hidden = !lastTarget;   /* まだ何も開いていなければ戻る先が無い */
@@ -3314,7 +3298,7 @@ addEventListener("resize", () => { clearTimeout(fitT); fitT = setTimeout(autoFit
 /* ── 週 ──────────────────────────────────────── */
 function syncVariant(){
   const v = week().variant;
-  for(const [id, k] of [["abA","A"],["abB","B"],["gA","A"],["gB","B"]])
+  for(const [id, k] of [["abA","A"],["abB","B"]])
     $(id).setAttribute("aria-pressed", String(v === k));
 }
 function refreshWeek(){
@@ -3393,12 +3377,10 @@ document.addEventListener("selectionchange", () => {
 function wire(){
   const on = (id, ev, fn) => { const e = $(id); if(e) e.addEventListener(ev, fn); };
 
-  on("gPrev","click", () => goWeek(-7));
-  on("gNext","click", () => goWeek(7));
+
   on("prevWk","click", () => goWeek(-7));
   on("nextWk","click", () => goWeek(7));
-  on("gA","click", () => setVariant("A"));
-  on("gB","click", () => setVariant("B"));
+
   on("abA","click", () => setVariant("A"));
   on("abB","click", () => setVariant("B"));
   on("toGate","click", showGate);

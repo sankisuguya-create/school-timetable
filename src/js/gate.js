@@ -48,13 +48,9 @@ function drawGate(){
              : {kind:"school"});
     };
   }
-  $("gWeek").textContent = md(monday) + " → " + md(addDays(monday, 4));
-  $("gFy").textContent   = fy() + "年度";
+  /* 週・年度・A週B週は**左のメニューだけが持つ。** ここには出さない */
   const n = weekNo();
-  $("gNo").textContent = n ? "第" + n + "週" : "";
-  /* 左の週表示も合わせる。入口を開いている間だけ空になると、
-     どの週を選んでいるのかが2か所で食い違って見える */
-  $("weekLabel").textContent = $("gWeek").textContent;
+  $("weekLabel").textContent = md(monday) + " → " + md(addDays(monday, 4));
   $("weekNo").textContent    = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
   $("gClose").hidden = !lastTarget;   /* まだ何も開いていなければ戻る先が無い */

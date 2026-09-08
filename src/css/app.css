@@ -184,9 +184,6 @@ button,select,input,textarea{font:inherit;color:inherit}
 .gate{grid-area:1/2/2/4;z-index:5;background:var(--bg);overflow:auto;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   padding:28px 20px;gap:20px;min-width:0}
-.gate .head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;justify-content:center}
-.gate .head b{font-size:17px;letter-spacing:.14em}
-.gate .head .fy{font-size:12px;color:var(--tx-sub);letter-spacing:.06em}
 .grid{display:grid;gap:8px;grid-template-columns:auto repeat(var(--cols),minmax(88px,1fr));
   max-width:min(94vw,780px);width:100%}
 .master{background:var(--card);border:1px solid var(--line);border-radius:var(--r);

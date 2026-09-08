@@ -66,7 +66,7 @@ addEventListener("resize", () => { clearTimeout(fitT); fitT = setTimeout(autoFit
 /* ── 週 ──────────────────────────────────────── */
 function syncVariant(){
   const v = week().variant;
-  for(const [id, k] of [["abA","A"],["abB","B"],["gA","A"],["gB","B"]])
+  for(const [id, k] of [["abA","A"],["abB","B"]])
     $(id).setAttribute("aria-pressed", String(v === k));
 }
 function refreshWeek(){
@@ -145,12 +145,10 @@ document.addEventListener("selectionchange", () => {
 function wire(){
   const on = (id, ev, fn) => { const e = $(id); if(e) e.addEventListener(ev, fn); };
 
-  on("gPrev","click", () => goWeek(-7));
-  on("gNext","click", () => goWeek(7));
+
   on("prevWk","click", () => goWeek(-7));
   on("nextWk","click", () => goWeek(7));
-  on("gA","click", () => setVariant("A"));
-  on("gB","click", () => setVariant("B"));
+
   on("abA","click", () => setVariant("A"));
   on("abB","click", () => setVariant("B"));
   on("toGate","click", showGate);
