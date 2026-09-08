@@ -363,5 +363,32 @@ function openAdminDlg(){
   $("sysLine").textContent =
     "週案 " + APP_VERSION + "（" + (BUILD_DATE || "日付なし") + "）／"
     + (b.gas ? "本番" : "手元") + "／" + fy() + "年度";
+  $("ckOut").innerHTML = "";
+  $("ckStat").textContent = b.gas ? "" : "手元では検査できない（シートを読まないと分からない）";
+  $("ckGo").disabled = !b.gas;
   $("adminDlg").showModal();
+}
+
+/* 検査の結果。**直さない。名指しするだけ。**
+   直すところまで自動でやると、直した中身が誰にも見えないまま year が進む。 */
+const CK_MARK = {ng:"要る", warn:"見る", ok:"よい"};
+function drawCheck(r){
+  $("ckStat").textContent = r.ng ? "足りないものが " + r.ng + " 件ある"
+                          : r.warn ? "見ておくものが " + r.warn + " 件"
+                                   : "そろっている";
+  $("ckOut").innerHTML =
+    "<table class=\"ck\">" + r.items.map(x =>
+      "<tr class=\"" + x.level + "\">"
+      + "<td class=\"lv\">" + CK_MARK[x.level] + "</td>"
+      + "<th>" + escText(x.what) + "</th>"
+      + "<td>" + escText(x.detail)
+      + (x.fix ? "<span class=\"fix\">" + escText(x.fix) + "</span>" : "")
+      + "</td></tr>").join("") + "</table>";
+}
+function runCheck(){
+  $("ckGo").disabled = true;
+  $("ckStat").textContent = "検査しています…";
+  Backend.checkYear(
+    r => { $("ckGo").disabled = false; drawCheck(r); },
+    why => { $("ckGo").disabled = false; $("ckStat").textContent = why; });
 }

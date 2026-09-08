@@ -381,6 +381,16 @@ const Backend = (function(){
       .apiWriteBaseAll(fy(), table);
   }
 
+  /* 年度の検査。**4月に開けたとき、何が足りないかを1画面で言う。**
+     手元では見られない（シートを読まなければ、足りないものが分からない）。 */
+  function checkYear(ok, ng){
+    if(!onGas) return ng("手元ではシートにつながっていないので、検査できない");
+    google.script.run
+      .withSuccessHandler(r => ok(r))
+      .withFailureHandler(e => ng("検査できなかった（" + (e && e.message) + "）"))
+      .apiCheckYear(fy());
+  }
+
   /* 貼り付け用シートを、そのままの形で読む。手元では使えない */
   function readPaste(ok, ng){
     if(!onGas) return ng("手元では、シートの代わりに貼り付け欄を使う");
@@ -430,6 +440,6 @@ const Backend = (function(){
 
   return {isGas, info, setNotifier, setDirtyWatcher, unsaved, prefetchWeek,
           cellChanged, flush, boot, ready, readyYear,
-          saveRoster, saveBase, saveBaseAll, readPaste,
+          saveRoster, saveBase, saveBaseAll, readPaste, checkYear,
           exportTanpopo, shapeTanpopo, buildTanpopo};
 })();

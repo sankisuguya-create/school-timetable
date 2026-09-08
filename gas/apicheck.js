@@ -91,6 +91,22 @@ for(const n of [...called].sort())
 const idle = names.filter(n => n.startsWith("api") && !called.has(n));
 if(idle.length) console.log("  ・画面から呼ばれない api…: " + idle.join("、"));
 
+/* 年度でファイルを分ける日に、直す場所が1か所で済むようにしておく。
+   ここが散ると、分ける決断そのものができなくなる（→ docs/spec.md 13-2）。 */
+console.log("\n■ ファイルの入口は1か所（Sheets.book）");
+/* 注釈の中の getActive() は数えない。**書き方の説明まで違反として数えると、
+   説明を消すほうへ働く。** 消したら次の人が同じ場所で同じ間違いをする。 */
+const nude = s => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+for(const f of ["Sheets.gs", "Store.gs"]){
+  const src = nude(fs.readFileSync(path.join(GAS, f), "utf8"));
+  const hits = (src.match(/SpreadsheetApp\.getActive\s*\(/g) || []).length;
+  const want = f === "Sheets.gs" ? 1 : 0;      /* book() の中の1回だけ */
+  ok(f + " は getActive() を book() の中でしか呼ばない（" + hits + "／" + want + "）",
+     hits === want, hits);
+}
+ok("Sheets.book / bookName を外へ出している",
+   /book,\s*bookName/.test(fs.readFileSync(path.join(GAS, "Sheets.gs"), "utf8")), "");
+
 console.log("\n■ 児童が直接叩いても止まる（実際に呼ぶ）");
 let EMAIL = "12345678@kyoiku.edu.nishi.or.jp";
 const dead = () => { throw new Error("シートに触れた"); };

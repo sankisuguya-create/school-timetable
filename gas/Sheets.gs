@@ -6,6 +6,16 @@
 ================================================================== */
 const Sheets = (function(){
 
+  /* いま開いているファイル。**この中で SpreadsheetApp.getActive() を直に呼ばない。**
+     年度でファイルを分ける日が来たら、差し替えるのはここ1か所にする
+     （→ docs/spec.md 13-2）。呼ぶ側は「どのファイルか」を知らないままでよい。
+     いまは1ファイルのままなので、中身は getActive() そのもの。
+
+     Gate.gs だけは別で、自分で getActive() を呼んでいる。関門は Sheets.gs を
+     読み込まずに動けなければならない（関門の検査は Gate.gs だけを読む）。 */
+  function book(){ return SpreadsheetApp.getActive(); }
+  function bookName(){ try{ return book().getName(); }catch(e){ return ""; } }
+
   /* 列は名前で引く。**位置で引かない。**
      列を1つ足しただけで全部ずれる書き方をしない。 */
   const SPEC = {
@@ -126,7 +136,7 @@ const Sheets = (function(){
   }
 
   function ensurePlan(name){
-    const ss = SpreadsheetApp.getActive();
+    const ss = book();
     let sh = ss.getSheetByName(name);
     if(sh) return sh;
     sh = ss.insertSheet(name);
@@ -170,7 +180,7 @@ const Sheets = (function(){
   /* 名前 → シート の対応を1回で作る。**シートを1枚ずつ探しに行かない。** */
   function planMap(){
     const out = {};
-    for(const sh of SpreadsheetApp.getActive().getSheets()){
+    for(const sh of book().getSheets()){
       const n = sh.getName();
       if(n.indexOf(PLAN_PREFIX) === 0) out[n] = sh;
     }
@@ -189,15 +199,9 @@ const Sheets = (function(){
       sh.getRange(body.length + 2, 1, last - body.length - 1, w).clearContent();
   }
 
-  /* いま開いているファイル。**年度でファイルを分ける日が来たら、
-     差し替えるのはここ1か所**にする。呼ぶ側は「どのファイルか」を知らない。
-     いまは1ファイルのままなので、中身は getActive() そのもの。 */
-  function book(){ return SpreadsheetApp.getActive(); }
-  function bookName(){ try{ return book().getName(); }catch(e){ return ""; } }
-
   /* いまある週案シートの名前。**移行や書き出しで、全部を見たいときに使う。** */
   function planNames(){
-    return SpreadsheetApp.getActive().getSheets()
+    return book().getSheets()
       .map(sh => sh.getName())
       .filter(n => n.indexOf(PLAN_PREFIX) === 0);
   }
@@ -241,13 +245,13 @@ const Sheets = (function(){
   }
 
   function sheet(name){
-    const ss = SpreadsheetApp.getActive();
+    const ss = book();
     return ss.getSheetByName(name);
   }
 
   /* シートを作る。**あるものは触らない。** 何度走らせても同じ結果になる。 */
   function setup(){
-    const ss = SpreadsheetApp.getActive();
+    const ss = book();
     const made = [], kept = [];
     for(const name of NAMES){
       let sh = ss.getSheetByName(name);

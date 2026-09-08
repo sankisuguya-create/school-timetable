@@ -685,11 +685,18 @@ ok("手元で開いているときは、そう言う",
 ok("そのまま伝えられる1行がある",
    (await p.locator("#sysLine").innerText()).indexOf(await p.evaluate(() => APP_VERSION)) >= 0,
    await p.locator("#sysLine").innerText());
-ok("管理に担任の操作を置いていない", await (async () => {
-     const t = await p.locator("#adminDlg").innerText();
-     return ["基本時間割", "学級編成", "印刷", "たんぽぽ"].every(w => t.indexOf(w) < 0);
-   })() === true, await p.locator("#adminDlg").innerText());
-await p.locator("#adminDlg .btn.go").click();
+ok("管理に担任の操作（押すもの）を置いていない", await (async () => {
+     const t = await p.evaluate(() => [...document.querySelectorAll("#adminDlg button")]
+       .map(b => b.innerText.trim()));
+     return t.every(x => ["基本時間割", "学級編成", "印刷", "たんぽぽ", "時数"]
+       .every(w => x.indexOf(w) < 0));
+   })() === true, await p.evaluate(() => [...document.querySelectorAll("#adminDlg button")]
+     .map(b => b.innerText.trim())));
+ok("手元では検査できないと言い、押せなくする",
+   await p.locator("#ckGo").isDisabled() === true
+   && (await p.locator("#ckStat").innerText()).indexOf("手元") >= 0,
+   await p.locator("#ckStat").innerText());
+await p.locator("#adminDlg [data-close]").click();
 await p.waitForTimeout(200);
 
 console.log("\n■ 手元だけで使っているときは、古い週を捨てない");

@@ -144,6 +144,14 @@ await p.addInitScript(() => {
         call("apiWriteBaseAll", [y, table]);
         setTimeout(() => okFn({classes:Object.keys(table).length}), 0);
       },
+      apiCheckYear(y){
+        call("apiCheckYear", [y]);
+        setTimeout(() => okFn({year:y, ng:1, warn:1, file:"週案 2026（高木北）", items:[
+          {level:"ok",   what:"クラス",     detail:"20組（1・2・3・4・5・6年）", fix:""},
+          {level:"ng",   what:"基本時間割", detail:"A週が空：5-4", fix:"表から取り込む"},
+          {level:"warn", what:"たんぽぽ",   detail:"交流級が1つも選ばれていない", fix:"人数を入れる"}
+        ]}), 0);
+      },
       apiShapeTanpopo(m){
         call("apiShapeTanpopo", [m]);
         setTimeout(() => okFn({file:"たんぽぽ時間割", sheet:"週案", sheets:["週案"],
@@ -601,8 +609,33 @@ ok("つないでいるファイルの名前が出る",
 ok("開いている人のメールが出る",
    (await p.locator("#sysTbl").innerText()).indexOf("tanaka@edu.nishi.or.jp") >= 0,
    await p.locator("#sysTbl").innerText());
-await p.locator("#adminDlg .btn.go").click();
+await p.locator("#adminDlg [data-close]").click();
 await p.waitForTimeout(200);
+
+console.log("\n■ 新年度の検査（足りないものだけ名指しする）");
+await p.locator(".side .admin").click(); await p.waitForTimeout(200);
+await p.locator("#ckGo").click(); await p.waitForTimeout(300);
+ok("apiCheckYear を、開いている年度で呼ぶ",
+   (await lastCall("apiCheckYear")).args[0] === 2026, await lastCall("apiCheckYear"));
+ok("足りないものの件数を言う",
+   (await p.locator("#ckStat").innerText()).indexOf("1 件") >= 0,
+   await p.locator("#ckStat").innerText());
+ok("項目を全部並べる", await p.locator("#ckOut tr").count() === 3,
+   await p.locator("#ckOut tr").count());
+ok("足りないものは「要る」と出す",
+   (await p.locator("#ckOut tr.ng .lv").innerText()).trim() === "要る",
+   await p.locator("#ckOut tr.ng .lv").innerText());
+ok("直し方も出す",
+   (await p.locator("#ckOut tr.ng").innerText()).indexOf("表から取り込む") >= 0,
+   await p.locator("#ckOut tr.ng").innerText());
+ok("色だけで見分けさせない（字でも書く）", await p.evaluate(() =>
+     [...document.querySelectorAll("#ckOut .lv")].every(e => e.innerText.trim().length > 0)) === true);
+ok("よい項目は落として出す（読むところを減らす）", await p.evaluate(() => {
+     const a = getComputedStyle(document.querySelector("#ckOut tr.ok th")).color;
+     const b = getComputedStyle(document.querySelector("#ckOut tr.ng th")).color;
+     return a !== b;
+   }) === true);
+await p.locator("#adminDlg [data-close]").click(); await p.waitForTimeout(200);
 
 console.log("\n■ 本番では、古い週の控えを間引く");
 ok("いま見ている週は、間引いても残る", await p.evaluate(() => {

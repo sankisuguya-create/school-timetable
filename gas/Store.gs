@@ -196,6 +196,98 @@ const Store = (function(){
     })).filter(s => s.code);
   }
 
+  /* ── 年度の検査 ──────────────────────────────
+     4月に開けたとき、**何が足りないかを1画面で言う**。
+     足りないまま使い始めると、担任が「自分のクラスが無い」と探すことになる。
+     直しはしない。**黙って直すと、直した中身が誰にも見えない。** */
+  function checkYear(year){
+    const y = +year;
+    const items = [];
+    const say = (level, what, detail, fix) => items.push({level, what, detail, fix});
+
+    /* 1. クラス */
+    const r = readRoster(y);
+    const grades = Object.keys(r.classes).sort();
+    const cls = grades.reduce((a, g) => a.concat(r.classes[g]), []);
+    const own = Sheets.readAll("クラス").rows
+      .filter(x => String(x["年度"] || "").trim() === String(y));
+    if(!cls.length)
+      say("ng", "クラス", "1つも読めない", "「クラス」シートに学年とクラスを入れる");
+    else if(!own.length)
+      say("warn", "クラス", cls.length + "組（年度の欄が空の行を使っている）",
+          y + " の行を作ると、来年度そのまま持ち越さずに済む");
+    else
+      say("ok", "クラス", cls.length + "組（" + grades.join("・") + "年）", "");
+
+    /* 2. 担任のメール。**児童のアドレスが混ざっていないかも見る。** */
+    const bad = [], dup = {}, dups = [], none = [];
+    for(const x of (own.length ? own : Sheets.readAll("クラス").rows)){
+      const c = Sheets.asClass(x["クラス"]);
+      if(!c) continue;
+      const m = String(x["担任メール"] || "").trim().toLowerCase();
+      if(!m){ none.push(c); continue; }
+      if(!Gate.judge(m).ok) bad.push(c + "（" + m + "）");
+      if(dup[m]) dups.push(c + "＝" + dup[m]); else dup[m] = c;
+    }
+    if(bad.length)      say("ng", "担任のメール", "通らないアドレス：" + bad.join("、"),
+                            "教職員は なまえ@" + Gate.STAFF_DOMAIN + "。児童のアドレスは入れない");
+    else if(dups.length) say("warn", "担任のメール", "同じ人が2クラス：" + dups.join("、"), "写し間違いでないか見る");
+    else if(none.length) say("warn", "担任のメール", none.length + "組が空", "空でも書けるが、上書きの知らせが届かない");
+    else                 say("ok", "担任のメール", "全クラスに入っている", "");
+
+    /* 3. 専科 */
+    if(!r.specials.length) say("warn", "専科", "1つも無い", "「専科」シートに教科コードと表示名を入れる");
+    else say("ok", "専科", r.specials.map(s => s.label).join("・"), "");
+
+    /* 4. 時程 */
+    const slots = readSlots();
+    const lessons = slots.filter(s => s.kind === "lesson");
+    const noTally = lessons.filter(s => !s.tally).map(s => s.name);
+    if(!lessons.length) say("ng", "時程", "授業の行が1つも無い", "「時程」シートの種別を「授業」にする");
+    else if(noTally.length) say("warn", "時程", "時数表の列が空：" + noTally.join("・"),
+                                "時数のコピーで、その校時が抜ける");
+    else say("ok", "時程", lessons.length + "校時（" + slots.length + "行）", "");
+
+    /* 5. 基本時間割。**A週が無いクラスは、開いても空のまま出る。** */
+    const warn = [];
+    const base = readBase(y, warn);
+    const noA = cls.filter(c => !(base[c] && base[c].A && Object.keys(base[c].A).length));
+    const noB = cls.filter(c => base[c] && base[c].A && !(base[c].B && Object.keys(base[c].B).length));
+    if(warn.length)     say("ng", "基本時間割", "読めない行が " + warn.length + " 行", warn.slice(0, 5).join(" / "));
+    else if(noA.length) say("ng", "基本時間割", "A週が空：" + noA.join("、"),
+                            "画面の「基本時間割」から入れるか、表から取り込む");
+    else if(noB.length) say("warn", "基本時間割", "B週が空：" + noB.join("、"),
+                            "A週と同じでよければ「A週をB週へ写す」");
+    else say("ok", "基本時間割", cls.length + "組ぶん入っている", "");
+
+    /* 6. 年設定（第1週の月曜）。**ここが空だと週番号が出ない。** */
+    if(!r.week1) say("warn", "年設定", "第1週の月曜が空", "「年設定」シートに " + y + " の行を作る");
+    else say("ok", "年設定", "第1週の月曜 " + r.week1, "");
+
+    /* 7. たんぽぽ */
+    const cfg = readConfig();
+    const tpN = Object.keys(r.tanpopo).length;
+    if(!String(cfg["たんぽぽファイルID"] || "").trim())
+      say("warn", "たんぽぽ", "出し先のファイルが未設定", "「設定」シートの たんぽぽファイルID にURLを貼る");
+    else if(!tpN) say("warn", "たんぽぽ", "交流級が1つも選ばれていない", "「クラス」シートの たんぽぽ交流級 に人数を入れる");
+    else say("ok", "たんぽぽ", tpN + "組・" +
+             Object.keys(r.tanpopo).reduce((a, c) => a + r.tanpopo[c], 0) + "人", "");
+
+    /* 8. 週案シート。**担任が開く前に揃えておく。** */
+    const have = Sheets.planNames();
+    const want = [Sheets.planName("school", "")]
+      .concat(grades.map(g => Sheets.planName("grade", g)))
+      .concat(cls.map(c => Sheets.planName("home", c)));
+    const miss = want.filter(n => have.indexOf(n) < 0);
+    if(miss.length) say("warn", "週案シート", miss.length + "枚が未作成",
+                        "エディタから setupPlanSheets を1回走らせる（書けば自動でも作られる）");
+    else say("ok", "週案シート", want.length + "枚そろっている", "");
+
+    const ng   = items.filter(x => x.level === "ng").length;
+    const warn2 = items.filter(x => x.level === "warn").length;
+    return {year: y, items, ng, warn: warn2, file: Sheets.bookName()};
+  }
+
   /* ── 書く ────────────────────────────────────── */
 
   /* patches = [{date, slot, layer, target, title, note, subject, sp, remove}]
@@ -772,7 +864,7 @@ const Store = (function(){
 
   return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects,
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste,
-          exportTanpopo, shapeTanpopo, buildTanpopo, migratePlan, ymd};
+          exportTanpopo, shapeTanpopo, buildTanpopo, migratePlan, checkYear, ymd};
 })();
 
 /* ── 画面から呼ぶ口。**すべて1行目で Gate.check()。** ───────── */
@@ -797,6 +889,12 @@ function apiBoot(year){
     out.warn   = warn;
   }
   return out;
+}
+/* 年度の検査。**4月に開けたとき、何が足りないかを1画面で言う。**
+   直しはここでやらない。黙って直すと、直した中身が誰にも見えない。 */
+function apiCheckYear(year){
+  Gate.check();
+  return Store.checkYear(year || new Date().getFullYear());
 }
 function apiReadYear(year){
   Gate.check();

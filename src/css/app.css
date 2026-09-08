@@ -368,6 +368,19 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .sys th{width:14em;color:var(--tx-sub);font-weight:600;white-space:nowrap}
 .sys td{font-variant-numeric:tabular-nums}
 
+/* 年度の検査。**要る／見る／よい の3段だけ。** 段を増やすと読む気が失せる */
+.ck{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0 2px}
+.ck td,.ck th{border-bottom:1px solid var(--rule-soft);padding:7px 8px;text-align:left;
+  vertical-align:top}
+.ck th{width:9em;font-weight:600;white-space:nowrap}
+.ck .lv{width:3.4em;white-space:nowrap;font-size:11.5px;font-weight:700;
+  border-radius:5px;text-align:center}
+.ck tr.ng   .lv{color:var(--cat-clash)}
+.ck tr.warn .lv{color:var(--cat-grade)}
+.ck tr.ok   .lv{color:var(--tx-sub);font-weight:400}
+.ck tr.ok   td,.ck tr.ok th{color:var(--tx-sub)}
+.ck .fix{display:block;margin-top:3px;font-size:11.5px;color:var(--tx-sub)}
+
 @media (max-width:1180px){
   .work{grid-template-columns:200px minmax(0,1fr) 400px}
   .side .foot-note,.side .legend{display:none}

@@ -428,6 +428,19 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .sys th{width:14em;color:var(--tx-sub);font-weight:600;white-space:nowrap}
 .sys td{font-variant-numeric:tabular-nums}
 
+/* 年度の検査。**要る／見る／よい の3段だけ。** 段を増やすと読む気が失せる */
+.ck{border-collapse:collapse;width:100%;font-size:13px;margin:8px 0 2px}
+.ck td,.ck th{border-bottom:1px solid var(--rule-soft);padding:7px 8px;text-align:left;
+  vertical-align:top}
+.ck th{width:9em;font-weight:600;white-space:nowrap}
+.ck .lv{width:3.4em;white-space:nowrap;font-size:11.5px;font-weight:700;
+  border-radius:5px;text-align:center}
+.ck tr.ng   .lv{color:var(--cat-clash)}
+.ck tr.warn .lv{color:var(--cat-grade)}
+.ck tr.ok   .lv{color:var(--tx-sub);font-weight:400}
+.ck tr.ok   td,.ck tr.ok th{color:var(--tx-sub)}
+.ck .fix{display:block;margin-top:3px;font-size:11.5px;color:var(--tx-sub)}
+
 @media (max-width:1180px){
   .work{grid-template-columns:200px minmax(0,1fr) 400px}
   .side .foot-note,.side .legend{display:none}
@@ -985,6 +998,13 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
      不具合を知らせるときは、下の1行をそのまま伝えると原因が早く分かります。</p>
   <table class="sys" id="sysTbl"></table>
   <p class="hint" id="sysLine"></p>
+  <hr>
+  <h3 style="margin:12px 0 4px;font-size:14px">新年度の検査</h3>
+  <p>年度の初めに1回押す。<b>足りないものだけを名指しします。</b>
+     直すのは人の手です（黙って直すと、直した中身が誰にも見えません）。</p>
+  <div class="row"><button class="btn go" id="ckGo">この年度を検査する</button>
+    <span class="hint" id="ckStat"></span></div>
+  <div id="ckOut"></div>
   <div class="end"><button class="btn go" data-close="adminDlg">閉じる</button></div>
 </div></dialog>
 
@@ -1804,6 +1824,16 @@ const Backend = (function(){
       .apiWriteBaseAll(fy(), table);
   }
 
+  /* 年度の検査。**4月に開けたとき、何が足りないかを1画面で言う。**
+     手元では見られない（シートを読まなければ、足りないものが分からない）。 */
+  function checkYear(ok, ng){
+    if(!onGas) return ng("手元ではシートにつながっていないので、検査できない");
+    google.script.run
+      .withSuccessHandler(r => ok(r))
+      .withFailureHandler(e => ng("検査できなかった（" + (e && e.message) + "）"))
+      .apiCheckYear(fy());
+  }
+
   /* 貼り付け用シートを、そのままの形で読む。手元では使えない */
   function readPaste(ok, ng){
     if(!onGas) return ng("手元では、シートの代わりに貼り付け欄を使う");
@@ -1853,7 +1883,7 @@ const Backend = (function(){
 
   return {isGas, info, setNotifier, setDirtyWatcher, unsaved, prefetchWeek,
           cellChanged, flush, boot, ready, readyYear,
-          saveRoster, saveBase, saveBaseAll, readPaste,
+          saveRoster, saveBase, saveBaseAll, readPaste, checkYear,
           exportTanpopo, shapeTanpopo, buildTanpopo};
 })();
 /* ▲ src/js/backend.js ▲ */
@@ -3643,7 +3673,34 @@ function openAdminDlg(){
   $("sysLine").textContent =
     "週案 " + APP_VERSION + "（" + (BUILD_DATE || "日付なし") + "）／"
     + (b.gas ? "本番" : "手元") + "／" + fy() + "年度";
+  $("ckOut").innerHTML = "";
+  $("ckStat").textContent = b.gas ? "" : "手元では検査できない（シートを読まないと分からない）";
+  $("ckGo").disabled = !b.gas;
   $("adminDlg").showModal();
+}
+
+/* 検査の結果。**直さない。名指しするだけ。**
+   直すところまで自動でやると、直した中身が誰にも見えないまま year が進む。 */
+const CK_MARK = {ng:"要る", warn:"見る", ok:"よい"};
+function drawCheck(r){
+  $("ckStat").textContent = r.ng ? "足りないものが " + r.ng + " 件ある"
+                          : r.warn ? "見ておくものが " + r.warn + " 件"
+                                   : "そろっている";
+  $("ckOut").innerHTML =
+    "<table class=\"ck\">" + r.items.map(x =>
+      "<tr class=\"" + x.level + "\">"
+      + "<td class=\"lv\">" + CK_MARK[x.level] + "</td>"
+      + "<th>" + escText(x.what) + "</th>"
+      + "<td>" + escText(x.detail)
+      + (x.fix ? "<span class=\"fix\">" + escText(x.fix) + "</span>" : "")
+      + "</td></tr>").join("") + "</table>";
+}
+function runCheck(){
+  $("ckGo").disabled = true;
+  $("ckStat").textContent = "検査しています…";
+  Backend.checkYear(
+    r => { $("ckGo").disabled = false; drawCheck(r); },
+    why => { $("ckGo").disabled = false; $("ckStat").textContent = why; });
 }
 /* ▲ src/js/dialogs.js ▲ */
 /* ▼ src/js/main.js ▼ */
@@ -3866,6 +3923,7 @@ function wire(){
   on("toGate","click", showGate);
   on("target","change", e => onTargetChange(e.target.value));
   on("tpGo","click", reflectTanpopo);
+  on("ckGo","click", runCheck);
   on("gClose","click", () => { if(lastTarget) openView(lastTarget); });
 
   for(const b of document.querySelectorAll("[data-act]"))

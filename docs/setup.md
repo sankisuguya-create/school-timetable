@@ -85,7 +85,7 @@
    const STUDENT_LOCAL = /^[0-9]{8}$/;        // 児童は @ の左が8桁の数字
    ```
 
-**確かめる**：手元で `node gas/gatecheck.js`（29件）と `node gas/storecheck.js`（149件）が通ること。
+**確かめる**：手元で `node gas/gatecheck.js`（26件）・`node gas/apicheck.js`（48件）・`node gas/storecheck.js`（161件）が通ること。
 **通らないまま貼らない。**
 
 ---
@@ -214,6 +214,23 @@
 
 `/exec` の URL を使う。エディタの「テスト用デプロイ」で取れる `/dev` は
 編集権限のある人しか開けないので、児童アカウントでの確認に使えない。
+
+---
+
+### 年度の初めに1回、検査する
+
+左メニュー下の「管理・システム」→「**この年度を検査する**」。
+クラス・担任のメール・専科・時程・基本時間割・年設定・たんぽぽ・週案シートの8つを見て、
+**足りないものだけを名指しする**。
+
+| 出方 | 意味 |
+|---|---|
+| 要る | そのままでは担任が使えない。直してから配る |
+| 見る | 使えるが、後で困る。心当たりを確かめる |
+| よい | そろっている |
+
+**直しはしない。** 黙って直すと、直した中身が誰にも見えないまま年度が進む。
+直し方は各行の下に書いてある。
 
 ---
 
@@ -357,11 +374,11 @@
 ```
 python3 build.py          src/ から作り直す
 python3 build.py --check  生成物が src と一致するか
-node tools/check.mjs      画面（Playwright・151件）
-node tools/wirecheck.mjs  本番の口とのやりとり（82件）
-node gas/storecheck.js    シートの読み書き（149件）
+node tools/check.mjs      画面（Playwright・152件）
+node tools/wirecheck.mjs  本番の口とのやりとり（89件）
+node gas/storecheck.js    シートの読み書き（161件）
 node gas/gatecheck.js     関門（26件）
-node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明（42件）
+node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明（48件）
 ```
 
 **この6つが通らないものは貼らない。**

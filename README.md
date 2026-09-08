@@ -18,11 +18,11 @@
 ```
 python3 build.py          src/ から dist/index.html と gas/plan.html を作る
 python3 build.py --check  生成物が src と一致するか調べる
-node tools/check.mjs      画面を動かして確かめる（151件）
-node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（82件）
-node gas/storecheck.js    シートの読み書きを確かめる（149件）
+node tools/check.mjs      画面を動かして確かめる（152件）
+node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（89件）
+node gas/storecheck.js    シートの読み書きを確かめる（161件）
 node gas/gatecheck.js     関門を確かめる（26件）
-node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明を見る（42件）
+node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明を見る（48件）
 ```
 
 **この6つが通らないものはデプロイしない。**

@@ -832,6 +832,50 @@ ok("対象が化けていても同じ行を直す（行が増えない）",
 ok("読み直すと 6-3 のコマとして戻る",
    ev('Store.readWeek(2026, "2026-11-30")').home["6-3"]["1|p1"].title === "理科");
 
+/* 4月に開けたとき、**足りないものを名指しできるか**。
+   ここが黙ると、担任が「自分のクラスが無い」と探すことになる。 */
+console.log("\n■ 年度の検査");
+let chk = ev("Store.checkYear(2026)");
+const item = w => chk.items.find(x => x.what === w);
+ok("8項目を見る", chk.items.length === 8, chk.items.map(x => x.what));
+ok("クラスは20組と言う", item("クラス").detail.indexOf("20組") >= 0, item("クラス"));
+ok("時程の校時数を言う", item("時程").level === "ok", item("時程"));
+ok("基本時間割が空なら止める（ng）", item("基本時間割").level === "ng", item("基本時間割"));
+ok("直し方を書く", !!item("基本時間割").fix, item("基本時間割"));
+ok("ng の数を返す", chk.ng >= 1, chk);
+ok("つないでいるファイルの名前も返す", typeof chk.file === "string", chk);
+
+/* 担任に児童のアドレスが入っていたら、そこで止める */
+SHEETS["クラス"][1][0] = 2026;
+SHEETS["クラス"][1][3] = "12345678@kyoiku.edu.nishi.or.jp";
+chk = ev("Store.checkYear(2026)");
+ok("担任の欄に児童のアドレスがあれば ng",
+   chk.items.find(x => x.what === "担任のメール").level === "ng",
+   chk.items.find(x => x.what === "担任のメール"));
+SHEETS["クラス"][1][3] = "tanaka@edu.nishi.or.jp";
+chk = ev("Store.checkYear(2026)");
+ok("教職員のアドレスなら止めない",
+   chk.items.find(x => x.what === "担任のメール").level !== "ng",
+   chk.items.find(x => x.what === "担任のメール"));
+ok("年度の行が1行だけなら、そのことを言う",
+   chk.items.find(x => x.what === "クラス").detail.indexOf("1組") >= 0,
+   chk.items.find(x => x.what === "クラス"));
+/* **年度の欄を戻す。** 1行だけ 2026 が入っていると、その年度はその1行が
+   全部になる（年度の行があれば、年度の空欄の行は使わない）。 */
+SHEETS["クラス"][1][0] = "";
+SHEETS["クラス"][1][3] = "";
+
+/* 基本時間割を入れると ok に変わる（検査が中身を見ている証拠） */
+ev(`Store.writeBaseAll(2026, {"1-1":{A:{"0|p1":{title:"国語",subject:"kokugo"}},
+                                     B:{"0|p1":{title:"国語",subject:"kokugo"}}}})`);
+chk = ev("Store.checkYear(2026)");
+ok("1組だけ入れても、残りが空なら ng のまま",
+   chk.items.find(x => x.what === "基本時間割").level === "ng",
+   chk.items.find(x => x.what === "基本時間割"));
+ok("空のクラス名を並べる",
+   chk.items.find(x => x.what === "基本時間割").detail.indexOf("1-2") >= 0,
+   chk.items.find(x => x.what === "基本時間割").detail);
+
 console.log("\n■ ロック");
 ok("書き込みのあとロックは残らない", locks.held === 0, locks.held);
 
