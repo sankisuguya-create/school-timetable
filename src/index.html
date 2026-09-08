@@ -417,6 +417,19 @@
   <div class="end"><button class="btn go" data-close="adminDlg">閉じる</button></div>
 </div></dialog>
 
+<!-- 上書きの窓。**既定は「変更しない」。**
+     ブラウザの confirm は Enter で「はい」に落ちる。打鍵の勢いのまま
+     他人の予定が消える。編集そのものは止めない（誰でもどのコマでも直せる） -->
+<dialog id="swDlg"><div class="dlg">
+  <h2>ほかの人が入れた予定です</h2>
+  <p><b id="swWhen"></b> を「<b id="swTo"></b>」に変えます。<br>
+     いま入っているのは次のものです。<b>消したくなければ「変更しない」。</b></p>
+  <ul id="swList" class="owlist"></ul>
+  <div class="end">
+    <button class="btn go" id="swNo">変更しない</button>
+    <button class="btn danger" id="swYes">上書きする</button></div>
+</div></dialog>
+
 <dialog id="owDlg"><div class="dlg">
   <h2>あなたの予定が上書きされています</h2>
   <p>あなたが入れたコマに、<b>あとから別の予定が入りました。</b>

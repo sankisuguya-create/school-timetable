@@ -1008,6 +1008,19 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   <div class="end"><button class="btn go" data-close="adminDlg">閉じる</button></div>
 </div></dialog>
 
+<!-- 上書きの窓。**既定は「変更しない」。**
+     ブラウザの confirm は Enter で「はい」に落ちる。打鍵の勢いのまま
+     他人の予定が消える。編集そのものは止めない（誰でもどのコマでも直せる） -->
+<dialog id="swDlg"><div class="dlg">
+  <h2>ほかの人が入れた予定です</h2>
+  <p><b id="swWhen"></b> を「<b id="swTo"></b>」に変えます。<br>
+     いま入っているのは次のものです。<b>消したくなければ「変更しない」。</b></p>
+  <ul id="swList" class="owlist"></ul>
+  <div class="end">
+    <button class="btn go" id="swNo">変更しない</button>
+    <button class="btn danger" id="swYes">上書きする</button></div>
+</div></dialog>
+
 <dialog id="owDlg"><div class="dlg">
   <h2>あなたの予定が上書きされています</h2>
   <p>あなたが入れたコマに、<b>あとから別の予定が入りました。</b>
@@ -2171,6 +2184,29 @@ function viewWhere(){
   return "";
 }
 
+/* ── 誰が入れたか ────────────────────────────
+   **層（担任・学年・全体）と、人（メール）は別のもの。**
+   前は同じ欄に層の名前を入れていたので、「自分が入れたコマかどうか」を
+   判定する材料が画面に無かった。シートの「更新者」はメールなので、
+   手元でもメールを入れて、形をそろえる。 */
+function myEmail(){
+  const b = (typeof Backend !== "undefined" && Backend.info) ? Backend.info() : null;
+  return (b && b.me) || "";
+}
+/* **手元では自分が誰か分からない。** 分からないときは「自分ではない」に倒す。
+   自分だと決めつけると、他人の予定を黙って上書きする側に転ぶ。 */
+function isMe(by){
+  const me = myEmail();
+  return !!me && !!by && String(by).toLowerCase() === me.toLowerCase();
+}
+/* 画面に出す名前。**@より前だけ。** 職員室で読めればよく、全部は要らない */
+function whoName(by){
+  const t = String(by || "").trim();
+  if(!t) return "";
+  const at = t.lastIndexOf("@");
+  return at > 0 ? t.slice(0, at) : t;
+}
+
 /* ── 合成 ────────────────────────────────────── */
 
 function baseCell(cls, d, s){
@@ -2337,7 +2373,11 @@ function wouldOverwrite(d, s){
     if(cur.layer === "base") continue;                 /* 基本時間割は潰してよい */
     if(cur.layer === layer && sameTarget(cur.layer, c, target)) continue;  /* 自分の続き */
     const t = plain(cur.title).trim();
-    if(t) hit.push({cls:c, from:t, by:LAYER_FULL[cur.layer]});
+    /* **自分が入れたものは聞かない。** 自分の予定を自分で直すたびに
+       窓が出ると、窓を読まずに閉じる癖がつく。それでは他人の予定も守れない */
+    if(isMe(cur.by)) continue;
+    if(t) hit.push({cls:c, from:t, layer:LAYER_FULL[cur.layer],
+                    who:whoName(cur.by), by:LAYER_FULL[cur.layer]});
   }
   return hit;
 }
@@ -2359,14 +2399,16 @@ function overwrittenHere(){
       for(const lost of cur.clash)
         if(lost.layer === "home")
           out.push({d, s:sl.id, cls:view.cls, from:plain(lost.title),
-                    to:plain(cur.title), by:LAYER_FULL[cur.layer]});
+                    to:plain(cur.title), by:LAYER_FULL[cur.layer],
+                    who:whoName(cur.by)});
     }else if(view.kind === "special"){
       const own = ownCell(d, sl.id);
       if(!own.cls) continue;
       const cur = compose(own.cls, d, sl.id);
       if(cur.layer !== "special")
         out.push({d, s:sl.id, cls:own.cls, from:plain(own.title || ""),
-                  to:plain(cur.title), by:LAYER_FULL[cur.layer]});
+                  to:plain(cur.title), by:LAYER_FULL[cur.layer],
+                  who:whoName(cur.by)});
     }else{
       const bank = masterBank(), me = bank && bank[key];
       if(!me) continue;
@@ -2375,7 +2417,8 @@ function overwrittenHere(){
         if(cur.layer === view.kind) continue;
         if((cur.at || 0) <= (me.at || 0)) continue;
         out.push({d, s:sl.id, cls:c, from:plain(me.title),
-                  to:plain(cur.title), by:LAYER_FULL[cur.layer]});
+                  to:plain(cur.title), by:LAYER_FULL[cur.layer],
+                  who:whoName(cur.by)});
       }
     }
   }
@@ -2409,7 +2452,7 @@ function writeCell(d, s, patch){
         title: escText(sub ? sub.name : viewName()),
         subject: view.sp, sp: view.sp,
         note: ("note" in patch) ? clean(patch.note) : (cur.note || ""),
-        at: Date.now(), by: viewName()
+        at: Date.now(), by: myEmail()
       };
       Backend.cellChanged("special", target, d, s);
     }
@@ -2426,7 +2469,7 @@ function writeCell(d, s, patch){
   if("title"   in patch) e.title   = clean(patch.title);
   if("note"    in patch) e.note    = clean(patch.note);
   if("subject" in patch) e.subject = patch.subject;
-  e.by = viewName();
+  e.by = myEmail();          /* 層ではなく人。層は開いている面から分かる */
   e.at = Date.now();
   if(isEmptyCell(e)) delete st[key]; else st[key] = e;
   Backend.cellChanged(layerOfStore(), targetOfStore(), d, s);
@@ -2532,15 +2575,18 @@ function cellEl(d, s){
   if(n) n.addEventListener("focus", focus);
 
   if(t) t.addEventListener("input", () => {
-    /* 打ち始めた1打目で聞く。«いいえ»なら元に戻す */
-    if(!okToOverwrite(d, s.id, plain(t.innerHTML))){
+    /* 打ち始めた1打目で聞く。**「変更しない」なら打った字ごと元に戻す。** */
+    const put = () => {
+      typing = t;
+      const sub = SUB_BY_NAME[plain(t.innerHTML).trim()];
+      writeCell(d, s.id, {title:t.innerHTML, subject:sub ? sub.code : null});
+      paintSheet(e); fillPanel(); typing = null;
+    };
+    const undo = () => {
       t.innerHTML = (cellFor(d, s.id).title || "");
-      return;
-    }
-    typing = t;
-    const sub = SUB_BY_NAME[plain(t.innerHTML).trim()];
-    writeCell(d, s.id, {title:t.innerHTML, subject:sub ? sub.code : null});
-    paintSheet(e); fillPanel(); typing = null;
+      typing = null; paintSheet(); fillPanel();
+    };
+    okToOverwrite(d, s.id, plain(t.innerHTML), put, undo);
   });
   if(n) n.addEventListener("input", () => {
     typing = n;
@@ -2716,22 +2762,51 @@ function drawPalette(){
 }
 
 /* 書く前に一度だけ聞く。**別の人の予定を潰すときだけ。**
-   基本時間割を直すのはふだんの作業なので聞かない。
-   一度«はい»と答えたコマは、その画面を開いている間は聞き直さない。 */
+   基本時間割を直すのはふだんの作業なので聞かない（→ compose.js の wouldOverwrite）。
+   自分が入れたコマも聞かない。一度«上書きする»と答えたコマは、
+   その画面を開いている間は聞き直さない。
+
+   **編集そのものは止めない。** 止めると、担任が直せないコマができて、
+   直せる人を探して回ることになる。止めるのではなく、既定を安全側に置く。 */
 const askedCells = {};
-function okToOverwrite(d, sid, to){
-  const hit = wouldOverwrite(d, sid);
-  if(!hit.length) return true;
-  const key = viewName() + "|" + ck(d, sid);
-  if(askedCells[key]) return true;
+
+/* 窓の返事を待つあいだ、答えを受け取る先。**Enter や Esc は「変更しない」。** */
+let owAsk = null;
+function whenLabel(d, sid){
   const dt = addDays(monday, d), sl = SLOT_BY_ID[sid];
-  const when = md(dt) + "(" + DOW[d] + ") " + sl.name + (sl.kind === "lesson" ? "校時" : "");
-  const lines = hit.map(h => "　" + h.cls + " の「" + h.from + "」（" + h.by + "）");
-  const yes = confirm(
-    when + "\n\n次の予定を「" + (plain(to) || "（空）") + "」に上書きします。\n\n"
-    + lines.join("\n") + "\n\nつづけますか？");
-  if(yes) askedCells[key] = true;
-  return yes;
+  return md(dt) + "(" + DOW[d] + ") " + sl.name + (sl.kind === "lesson" ? "校時" : "");
+}
+function askOverwrite(when, to, hits, yes, no){
+  owAsk = {yes, no, done:false};
+  $("swWhen").textContent = when;
+  $("swTo").textContent   = plain(to) || "（空）";
+  $("swList").innerHTML = hits.map(h =>
+    "<li><b>" + escText(h.cls) + "</b> の「" + (escText(h.from) || "（空）") + "」"
+    + "<br><span class=\"who\">" + escText(h.layer)
+    + (h.who ? "・" + escText(h.who) : "") + " が入れたもの</span></li>").join("");
+  const dlg = $("swDlg");
+  dlg.showModal();
+  $("swNo").focus();                 /* **既定は「変更しない」。** */
+}
+/* 窓の返事を1回だけ流す。閉じ方（ボタン・Esc・外側）で取りこぼさない */
+function owAnswer(yes){
+  const a = owAsk;
+  owAsk = null;
+  if(!a || a.done) return;
+  a.done = true;
+  (yes ? a.yes : a.no)();
+}
+
+/* 聞かずに済むときは、その場で yes を呼んで true を返す。
+   聞くときは false を返し、返事が出たあとで yes / no のどちらかを呼ぶ。 */
+function okToOverwrite(d, sid, to, yes, no){
+  yes = yes || function(){}; no = no || function(){};
+  const hit = wouldOverwrite(d, sid);
+  const key = viewName() + "|" + ck(d, sid);
+  if(!hit.length || askedCells[key]){ yes(); return true; }
+  askOverwrite(whenLabel(d, sid), to, hit,
+               () => { askedCells[key] = true; yes(); }, no);
+  return false;
 }
 
 function applyPalette(d, sid, v, e){
@@ -2753,10 +2828,11 @@ function applyPalette(d, sid, v, e){
   }
   const sub = SUB_BY_CODE[v];
   if(!sub) return;
-  if(!okToOverwrite(d, sid, sub.name)) return;
-  writeCell(d, sid, {title:escText(sub.name), subject:sub.code});
-  paintSheet(); selectCell(d, sid, e || cellAt(d, sid));
-  toast(sub.name + " を入れた");
+  okToOverwrite(d, sid, sub.name, () => {
+    writeCell(d, sid, {title:escText(sub.name), subject:sub.code});
+    paintSheet(); selectCell(d, sid, e || cellAt(d, sid));
+    toast(sub.name + " を入れた");
+  });
 }
 
 /* ── 選ぶ ────────────────────────────────────── */
@@ -2787,7 +2863,14 @@ function fillPanel(){
   $("pWhere").textContent = md(dt) + "(" + DOW[selCell.d] + ") "
     + slot.name + (slot.kind === "lesson" ? "校時" : "")
     + (slot.time ? "　" + slot.time : "");
-  $("pWho").textContent = viewName();
+  /* **いま書くとどこへ入るか（層）と、いま入っているものを誰が入れたか（人）。**
+     前は層の名前しか出していなかったので、他人の予定かどうかが分からなかった。 */
+  const who = whoName(c.by);
+  $("pWho").textContent = viewName()
+    + (c.layer === "base" ? "　いまは基本時間割のまま"
+      : "　いま入っているのは " + (LAYER_FULL[c.layer] || "")
+        + (who ? "・" + who : "") + " が入れたもの"
+        + (isMe(c.by) ? "（自分）" : ""));
 
   const t = $("pTitle"), n = $("pNote");
   if(t !== typing && t.innerHTML !== (c.title || "")) t.innerHTML = c.title || "";
@@ -3924,6 +4007,12 @@ function wire(){
   on("target","change", e => onTargetChange(e.target.value));
   on("tpGo","click", reflectTanpopo);
   on("ckGo","click", runCheck);
+
+  /* 上書きの窓。**閉じ方が何であれ「変更しない」に落ちる。**
+     Esc も、外側を押したときも、返事をしないまま消えたときも同じ */
+  on("swNo","click",  () => { $("swDlg").close(); });
+  on("swYes","click", () => { owAnswer(true); $("swDlg").close(); });
+  on("swDlg","close", () => owAnswer(false));
   on("gClose","click", () => { if(lastTarget) openView(lastTarget); });
 
   for(const b of document.querySelectorAll("[data-act]"))
@@ -4048,15 +4137,24 @@ function wire(){
     delete (week().home[view.cls] || {})[ck(selCell.d, selCell.s)];
     save(); paintSheet(); fillPanel();
   });
+  /* 5日ぶんを1日ずつ聞くと、窓が最大5回出る。**まとめて1回だけ聞く。** */
   on("pAll","click", () => {
     if(!selCell) return;
-    const c = cellFor(selCell.d, selCell.s);
-    for(let d = 0; d < 5; d++){
-      if(!okToOverwrite(d, selCell.s, plain(c.title))) continue;
-      writeCell(d, selCell.s, {title:c.title, note:c.note || ""});
-    }
-    paintSheet(); fillPanel();
-    toast("5日とも「" + (escText(plain(c.title)) || "（空）") + "」にした");
+    const c = cellFor(selCell.d, selCell.s), sid = selCell.s;
+    const days = [0,1,2,3,4];
+    const hits = [];
+    for(const d of days)
+      for(const h of wouldOverwrite(d, sid))
+        hits.push(Object.assign({}, h, {cls:h.cls + "（" + DOW[d] + "）"}));
+    const put = () => {
+      for(const d of days) writeCell(d, sid, {title:c.title, note:c.note || ""});
+      paintSheet(); fillPanel();
+      toast("5日とも「" + (escText(plain(c.title)) || "（空）") + "」にした");
+    };
+    if(!hits.length) return put();
+    askOverwrite("この週の " + SLOT_BY_ID[sid].name
+                 + (SLOT_BY_ID[sid].kind === "lesson" ? "校時" : "") + "（5日ぶん）",
+                 c.title, hits, put, () => {});
   });
   for(const id of ["pTitle", "pNote"]){
     $(id).addEventListener("input", () => {
@@ -4064,14 +4162,19 @@ function wire(){
       const f = $(id);
       typing = f;
       if(id === "pTitle"){
-        if(!okToOverwrite(selCell.d, selCell.s, plain(f.innerHTML))){
-          f.innerHTML = (cellFor(selCell.d, selCell.s).title || ""); typing = null; return;
-        }
-        const sub = SUB_BY_NAME[plain(f.innerHTML).trim()];
-        writeCell(selCell.d, selCell.s, {title:f.innerHTML, subject:sub ? sub.code : null});
-      }else{
-        writeCell(selCell.d, selCell.s, {note:f.innerHTML});
+        const at = {d:selCell.d, s:selCell.s};
+        const put = () => {
+          const sub = SUB_BY_NAME[plain(f.innerHTML).trim()];
+          writeCell(at.d, at.s, {title:f.innerHTML, subject:sub ? sub.code : null});
+          paintSheet(); typing = null;
+        };
+        const undo = () => {
+          f.innerHTML = (cellFor(at.d, at.s).title || "");
+          typing = null; paintSheet();
+        };
+        return okToOverwrite(at.d, at.s, plain(f.innerHTML), put, undo);
       }
+      writeCell(selCell.d, selCell.s, {note:f.innerHTML});
       paintSheet(); typing = null;
     });
   }

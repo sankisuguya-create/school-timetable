@@ -597,6 +597,45 @@ ok("入れた層のまま戻る（担任が入れたものとして出る）",
    await p.locator("#sheet .cell[data-d='2'][data-s='p1']").getAttribute("data-layer") === "home",
    await p.locator("#sheet .cell[data-d='2'][data-s='p1']").getAttribute("data-layer"));
 
+/* **層と人は別のもの。** シートの「更新者」はメールなので、手元でも
+   メールを入れて形をそろえた。そろえて初めて「自分か他人か」を判定できる。 */
+console.log("\n■ 自分が入れたコマか、他人が入れたコマか");
+ok("開いている人のメールが画面まで届く",
+   await p.evaluate(() => myEmail()) === "tanaka@edu.nishi.or.jp",
+   await p.evaluate(() => myEmail()));
+ok("自分のメールなら自分", await p.evaluate(() => isMe("tanaka@edu.nishi.or.jp")) === true);
+ok("大文字小文字は同じものとして見る",
+   await p.evaluate(() => isMe("Tanaka@Edu.Nishi.or.jp")) === true);
+ok("別の人なら自分ではない", await p.evaluate(() => isMe("suzuki@edu.nishi.or.jp")) === false);
+ok("空は自分ではない（分からないときは他人に倒す）",
+   await p.evaluate(() => isMe("")) === false);
+ok("書いたコマの更新者は、層ではなく人",
+   await p.evaluate(() => {
+     const w = week(), k = Object.keys(w.home["5-3"] || {})[0];
+     return k ? w.home["5-3"][k].by : null;
+   }) === "tanaka@edu.nishi.or.jp",
+   await p.evaluate(() => {
+     const w = week(), k = Object.keys(w.home["5-3"] || {})[0];
+     return k ? w.home["5-3"][k] : null;
+   }));
+/* 学年の面から担任のコマを潰す形で見る（層が違うので、層では除かれない）。
+   **同じコマで、更新者だけを入れ替えて比べる。** */
+const owFrom = (by) => p.evaluate(who => {
+  const w = week(), key = "1|p2", keep = view;
+  (w.home["5-3"] || (w.home["5-3"] = {}))[key] =
+    {title:"国語", note:"", subject:"kokugo", at:Date.now(), by:who};
+  view = {kind:"grade", grade:"5"};
+  const n = wouldOverwrite(1, "p2").length;
+  view = keep;
+  delete w.home["5-3"][key];
+  return n;
+}, by);
+ok("自分が入れたコマなら聞かない", await owFrom("tanaka@edu.nishi.or.jp") === 0,
+   await owFrom("tanaka@edu.nishi.or.jp"));
+ok("他人が入れたコマなら聞く", await owFrom("suzuki@edu.nishi.or.jp") >= 1,
+   await owFrom("suzuki@edu.nishi.or.jp"));
+ok("更新者が分からないコマも聞く（他人に倒す）", await owFrom("") >= 1, await owFrom(""));
+
 console.log("\n■ 管理・システム（本番では、どこにつないでいるかが出る）");
 await p.locator(".side .admin").click();
 await p.waitForTimeout(250);

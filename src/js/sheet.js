@@ -84,15 +84,18 @@ function cellEl(d, s){
   if(n) n.addEventListener("focus", focus);
 
   if(t) t.addEventListener("input", () => {
-    /* 打ち始めた1打目で聞く。«いいえ»なら元に戻す */
-    if(!okToOverwrite(d, s.id, plain(t.innerHTML))){
+    /* 打ち始めた1打目で聞く。**「変更しない」なら打った字ごと元に戻す。** */
+    const put = () => {
+      typing = t;
+      const sub = SUB_BY_NAME[plain(t.innerHTML).trim()];
+      writeCell(d, s.id, {title:t.innerHTML, subject:sub ? sub.code : null});
+      paintSheet(e); fillPanel(); typing = null;
+    };
+    const undo = () => {
       t.innerHTML = (cellFor(d, s.id).title || "");
-      return;
-    }
-    typing = t;
-    const sub = SUB_BY_NAME[plain(t.innerHTML).trim()];
-    writeCell(d, s.id, {title:t.innerHTML, subject:sub ? sub.code : null});
-    paintSheet(e); fillPanel(); typing = null;
+      typing = null; paintSheet(); fillPanel();
+    };
+    okToOverwrite(d, s.id, plain(t.innerHTML), put, undo);
   });
   if(n) n.addEventListener("input", () => {
     typing = n;

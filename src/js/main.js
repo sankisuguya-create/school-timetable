@@ -218,6 +218,12 @@ function wire(){
   on("target","change", e => onTargetChange(e.target.value));
   on("tpGo","click", reflectTanpopo);
   on("ckGo","click", runCheck);
+
+  /* 上書きの窓。**閉じ方が何であれ「変更しない」に落ちる。**
+     Esc も、外側を押したときも、返事をしないまま消えたときも同じ */
+  on("swNo","click",  () => { $("swDlg").close(); });
+  on("swYes","click", () => { owAnswer(true); $("swDlg").close(); });
+  on("swDlg","close", () => owAnswer(false));
   on("gClose","click", () => { if(lastTarget) openView(lastTarget); });
 
   for(const b of document.querySelectorAll("[data-act]"))
@@ -342,15 +348,24 @@ function wire(){
     delete (week().home[view.cls] || {})[ck(selCell.d, selCell.s)];
     save(); paintSheet(); fillPanel();
   });
+  /* 5日ぶんを1日ずつ聞くと、窓が最大5回出る。**まとめて1回だけ聞く。** */
   on("pAll","click", () => {
     if(!selCell) return;
-    const c = cellFor(selCell.d, selCell.s);
-    for(let d = 0; d < 5; d++){
-      if(!okToOverwrite(d, selCell.s, plain(c.title))) continue;
-      writeCell(d, selCell.s, {title:c.title, note:c.note || ""});
-    }
-    paintSheet(); fillPanel();
-    toast("5日とも「" + (escText(plain(c.title)) || "（空）") + "」にした");
+    const c = cellFor(selCell.d, selCell.s), sid = selCell.s;
+    const days = [0,1,2,3,4];
+    const hits = [];
+    for(const d of days)
+      for(const h of wouldOverwrite(d, sid))
+        hits.push(Object.assign({}, h, {cls:h.cls + "（" + DOW[d] + "）"}));
+    const put = () => {
+      for(const d of days) writeCell(d, sid, {title:c.title, note:c.note || ""});
+      paintSheet(); fillPanel();
+      toast("5日とも「" + (escText(plain(c.title)) || "（空）") + "」にした");
+    };
+    if(!hits.length) return put();
+    askOverwrite("この週の " + SLOT_BY_ID[sid].name
+                 + (SLOT_BY_ID[sid].kind === "lesson" ? "校時" : "") + "（5日ぶん）",
+                 c.title, hits, put, () => {});
   });
   for(const id of ["pTitle", "pNote"]){
     $(id).addEventListener("input", () => {
@@ -358,14 +373,19 @@ function wire(){
       const f = $(id);
       typing = f;
       if(id === "pTitle"){
-        if(!okToOverwrite(selCell.d, selCell.s, plain(f.innerHTML))){
-          f.innerHTML = (cellFor(selCell.d, selCell.s).title || ""); typing = null; return;
-        }
-        const sub = SUB_BY_NAME[plain(f.innerHTML).trim()];
-        writeCell(selCell.d, selCell.s, {title:f.innerHTML, subject:sub ? sub.code : null});
-      }else{
-        writeCell(selCell.d, selCell.s, {note:f.innerHTML});
+        const at = {d:selCell.d, s:selCell.s};
+        const put = () => {
+          const sub = SUB_BY_NAME[plain(f.innerHTML).trim()];
+          writeCell(at.d, at.s, {title:f.innerHTML, subject:sub ? sub.code : null});
+          paintSheet(); typing = null;
+        };
+        const undo = () => {
+          f.innerHTML = (cellFor(at.d, at.s).title || "");
+          typing = null; paintSheet();
+        };
+        return okToOverwrite(at.d, at.s, plain(f.innerHTML), put, undo);
       }
+      writeCell(selCell.d, selCell.s, {note:f.innerHTML});
       paintSheet(); typing = null;
     });
   }

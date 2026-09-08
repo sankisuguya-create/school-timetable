@@ -262,41 +262,66 @@ await p.locator(".pal[data-v='kokugo']").click(); await p.waitForTimeout(250);
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".master[data-g='3']").click(); await p.waitForTimeout(300);
 
-let asked = null, answer = true;
-const onDialog = async d => { asked = d.message(); await (answer ? d.accept() : d.dismiss()); };
-p.on("dialog", onDialog);
+const swOpen = () => p.locator("#swDlg").evaluate(d => d.open);
 await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").click(); await p.waitForTimeout(150);
 await p.locator(".pal[data-v='taiiku']").click(); await p.waitForTimeout(300);
-ok("別の人の予定を潰すときは聞く", typeof asked === "string" && asked.length > 0, asked);
+ok("別の人の予定を潰すときは聞く", await swOpen() === true);
+let swText = await p.locator("#swDlg").innerText();
 ok("どのクラスの何を何に変えるかを言う",
-   !!asked && asked.indexOf("3-3") >= 0 && asked.indexOf("国語") >= 0
-   && asked.indexOf("体育") >= 0, asked);
-ok("«はい»なら入る",
-   (await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText()).trim() === "体育");
+   swText.indexOf("3-3") >= 0 && swText.indexOf("国語") >= 0 && swText.indexOf("体育") >= 0,
+   swText);
+ok("誰が入れたものかも言う（層）", swText.indexOf("担任") >= 0, swText);
+/* **ブラウザの confirm を使わない。** Enter で「はい」に落ちて、
+   打鍵の勢いのまま他人の予定が消える */
+ok("既定は「変更しない」（そこに焦点がある）",
+   await p.evaluate(() => document.activeElement && document.activeElement.id) === "swNo",
+   await p.evaluate(() => document.activeElement && document.activeElement.id));
+ok("「変更しない」が先に並ぶ", await p.evaluate(() => {
+     const b = [...document.querySelectorAll("#swDlg .end button")].map(x => x.id);
+     return b[0] === "swNo" && b[1] === "swYes";
+   }) === true, await p.evaluate(() =>
+     [...document.querySelectorAll("#swDlg .end button")].map(x => x.id)));
 
-asked = null;
+/* Esc は「変更しない」に落ちる。**学年の面には、まだ何も入っていない** */
+await p.keyboard.press("Escape"); await p.waitForTimeout(250);
+ok("Esc で閉じても入らない", await p.evaluate(() =>
+     !((week().grade["3"] || {})["3|p4"])) === true,
+   await p.evaluate(() => (week().grade["3"] || {})["3|p4"]));
+
+await p.locator(".pal[data-v='taiiku']").click(); await p.waitForTimeout(250);
+await p.locator("#swYes").click(); await p.waitForTimeout(300);
+ok("«上書きする»なら入る",
+   (await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText()).trim() === "体育",
+   await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText());
+
 await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").click(); await p.waitForTimeout(150);
 await p.locator(".pal[data-v='sansu']").click(); await p.waitForTimeout(250);
-ok("同じコマでは聞き直さない", asked === null, asked);
+ok("同じコマでは聞き直さない", await swOpen() === false);
 
 /* 誰の予定も潰さないコマでは聞かない */
-asked = null;
 await p.locator("#sheet .cell[data-d='0'][data-s='p6'] .t").click(); await p.waitForTimeout(150);
 await p.locator(".pal[data-v='sogo']").click(); await p.waitForTimeout(250);
-ok("誰の予定も潰さないときは聞かない", asked === null, asked);
+ok("誰の予定も潰さないときは聞かない", await swOpen() === false);
 
-/* «いいえ»なら入らない */
-answer = false; asked = null;
+/* «変更しない»なら入らない */
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(300);
 const beforeCancel = (await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText()).trim();
 await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").click(); await p.waitForTimeout(150);
 await p.locator(".pal[data-v='katei']").click(); await p.waitForTimeout(300);
-ok("«いいえ»なら入らない",
+await p.locator("#swNo").click(); await p.waitForTimeout(300);
+ok("«変更しない»なら入らない",
    (await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText()).trim() === beforeCancel,
    [beforeCancel, await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText()]);
-p.off("dialog", onDialog);
-answer = true;
+
+/* 打って入れるときも同じ。**打った字ごと元に戻す** */
+await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").click(); await p.waitForTimeout(150);
+await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").type("音"); await p.waitForTimeout(300);
+ok("打ち始めた1打目でも聞く", await swOpen() === true);
+await p.locator("#swNo").click(); await p.waitForTimeout(300);
+ok("«変更しない»なら、打った字ごと戻す",
+   (await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText()).trim() === beforeCancel,
+   await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText());
 
 console.log("\n■ 上書きされた側への知らせ");
 /* 3-3 の担任が入れた「国語」は、学年の「体育」に上書きされている */
@@ -314,6 +339,16 @@ await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-3']").click(); await p.waitForTimeout(500);
 ok("同じ上書きについては二度出ない",
    await p.locator("#owDlg").evaluate(d => d.open) === false);
+
+/* **層（どこから来たか）と人（誰が入れたか）は別のもの。**
+   前は同じ欄に層の名前を入れていたので、他人の予定かどうかを判定できなかった */
+await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").click(); await p.waitForTimeout(200);
+ok("パネルに、いま入っているものの層を出す",
+   (await p.locator("#pWho").innerText()).indexOf("学年") >= 0,
+   await p.locator("#pWho").innerText());
+ok("手元では「自分」と決めつけない", await p.evaluate(() => isMe("")) === false);
+ok("人の名前は @ より前だけ出す",
+   await p.evaluate(() => whoName("tanaka@edu.nishi.or.jp")) === "tanaka");
 
 console.log("\n■ たんぽぽ（交流級を選ぶところから出す）");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);

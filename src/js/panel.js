@@ -48,22 +48,51 @@ function drawPalette(){
 }
 
 /* 書く前に一度だけ聞く。**別の人の予定を潰すときだけ。**
-   基本時間割を直すのはふだんの作業なので聞かない。
-   一度«はい»と答えたコマは、その画面を開いている間は聞き直さない。 */
+   基本時間割を直すのはふだんの作業なので聞かない（→ compose.js の wouldOverwrite）。
+   自分が入れたコマも聞かない。一度«上書きする»と答えたコマは、
+   その画面を開いている間は聞き直さない。
+
+   **編集そのものは止めない。** 止めると、担任が直せないコマができて、
+   直せる人を探して回ることになる。止めるのではなく、既定を安全側に置く。 */
 const askedCells = {};
-function okToOverwrite(d, sid, to){
-  const hit = wouldOverwrite(d, sid);
-  if(!hit.length) return true;
-  const key = viewName() + "|" + ck(d, sid);
-  if(askedCells[key]) return true;
+
+/* 窓の返事を待つあいだ、答えを受け取る先。**Enter や Esc は「変更しない」。** */
+let owAsk = null;
+function whenLabel(d, sid){
   const dt = addDays(monday, d), sl = SLOT_BY_ID[sid];
-  const when = md(dt) + "(" + DOW[d] + ") " + sl.name + (sl.kind === "lesson" ? "校時" : "");
-  const lines = hit.map(h => "　" + h.cls + " の「" + h.from + "」（" + h.by + "）");
-  const yes = confirm(
-    when + "\n\n次の予定を「" + (plain(to) || "（空）") + "」に上書きします。\n\n"
-    + lines.join("\n") + "\n\nつづけますか？");
-  if(yes) askedCells[key] = true;
-  return yes;
+  return md(dt) + "(" + DOW[d] + ") " + sl.name + (sl.kind === "lesson" ? "校時" : "");
+}
+function askOverwrite(when, to, hits, yes, no){
+  owAsk = {yes, no, done:false};
+  $("swWhen").textContent = when;
+  $("swTo").textContent   = plain(to) || "（空）";
+  $("swList").innerHTML = hits.map(h =>
+    "<li><b>" + escText(h.cls) + "</b> の「" + (escText(h.from) || "（空）") + "」"
+    + "<br><span class=\"who\">" + escText(h.layer)
+    + (h.who ? "・" + escText(h.who) : "") + " が入れたもの</span></li>").join("");
+  const dlg = $("swDlg");
+  dlg.showModal();
+  $("swNo").focus();                 /* **既定は「変更しない」。** */
+}
+/* 窓の返事を1回だけ流す。閉じ方（ボタン・Esc・外側）で取りこぼさない */
+function owAnswer(yes){
+  const a = owAsk;
+  owAsk = null;
+  if(!a || a.done) return;
+  a.done = true;
+  (yes ? a.yes : a.no)();
+}
+
+/* 聞かずに済むときは、その場で yes を呼んで true を返す。
+   聞くときは false を返し、返事が出たあとで yes / no のどちらかを呼ぶ。 */
+function okToOverwrite(d, sid, to, yes, no){
+  yes = yes || function(){}; no = no || function(){};
+  const hit = wouldOverwrite(d, sid);
+  const key = viewName() + "|" + ck(d, sid);
+  if(!hit.length || askedCells[key]){ yes(); return true; }
+  askOverwrite(whenLabel(d, sid), to, hit,
+               () => { askedCells[key] = true; yes(); }, no);
+  return false;
 }
 
 function applyPalette(d, sid, v, e){
@@ -85,10 +114,11 @@ function applyPalette(d, sid, v, e){
   }
   const sub = SUB_BY_CODE[v];
   if(!sub) return;
-  if(!okToOverwrite(d, sid, sub.name)) return;
-  writeCell(d, sid, {title:escText(sub.name), subject:sub.code});
-  paintSheet(); selectCell(d, sid, e || cellAt(d, sid));
-  toast(sub.name + " を入れた");
+  okToOverwrite(d, sid, sub.name, () => {
+    writeCell(d, sid, {title:escText(sub.name), subject:sub.code});
+    paintSheet(); selectCell(d, sid, e || cellAt(d, sid));
+    toast(sub.name + " を入れた");
+  });
 }
 
 /* ── 選ぶ ────────────────────────────────────── */
@@ -119,7 +149,14 @@ function fillPanel(){
   $("pWhere").textContent = md(dt) + "(" + DOW[selCell.d] + ") "
     + slot.name + (slot.kind === "lesson" ? "校時" : "")
     + (slot.time ? "　" + slot.time : "");
-  $("pWho").textContent = viewName();
+  /* **いま書くとどこへ入るか（層）と、いま入っているものを誰が入れたか（人）。**
+     前は層の名前しか出していなかったので、他人の予定かどうかが分からなかった。 */
+  const who = whoName(c.by);
+  $("pWho").textContent = viewName()
+    + (c.layer === "base" ? "　いまは基本時間割のまま"
+      : "　いま入っているのは " + (LAYER_FULL[c.layer] || "")
+        + (who ? "・" + who : "") + " が入れたもの"
+        + (isMe(c.by) ? "（自分）" : ""));
 
   const t = $("pTitle"), n = $("pNote");
   if(t !== typing && t.innerHTML !== (c.title || "")) t.innerHTML = c.title || "";

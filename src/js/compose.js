@@ -32,6 +32,29 @@ function viewWhere(){
   return "";
 }
 
+/* ── 誰が入れたか ────────────────────────────
+   **層（担任・学年・全体）と、人（メール）は別のもの。**
+   前は同じ欄に層の名前を入れていたので、「自分が入れたコマかどうか」を
+   判定する材料が画面に無かった。シートの「更新者」はメールなので、
+   手元でもメールを入れて、形をそろえる。 */
+function myEmail(){
+  const b = (typeof Backend !== "undefined" && Backend.info) ? Backend.info() : null;
+  return (b && b.me) || "";
+}
+/* **手元では自分が誰か分からない。** 分からないときは「自分ではない」に倒す。
+   自分だと決めつけると、他人の予定を黙って上書きする側に転ぶ。 */
+function isMe(by){
+  const me = myEmail();
+  return !!me && !!by && String(by).toLowerCase() === me.toLowerCase();
+}
+/* 画面に出す名前。**@より前だけ。** 職員室で読めればよく、全部は要らない */
+function whoName(by){
+  const t = String(by || "").trim();
+  if(!t) return "";
+  const at = t.lastIndexOf("@");
+  return at > 0 ? t.slice(0, at) : t;
+}
+
 /* ── 合成 ────────────────────────────────────── */
 
 function baseCell(cls, d, s){
@@ -198,7 +221,11 @@ function wouldOverwrite(d, s){
     if(cur.layer === "base") continue;                 /* 基本時間割は潰してよい */
     if(cur.layer === layer && sameTarget(cur.layer, c, target)) continue;  /* 自分の続き */
     const t = plain(cur.title).trim();
-    if(t) hit.push({cls:c, from:t, by:LAYER_FULL[cur.layer]});
+    /* **自分が入れたものは聞かない。** 自分の予定を自分で直すたびに
+       窓が出ると、窓を読まずに閉じる癖がつく。それでは他人の予定も守れない */
+    if(isMe(cur.by)) continue;
+    if(t) hit.push({cls:c, from:t, layer:LAYER_FULL[cur.layer],
+                    who:whoName(cur.by), by:LAYER_FULL[cur.layer]});
   }
   return hit;
 }
@@ -220,14 +247,16 @@ function overwrittenHere(){
       for(const lost of cur.clash)
         if(lost.layer === "home")
           out.push({d, s:sl.id, cls:view.cls, from:plain(lost.title),
-                    to:plain(cur.title), by:LAYER_FULL[cur.layer]});
+                    to:plain(cur.title), by:LAYER_FULL[cur.layer],
+                    who:whoName(cur.by)});
     }else if(view.kind === "special"){
       const own = ownCell(d, sl.id);
       if(!own.cls) continue;
       const cur = compose(own.cls, d, sl.id);
       if(cur.layer !== "special")
         out.push({d, s:sl.id, cls:own.cls, from:plain(own.title || ""),
-                  to:plain(cur.title), by:LAYER_FULL[cur.layer]});
+                  to:plain(cur.title), by:LAYER_FULL[cur.layer],
+                  who:whoName(cur.by)});
     }else{
       const bank = masterBank(), me = bank && bank[key];
       if(!me) continue;
@@ -236,7 +265,8 @@ function overwrittenHere(){
         if(cur.layer === view.kind) continue;
         if((cur.at || 0) <= (me.at || 0)) continue;
         out.push({d, s:sl.id, cls:c, from:plain(me.title),
-                  to:plain(cur.title), by:LAYER_FULL[cur.layer]});
+                  to:plain(cur.title), by:LAYER_FULL[cur.layer],
+                  who:whoName(cur.by)});
       }
     }
   }
@@ -270,7 +300,7 @@ function writeCell(d, s, patch){
         title: escText(sub ? sub.name : viewName()),
         subject: view.sp, sp: view.sp,
         note: ("note" in patch) ? clean(patch.note) : (cur.note || ""),
-        at: Date.now(), by: viewName()
+        at: Date.now(), by: myEmail()
       };
       Backend.cellChanged("special", target, d, s);
     }
@@ -287,7 +317,7 @@ function writeCell(d, s, patch){
   if("title"   in patch) e.title   = clean(patch.title);
   if("note"    in patch) e.note    = clean(patch.note);
   if("subject" in patch) e.subject = patch.subject;
-  e.by = viewName();
+  e.by = myEmail();          /* 層ではなく人。層は開いている面から分かる */
   e.at = Date.now();
   if(isEmptyCell(e)) delete st[key]; else st[key] = e;
   Backend.cellChanged(layerOfStore(), targetOfStore(), d, s);

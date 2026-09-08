@@ -374,8 +374,8 @@
 ```
 python3 build.py          src/ から作り直す
 python3 build.py --check  生成物が src と一致するか
-node tools/check.mjs      画面（Playwright・152件）
-node tools/wirecheck.mjs  本番の口とのやりとり（89件）
+node tools/check.mjs      画面（Playwright・161件）
+node tools/wirecheck.mjs  本番の口とのやりとり（98件）
 node gas/storecheck.js    シートの読み書き（161件）
 node gas/gatecheck.js     関門（26件）
 node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明（48件）
