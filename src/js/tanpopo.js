@@ -194,6 +194,66 @@ function reflectTanpopo(){
   });
 }
 
+/* ── 出す先の形 ────────────────────────────────
+   出せないときは、たいてい**出す先の形**が合っていない。
+   何がどう違うのかを見せる。推し量って直すより、そのまま出したほうが早い。 */
+function showShape(){
+  $("tpShapeOut").innerHTML = "<div class='box ok'>見ています…</div>";
+  Backend.shapeTanpopo(
+    r => {
+      const b = [];
+      b.push("<div class='box " + (r.note.length ? "" : "ok") + "'>"
+        + "<b>" + escText(r.file) + "／シート「" + escText(r.sheet) + "」</b>"
+        + "<div class='tpshape'>"
+        + r.rows + "行 × " + r.cols + "列\n"
+        + "日付の行：" + (r.days.length ? r.days.map(x => x.date + "(" + x.row + "行目)").join("　") : "無し") + "\n"
+        + "骨（中休み・給食・昼休み）：" + (r.marks.length ? r.marks.length + "つ" : "無し") + "\n"
+        + "交流学級の見出し：" + (r.classCols || 0) + "列"
+        + (r.head ? "\n" + r.headRow + "行目：" + r.head.slice(0, 14).join(" | ") : "")
+        + "</div></div>");
+      for(const n of r.note)
+        b.push("<div class='box'><b>" + escText(n) + "</b></div>");
+      if(r.sheets && r.sheets.length > 1)
+        b.push("<div class='box'>このファイルのシート：<b>" + r.sheets.map(escText).join("・")
+          + "</b>　ちがうシートを見ているなら、設定の「たんぽぽシート名」を直す</div>");
+      $("tpShapeOut").innerHTML = b.join("");
+    },
+    why => { $("tpShapeOut").innerHTML =
+      "<div class='box'><b>見られませんでした。</b><br>" + escText(why) + "</div>"; });
+}
+
+/* **形を作りなおす。** いまのシートは名前を変えて残す（消さない）。 */
+function buildShape(){
+  const chosen = tpChosen().filter(c => allClasses().indexOf(c) >= 0);
+  if(!chosen.length) return toast("先に交流級を選ぶ");
+  const nums = {};
+  for(const c of chosen) nums[c] = tpCount(c);
+  const n = chosen.reduce((a, c) => a + nums[c], 0);
+  const yes = confirm(
+    "たんぽぽ時間割のシートを、この形で作りなおします。\n\n"
+    + "・児童ごとに1列：" + chosen.map(c => c + "×" + nums[c]).join("、")
+    + "（合わせて " + n + " 列）\n"
+    + "・1日16行 × 5日。各コマは 授業名 と 担当者・場所 の2行\n"
+    + "・授業名の行は灰色。担当者・場所が「た」で始まると白に戻る書式も入れます\n\n"
+    + "いまのシートは<消しません>。名前を変えて残します。\n\nつづけますか？");
+  if(!yes) return;
+  $("tpShapeOut").innerHTML = "<div class='box ok'>作っています…</div>";
+  Backend.buildTanpopo(nums, tpSlots(),
+    r => {
+      $("tpShapeOut").innerHTML =
+        "<div class='box ok'><b>作りなおした。</b>"
+        + escText(r.file) + "／シート「" + escText(r.sheet) + "」<br>"
+        + "児童 " + r.cols + " 列"
+        + (r.staff ? "＋支援員 " + r.staff + " 列" : "")
+        + "・" + r.rows + " 行"
+        + (r.backup ? "<br>前の形は「" + escText(r.backup) + "」に残した" : "")
+        + "<br>列の幅は、B4 1枚に収まるようたんぽぽ担当が調える</div>";
+      toast("たんぽぽ時間割の形を作りなおした");
+    },
+    why => { $("tpShapeOut").innerHTML =
+      "<div class='box'><b>作れませんでした。</b><br>" + escText(why) + "</div>"; });
+}
+
 /* 出したあとに、何がどうなったかを出す。**数と、飛ばした日を必ず見せる。**
    「出しました」だけだと、形が合わずに飛ばした日に気づけない。 */
 function showTanpopoResult(r){
@@ -207,6 +267,9 @@ function showTanpopoResult(r){
       + (r.short.length > 8 ? "<br>ほか " + (r.short.length - 8) + "件" : "")
       + "<br>たんぽぽ時間割は<b>児童ごとに1列</b>。2人いる交流級は2列いる。"
       + "列を足すか、こちらの人数を直す</div>");
+  if(r.redated)
+    box.push("<div class='box ok'>この週の日付が入っていなかったので、"
+      + "<b>日付を入れ直して</b>書いた（同じシートを毎週使い回せる）</div>");
   if(r.skipped && r.skipped.length)
     box.push("<div class='box'><b>書かなかった日がある。</b><br>"
       + r.skipped.map(escText).join("<br>")

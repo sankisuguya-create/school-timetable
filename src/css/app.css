@@ -108,6 +108,13 @@ button,select,input,textarea{font:inherit;color:inherit}
 .tpwarn .box b{color:var(--tx)}
 .tpwarn .box.ok{border-left-color:var(--ok,#2F6E4E);color:var(--tx-sub)}
 .tpact{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.tpfix{border-top:1px solid var(--line);padding-top:16px;display:flex;
+  flex-direction:column;gap:10px}
+.tpfix h3{margin:0;font-size:12px;letter-spacing:.08em;color:var(--tx-sub)}
+.tpfix p{margin:0;font-size:12.5px;color:var(--tx-sub);line-height:1.85;max-width:70ch}
+.tpfix p b{color:var(--tx)}
+.tpshape{font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;
+  white-space:pre-wrap;word-break:break-all}
 .hint{font-size:11.5px;color:var(--tx-sub);line-height:1.75;margin:0}
 .hint b{color:var(--tx)}
 /* アイコン付きの1行。文を割らないよう、文字はまとめて1つの箱に入れる */

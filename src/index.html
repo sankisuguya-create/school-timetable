@@ -146,6 +146,19 @@
           <button class="btn go" id="tpGo">たんぽぽ時間割へ出す</button>
           <span class="hint" id="tpCount"></span>
         </div>
+
+        <!-- 出せないときは、たいてい**出す先の形**が合っていない。
+             手で整えるのをやめて、こちらで作れるようにする -->
+        <div class="tpfix">
+          <h3>出す先の形</h3>
+          <p>たんぽぽ時間割は<b>1日16行・児童ごとに1列</b>の形をしている必要がある。
+             合っていないと、日ブロックの場所も列も決められず、1コマも入らない。</p>
+          <div class="tpact">
+            <button class="btn" id="tpShape">いまの形をみる</button>
+            <button class="btn" id="tpBuild">この形で作りなおす</button>
+          </div>
+          <div class="tpwarn" id="tpShapeOut"></div>
+        </div>
       </div>
     </main>
 

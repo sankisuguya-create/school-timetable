@@ -376,6 +376,22 @@ const Backend = (function(){
   /* たんぽぽ時間割へ出す。**中身はこちらで組んで渡す。**
      どのクラスのどの校時が何かを決めるのは画面（層の重ね方を知っている）。
      どの行・どの列に置くかを決めるのはシート側（実物の形を知っている）。 */
+  /* たんぽぽ時間割の形をみる／作りなおす */
+  function shapeTanpopo(ok, ng){
+    if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
+    google.script.run
+      .withSuccessHandler(r => ok(r))
+      .withFailureHandler(e => ng(String((e && e.message) || "見られなかった")))
+      .apiShapeTanpopo(wkKey());
+  }
+  function buildTanpopo(counts, slots, ok, ng){
+    if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
+    google.script.run
+      .withSuccessHandler(r => ok(r))
+      .withFailureHandler(e => ng(String((e && e.message) || "作れなかった")))
+      .apiBuildTanpopo(fy(), wkKey(), counts, slots);
+  }
+
   function exportTanpopo(titles, classes, slots, ok, ng){
     if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
     google.script.run
@@ -397,5 +413,6 @@ const Backend = (function(){
 
   return {isGas, setNotifier, setDirtyWatcher, unsaved, prefetchWeek,
           cellChanged, flush, boot, ready, readyYear,
-          saveRoster, saveBase, saveBaseAll, readPaste, exportTanpopo};
+          saveRoster, saveBase, saveBaseAll, readPaste,
+          exportTanpopo, shapeTanpopo, buildTanpopo};
 })();

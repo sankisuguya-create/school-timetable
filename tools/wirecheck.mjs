@@ -100,6 +100,17 @@ await p.addInitScript(() => {
         call("apiWriteBaseAll", [y, table]);
         setTimeout(() => okFn({classes:Object.keys(table).length}), 0);
       },
+      apiShapeTanpopo(m){
+        call("apiShapeTanpopo", [m]);
+        setTimeout(() => okFn({file:"たんぽぽ時間割", sheet:"週案", sheets:["週案"],
+          rows:86, cols:34, days:[], marks:[], classCols:0,
+          note:["A列に日付が見つかりません"]}), 0);
+      },
+      apiBuildTanpopo(y, m, counts, slots){
+        call("apiBuildTanpopo", [y, m, counts, slots]);
+        setTimeout(() => okFn({file:"たんぽぽ時間割", sheet:"週案", cols:3, staff:0,
+          rows:81, backup:"週案（前の形 1116-0900）", list:["5-1","5-2","5-2"]}), 0);
+      },
       apiExportTanpopo(y, m, titles, classes, slots){
         call("apiExportTanpopo", [y, m, titles, classes, slots]);
         setTimeout(() => okFn({wrote:60, days:5, skipped:[], unknown:[], file:"たんぽぽ時間割"}), 0);
@@ -395,6 +406,32 @@ ok("校時のIDは時程シートから決める",
 ok("出したあと、何コマ入ったかを出す",
    (await p.locator("#tpWarn").innerText()).indexOf("60") >= 0,
    await p.locator("#tpWarn").innerText());
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(300);
+
+console.log("\n■ たんぽぽ時間割の形を、みる・作りなおす");
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
+await p.locator(".master.tp").click(); await p.waitForTimeout(400);
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator("#tpShape").click(); await p.waitForTimeout(400);
+ok("「いまの形をみる」で apiShapeTanpopo を呼ぶ",
+   (await calls()).indexOf("apiShapeTanpopo") >= 0, await calls());
+const shOut = await p.locator("#tpShapeOut").innerText();
+ok("何行×何列か・骨や見出しがあるかを、そのまま出す",
+   shOut.indexOf("86行") >= 0 && shOut.indexOf("交流学級の見出し：0列") >= 0, shOut);
+ok("足りないものを名指しする",
+   shOut.indexOf("日付が見つかりません") >= 0, shOut);
+
+p.once("dialog", d => d.accept());
+await p.locator("#tpBuild").click(); await p.waitForTimeout(500);
+const bd = await lastCall("apiBuildTanpopo");
+ok("「この形で作りなおす」で apiBuildTanpopo を呼ぶ", !!bd, await calls());
+ok("児童の人数のまま渡す（2人いれば2列）",
+   !!bd && JSON.stringify(bd.args[2]) === JSON.stringify({"5-1":1, "5-2":1}),
+   bd && bd.args[2]);
+const bdOut = await p.locator("#tpShapeOut").innerText();
+ok("作りなおしたことと、前の形を残したことを出す",
+   bdOut.indexOf("作りなおした") >= 0 && bdOut.indexOf("前の形") >= 0, bdOut);
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(300);
 

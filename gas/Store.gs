@@ -343,7 +343,8 @@ const Store = (function(){
 
   /* titles = {クラス: {"0": {p1:"国語", …}, …}}（0〜4 は月〜金）
      classes = 出す交流級。**選んだ交流級の列だけに書く。** */
-  function exportTanpopo(year, mondayISO, titles, classes, slots){
+  /* たんぽぽ時間割のファイルとシートを開く。3つの入口（見る・作る・出す）で使う */
+  function tpOpen(){
     const cfg = readConfig();
     const id = fileId(cfg["たんぽぽファイルID"], "たんぽぽファイルID");
     let ss;
@@ -357,6 +358,112 @@ const Store = (function(){
     if(!sh) throw new Error("たんぽぽ時間割に「" + want + "」というシートがありません。"
       + "あるのは「" + ss.getSheets().map(function(x){ return x.getName(); }).join("」「")
       + "」");
+    return {ss, sh, cfg, want};
+  }
+
+  /* ── 形をみる ──────────────────────────────────
+     「出せない」ときに、**何がどう違うのか**を見せる。
+     推し量って直すより、いまの形をそのまま出したほうが早い。 */
+  function shapeTanpopo(mondayISO){
+    const {ss, sh} = tpOpen();
+    const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
+    const out = {file:ss.getName(), sheet:sh.getName(),
+                 sheets:ss.getSheets().map(function(x){ return x.getName(); }),
+                 rows:lastRow, cols:lastCol, days:[], marks:[], note:[]};
+    if(lastRow < 2 || lastCol < 2){ out.note.push("シートが空です"); return out; }
+    const colA = sh.getRange(1, 1, lastRow, 1).getValues();
+    const year = +String(mondayISO).slice(0, 4);
+    for(let r = 0; r < lastRow; r++){
+      const a = tpNorm(colA[r][0]);
+      const d = tpDate(colA[r][0], year);
+      if(d) out.days.push({row:r + 1, date:d});
+      for(const m of TP_MARKS) if(a.indexOf(tpNorm(m)) >= 0) out.marks.push({row:r + 1, mark:m});
+    }
+    /* いちばん上の日ブロックの見出しを、そのまま見せる */
+    const first = out.days.length ? out.days[0].row
+                : (out.marks.length ? Math.max(1, out.marks[0].row - 5) : 0);
+    if(first){
+      const head = sh.getRange(first, 1, 1, lastCol).getValues()[0];
+      out.headRow = first;
+      out.head = head.slice(0, 30).map(function(v){ return String(v == null ? "" : v); });
+      out.classCols = out.head.filter(function(v){ return /^[1-9]-[1-9]$/.test(tpNorm(v)); }).length;
+    }
+    if(!out.days.length) out.note.push("A列に日付が見つかりません");
+    if(!out.marks.length) out.note.push("A列に「中休み」「給食」「昼休み」が見つかりません");
+    if(out.classCols === 0) out.note.push("交流学級（1-1 のような字）の見出しが1つもありません");
+    return out;
+  }
+
+  /* ── 形を作る ──────────────────────────────────
+     **手で整えるのをやめる。** 1日16行・児童ごとに1列の形をこちらで作る。
+     いまのシートは名前を変えて残す（消さない）。 */
+  const TP_BUILD_ROWS = 16;
+  function buildTanpopo(year, mondayISO, counts, slots){
+    const {ss, sh, cfg, want} = tpOpen();
+    const name = sh.getName();
+
+    /* 列を決める。**児童ごとに1列。** 2人いる交流級は2列 */
+    const cols = [];
+    const cs = Object.keys(counts || {}).sort(function(a, b){
+      const pa = String(a).split("-"), pb = String(b).split("-");
+      return (+pa[0] - +pb[0]) || (+pa[1] - +pb[1]);
+    });
+    for(const c of cs)
+      for(let i = 0; i < (+counts[c] || 0); i++) cols.push(tpNorm(c));
+    if(!cols.length) throw new Error("交流級を1つも選んでいません");
+    const staff = String(cfg["たんぽぽ支援員"] || "").split(/[,、\s]+/)
+      .map(function(x){ return x.trim(); }).filter(Boolean);
+
+    const width = 1 + cols.length + staff.length;
+    const ids = (slots && slots.length === 6) ? slots : ["p1","p2","p3","p4","p5","p6"];
+    const rows = [];
+    rows.push(["たんぽぽ 週案"].concat(new Array(width - 1).fill("")));
+    for(let d = 0; d < 5; d++){
+      /* **日付として置く。** 字で置くと、シートの側で日付になったりならなかったり
+         して、次に読むときに見つけられないことがある */
+      const head = [addDays_(mondayISO, d)].concat(cols, staff);
+      rows.push(head);
+      const lab = ["1", "", "2", "", "中休み", "3", "", "4", "", "給食", "昼休み",
+                   "5", "", "6", ""];
+      for(const t of lab) rows.push([t].concat(new Array(width - 1).fill("")));
+    }
+
+    /* いまのシートは残す。**消さない。** */
+    const backup = name + "（前の形 " + Utilities.formatDate(new Date(), TZ, "MMdd-HHmm") + "）";
+    if(sh.getLastRow() > 1) sh.setName(backup);
+    else ss.deleteSheet(sh);
+    const nw = ss.insertSheet(name, 0);
+    nw.getRange(1, 1, rows.length, width).setValues(rows);
+    nw.setFrozenColumns(1);
+    nw.setFrozenRows(1);
+    for(let d = 0; d < 5; d++)
+      nw.getRange(2 + d * TP_BUILD_ROWS, 1).setNumberFormat("m/d（ddd）");
+
+    /* 授業名の行は灰色。担当者・場所が「た」で始まる列だけ、条件付き書式で白に戻す */
+    const titleOff = [1, 3, 6, 8, 12, 14];
+    const rules = [];
+    for(let d = 0; d < 5; d++){
+      const top = 2 + d * TP_BUILD_ROWS;
+      for(const off of titleOff){
+        const r = top + off;
+        const rng = nw.getRange(r, 2, 1, width - 1);
+        rng.setBackground(Sheets.TANPOPO_FILL.imported);
+        rules.push(SpreadsheetApp.newConditionalFormatRule()
+          .whenFormulaSatisfied('=LEFT(B' + (r + 1) + ',1)="た"')
+          .setBackground(Sheets.TANPOPO_FILL.own).setRanges([rng]).build());
+      }
+      nw.getRange(top, 1, 1, width).setFontWeight("bold");
+      for(const off of [5, 10, 11])
+        nw.getRange(top + off, 1, 1, width).setBackground("#EFEFEF");
+    }
+    nw.setConditionalFormatRules(rules);
+    SpreadsheetApp.flush();
+    return {file:ss.getName(), sheet:name, cols:cols.length, staff:staff.length,
+            rows:rows.length, backup:(sh.getLastRow() > 1 ? backup : ""), list:cols};
+  }
+
+  function exportTanpopo(year, mondayISO, titles, classes, slots){
+    const {ss, sh} = tpOpen();
 
     /* classes は {クラス:人数} でも、クラス名の並びでも受ける */
     const pick = {};
@@ -369,17 +476,40 @@ const Store = (function(){
     if(lastRow < 2 || lastCol < 2) throw new Error("たんぽぽ時間割のシートが空です");
     const colA = sh.getRange(1, 1, lastRow, 1).getValues();
 
-    /* 日付の入った行を探す。**先頭行を決め打ちしない**（行が足された表もある） */
+    /* 日ブロックを探す。まず日付で。**行が足された表もあるので先頭行は決め打ちしない。** */
     const blocks = [];
     for(let r = 0; r < lastRow; r++){
       const d = tpDate(colA[r][0], year);
       if(d && dayOf[d] !== undefined) blocks.push({row: r + 1, day: dayOf[d], date: d});
     }
 
+    /* この週の日付が入っていないとき。**日付だけを入れ直して使う。**
+       たんぽぽ時間割は毎週おなじシートを使い回す。週が変わるたびに人が
+       日付を打ち替えるのでは、打ち替え忘れた週に何も入らない。
+       「中休み」の行を骨にして日ブロックを見つけ、その先頭に日付を書く。 */
+    let redated = 0;
+    if(blocks.length < 5){
+      const starts = [];
+      for(let r = 0; r < lastRow; r++)
+        if(tpNorm(colA[r][0]).indexOf(tpNorm("中休み")) >= 0 && r - 5 >= 0)
+          starts.push(r - 5 + 1);                 /* +5 が中休み → その5つ上 */
+      if(starts.length === 5){
+        blocks.length = 0;
+        for(let i = 0; i < 5; i++){
+          const d = ymd(addDays_(mondayISO, i));
+          sh.getRange(starts[i], 1).setValue(new Date(d + "T00:00:00"));
+          blocks.push({row: starts[i], day: i, date: d});
+          redated++;
+        }
+        SpreadsheetApp.flush();
+      }
+    }
+
     /* 校時のIDは画面から受け取る。時程シートを直した学校でも合う */
     const slotIds = (slots && slots.length === 6)
       ? slots : ["p1", "p2", "p3", "p4", "p5", "p6"];
-    const report = {wrote:0, days:0, skipped:[], short:[], unknown:{}, file:ss.getName()};
+    const report = {wrote:0, days:0, skipped:[], short:[], unknown:{},
+                    redated:redated, file:ss.getName()};
 
     /* 次の日の日付までが、その日のブロック */
     for(let bi = 0; bi < blocks.length; bi++){
@@ -630,7 +760,7 @@ const Store = (function(){
 
   return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects,
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste,
-          exportTanpopo, migratePlan, ymd};
+          exportTanpopo, shapeTanpopo, buildTanpopo, migratePlan, ymd};
 })();
 
 /* ── 画面から呼ぶ口。**すべて1行目で Gate.check()。** ───────── */
@@ -712,6 +842,14 @@ function apiWriteBaseAll(year, table){
 function apiReadPaste(){
   Gate.check();
   return Store.readPaste();
+}
+function apiShapeTanpopo(mondayISO){
+  Gate.check();
+  return Store.shapeTanpopo(mondayISO);
+}
+function apiBuildTanpopo(year, mondayISO, counts, slots){
+  Gate.check();
+  return Store.buildTanpopo(year, mondayISO, counts, slots);
 }
 function apiExportTanpopo(year, mondayISO, titles, classes, slots){
   Gate.check();

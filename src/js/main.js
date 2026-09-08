@@ -266,6 +266,10 @@ function wire(){
   /* 保存。**打つたびには送らない。** ここで1コマ1件にまとめて送る */
   on("saveBtn","click", () => doSave(true));
   on("lockBtn","click", () => setLock(!isLocked()));
+
+  /* たんぽぽ時間割の形 */
+  on("tpShape","click", showShape);
+  on("tpBuild","click", buildShape);
   on("baseImp","click", openImpDlg);
 
   /* 固定時間割の取り込み */

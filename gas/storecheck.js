@@ -101,11 +101,14 @@ function fakeSheetOn(grid, name){
           return this; },
         setValue(v){ grid[r - 1][c - 1] = v; return this; },
         clearContent(){ return this; },
-        setFontWeight(){ return this; }, setNumberFormat(){ return this; }
+        setFontWeight(){ return this; }, setNumberFormat(){ return this; },
+        setBackground(){ return this; }
       };
     },
+    setConditionalFormatRules(){},
     getMaxRows(){ return Math.max(200, grid.length); },
-    setFrozenRows(){},
+    setFrozenRows(){}, setFrozenColumns(){},
+    setName(n){ TPFILE.sheets[n] = grid; delete TPFILE.sheets[name]; name = n; return s0; },
     getDataRange(){
       const r = s0.getLastRow(), c = s0.getLastColumn();
       return s0.getRange(1, 1, Math.max(1, r), Math.max(1, c));
@@ -122,6 +125,11 @@ const sandbox = {
   Logger: {log(){}},
   Session: {getActiveUser: () => ({getEmail: () => EMAIL})},
   SpreadsheetApp: {
+    newConditionalFormatRule(){
+      const r = {whenFormulaSatisfied(){ return r; }, setBackground(){ return r; },
+                 setRanges(){ return r; }, build(){ return {}; }};
+      return r;
+    },
     getActive: () => ({
       getSheetByName: n => (n in SHEETS) ? fakeSheet(n) : null,
       insertSheet(n){ SHEETS[n] = []; return fakeSheet(n); },
@@ -132,7 +140,9 @@ const sandbox = {
       return {
         getName: () => TPFILE.name,
         getSheets: () => Object.keys(TPFILE.sheets).map(tpSheet),
-        getSheetByName: n => (n in TPFILE.sheets) ? tpSheet(n) : null
+        getSheetByName: n => (n in TPFILE.sheets) ? tpSheet(n) : null,
+        insertSheet(n){ TPFILE.sheets[n] = []; return tpSheet(n); },
+        deleteSheet(x){ delete TPFILE.sheets[x.getName()]; }
       };
     },
     flush(){},
@@ -648,10 +658,27 @@ ok("書けなかった校時があることは言う",
     if(String(row[at["キー"]]) === "たんぽぽシート名") row[at["値"]] = "";
 })();
 
-/* この週の日付が無ければ、黙って何もしない代わりに理由を返す */
-const rep3 = ev(`Store.exportTanpopo(2026, "2026-12-07", ${JSON.stringify(titles)}, ["3-3"])`);
-ok("その週が無ければ書かず、理由を返す",
-   rep3.days === 0 && rep3.skipped.length === 1, rep3);
+/* この週の日付が入っていなくても、**日付を入れ直して使う**。
+   たんぽぽ時間割は毎週おなじシートを使い回すため。 */
+const rep3 = ev(`Store.exportTanpopo(2026, "2026-12-07", ${JSON.stringify(titles)}, {"3-3":2})`);
+ok("この週の日付が無ければ、日付を入れ直して書く",
+   rep3.days === 5 && rep3.redated === 5, rep3);
+ok("入れ直した日付はその週の月〜金", (function(){
+     const g = TPFILE.sheets["週案"];
+     const d = g[1][0];
+     return !!d && typeof d === "object" && d.getMonth() === 11 && d.getDate() === 7;
+   })() === true, String(TPFILE.sheets["週案"][1][0]));
+/* 骨が1つも無ければ、日付も入れ直せない */
+(function(){
+  for(const row of TPFILE.sheets["週案"]) if(String(row[0]) === "中休み") row[0] = "";
+})();
+const rep4 = ev(`Store.exportTanpopo(2026, "2027-05-10", ${JSON.stringify(titles)}, {"3-3":2})`);
+ok("骨も日付も無ければ、書かずに理由を返す",
+   rep4.days === 0 && rep4.skipped.length >= 1, rep4);
+(function(){                      /* 骨を戻す */
+  const g = TPFILE.sheets["週案"];
+  for(let i = 0; i < g.length; i++) if((i - 1) % 16 === 5) g[i][0] = "中休み";
+})();
 
 /* **URL をそのまま貼っても通す。** ID だけ抜くのは知らないとできない操作 */
 const setId = v => {
@@ -683,11 +710,64 @@ let noId = false;
 try{ ev(`Store.exportTanpopo(2026, "2026-11-16", {}, ["3-3"])`); }catch(e){ noId = true; }
 ok("ファイルIDが空なら、何もせず知らせる", noId === true);
 
+console.log("\n■ たんぽぽ時間割の形を作る");
+/* 偽のファイルに、形の合っていないシートを置く */
+TPFILE.sheets["ばらばら"] = (function(){
+  const g = [];
+  for(let i = 0; i < 30; i++) g.push(new Array(12).fill(""));
+  g[0][0] = "たんぽぽ"; g[3][1] = "なにか";
+  return g;
+})();
+(function(){
+  const at = ev('Sheets.head("設定").at');
+  for(const row of SHEETS["設定"]){
+    if(String(row[at["キー"]]) === "たんぽぽシート名")  row[at["値"]] = "ばらばら";
+    if(String(row[at["キー"]]) === "たんぽぽファイルID") row[at["値"]] = TPID;
+  }
+})();
+const sp0 = ev(`Store.shapeTanpopo("2026-11-16")`);
+ok("形が合っていないと、何が無いかを言う",
+   sp0.note.length >= 2 && sp0.note.join("").indexOf("日付") >= 0, sp0.note);
+
+const bt = ev(`Store.buildTanpopo(2026, "2026-11-16", {"3-3":2, "1-1":1}, ["p1","p2","p3","p4","p5","p6"])`);
+ok("児童の数だけ列を作る（2人いる交流級は2列）", bt.cols === 3, bt);
+ok("列は学年・組の順に並ぶ",
+   JSON.stringify(bt.list) === JSON.stringify(["1-1", "3-3", "3-3"]), bt.list);
+ok("1日16行・5日ぶんと見出しの行", bt.rows === 1 + 16 * 5, bt.rows);
+ok("前の形は消さずに名前を変えて残す", !!bt.backup && !!TPFILE.sheets[bt.backup], bt.backup);
+const G2 = TPFILE.sheets["ばらばら"];
+ok("A列に骨（中休み・給食・昼休み）が入る",
+   String(G2[1 + 5][0]) === "中休み" && String(G2[1 + 10][0]) === "給食"
+   && String(G2[1 + 11][0]) === "昼休み",
+   [G2[6][0], G2[11][0], G2[12][0]]);
+ok("日ブロックの先頭に日付が入る",
+   !!G2[1][0] && typeof G2[1][0] === "object", String(G2[1][0]));
+ok("見出しの行に交流学級が並ぶ",
+   String(G2[1][1]) === "1-1" && String(G2[1][2]) === "3-3" && String(G2[1][3]) === "3-3",
+   G2[1].slice(0, 5));
+/* 作った形にそのまま出せる */
+const bt2 = ev(`Store.exportTanpopo(2026, "2026-11-16",
+  ${JSON.stringify({"3-3":{"0":{p1:"国語",p2:"算数",p3:"",p4:"体育",p5:"理科",p6:"総合"},
+                          "1":{},"2":{},"3":{},"4":{}},
+                    "1-1":{"0":{p1:"生活"},"1":{},"2":{},"3":{},"4":{}}})},
+  {"3-3":2, "1-1":1})`);
+ok("作った形にはそのまま出せる", bt2.days === 5 && (bt2.short || []).length === 0, bt2);
+ok("2人ぶんの列に同じ授業が入る",
+   String(G2[2][2]) === "国語" && String(G2[2][3]) === "国語", G2[2].slice(0, 5));
+ok("担当者・場所の行は空のまま（たんぽぽ担当が書く）",
+   String(G2[3][2]) === "", G2[3].slice(0, 5));
+(function(){
+  const at = ev('Sheets.head("設定").at');
+  for(const row of SHEETS["設定"])
+    if(String(row[at["キー"]]) === "たんぽぽシート名") row[at["値"]] = "";
+})();
+
 console.log("\n■ 画面から呼ぶ口はすべて関門を通る");
 const gated = ["apiBoot()", 'apiReadYear(2026)', 'apiReadWeek(2026,"2026-11-16")',
                'apiWriteCells(2026,[])', 'apiWriteRoster(2026,{},[],"")',
                'apiWriteBase(2026,"3-3","A",{})', 'apiWriteBaseAll(2026,{})',
-               'apiReadPaste()', 'apiExportTanpopo(2026,"2026-11-16",{},[])'];
+               'apiReadPaste()', 'apiExportTanpopo(2026,"2026-11-16",{},[])',
+               'apiShapeTanpopo("2026-11-16")', 'apiBuildTanpopo(2026,"2026-11-16",{},[])'];
 EMAIL = "12345678@kyoiku.edu.nishi.or.jp";
 for(const call of gated){
   let threw = false;
