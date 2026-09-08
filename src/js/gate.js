@@ -41,6 +41,7 @@ function drawGate(){
   for(const b of g.querySelectorAll("[data-go]")){
     b.onclick = () => {
       const k = b.dataset.go;
+      markOpening(b);            /* 押したタイルにすぐ手ごたえを出す */
       openView(k === "class"   ? {kind:"class",   cls:b.dataset.c}
              : k === "grade"   ? {kind:"grade",   grade:b.dataset.g}
              : k === "special" ? {kind:"special", sp:b.dataset.s}
@@ -90,12 +91,14 @@ function openView(v){
     landed = true;
     if(!drawn) return;            /* すぐ返った（手元・読み込みずみ）。下で1回描く */
     setBusy(false);
+    markOpening(null);
     draw();
+    Backend.prefetchWeek();       /* 次のクラスは待たせない */
   });
-  if(!landed) setBusy(true);
+  if(!landed) setBusy(true, viewName() + " をひらいています");
   draw();
   drawn = true;
-  if(landed) setBusy(false);
+  if(landed){ setBusy(false); markOpening(null); }
 }
 function showGate(){
   Backend.flush();

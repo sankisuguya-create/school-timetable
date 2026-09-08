@@ -263,17 +263,7 @@ const Backend = (function(){
     if(!want.length) return after();
     google.script.run
       .withSuccessHandler(w => {
-        const cur = week();
-        /* 頼んだぶんだけ入れ替える。頼んでいないクラスの控えは残す */
-        for(const t of want){
-          if(t.layer === "school")     cur.school = w.school || {};
-          else if(t.layer === "grade") cur.grade[t.target]  = (w.grade || {})[t.target] || {};
-          else {
-            cur.home[t.target]    = (w.home    || {})[t.target] || {};
-            cur.special[t.target] = (w.special || {})[t.target] || {};
-          }
-          loadedWeek[weekTag(t)] = true;
-        }
+        mergeWeek(want, w);      /* 頼んだぶんだけ入れ替える。控えは残す */
         after();
       })
       .withFailureHandler(e => {
@@ -284,6 +274,60 @@ const Backend = (function(){
       .apiReadWeek(fy(), wkKey(), want);
   }
   const weekTag = t => fy() + "/" + wkKey() + "/" + t.layer + "/" + (t.target || "");
+
+  /* まだ送っていないコマがある対象は、読み直しで上書きしない。
+     **上書きすると、書いたのに消えたように見える。** */
+  function hasPending(layer, target){
+    for(const k in dirty){
+      const m = dirty[k];
+      if(m.layer === layer && m.target === (target || "")) return true;
+      /* 専科のコマはクラスのシートに入る。クラスを読み直すときは専科も見る */
+      if(layer === "home" && m.layer === "special" && m.target === target) return true;
+    }
+    return false;
+  }
+
+  /* **次のクラスを待たせない。** 1つ開いたあと、手が空いているうちに
+     この週の残りを読んでおく。開くたびに1往復待つのは、
+     3クラス見るだけで3回待つということ。 */
+  let preT = 0;
+  function prefetchWeek(){
+    if(!onGas) return;
+    clearTimeout(preT);
+    preT = setTimeout(() => {
+      const want = allTargets().filter(t => !loadedWeek[weekTag(t)]);
+      if(!want.length || sending) return;
+      const year = fy(), mon = wkKey();
+      google.script.run
+        .withSuccessHandler(w => {
+          if(fy() !== year || wkKey() !== mon) return;   /* もう別の週を見ている */
+          mergeWeek(want, w);
+        })
+        .withFailureHandler(() => {})     /* 先読みが失敗しても、開くときに読み直す */
+        .apiReadWeek(year, mon, want);
+    }, 1200);
+  }
+  function allTargets(){
+    const out = [{layer:"school", target:""}];
+    for(const g of grades()) out.push({layer:"grade", target:g});
+    for(const c of allClasses()) out.push({layer:"home", target:c});
+    return out;
+  }
+
+  function mergeWeek(want, w){
+    const cur = week();
+    for(const t of want){
+      /* まだ送っていないコマがある対象は触らない */
+      if(hasPending(t.layer, t.target)) continue;
+      if(t.layer === "school")     cur.school = w.school || {};
+      else if(t.layer === "grade") cur.grade[t.target]  = (w.grade || {})[t.target] || {};
+      else {
+        cur.home[t.target]    = (w.home    || {})[t.target] || {};
+        cur.special[t.target] = (w.special || {})[t.target] || {};
+      }
+      loadedWeek[weekTag(t)] = true;
+    }
+  }
   /* 週や年度を開くときの入口。手元では即その場で続く。
      立ち上がりの1回がまだ返っていなければ、それを待ってから読む
      （待たないと、シートの時程を知らないまま紙を組んでしまう）。 */
@@ -349,7 +393,7 @@ const Backend = (function(){
     }
   });
 
-  return {isGas, setNotifier, setDirtyWatcher, unsaved,
+  return {isGas, setNotifier, setDirtyWatcher, unsaved, prefetchWeek,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveBase, saveBaseAll, readPaste, exportTanpopo};
 })();

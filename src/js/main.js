@@ -33,9 +33,9 @@ function paintSave(){
 }
 function doSave(loud){
   if(!Backend.isGas()){ save(); if(loud) toast("この端末に保存した（本番ではシートへ）"); return; }
-  saveState.busy = true; paintSave();
+  saveState.busy = true; paintSave(); setBusy(true, "シートに保存しています");
   Backend.flush(okAll => {
-    saveState.busy = false; paintSave();
+    saveState.busy = false; paintSave(); setBusy(false);
     if(loud && okAll) toast("シートに保存した");
   });
 }
@@ -95,18 +95,32 @@ function goWeek(n){
     setBusy(false);
     draw();
   });
-  if(!landed) setBusy(true);
+  if(!landed) setBusy(true, "週をひらいています");
   draw();
   drawn = true;
   if(landed) setBusy(false);
 }
 
-/* 読み込み中の印。**画面は止めない。**
-   止めると、開いたのに何も出ない時間ができる。古いものを見ているかもしれない
-   ことだけを小さく出しておく。 */
-function setBusy(on){
-  const e = $("busy");
-  if(e) e.hidden = !on;
+/* ── 待っているあいだの印 ────────────────────
+   **押したのに何も起きない時間を作らない。** 校内の回線ではシートを読むのに
+   1秒前後かかる。黙っていると、押せていないのかと思ってもう一度押す。
+
+   数えて出す（読み込みと保存が重なることがある）。
+   画面は止めない。控えで描いた紙はそのあいだも読める。 */
+let busyN = 0, busyWhat = "";
+function setBusy(on, what){
+  busyN = Math.max(0, busyN + (on ? 1 : -1));
+  if(on && what) busyWhat = what;
+  const e = $("busy"), t = $("busyTxt");
+  if(t) t.textContent = busyWhat || "読み込み中";
+  if(e) e.hidden = !busyN;
+  document.querySelector(".app").classList.toggle("busy-on", !!busyN);
+  if(!busyN) busyWhat = "";
+}
+/* 押したものそのものに、すぐ手ごたえを出す */
+function markOpening(el){
+  for(const x of document.querySelectorAll(".opening")) x.classList.remove("opening");
+  if(el) el.classList.add("opening");
 }
 function setVariant(v){ week().variant = v; save();
   if(view.kind === "gate") drawGate(); else refreshWeek(); }

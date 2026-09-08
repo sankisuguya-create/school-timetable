@@ -552,6 +552,8 @@ ok("刷っても枠からはみ出さない（刷るときの列の幅で測っ�
      .every(t => t.scrollWidth <= t.clientWidth + 1)) === true,
    await p.evaluate(() => [...document.querySelectorAll("#sheet .cell .t")]
      .filter(t => t.scrollWidth > t.clientWidth + 1).map(t => t.innerText)));
+ok("刷るとき、待っている印は出さない",
+   await p.evaluate(() => getComputedStyle(document.querySelector(".busy")).display) === "none");
 ok("刷るとき、選んでいる印も消える",
    await p.evaluate(() => {
      const e = document.querySelector("#sheet .cell.sel");

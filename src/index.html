@@ -118,7 +118,11 @@
     </aside>
 
     <main class="center" id="centerWrap">
-      <div class="busy" id="busy" hidden>シートから読み込み中…</div>
+      <!-- 待っているあいだの印。**押した手ごたえがここに出る。**
+           画面は止めない（止めると、開いたのに何も出ない時間ができる） -->
+      <div class="busy" id="busy" hidden>
+        <span class="spin" aria-hidden="true"></span><span id="busyTxt">読み込み中</span>
+      </div>
       <div class="stage" id="stage"><div class="paper" id="paper"><div class="sheet" id="sheet"></div></div></div>
 
       <!-- たんぽぽの面。週案の紙ではないので、紙の代わりにここを出す -->

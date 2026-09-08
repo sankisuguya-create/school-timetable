@@ -174,9 +174,17 @@ ok("読むのは 全校・その学年・そのクラス の3枚だけ",
      {layer:"school", target:""}, {layer:"grade", target:"5"},
      {layer:"home", target:"5-1"}]),
    rw && rw.args[2]);
+/* 開いたあと、手が空いているうちに残りも読んでおく */
+await p.waitForTimeout(1500);
+const pre = await lastCall("apiReadWeek");
+ok("開いたあとは、この週の残りも読んでおく（次のクラスを待たせない）",
+   !!pre && pre.args[2].length > 3, pre && pre.args[2] && pre.args[2].length);
 
-console.log("\n■ シートが届くのを待たずに紙を出す");
+console.log("\n■ 待っているあいだ、待っていると分かる");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
+/* まだ読んでいない週へ移る（入口を見ているあいだは週案を読まない） */
+await p.locator("#nextWk").click(); await p.waitForTimeout(300);
+await p.locator("#nextWk").click(); await p.waitForTimeout(300);
 await p.evaluate(() => { window.__slow = 1500; });      /* 返事が遅い回線 */
 await p.locator(".tile[data-c='5-2']").click();
 await p.waitForTimeout(300);                            /* まだ返事は来ていない */
@@ -184,10 +192,32 @@ ok("押してすぐ紙が出る（返事を待たない）",
    await p.locator("#sheet .cell").count() > 0
    && await p.locator("#gate").isHidden() === true,
    await p.locator("#sheet .cell").count());
-ok("読み込み中だと分かるようにする", await p.locator("#busy").isVisible() === true);
+ok("待っている印が出る", await p.locator("#busy").isVisible() === true);
+ok("何をして待っているかを書く",
+   (await p.locator("#busyTxt").innerText()).indexOf("5-2") >= 0,
+   await p.locator("#busyTxt").innerText());
+ok("画面の上端にも帯を出す（どこを見ていても目に入る）",
+   await p.locator(".app").evaluate(e => e.classList.contains("busy-on")) === true);
+ok("押したタイルにも手ごたえを出す",
+   await p.locator(".tile[data-c='5-2'].opening").count() === 1);
 await p.waitForTimeout(1600);
 ok("届いたら印は消える", await p.locator("#busy").isHidden() === true);
+ok("届いたら帯も消える",
+   await p.locator(".app").evaluate(e => e.classList.contains("busy-on")) === false);
+ok("届いたらタイルの印も消える", await p.locator(".opening").count() === 0);
+
+console.log("\n■ 次のクラスは待たせない（先に読んでおく）");
 await p.evaluate(() => { window.__slow = 0; });
+await p.waitForTimeout(1600);                  /* 手が空いたころに残りを読む */
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='1-1']").click(); await p.waitForTimeout(500);
+ok("2クラス目は読みに行かない（もう手元にある）",
+   (await calls()).indexOf("apiReadWeek") < 0, await calls());
+ok("2クラス目は待つ印も出ない", await p.locator("#busy").isHidden() === true);
+/* もとの週へ戻す */
+await p.locator("#prevWk").click(); await p.waitForTimeout(300);
+await p.locator("#prevWk").click(); await p.waitForTimeout(400);
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(400);
 
@@ -361,8 +391,8 @@ await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(300);
 
 console.log("\n■ 週を動かすと、その週を読みに行く");
 await p.evaluate(() => { window.__calls.length = 0; });
-await p.locator("#nextWk").click(); await p.waitForTimeout(400);
-await p.locator("#nextWk").click(); await p.waitForTimeout(500);
+for(let i = 0; i < 5; i++){ await p.locator("#nextWk").click(); await p.waitForTimeout(250); }
+await p.waitForTimeout(500);
 ok("まだ見ていない週で apiReadWeek を呼ぶ",
    (await calls()).indexOf("apiReadWeek") >= 0, await calls());
 await p.evaluate(() => { window.__calls.length = 0; });
