@@ -155,9 +155,16 @@ const sandbox = {
     })
   },
   Utilities: {
+    /* **形の指定どおりに返す。** 「yyyy-MM-dd」だけを返す偽物にしていると、
+       退避したシートの名前が本物と違う形になり、そこを検査できない */
     formatDate(d, tz, fmt){
       const p = n => String(n).padStart(2, "0");
-      return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+      return String(fmt)
+        .replace(/yyyy/g, d.getFullYear())
+        .replace(/MM/g,   p(d.getMonth() + 1))
+        .replace(/dd/g,   p(d.getDate()))
+        .replace(/HH/g,   p(d.getHours()))
+        .replace(/mm/g,   p(d.getMinutes()));
     }
   }
 };
@@ -772,6 +779,59 @@ ok("担当者・場所の行は空のまま（たんぽぽ担当が書く）",
   for(const row of SHEETS["設定"])
     if(String(row[at["キー"]]) === "たんぽぽシート名") row[at["値"]] = "";
 })();
+
+/* **消さずに退避する**のと、**形が分からないときは書かない**のは、
+   外へ出すところ全部で同じにする。1本に寄せてある（Sheets.stash / shapeOk）。 */
+console.log("\n■ 退避と、形の見分け（外へ出すところ共通）");
+TPFILE.sheets["退避テスト"] = [["見出し"], ["中身"]];
+const st = ev(`Sheets.stash(SpreadsheetApp.openById("${TPID}").getSheetByName("退避テスト"), "前の形")`);
+ok("名前を変えて残す（消さない）", !!st && !!TPFILE.sheets[st], [st, Object.keys(TPFILE.sheets)]);
+ok("いつ退けたかが名前に入る", /（前の形 \d{4}-\d{4}）$/.test(st), st);
+TPFILE.sheets["空っぽ"] = [[""]];
+ok("空のシートは退避しない（残す値が無い）",
+   ev(`Sheets.stash(SpreadsheetApp.openById("${TPID}").getSheetByName("空っぽ"), "前の形")`) === "");
+ok("シートが無いときも落ちない", ev("Sheets.stash(null, '前の形')") === "");
+
+const sk = ev(`Sheets.shapeOk("たんぽぽ時間割（見本）", [
+  {ok:true,  why:"通るもの"},
+  {ok:false, why:"行が 1 しかありません"},
+  {ok:false, why:"列が 1 しかありません"}])`);
+ok("足りないものだけを並べる", sk.ok === false && sk.why.length === 2, sk);
+const se = ev(`Sheets.shapeError(Sheets.shapeOk("たんぽぽ時間割（見本）",
+  [{ok:false, why:"行が 1 しかありません"}]))`);
+ok("どのファイルの話かを言う", se.message.indexOf("たんぽぽ時間割（見本）") >= 0, se.message);
+ok("何が足りないかを言う", se.message.indexOf("行が 1 しかありません") >= 0, se.message);
+ok("次に何をすればよいかも言う", se.message.indexOf("いまの形をみる") >= 0, se.message);
+
+/* 空のシートへは1マスも書かない。**書くと別の行に授業名が入る** */
+TPFILE.sheets["からっぽ"] = [[""]];
+(function(){
+  const at = ev('Sheets.head("設定").at');
+  for(const row of SHEETS["設定"])
+    if(String(row[at["キー"]]) === "たんぽぽシート名") row[at["値"]] = "からっぽ";
+})();
+let threw = "";
+try{ ev(`Store.exportTanpopo(2026, "2026-11-16", {}, {"3-3":1})`); }
+catch(e){ threw = e.message; }
+ok("形が分からないシートへは書かない", threw.indexOf("形が読めません") >= 0, threw);
+ok("そのときも「エラーが発生しました」で終わらせない",
+   threw.indexOf("からっぽ") >= 0 && threw.indexOf("行が") >= 0, threw);
+(function(){
+  const at = ev('Sheets.head("設定").at');
+  for(const row of SHEETS["設定"])
+    if(String(row[at["キー"]]) === "たんぽぽシート名") row[at["値"]] = "";
+})();
+
+console.log("\n■ 保存にかかった時間を返す");
+const tm = ev(`Store.writeCells(2026, [{date:"2026-11-16", slot:"p1", layer:"home",
+  target:"3-3", title:"国語", note:"", subject:"kokugo"}])`);
+ok("書き込みにかかった時間を返す", typeof tm.ms === "number" && tm.ms >= 0, tm);
+ok("ロック待ちを分けて返す", typeof tm.waitMs === "number" && tm.waitMs >= 0, tm);
+ok("何シートに書いたかも返す", tm.sheets === 1, tm);
+ok("書くものが無いときも形はそろえる",
+   (function(){ const z = ev("Store.writeCells(2026, [])");
+                return z.ms === 0 && z.waitMs === 0; })() === true,
+   ev("Store.writeCells(2026, [])"));
 
 console.log("\n■ 画面から呼ぶ口はすべて関門を通る");
 const gated = ["apiBoot()", 'apiReadYear(2026)', 'apiReadWeek(2026,"2026-11-16")',

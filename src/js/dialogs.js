@@ -358,6 +358,21 @@ function openAdminDlg(){
     ["この端末に残っている週", weeks + " 週（" + KEEP_WEEKS + " 週を超えたら古い順に捨てる）"],
     ["まだ送っていないコマ", Backend.unsaved() + " コマ"]
   ];
+  /* **保存にかかった時間。いちばん遅かったぶんを出す。**
+     平均は、たまに出る遅さを隠す。困るのは「たまに10秒待つ」ほう。
+     ここが 2 秒を超えたら、シートを年度で分ける手を打つ（docs/spec.md 13-2）。 */
+  const t = b.times;
+  if(t){
+    rows.push(["保存（直近" + t.n + "回で最も遅かったもの）",
+               (t.round / 1000).toFixed(1) + " 秒"
+               + "　内わけ：待ち " + (t.wait / 1000).toFixed(1) + " 秒"
+               + "／書き込み " + (t.ms / 1000).toFixed(1) + " 秒"]);
+    rows.push(["そのときの量", t.cells + " コマ・" + t.sheets + " シート"]);
+    if(t.round >= 2000)
+      rows.push(["めやす", "2 秒を超えている。docs/spec.md 13-2 の手順を見る"]);
+  }else if(b.gas){
+    rows.push(["保存の時間", "まだ1回も保存していない"]);
+  }
   $("sysTbl").innerHTML = rows
     .map(r => "<tr><th>" + r[0] + "</th><td>" + escText(String(r[1])) + "</td></tr>").join("");
   $("sysLine").textContent =

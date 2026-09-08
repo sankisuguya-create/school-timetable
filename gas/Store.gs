@@ -298,9 +298,16 @@ const Store = (function(){
      日付は書いた瞬間にシートの側で日付型になるので、文字のまま覚えた行番号は
      次に読んだときもう合わない。合わないと、直したつもりの行が増えていく。 */
   function writeCells(year, patches){
-    if(!patches || !patches.length) return {at:{}, count:0};
+    if(!patches || !patches.length) return {at:{}, count:0, ms:0, waitMs:0};
+    /* **保存にかかった時間を測って返す。**
+       「速くする改造」は、必ず正しさを削る方向に働く。数字が基準に届く前に
+       手を入れない（→ docs/spec.md 13-2）。ロック待ちと書き込みは分けて測る。
+       木曜の夕方に30人が同時に押すと、伸びるのはロック待ちのほうなので、
+       混ぜて測ると、どちらを直せばよいのか分からなくなる。 */
+    const t0 = Date.now();
     const lock = LockService.getScriptLock();
     lock.waitLock(30000);
+    const t1 = Date.now();
     try{
       const rank = slotRank();
       const now = new Date(), at = {};
@@ -353,7 +360,8 @@ const Store = (function(){
         Sheets.writePlan(name, keep);
       }
       SpreadsheetApp.flush();
-      return {at, count: patches.length};
+      return {at, count: patches.length, sheets: Object.keys(byName).length,
+              ms: Date.now() - t1, waitMs: t1 - t0};
     } finally {
       lock.releaseLock();
     }
@@ -532,10 +540,9 @@ const Store = (function(){
       for(const t of lab) rows.push([t].concat(new Array(width - 1).fill("")));
     }
 
-    /* いまのシートは残す。**消さない。** */
-    const backup = name + "（前の形 " + Utilities.formatDate(new Date(), TZ, "MMdd-HHmm") + "）";
-    if(sh.getLastRow() > 1) sh.setName(backup);
-    else ss.deleteSheet(sh);
+    /* いまのシートは残す。**消さない。**（退避のやり方は Sheets.stash に1本化） */
+    const backup = Sheets.stash(sh, "前の形");
+    if(!backup) ss.deleteSheet(sh);          /* 空のシートだけは消す。残す値が無い */
     const nw = ss.insertSheet(name, 0);
     nw.getRange(1, 1, rows.length, width).setValues(rows);
     nw.setFrozenColumns(1);
@@ -563,7 +570,7 @@ const Store = (function(){
     nw.setConditionalFormatRules(rules);
     SpreadsheetApp.flush();
     return {file:ss.getName(), sheet:name, cols:cols.length, staff:staff.length,
-            rows:rows.length, backup:(sh.getLastRow() > 1 ? backup : ""), list:cols};
+            rows:rows.length, backup:backup, list:cols};
   }
 
   function exportTanpopo(year, mondayISO, titles, classes, slots){
@@ -576,8 +583,15 @@ const Store = (function(){
     const dayOf = {};                       /* 日付 → 月〜金の何日目か */
     for(let i = 0; i < 5; i++) dayOf[ymd(addDays_(mondayISO, i))] = i;
 
+    /* **書く前に形を確かめる。分からないときは1マスも書かない。**
+       何が足りないかを必ず言う（「エラーが発生しました」だけを出さない）。 */
     const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
-    if(lastRow < 2 || lastCol < 2) throw new Error("たんぽぽ時間割のシートが空です");
+    const where = "たんぽぽ時間割（" + ss.getName() + " の「" + sh.getName() + "」）";
+    const shape = Sheets.shapeOk(where, [
+      {ok: lastRow >= 2, why: "行が " + lastRow + " しかありません（日ブロックが1つも入らない）"},
+      {ok: lastCol >= 2, why: "列が " + lastCol + " しかありません（交流級の列がない）"}
+    ]);
+    if(!shape.ok) throw Sheets.shapeError(shape);
     const colA = sh.getRange(1, 1, lastRow, 1).getValues();
 
     /* 日ブロックを探す。まず日付で。**行が足された表もあるので先頭行は決め打ちしない。** */

@@ -84,9 +84,11 @@ const Backend = (function(){
     /* ふつうは1年度ぶん。年度をまたいで直したときだけ2回に分かれる */
     const years = Object.keys(byYear);
     let left = years.length, bad = false;
+    const t0 = Date.now();
     for(const y of years){
       google.script.run
         .withSuccessHandler(res => {
+          noteTime(res, Date.now() - t0);
           applyServerTimes(res && res.at);
           if(!--left){ sending = false; lastErr = bad ? lastErr : "";
                        onDirty(dirtyN, lastErr); persistPending(); after && after(!bad); }
@@ -189,7 +191,31 @@ const Backend = (function(){
   /* 立ち上がりでもらった、**自分と置き場所のこと**。管理画面に出す。
      手元で開いているときは空のまま（サーバに聞いていないので分からない）。 */
   let bootInfo = {me:"", file:""};
-  const info = () => ({me: bootInfo.me, file: bootInfo.file, gas: !!onGas});
+
+  /* **保存にかかった時間を、最近のぶんだけ覚える。**
+     長くなってきたことに、誰かが困る前に気づくため。
+     溜め込まない（大きな監査ログは作らない。作れば作ったで誰も見ない）。 */
+  const TIMES = 20;
+  const times = [];
+  function noteTime(res, roundMs){
+    if(!res) return;
+    times.push({ms: +res.ms || 0, wait: +res.waitMs || 0, round: roundMs,
+                cells: +res.count || 0, sheets: +res.sheets || 0});
+    while(times.length > TIMES) times.shift();
+  }
+  /* 遅いほうから見る。**平均は、たまに出る遅さを隠す。**
+     困るのは「たまに10秒待たされる」ほうで、平均が速いことではない。 */
+  function saveTimes(){
+    if(!times.length) return null;
+    const pick = f => times.map(f).sort((a, b) => a - b);
+    const worst = a => a[a.length - 1];
+    return {n: times.length,
+            ms: worst(pick(x => x.ms)), wait: worst(pick(x => x.wait)),
+            round: worst(pick(x => x.round)),
+            cells: worst(pick(x => x.cells)), sheets: worst(pick(x => x.sheets))};
+  }
+  const info = () => ({me: bootInfo.me, file: bootInfo.file, gas: !!onGas,
+                       times: saveTimes()});
   function boot(after){
     if(!onGas){ booted = true; return after(); }
     google.script.run

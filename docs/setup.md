@@ -85,7 +85,7 @@
    const STUDENT_LOCAL = /^[0-9]{8}$/;        // 児童は @ の左が8桁の数字
    ```
 
-**確かめる**：手元で `node gas/gatecheck.js`（26件）・`node gas/apicheck.js`（48件）・`node gas/storecheck.js`（161件）が通ること。
+**確かめる**：手元で `node gas/gatecheck.js`（26件）・`node gas/apicheck.js`（48件）・`node gas/storecheck.js`（175件）が通ること。
 **通らないまま貼らない。**
 
 ---
@@ -375,8 +375,8 @@
 python3 build.py          src/ から作り直す
 python3 build.py --check  生成物が src と一致するか
 node tools/check.mjs      画面（Playwright・161件）
-node tools/wirecheck.mjs  本番の口とのやりとり（98件）
-node gas/storecheck.js    シートの読み書き（161件）
+node tools/wirecheck.mjs  本番の口とのやりとり（102件）
+node gas/storecheck.js    シートの読み書き（175件）
 node gas/gatecheck.js     関門（26件）
 node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明（48件）
 ```

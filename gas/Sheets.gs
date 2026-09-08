@@ -199,6 +199,40 @@ const Sheets = (function(){
       sh.getRange(body.length + 2, 1, last - body.length - 1, w).clearContent();
   }
 
+  /* ── 退避 ────────────────────────────────────
+     **消さない。名前を変えて残す。** 消してしまうと、形を作り直したあとに
+     「前はこうだった」を誰も確かめられない。教員が自分で戻すこともできない。
+
+     戻り値は退避後の名前（残さなかったときは空）。呼ぶ側は、これを画面に出して
+     「どこへ退けたか」を必ず伝える。伝えないと、消えたと思われる。 */
+  function stash(sh, tag){
+    if(!sh) return "";
+    if(sh.getLastRow() <= 1) return "";          /* 空なら残す値が無い */
+    const stamp = Utilities.formatDate(new Date(), TZ_, "MMdd-HHmm");
+    const name = sh.getName() + "（" + (tag || "前の形") + " " + stamp + "）";
+    sh.setName(name);
+    return name;
+  }
+  const TZ_ = Session.getScriptTimeZone ? Session.getScriptTimeZone() : "Asia/Tokyo";
+
+  /* 外へ出す前に形を確かめる。**形が分からないときは書かない。**
+     書いてしまうと、別の行に授業名が入る。落ちないので誰も気づかない。
+
+     want = [{ok:真偽, why:"何がどう足りないか"}] の並び。
+     すべて ok なら {ok:true}。だめなら {ok:false, why:[…]} を返す。
+     **「エラーが発生しました」だけを出さない。** 何が足りないかを必ず言う。 */
+  function shapeOk(where, want){
+    const why = (want || []).filter(x => x && !x.ok).map(x => x.why);
+    if(!why.length) return {ok:true, where, why:[]};
+    return {ok:false, where, why};
+  }
+  /* 形が合わないときの言い方。**どのファイルの、何が、どう足りないか。** */
+  function shapeError(r){
+    return new Error(r.where + "の形が読めません。\n・" + r.why.join("\n・")
+                   + "\n\n形を直してからもう一度。"
+                   + "画面の「いまの形をみる」で、いま何が見えているかを確かめられます。");
+  }
+
   /* いまある週案シートの名前。**移行や書き出しで、全部を見たいときに使う。** */
   function planNames(){
     return book().getSheets()
@@ -344,7 +378,7 @@ const Sheets = (function(){
   }
 
   return {SPEC, NAMES, PASTE, CLASS_COLS, TANPOPO_FILL, asClass, isDate, readGrid,
-          book, bookName,
+          book, bookName, stash, shapeOk, shapeError,
           PLAN_PREFIX, PLAN_ALL, PLAN_COLS, planName, ensurePlan, readPlan, writePlan,
           planNames, planMap,
           setup, head, readAll, appendRows, toArray, setRow, blankRow, sheet};

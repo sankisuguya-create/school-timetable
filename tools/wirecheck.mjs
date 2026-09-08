@@ -136,7 +136,11 @@ await p.addInitScript(() => {
         const at = {};
         for(const q of patches)
           at[[q.date, q.slot, q.layer, q.target].join("|")] = q.remove ? 0 : 1700000000000;
-        setTimeout(() => okFn({at, count:patches.length}), 0);
+        /* 本番と同じ形で返す。**時間も返す**（管理・システムに出る） */
+        const names = {};
+        for(const q of patches) names[q.layer + "|" + (q.target || "")] = 1;
+        setTimeout(() => okFn({at, count:patches.length, sheets:Object.keys(names).length,
+                               ms:120, waitMs:40}), 0);
       },
       apiWriteRoster(y, c, s, w, tp){ call("apiWriteRoster", [y, c, s, w, tp]); setTimeout(() => okFn({}), 0); },
       apiWriteBase(y, c, v, bank){ call("apiWriteBase", [y, c, v, bank]); setTimeout(() => okFn(true), 0); },
@@ -674,6 +678,30 @@ ok("よい項目は落として出す（読むところを減らす）", await p
      const b = getComputedStyle(document.querySelector("#ckOut tr.ng th")).color;
      return a !== b;
    }) === true);
+await p.locator("#adminDlg [data-close]").click(); await p.waitForTimeout(200);
+
+/* **速くする改造は、必ず正しさを削る方向に働く。**
+   数字が基準（2秒）に届く前に手を入れないための目盛り。 */
+console.log("\n■ 保存にかかった時間を、管理・システムに出す");
+/* この節の前で開き直しているので、まず1回書いて保存する */
+await p.locator("#sheet .cell[data-d='3'][data-s='p2'] .t").click(); await p.waitForTimeout(150);
+await p.locator(".pal[data-v='sansu']").click(); await p.waitForTimeout(200);
+await p.locator("#saveBtn").click(); await p.waitForTimeout(500);
+ok("保存すると時間を覚える", await p.evaluate(() => {
+     const t = Backend.info().times;
+     return !!t && t.n >= 1 && typeof t.round === "number";
+   }) === true, await p.evaluate(() => Backend.info().times));
+ok("待ちと書き込みを分けて持つ", await p.evaluate(() => {
+     const t = Backend.info().times;
+     return typeof t.wait === "number" && typeof t.ms === "number";
+   }) === true, await p.evaluate(() => Backend.info().times));
+await p.locator(".side .admin").click(); await p.waitForTimeout(250);
+ok("いちばん遅かったぶんを出す（平均は、たまに出る遅さを隠す）",
+   (await p.locator("#sysTbl").innerText()).indexOf("最も遅かった") >= 0,
+   await p.locator("#sysTbl").innerText());
+ok("何コマ・何シートだったかも出す",
+   (await p.locator("#sysTbl").innerText()).indexOf("シート") >= 0,
+   await p.locator("#sysTbl").innerText());
 await p.locator("#adminDlg [data-close]").click(); await p.waitForTimeout(200);
 
 console.log("\n■ 本番では、古い週の控えを間引く");
