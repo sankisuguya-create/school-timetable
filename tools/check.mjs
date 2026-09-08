@@ -493,12 +493,40 @@ ok("5日 × 1日ぶんの行数 の矩形になる", tsv.split("\n").length === 
 ok("空のセルを含む（貼った先の形が揃う）", tsv.split("\n")[0].split("\t").length === 15,
    tsv.split("\n")[0].split("\t").length);
 
+console.log("\n■ 授業名は枠いっぱい。入らないコマだけ縮める");
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='3-3']").click(); await p.waitForTimeout(400);
+await p.evaluate(() => {
+  writeCell(0, "p1", {title:"国語", subject:"kokugo"});
+  writeCell(1, "p1", {title:"クラブ活動・委員会", subject:null});
+  paintSheet();
+});
+await p.waitForTimeout(250);
+const fs = d => p.evaluate(dd => parseFloat(getComputedStyle(
+  document.querySelector("#sheet .cell[data-d='" + dd + "'][data-s='p1'] .t")).fontSize), d);
+ok("2文字の教科は大きく出る", await fs(0) >= 19, await fs(0));
+ok("長い名前はそのコマだけ縮む", await fs(1) < await fs(0) * 0.7,
+   [await fs(0), await fs(1)]);
+ok("縮めても、ほかのコマは大きいまま（全部を長い名前に合わせない）",
+   await fs(0) >= 19, await fs(0));
+ok("どのコマも枠からはみ出さない",
+   await p.evaluate(() => [...document.querySelectorAll("#sheet .cell .t")]
+     .every(t => t.scrollWidth <= t.clientWidth + 1
+                 && t.scrollHeight <= t.clientHeight + 1)) === true,
+   await p.evaluate(() => [...document.querySelectorAll("#sheet .cell .t")]
+     .filter(t => t.scrollWidth > t.clientWidth + 1).map(t => t.innerText)));
+
 await p.emulateMedia({media:"print"});
 await p.waitForTimeout(200);
 ok("刷るとき、まわりの操作は消える", await p.locator(".side").isHidden());
 ok("刷るとき、層の印は消える", await p.locator("#sheet .tag").first().isHidden());
 ok("刷るとき、時刻は出さない（版面を動かさない）",
    await p.locator("#sheet .lab .tm").first().isHidden());
+ok("刷っても枠からはみ出さない（刷るときの列の幅で測っている）",
+   await p.evaluate(() => [...document.querySelectorAll("#sheet .cell .t")]
+     .every(t => t.scrollWidth <= t.clientWidth + 1)) === true,
+   await p.evaluate(() => [...document.querySelectorAll("#sheet .cell .t")]
+     .filter(t => t.scrollWidth > t.clientWidth + 1).map(t => t.innerText)));
 ok("刷るとき、選んでいる印も消える",
    await p.evaluate(() => {
      const e = document.querySelector("#sheet .cell.sel");

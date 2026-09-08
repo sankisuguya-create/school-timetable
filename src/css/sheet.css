@@ -6,6 +6,7 @@
   --k:1;
   --pw:182mm; --ph:257mm; --pm:8mm;      /* B5・余白。設定から動く */
   --labw:15mm;                            /* 時程の列（校時と時刻） */
+  --labw-print:9mm;                       /* 刷るときは時刻を出さないので狭い */
   --wkw:20mm;                             /* 土日の列 */
   --h-head:8mm;
   --h-break:6mm;
@@ -15,6 +16,14 @@
   --h-after:14mm;  /* 放課後。週メモから回したぶん、ここが縦に伸びる */
   --fs:8.5pt;
   --fs-s:6pt;
+  /* 授業名は**枠いっぱいまで大きく**する。入りきらないコマだけ、
+     そのコマの中で縮める（--fit は入るかどうかを測って画面が入れる）。
+     題名の欄は 8mm。行の高さ 1.15 で 6.5mm まで置けるが、
+     字の上下がぎりぎり枠に触れるので 5.6mm（16pt）を上限にした。 */
+  --fs-t:16pt;
+  --fs-b:9.5pt;    /* 朝学習・業間などの休み行。行の高さは 6mm */
+  --fs-n:7pt;      /* 詳細・備考。21mm に 6行入る大きさ */
+  --fs-a:8pt;      /* 放課後の備考。罫線 4.2mm に合わせた */
 
   background:var(--sheet); color:var(--ink);
   width:calc(var(--pw) - var(--pm)*2);
@@ -51,9 +60,12 @@
 .cell.brk{height:calc(var(--h-break)*var(--k))}
 .cell .t,.cell .n{padding:1px calc(1.4mm*var(--k));outline:none;overflow:hidden;
   word-break:break-word;line-height:1.25}
-.cell .t{height:calc(var(--h-title)*var(--k));display:flex;align-items:center;font-weight:600}
-.cell.brk .t{height:100%;font-weight:400;font-size:calc(var(--fs-s)*var(--k))}
-.cell .n{flex:1;font-size:calc(var(--fs-s)*var(--k));color:var(--ink-sub);
+.cell .t{height:calc(var(--h-title)*var(--k));display:flex;align-items:center;
+  font-weight:600;line-height:1.15;
+  font-size:calc(var(--fs-t)*var(--k)*var(--fit,1))}
+.cell.brk .t{height:100%;font-weight:400;
+  font-size:calc(var(--fs-b)*var(--k)*var(--fit,1))}
+.cell .n{flex:1;font-size:calc(var(--fs-n)*var(--k));color:var(--ink-sub);
   border-top:.6px dashed var(--rule-soft);padding-top:calc(.6mm*var(--k))}
 .cell .t:focus,.cell .n:focus{background:#FFFBEA;
   box-shadow:inset 0 0 0 1.6px var(--ink-link)}
@@ -96,7 +108,7 @@
    紙の高さは決まっているので、片方を広げるともう片方が狭くなる。
    放課後に書くのは行事や会議で、週メモより行数が要る。 */
 .cell.note{background:var(--sheet);min-height:calc(var(--h-after)*var(--k))}
-.cell.note .n{height:100%;
+.cell.note .n{height:100%;font-size:calc(var(--fs-a)*var(--k));color:var(--ink);
   background:repeating-linear-gradient(to bottom,transparent 0,transparent
     calc(4.2mm*var(--k) - .6px),var(--rule-soft) calc(4.2mm*var(--k)))}
 
@@ -116,7 +128,7 @@
   .side,.panel,.gate,.toast,.tpview{display:none!important}
   /* 時刻は画面だけのもの。紙の版面は教務必携の枠に合わせたまま動かさない
      （時程の列は 9mm。ここを広げると曜日の列がその分だけ痩せる） */
-  .sheet{--labw:9mm}
+  .sheet{--labw:var(--labw-print)}
   .lab .tm{display:none}
   /* 選んでいる印・打ち込み中の色も刷らない */
   .cell.sel{box-shadow:none}

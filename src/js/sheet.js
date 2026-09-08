@@ -106,6 +106,56 @@ function cellEl(d, s){
   return e;
 }
 
+/* ── 枠に合わせて字を縮める ────────────────────
+   授業名は**枠いっぱいまで大きく**する。そのままでは「クラブ活動」のような
+   長い名前がはみ出すので、はみ出すコマだけ、そのコマの中で縮める。
+
+   全部を同じ大きさに合わせない。**いちばん長い名前に全部を合わせると、
+   「国語」まで小さくなる。** 紙に載っているコマの大半は2文字で、
+   そこが読めることのほうが、大きさがそろっていることより効く。
+
+   測るのと書くのを分ける。1コマずつ「書いて測って」を繰り返すと、
+   そのたびにブラウザが並べ直す（55コマで55回）。 */
+const FIT_MIN = 0.45;      /* これ以上は縮めない。読めなくなる */
+
+function fitTitles(els){
+  if(!els.length) return;
+  /* **刷ったときの列の幅で測る。** 画面の時程の列は時刻を出すぶん広く、
+     刷るときは狭い（そのぶん曜日の列が広い）。画面の幅で決めると、
+     刷ったときに入るはずの字まで小さくなる。紙が正本。 */
+  const sh = $("sheet");
+  const had = sh.style.getPropertyValue("--labw");
+  sh.style.setProperty("--labw", getComputedStyle(sh).getPropertyValue("--labw-print"));
+
+  for(let pass = 0; pass < 2; pass++){
+    const want = [];
+    for(const t of els){
+      if(!t.firstChild) continue;                 /* 空のコマはそのまま */
+      const cs = getComputedStyle(t);
+      const availW = t.clientWidth
+        - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const availH = t.clientHeight
+        - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+      if(availW <= 0 || availH <= 0) continue;
+      const r = document.createRange();
+      r.selectNodeContents(t);
+      const box = r.getBoundingClientRect();
+      if(!box.width || !box.height) continue;
+      const cur = +(t.style.getPropertyValue("--fit") || 1);
+      /* いまの大きさで、入るかどうか。入るなら1まで戻す（縮めっぱなしにしない） */
+      const s = Math.min(1, cur * Math.min(availW / box.width, availH / box.height));
+      want.push([t, Math.max(FIT_MIN, s)]);
+    }
+    let moved = false;
+    for(const [t, s] of want){
+      const cur = +(t.style.getPropertyValue("--fit") || 1);
+      if(Math.abs(cur - s) > 0.01){ t.style.setProperty("--fit", s); moved = true; }
+    }
+    if(!moved) break;      /* 落ち着いたら、2度目は測らない */
+  }
+  if(had) sh.style.setProperty("--labw", had); else sh.style.removeProperty("--labw");
+}
+
 /* 中身を流し込む。el を渡すとそのコマだけ塗り直す。 */
 function paintSheet(one){
   const list = one ? [one] : [...document.querySelectorAll("#sheet .cell")];
@@ -133,6 +183,8 @@ function paintSheet(one){
     tag.textContent = name;
 
   }
+  /* **書き終えてから、まとめて測る。** 1コマずつだと並べ直しが55回になる */
+  fitTitles(list.map(e => e.querySelector(".t")).filter(Boolean));
   if(!one) warnOverwritten();
 }
 
