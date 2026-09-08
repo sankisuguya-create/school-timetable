@@ -356,7 +356,7 @@ ok("選んだ交流級の列は、空のコマも含めて全部入れる",
      const cols = TANPOPO_COLS.map((c, i) => [i, c])
        .filter(([, c]) => !c.staff && c.cls === "3-3");
      return cols.length > 0 && cols.every(([i, c]) =>
-       TANPOPO_SLOTS.every(s => tanpopoCell(i, c, s).fill !== "none"));
+       tpSlots().every(s => tanpopoCell(i, c, s).fill !== "none"));
    }) === true);
 ok("選んでいない交流級の列には書かない", tpText.indexOf("選んでいない交流級") >= 0);
 ok("支援員の列には書かない", tpText.indexOf("支援員の列") >= 0);

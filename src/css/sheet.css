@@ -60,7 +60,10 @@
 .cell.brk{height:calc(var(--h-break)*var(--k))}
 .cell .t,.cell .n{padding:1px calc(1.4mm*var(--k));outline:none;overflow:hidden;
   word-break:break-word;line-height:1.25}
-.cell .t{height:calc(var(--h-title)*var(--k));display:flex;align-items:center;
+/* 題名は**中央ぞろえ**。教科名は2文字が大半で、左に寄せると
+   コマの右半分が空いて見え、どこまでが1つのコマか分かりにくい */
+.cell .t{height:calc(var(--h-title)*var(--k));display:flex;
+  align-items:center;justify-content:center;text-align:center;
   font-weight:600;line-height:1.15;
   font-size:calc(var(--fs-t)*var(--k)*var(--fit,1))}
 .cell.brk .t{height:100%;font-weight:400;

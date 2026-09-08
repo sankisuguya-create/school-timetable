@@ -231,8 +231,41 @@ const Store = (function(){
 
      **書く前に形を確かめる。** 形が合わない日はその日だけ書かない。
      合わない日に書くと、別の校時の行に授業名が入る。落ちないので気づかない。 */
-  const TP_TITLE_ROW = [1, 3, 6, 8, 12, 14];      /* 1〜6校時の授業名の行 */
-  const TP_MARK = [[5, "中休み"], [10, "給食"], [11, "昼休み"]];
+  /* 1日ぶんのブロックの中で、授業名の行がどこかを決める。
+     **行数を決め打ちしない。** 実物は日によって 16・18・15・18・18 行と
+     まちまちで、空行の入り方も揃っていない。決め打ちすると、
+     揃えてもらうまで1日も書けない。揃えたあとに誰かが行を足しても壊れる。
+
+     代わりに「中休み」「給食」「昼休み」の行を探して、そこから数える。
+     この3つは日ブロックの骨で、動かすことはない。
+
+       1校時 = 中休み − 4      2校時 = 中休み − 2
+       3校時 = 中休み + 1      4校時 = 中休み + 3
+       5校時 = 昼休み + 1      6校時 = 昼休み + 3     （いずれも授業名の行）
+
+     見つからない日は、その日だけ書かない。 */
+  const TP_MARKS = ["中休み", "給食", "昼休み"];
+  function tpRows(grid, len){
+    const at = {};
+    for(let r = 1; r < len; r++){
+      const a = tpNorm(grid[r][0]);
+      for(const m of TP_MARKS)
+        if(at[m] === undefined && a.indexOf(tpNorm(m)) >= 0) at[m] = r;
+    }
+    for(const m of TP_MARKS) if(at[m] === undefined) return {bad:"「" + m + "」の行が無い"};
+    const br = at["中休み"], lu = at["昼休み"];
+    if(!(br >= 5)) return {bad:"「中休み」が上すぎる（1・2校時の行が足りない）"};
+    if(!(lu > br)) return {bad:"「昼休み」が「中休み」より上にある"};
+    if(!(at["給食"] > br + 3)) return {bad:"「給食」が4校時より上にある"};
+    const rows = [br - 4, br - 2, br + 1, br + 3, lu + 1, lu + 3];
+    /* **短い日は、ある校時だけ書く。** 水曜は6校時が無いので2行短い。
+       日ごと丸ごと飛ばすと、1〜5校時まで書けるのに書かないことになる。 */
+    const miss = [];
+    for(let i = 0; i < rows.length; i++)
+      if(rows[i] < 1 || rows[i] >= len){ miss.push(i + 1); rows[i] = -1; }
+    if(rows.every(function(r){ return r < 0; })) return {bad:"授業名の行が1つも無い"};
+    return {rows, miss};
+  }
 
   function tpNorm(v){
     let t = String(v == null ? "" : v).normalize("NFKC").trim().replace(/[　\s]+/g, "");
@@ -253,7 +286,7 @@ const Store = (function(){
 
   /* titles = {クラス: {"0": {p1:"国語", …}, …}}（0〜4 は月〜金）
      classes = 出す交流級。**選んだ交流級の列だけに書く。** */
-  function exportTanpopo(year, mondayISO, titles, classes){
+  function exportTanpopo(year, mondayISO, titles, classes, slots){
     const cfg = readConfig();
     const id = String(cfg["たんぽぽファイルID"] || "").trim();
     if(!id) throw new Error("「設定」シートの「たんぽぽファイルID」が空です。"
@@ -279,18 +312,23 @@ const Store = (function(){
       if(d && dayOf[d] !== undefined) blocks.push({row: r + 1, day: dayOf[d], date: d});
     }
 
-    const slotIds = ["p1", "p2", "p3", "p4", "p5", "p6"];
+    /* 校時のIDは画面から受け取る。時程シートを直した学校でも合う */
+    const slotIds = (slots && slots.length === 6)
+      ? slots : ["p1", "p2", "p3", "p4", "p5", "p6"];
     const report = {wrote:0, days:0, skipped:[], unknown:{}, file:ss.getName()};
 
-    for(const b of blocks){
-      if(b.row + 15 > lastRow){ report.skipped.push(b.date + "（行が足りない）"); continue; }
-      const grid = sh.getRange(b.row, 1, 16, lastCol).getValues();
-      /* 形を確かめる。合わない日は書かない */
-      let bad = "";
-      for(const m of TP_MARK)
-        if(tpNorm(grid[m[0]][0]).indexOf(tpNorm(m[1])) < 0)
-          bad = bad || ("+" + m[0] + " が「" + m[1] + "」でない");
-      if(bad){ report.skipped.push(b.date + "（" + bad + "）"); continue; }
+    /* 次の日の日付までが、その日のブロック */
+    for(let bi = 0; bi < blocks.length; bi++){
+      const b = blocks[bi];
+      const end = (bi + 1 < blocks.length) ? blocks[bi + 1].row : lastRow + 1;
+      const len = Math.min(end - b.row, lastRow - b.row + 1);
+      if(len < 6){ report.skipped.push(b.date + "（行が足りない）"); continue; }
+      const grid = sh.getRange(b.row, 1, len, lastCol).getValues();
+      const found = tpRows(grid, len);
+      if(found.bad){ report.skipped.push(b.date + "（" + found.bad + "）"); continue; }
+      const TITLE = found.rows;
+      if(found.miss.length)
+        report.skipped.push(b.date + "（" + found.miss.join("・") + "校時の行が無い）");
 
       /* その日の見出しを読んで、書く列を決める */
       const cols = [];
@@ -303,17 +341,25 @@ const Store = (function(){
       }
       if(!cols.length){ report.skipped.push(b.date + "（出す交流級の列が無い）"); continue; }
 
-      const from = Math.min.apply(null, cols.map(x => x.c));
-      const to   = Math.max.apply(null, cols.map(x => x.c));
-      for(let i = 0; i < TP_TITLE_ROW.length; i++){
-        const rowIdx = TP_TITLE_ROW[i];
-        const line = grid[rowIdx].slice(from, to + 1);   /* 触らない列はそのまま戻す */
-        for(const x of cols){
-          const v = ((titles[x.cls] || {})[String(b.day)] || {})[slotIds[i]];
-          line[x.c - from] = (v === undefined || v === null) ? "" : String(v);
-          report.wrote++;
+      /* **選んだ列だけを書く。** 続きになっている列はまとめて1回で書く。
+         触らない列を巻き込むと、そこに式が入っていたときに値へ潰れる。 */
+      cols.sort(function(p, q){ return p.c - q.c; });
+      const runs = [];
+      for(const x of cols){
+        const last = runs[runs.length - 1];
+        if(last && x.c === last[last.length - 1].c + 1) last.push(x);
+        else runs.push([x]);
+      }
+      for(let i = 0; i < TITLE.length; i++){
+        if(TITLE[i] < 0) continue;                 /* その校時の行が無い日 */
+        for(const run of runs){
+          const line = run.map(function(x){
+            const v = ((titles[x.cls] || {})[String(b.day)] || {})[slotIds[i]];
+            report.wrote++;
+            return (v === undefined || v === null) ? "" : String(v);
+          });
+          sh.getRange(b.row + TITLE[i], run[0].c + 1, 1, line.length).setValues([line]);
         }
-        sh.getRange(b.row + rowIdx, from + 1, 1, line.length).setValues([line]);
       }
       report.days++;
     }
@@ -578,7 +624,7 @@ function apiReadPaste(){
   Gate.check();
   return Store.readPaste();
 }
-function apiExportTanpopo(year, mondayISO, titles, classes){
+function apiExportTanpopo(year, mondayISO, titles, classes, slots){
   Gate.check();
-  return Store.exportTanpopo(year, mondayISO, titles, classes);
+  return Store.exportTanpopo(year, mondayISO, titles, classes, slots);
 }

@@ -27,7 +27,10 @@ const TANPOPO_COLS = [
    ここは、塗りがどう決まるかを見せるための仮置き。 */
 const TANPOPO_DUTY = ["交：丸山", "た：桝村", "交：星川", "た：西本",
                       "", "交：朝倉", "支：大屋", "た：安部"];
-const TANPOPO_SLOTS = ["p1", "p2", "p3", "p4", "p5", "p6"];
+/* たんぽぽ時間割は1日6校時ぶんの行を持っている。
+   **どの校時かは時程シートが決める**ので、授業の行の上から6つを使う
+   （時程のIDを学校が変えていても合う）。 */
+const tpSlots = () => SLOTS.filter(s => s.kind === "lesson").slice(0, 6).map(s => s.id);
 let tpDay = 0;
 
 const tpChosen  = () => Y().tanpopo || [];
@@ -84,7 +87,7 @@ function drawTanpopoView(){
 
 function tanpopoCell(colIdx, col, slotId){
   if(col.staff) return {fill:"none", why:"支援員の列"};
-  const duty = TANPOPO_DUTY[(colIdx * 3 + TANPOPO_SLOTS.indexOf(slotId) * 5) % TANPOPO_DUTY.length];
+  const duty = TANPOPO_DUTY[(colIdx * 3 + tpSlots().indexOf(slotId) * 5) % TANPOPO_DUTY.length];
   if(allClasses().indexOf(col.cls) < 0) return {fill:"none", duty, why:"編成に無いクラス"};
   if(!tpHasCls(col.cls))                return {fill:"none", duty, why:"選んでいない交流級"};
   const t = plain(compose(col.cls, tpDay, slotId).title).trim();
@@ -106,9 +109,9 @@ function drawTanpopo(){
 
   let imported = 0, own = 0, none = 0;
   const head = "<tr><th>列</th><th>交流学級</th>"
-    + TANPOPO_SLOTS.map(s => "<th>" + SLOT_BY_ID[s].name + "</th>").join("") + "</tr>";
+    + tpSlots().map(s => "<th>" + escText(SLOT_BY_ID[s].name) + "</th>").join("") + "</tr>";
   const body = TANPOPO_COLS.map((col, i) => {
-    const cells = TANPOPO_SLOTS.map(s => {
+    const cells = tpSlots().map(s => {
       const r = tanpopoCell(i, col, s);
       if(r.fill === "imported") imported++; else if(r.fill === "own") own++; else none++;
       const top = r.fill === "none" ? "<i>" + escText(r.why) + "</i>"
@@ -135,7 +138,7 @@ function tanpopoTitles(list){
     const per = {};
     for(let d = 0; d < 5; d++){
       const one = {};
-      for(const s of TANPOPO_SLOTS) one[s] = plain(compose(cls, d, s).title).trim();
+      for(const s of tpSlots()) one[s] = plain(compose(cls, d, s).title).trim();
       per[String(d)] = one;
     }
     out[cls] = per;
@@ -166,7 +169,7 @@ function reflectTanpopo(){
   $("tpGo").disabled = true;
   $("tpCount").innerHTML = "たんぽぽ時間割へ書いている…";
   Backend.flush(() => {
-    Backend.exportTanpopo(tanpopoTitles(chosen), chosen,
+    Backend.exportTanpopo(tanpopoTitles(chosen), chosen, tpSlots(),
       r => {
         $("tpGo").disabled = false;
         drawTanpopoView();

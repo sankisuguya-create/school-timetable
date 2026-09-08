@@ -38,14 +38,16 @@ const Backend = (function(){
     if(!dirty[k]){ dirty[k] = {layer, target:target || "", year:fy(),
                                monday:wkKey(), d, slot:slotId}; dirtyN++; }
     onDirty(dirtyN, lastErr);
+    persistSoon();
     schedule();
   }
 
   /* **打鍵では送らない。** 手が止まってしばらく経ってから、念のため送る。
      ふだんは「保存」を押したとき・週や画面を変えたとき・閉じるときに送る。 */
-  function schedule(){
+  function schedule(){ retry(180000); }        /* 3分。取りこぼしの受け皿 */
+  function retry(ms){
     clearTimeout(timer);
-    timer = setTimeout(flush, 180000);          /* 3分。取りこぼしの受け皿 */
+    timer = setTimeout(() => flush(), ms);
   }
 
   /* 送る直前に、いま画面が持っている中身を読んで1コマ1件にする。 */
@@ -70,8 +72,8 @@ const Backend = (function(){
   /* 貯めたぶんを送る。after は送り終わってから呼ぶ（押した手ごたえを返すため）。 */
   function flush(after){
     if(!onGas || !dirtyN){ lastErr = ""; onDirty(0, ""); return after && after(true); }
-    if(sending){ schedule(); return after && after(false); }
-    const batch = dirty, n = dirtyN;
+    if(sending){ retry(900); return after && after(false); }
+    const batch = dirty;
     dirty = {}; dirtyN = 0; sending = true;
     onDirty(0, lastErr);
     const byYear = {};
@@ -87,7 +89,7 @@ const Backend = (function(){
         .withSuccessHandler(res => {
           applyServerTimes(res && res.at);
           if(!--left){ sending = false; lastErr = bad ? lastErr : "";
-                       onDirty(dirtyN, lastErr); after && after(!bad); }
+                       onDirty(dirtyN, lastErr); persistPending(); after && after(!bad); }
         })
         .withFailureHandler(err => {
           bad = true;
@@ -97,11 +99,64 @@ const Backend = (function(){
           }
           lastErr = err && err.message ? err.message : "通信できない";
           notify("<b>保存できていない</b>（" + escText(lastErr) + "）。もう一度「保存」を押す");
-          if(!--left){ sending = false; onDirty(dirtyN, lastErr); after && after(false); }
+          if(!--left){ sending = false; onDirty(dirtyN, lastErr); persistPending();
+                       after && after(false); }
         })
         .apiWriteCells(+y, byYear[y]);
     }
   }
+  /* ── 送れないまま閉じられたぶんを持ち越す ────────
+     送っている途中で画面を閉じられると、シートに入らないまま消える。
+     手元（localStorage）には中身が残るが、次に開いたときシートの側を
+     読み直すので、**シートに無いものは上書きされて消える。**
+
+     だから、まだ送っていないコマは**中身ごと**この端末に控えておき、
+     次に開いたときに送り直す。送れたら控えを捨てる。 */
+  const PEND = KEY + "/pending";
+  let pendT = 0;
+
+  function pendingNow(){
+    const out = [];
+    for(const k in dirty) out.push(patchOf(dirty[k]));
+    return out;
+  }
+  function persistPending(){
+    if(!onGas) return;
+    try{
+      const list = pendingNow();
+      if(list.length) localStorage.setItem(PEND, JSON.stringify(list));
+      else localStorage.removeItem(PEND);
+    }catch(e){}                 /* 控えられなくても、いまの保存は止めない */
+  }
+  const persistSoon = () => { clearTimeout(pendT); pendT = setTimeout(persistPending, 900); };
+
+  /* 前に閉じたときの持ち越しを送る。**週を読み直す前に送る。**
+     あとから送ると、読み直しで消えた中身を送ることになる。 */
+  function sendPending(after){
+    if(!onGas) return after();
+    let list = null;
+    try{ list = JSON.parse(localStorage.getItem(PEND) || "null"); }catch(e){}
+    if(!list || !list.length) return after();
+    const byYear = {};
+    for(const q of list){
+      const y = String(q.date).slice(0, 4);
+      /* 4月始まりなので、1〜3月は前の年度 */
+      const m = +String(q.date).slice(5, 7);
+      const fyOf = m <= 3 ? (+y - 1) : +y;
+      (byYear[fyOf] || (byYear[fyOf] = [])).push(q);
+    }
+    let left = Object.keys(byYear).length;
+    const done = () => { if(!--left){ try{ localStorage.removeItem(PEND); }catch(e){} after(); } };
+    for(const y in byYear)
+      google.script.run
+        .withSuccessHandler(done)
+        .withFailureHandler(() => {
+          notify("前に閉じたときのぶんを送れなかった。もう一度「保存」を押す");
+          done();
+        })
+        .apiWriteCells(+y, byYear[y]);
+  }
+
   const unsaved = () => dirtyN;
   const setDirtyWatcher = fn => { onDirty = fn; fn(dirtyN, lastErr); };
 
@@ -139,9 +194,12 @@ const Backend = (function(){
         if(b.subjects && b.subjects.length) setSubjects(b.subjects);
         if(b.config)  applyConfig(b.config);
         if(b.year) applyYear(String(b.year), b);
-        booted = true;
-        after();
-        while(waiters.length) waiters.shift()();
+        /* **週を読み直す前に、持ち越しを送る。** */
+        sendPending(() => {
+          booted = true;
+          after();
+          while(waiters.length) waiters.shift()();
+        });
       })
       .withFailureHandler(e => {
         booted = true;             /* 開けなくても止めない。手元の控えで続ける */
@@ -266,18 +324,19 @@ const Backend = (function(){
   /* たんぽぽ時間割へ出す。**中身はこちらで組んで渡す。**
      どのクラスのどの校時が何かを決めるのは画面（層の重ね方を知っている）。
      どの行・どの列に置くかを決めるのはシート側（実物の形を知っている）。 */
-  function exportTanpopo(titles, classes, ok, ng){
+  function exportTanpopo(titles, classes, slots, ok, ng){
     if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
     google.script.run
       .withSuccessHandler(r => ok(r))
       .withFailureHandler(e => ng(String((e && e.message) || "書き込めなかった")))
-      .apiExportTanpopo(fy(), wkKey(), titles, classes);
+      .apiExportTanpopo(fy(), wkKey(), titles, classes, slots);
   }
 
   /* 画面を閉じる前に、貯めたぶんを出し切る。
      出し切れないうちに閉じられそうなときは、引き止める。 */
   addEventListener("beforeunload", ev => {
     if(onGas && (dirtyN || sending)){
+      persistPending();          /* 先に控える。送り切れなくても次に開いたときに送る */
       flush();
       ev.preventDefault();
       ev.returnValue = "";

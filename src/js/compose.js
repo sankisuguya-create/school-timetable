@@ -251,12 +251,15 @@ function writeCell(d, s, patch){
     const cur = ownCell(d, s);
     let target = ("cls" in patch) ? patch.cls : cur.cls;
     if("title" in patch && !("cls" in patch)) target = normCls(plain(patch.title));
-    for(const c of allClasses()){          /* 行き先が変わるので一度どける */
+    /* 行き先が変わるので一度どける。**どけたクラスだけをサーバに伝える。**
+       全クラスに伝えると、1コマ直すたびに20枚のシートを読み書きすることになる
+       （週案はクラスごとに1枚。触っていないクラスのシートは開かない） */
+    for(const c of allClasses()){
       const e = (w.special[c] || {})[key];
-      if(e && e.sp === view.sp) delete w.special[c][key];
-    }
-    for(const c of allClasses()){            /* どけたぶんをサーバにも伝える */
-      if(c !== target) Backend.cellChanged("special", c, d, s);
+      if(e && e.sp === view.sp){
+        delete w.special[c][key];
+        if(c !== target) Backend.cellChanged("special", c, d, s);
+      }
     }
     if(target && allClasses().indexOf(target) >= 0){
       const sub = SUB_BY_CODE[view.sp];

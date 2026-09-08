@@ -84,6 +84,8 @@ await p.addInitScript(() => {
       apiReadWeek(y, m, t){ const r = call("apiReadWeek", [y, m, t], DATA.week); setTimeout(() => okFn(r), 0); },
       apiWriteCells(y, patches){
         call("apiWriteCells", [y, patches]);
+        /* __hang のあいだは返事をしない（送れないまま閉じた形を作る） */
+        if(window.__hang) return;
         const at = {};
         for(const q of patches)
           at[[q.date, q.slot, q.layer, q.target].join("|")] = q.remove ? 0 : 1700000000000;
@@ -95,8 +97,8 @@ await p.addInitScript(() => {
         call("apiWriteBaseAll", [y, table]);
         setTimeout(() => okFn({classes:Object.keys(table).length}), 0);
       },
-      apiExportTanpopo(y, m, titles, classes){
-        call("apiExportTanpopo", [y, m, titles, classes]);
+      apiExportTanpopo(y, m, titles, classes, slots){
+        call("apiExportTanpopo", [y, m, titles, classes, slots]);
         setTimeout(() => okFn({wrote:60, days:5, skipped:[], unknown:[], file:"たんぽぽ時間割"}), 0);
       },
       apiReadPaste(){
@@ -326,10 +328,12 @@ ok("出す前に、書いたぶんを先に送る",
    || (await calls()).indexOf("apiWriteCells") < 0, await calls());
 ok("選んだ交流級を渡す",
    !!tp && JSON.stringify(tp.args[3]) === JSON.stringify(["5-1", "5-2"]), tp && tp.args[3]);
-ok("紙に出ているとおりの授業名を渡す（月〜金・6校時ぶん）",
-   !!tp && Object.keys(tp.args[2]["5-1"]).length === 5
-        && Object.keys(tp.args[2]["5-1"]["0"]).length === 6,
-   tp && tp.args[2]["5-1"]);
+ok("紙に出ているとおりの授業名を渡す（月〜金ぶん）",
+   !!tp && Object.keys(tp.args[2]["5-1"]).length === 5, tp && tp.args[2]["5-1"]);
+/* この学校の時程は授業が3コマしかない。**時程シートの授業の行に合わせる** */
+ok("校時のIDは時程シートから決める",
+   !!tp && JSON.stringify(tp.args[4]) === JSON.stringify(["p1", "p2", "p3"]),
+   tp && tp.args[4]);
 ok("出したあと、何コマ入ったかを出す",
    (await p.locator("#tpWarn").innerText()).indexOf("60") >= 0,
    await p.locator("#tpWarn").innerText());
@@ -347,6 +351,40 @@ await p.locator("#prevWk").click();
 await p.waitForTimeout(500);
 ok("一度読んだ週は読み直さない（同じ週で往復しない）",
    (await calls()).indexOf("apiReadWeek") < 0, await calls());
+
+console.log("\n■ 送れないまま閉じても、次に開いたときに送る");
+/* 送らずに書いたコマを作り、その場で控えができているかを見る */
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(400);
+await p.evaluate(() => { window.__hang = true; });   /* 送っても返事が来ない状態 */
+await p.locator("#sheet .cell[data-d='0'][data-s='p3'] .t").click();
+await p.waitForTimeout(120);
+await p.locator(".pal[data-v='rika']").click();
+await p.waitForTimeout(1300);                 /* 控えを書くのを待つ */
+const pend = await p.evaluate(() =>
+  JSON.parse(localStorage.getItem("school-timetable/v3/pending") || "null"));
+ok("送っていないコマは、この端末に控える",
+   !!pend && pend.length === 1 && pend[0].title === "理科", pend);
+ok("控えるのは中身ごと（次に開いたとき、読み直しで消えないように）",
+   !!pend && pend[0].layer === "home" && pend[0].target === "5-1"
+   && /^\d{4}-\d{2}-\d{2}$/.test(pend[0].date), pend && pend[0]);
+
+/* 送らずに閉じたことにして、開き直す */
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.reload();
+await p.waitForTimeout(1200);
+const resent = await p.evaluate(() =>
+  window.__calls.filter(c => c.name === "apiWriteCells").map(c => c.args[1]));
+ok("開き直すと、控えていたぶんを送る",
+   resent.length === 1 && resent[0].length === 1 && resent[0][0].title === "理科", resent);
+ok("週を読み直すより先に送る", await p.evaluate(() => {
+     const n = window.__calls.map(c => c.name);
+     const w = n.indexOf("apiWriteCells"), r = n.indexOf("apiReadWeek");
+     return w >= 0 && (r < 0 || w < r);
+   }) === true, await calls());
+ok("送れたら控えは消す",
+   await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")) === null,
+   await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")));
 
 console.log(errs.length ? "\n【エラー】\n" + errs.join("\n") : "\nJSエラーなし");
 if(errs.length) ng += errs.length;

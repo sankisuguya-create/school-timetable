@@ -498,6 +498,71 @@ ok("どの日をなぜ飛ばしたかを言う",
    rep2.skipped.length === 1 && rep2.skipped[0].indexOf("中休み") >= 0, rep2.skipped);
 TPFILE.sheets["週案"][6][0] = "中休み";
 
+/* 実物は日によって行数が違う（16・18・15・18・18）。**揃っていなくても書く。**
+   骨（中休み・給食・昼休み）を探して、そこから校時の行を数える */
+(function(){
+  const W = 12, blank = () => new Array(W).fill("");
+  const g = [];
+  g.push(blank());
+  const days = [[2026,10,16], [2026,10,17]];
+  days.forEach((d, di) => {
+    const head = blank();
+    head[0] = new Date(d[0], d[1], d[2]);
+    head[1] = "3-3";
+    g.push(head);
+    /* 1日目は上に空行が1つ多い（＝骨の位置が下にずれる） */
+    if(di === 0) g.push(blank());
+    for(let i = 1; i <= 15; i++){
+      const row = blank();
+      if(i === 5)  row[0] = "中休み";
+      if(i === 10) row[0] = "給食";
+      if(i === 11) row[0] = "昼休み";
+      g.push(row);
+      /* 2日目は5校時のあとに空行を2つ足す（＝下がふくらむ） */
+      if(di === 1 && i === 13){ g.push(blank()); g.push(blank()); }
+    }
+  });
+  TPFILE.sheets["ずれ"] = g;
+  const at = ev('Sheets.head("設定").at');
+  for(const row of SHEETS["設定"]){
+    if(String(row[at["キー"]]) === "たんぽぽファイルID") row[at["値"]] = "TPID";
+    if(String(row[at["キー"]]) === "たんぽぽシート名")  row[at["値"]] = "ずれ";
+  }
+})();
+const rz = ev(`Store.exportTanpopo(2026, "2026-11-16", ${JSON.stringify(titles)}, ["3-3"])`);
+ok("行数が日によって違っても書く", rz.days === 2, rz);
+const Z = TPFILE.sheets["ずれ"];
+ok("空行が1つ多い日でも、正しい行に入る", Z[3][1] === "国語0", Z.slice(1,5).map(r => r[1]));
+ok("下がふくらんだ日でも、正しい行に入る", Z[19][1] === "国語1",
+   Z.slice(17,22).map(r => r[1]));
+
+/* 6校時の行が無い日（実物の水曜）。**その日を丸ごと飛ばさない** */
+(function(){
+  const g = TPFILE.sheets["ずれ"];
+  g.length = 0;
+  g.push(new Array(12).fill(""));
+  const head = new Array(12).fill(""); head[0] = new Date(2026, 10, 18); head[1] = "3-3";
+  g.push(head);
+  for(let i = 1; i <= 13; i++){          /* 6校時の2行が無い（+14 +15 が無い） */
+    const row = new Array(12).fill("");
+    if(i === 5)  row[0] = "中休み";
+    if(i === 10) row[0] = "給食";
+    if(i === 11) row[0] = "昼休み";
+    g.push(row);
+  }
+})();
+const rs = ev(`Store.exportTanpopo(2026, "2026-11-16", ${JSON.stringify(titles)}, ["3-3"])`);
+ok("6校時の行が無い日でも、1〜5校時は書く",
+   rs.days === 1 && TPFILE.sheets["ずれ"][2][1] === "国語2",
+   [rs, TPFILE.sheets["ずれ"][2][1]]);
+ok("書けなかった校時があることは言う",
+   rs.skipped.length === 1 && rs.skipped[0].indexOf("6校時") >= 0, rs.skipped);
+(function(){
+  const at = ev('Sheets.head("設定").at');
+  for(const row of SHEETS["設定"])
+    if(String(row[at["キー"]]) === "たんぽぽシート名") row[at["値"]] = "";
+})();
+
 /* この週の日付が無ければ、黙って何もしない代わりに理由を返す */
 const rep3 = ev(`Store.exportTanpopo(2026, "2026-12-07", ${JSON.stringify(titles)}, ["3-3"])`);
 ok("その週が無ければ書かず、理由を返す",
