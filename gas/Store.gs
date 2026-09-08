@@ -239,13 +239,52 @@ const Store = (function(){
     }
   }
 
+  /* 固定時間割の取り込み。**クラスごと・週ごとに丸ごと入れ替える。**
+     1クラスずつ40回に分けて送ると、途中で切れたときに半分だけ入った表が残る。
+     table = {クラス: {A:{"曜日|時程":{title,subject}}, B:{…}}} */
+  function writeBaseAll(year, table){
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try{
+      const target = {};
+      for(const cls in (table || {})) target[Sheets.asClass(cls)] = true;
+      for(const r of Sheets.readAll("基本時間割").rows)
+        if(String(r["年度"]) === String(year) && target[Sheets.asClass(r["クラス"])])
+          Sheets.blankRow("基本時間割", r.__row);
+      const adds = [];
+      for(const cls in (table || {}))
+        for(const v of ["A", "B"]){
+          const bank = (table[cls] || {})[v] || {};
+          for(const k in bank){
+            const p = k.split("|");
+            adds.push(Sheets.toArray("基本時間割", {
+              "年度":year, "クラス":cls, "週":v, "曜日":p[0], "時程":p[1],
+              "教科コード":bank[k].subject || "", "表示名":bank[k].title || ""
+            }));
+          }
+        }
+      Sheets.appendRows("基本時間割", adds);
+      SpreadsheetApp.flush();
+      return {classes:Object.keys(table || {}).length, rows:adds.length};
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  /* 貼り付けたシートを、そのままの形で渡す。読み方は画面側（src/js/fixed.js）。
+     **読み方を1か所にしておく。**シート用と貼り付け用で読み方が分かれると、
+     片方だけ直したときに結果が食い違う。 */
+  function readPaste(){
+    return Sheets.readGrid(Sheets.PASTE);
+  }
+
   function addDays_(isoStr, n){
     const p = String(isoStr).split("-");
     return new Date(+p[0], +p[1] - 1, +p[2] + n);
   }
 
   return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects,
-          writeCells, writeRoster, writeBase, ymd};
+          writeCells, writeRoster, writeBase, writeBaseAll, readPaste, ymd};
 })();
 
 /* ── 画面から呼ぶ口。**すべて1行目で Gate.check()。** ───────── */
@@ -278,4 +317,12 @@ function apiWriteRoster(year, classes, specials, week1, tanpopo){
 function apiWriteBase(year, cls, variant, bank){
   Gate.check();
   return Store.writeBase(year, cls, variant, bank);
+}
+function apiWriteBaseAll(year, table){
+  Gate.check();
+  return Store.writeBaseAll(year, table);
+}
+function apiReadPaste(){
+  Gate.check();
+  return Store.readPaste();
 }

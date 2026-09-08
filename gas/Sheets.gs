@@ -65,6 +65,8 @@ const Sheets = (function(){
         ["taiiku","体育","体",true], ["doutoku","道徳","道",true],
         ["gaikoku","外国語","外",true],["sogo","総合","総",true],
         ["gakkatsu","学活","学",true],
+        /* 図書は固定時間割の「と」。数えるかは学校が決める（1文字を入れて true に） */
+        ["tosho","図書","",false],
         /* 数えない教科は1文字を空にする。**書くと Excel 側の集計が増える。** */
         ["gyoji","行事","",false],   ["kyushoku","給食","",false],
         ["club","クラブ","",false],  ["iinkai","委員会","",false]
@@ -87,6 +89,10 @@ const Sheets = (function(){
   };
 
   const NAMES = Object.keys(SPEC);
+
+  /* 見出しの決まっていないシート。**学校の固定時間割表をそのまま貼る場所。**
+     列の並びは学校の表しだいなので、列名では読まない（読み方は src/js/fixed.js）。 */
+  const PASTE = "固定時間割取り込み";
 
   /* **クラス名は日付に化ける。**
      スプレッドシートは 1-1 を「1月1日」、6-3 を「6月3日」として取り込む。
@@ -151,6 +157,14 @@ const Sheets = (function(){
       }
       made.push(name);
     }
+    /* 貼り付け用のシート。見出しは作らない（学校の表をそのまま貼るため） */
+    if(!ss.getSheetByName(PASTE)){
+      const sh = ss.insertSheet(PASTE);
+      sh.getRange(1, 1).setValue(
+        "ここに学校の固定時間割表を、見出し（曜日・校時・A/B）ごと貼る。"
+        + "貼ったらウェブアプリの「基本時間割を取り込む」で読む。この1行は消してよい。");
+      made.push(PASTE);
+    }
     return {made, kept};
   }
 
@@ -206,7 +220,18 @@ const Sheets = (function(){
     sh.getRange(rowNo, 1, 1, SPEC[name].cols.length).clearContent();
   }
 
-  return {SPEC, NAMES, CLASS_COLS, TANPOPO_FILL, asClass, isDate,
+  /* 貼り付けたシートを、字の入っている範囲だけ**そのままの形**で読む。
+     日付に化けた 1-1 などもあるので、Date は月-日に戻して渡す。 */
+  function readGrid(name){
+    const sh = sheet(name);
+    if(!sh) return [];
+    const r = sh.getLastRow(), c = sh.getLastColumn();
+    if(!r || !c) return [];
+    return sh.getRange(1, 1, r, c).getValues()
+             .map(row => row.map(v => isDate(v) ? asClass(v) : String(v == null ? "" : v)));
+  }
+
+  return {SPEC, NAMES, PASTE, CLASS_COLS, TANPOPO_FILL, asClass, isDate, readGrid,
           setup, head, readAll, appendRows, toArray, setRow, blankRow, sheet};
 })();
 

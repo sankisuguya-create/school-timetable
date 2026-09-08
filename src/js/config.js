@@ -33,6 +33,9 @@ let SUBJECTS = [
   {code:"gaikoku", name:"外国語",short:"外", count:true},
   {code:"sogo",    name:"総合",  short:"総", count:true},
   {code:"gakkatsu",name:"学活",  short:"学", count:true},
+  /* 図書（固定時間割の「と」）。**時数に数えるかは学校が決める。**
+     数えるなら「時数表の1文字」を入れて count:true にする */
+  {code:"tosho",   name:"図書",  short:"",   count:false},
   {code:"gyoji",   name:"行事",  short:"",   count:false},
   {code:"kyushoku",name:"給食",  short:"",   count:false},
   {code:"club",    name:"クラブ",short:"",   count:false},

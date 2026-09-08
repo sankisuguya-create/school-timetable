@@ -208,9 +208,38 @@
     <span>週</span>
     <div class="seg"><button id="bvA" aria-pressed="true">A週</button><button id="bvB">B週</button></div>
     <button class="btn" id="baseCopy">A週をB週へ写す</button>
-    <button class="btn" id="basePrev">前年度から写す</button></div>
+    <button class="btn" id="basePrev">前年度から写す</button>
+    <button class="btn" id="baseImp">表から取り込む</button></div>
   <div id="baseGrid"></div>
   <div class="end"><button class="btn go" id="baseClose">閉じる</button></div>
+</div></dialog>
+
+<dialog id="impDlg"><div class="dlg">
+  <h2>固定時間割を取り込む</h2>
+  <p>学校の<b>固定時間割表</b>（1行1クラス・横に月〜金の各校時・各校時が<b>A週とB週の2列</b>）を、
+     そのまま読んで基本時間割にする。<br>
+     <b>見出し（曜日・校時・A/B）ごと</b>貼る。見出しから列の意味を決めているので、
+     数字の部分だけを貼ると読めない。</p>
+  <div class="row"><span>どこから</span>
+    <div class="seg" id="impSrc">
+      <button data-s="paste" aria-pressed="true">貼り付け</button>
+      <button data-s="sheet">シートから</button>
+      <button data-s="builtin">同梱の表</button>
+    </div>
+    <span class="hint" id="impSrcNote"></span></div>
+  <div id="impPasteBox">
+    <textarea id="impText" rows="5" placeholder="ここに表を貼る（Ctrl+V）"></textarea>
+  </div>
+  <div class="row"><button class="btn" id="impRead">読む</button>
+    <span class="hint" id="impStat"></span></div>
+  <div id="impWarn" class="tpwarn"></div>
+  <div class="row" id="impPickRow" hidden><span>見え方</span><select id="impCls"></select>
+    <span class="hint">読めた表のとおりに出す。<b>入れる前に1クラス見て確かめる</b></span></div>
+  <div id="impGrid" class="tpwrap"></div>
+  <div class="end">
+    <span class="hint" id="impCount"></span>
+    <button class="btn" id="impClose">閉じる</button>
+    <button class="btn go" id="impGo" disabled>基本時間割に入れる</button></div>
 </div></dialog>
 
 <dialog id="rosterDlg"><div class="dlg">
@@ -359,6 +388,7 @@
 /* @include js/util.js */
 /* @include js/store.js */
 /* @include js/backend.js */
+/* @include js/fixed.js */
 /* @include js/compose.js */
 /* @include js/sheet.js */
 /* @include js/panel.js */

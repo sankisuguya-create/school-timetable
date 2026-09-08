@@ -46,6 +46,7 @@ await p.addInitScript(() => {
       subjects: [
         {code:"kokugo", name:"国語", short:"国", count:true},
         {code:"sansu",  name:"算数", short:"算", count:true},
+        {code:"rika",   name:"理科", short:"理", count:true},
         {code:"gyoji",  name:"行事", short:"",   count:false}
       ]
     },
@@ -83,7 +84,20 @@ await p.addInitScript(() => {
         setTimeout(() => okFn({at, count:patches.length}), 0);
       },
       apiWriteRoster(y, c, s, w, tp){ call("apiWriteRoster", [y, c, s, w, tp]); setTimeout(() => okFn({}), 0); },
-      apiWriteBase(y, c, v, bank){ call("apiWriteBase", [y, c, v, bank]); setTimeout(() => okFn(true), 0); }
+      apiWriteBase(y, c, v, bank){ call("apiWriteBase", [y, c, v, bank]); setTimeout(() => okFn(true), 0); },
+      apiWriteBaseAll(y, table){
+        call("apiWriteBaseAll", [y, table]);
+        setTimeout(() => okFn({classes:Object.keys(table).length}), 0);
+      },
+      apiReadPaste(){
+        const g = call("apiReadPaste", [], [
+          ["", "", "月", "", "", ""],
+          ["", "", "1", "", "2", ""],
+          ["", "", "A", "B", "A", "B"],
+          ["5-1", "", "国", "", "算", "理"]
+        ]);
+        setTimeout(() => okFn(g), 0);
+      }
     };
     return api;
   }
@@ -107,7 +121,7 @@ console.log("\n■ シートの値がコードの既定に勝つ");
 ok("時程はシートの5行になる", await p.evaluate(() => SLOTS.length) === 5,
    await p.evaluate(() => SLOTS.map(s => s.id)));
 ok("時刻もシートのもの", await p.evaluate(() => SLOT_BY_ID.p1.time) === "8:40〜9:25");
-ok("教科はシートの3つ", await p.evaluate(() => SUBJECTS.length) === 3);
+ok("教科はシートの4つ", await p.evaluate(() => SUBJECTS.length) === 4);
 ok("用紙・余白・倍率もシートのもの",
    await p.evaluate(() => db.settings.paper + "/" + db.settings.margin + "/" + db.settings.k)
      === "A4/12/0.95",
@@ -194,6 +208,28 @@ ok("apiWriteRoster が呼ばれる", !!rq);
 ok("直した編成が届く", rq && rq.args[1]["1"].length === 3, rq && rq.args[1]);
 
 await p.locator("#rsClose").click(); await p.waitForTimeout(200);
+
+console.log("\n■ 固定時間割の取り込み");
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator("[data-act='base']").click(); await p.waitForTimeout(250);
+await p.locator("#baseImp").click(); await p.waitForTimeout(250);
+await p.locator("#impSrc button[data-s='sheet']").click(); await p.waitForTimeout(150);
+await p.locator("#impRead").click(); await p.waitForTimeout(400);
+ok("「シートから」で apiReadPaste を呼ぶ",
+   (await calls()).indexOf("apiReadPaste") >= 0, await calls());
+ok("シートの表をそのまま読める",
+   await p.evaluate(() => (impRes.classes["5-1"].B["0|p2"] || {}).title) === "理科",
+   await p.evaluate(() => impRes.classes && impRes.classes["5-1"]));
+await p.evaluate(() => { window.__calls.length = 0; });
+p.once("dialog", d => d.accept());
+await p.locator("#impGo").click(); await p.waitForTimeout(500);
+const ba = await lastCall("apiWriteBaseAll");
+ok("入れるときは1回でまとめて送る（クラスごとに送らない）",
+   !!ba && (await p.evaluate(() =>
+     window.__calls.filter(c => c.name === "apiWriteBase").length)) === 0, ba);
+ok("A週とB週の両方が届く",
+   !!ba && !!ba.args[1]["5-1"].A && !!ba.args[1]["5-1"].B, ba && Object.keys(ba.args[1]));
+await p.locator("#baseClose").click(); await p.waitForTimeout(250);
 
 console.log("\n■ たんぽぽ交流級もシートで持つ");
 ok("シートの印がそのまま選択になる",

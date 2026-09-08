@@ -299,6 +299,15 @@ table.tp td.f-none{background:repeating-linear-gradient(135deg,transparent 0 4px
 #tpSum .k.f-none{background:repeating-linear-gradient(135deg,transparent 0 3px,
   var(--line) 3px 4px)}
 table.tp tr.staff{opacity:.55}
+/* 固定時間割の取り込みプレビュー。**A週とB週で違うコマだけ目に入るようにする。**
+   全部に色を付けると、違うところが埋もれる（塗りは2色まで：docs/spec.md 9節） */
+table.tp.imp td{text-align:center;min-width:3.4em}
+table.tp.imp td.diff{background:var(--tint);font-weight:600}
+table.tp.imp tr.b th{color:var(--tx-sub);font-weight:400}
+#impText{width:100%;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+  border:1px solid var(--line);border-radius:var(--r-sm);padding:8px;resize:vertical;
+  background:var(--card);color:var(--tx)}
+#impGrid{margin-top:8px}
 ul.owlist{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:9px}
 ul.owlist li{border:1px solid var(--line);border-left:4px solid var(--cat-clash);
   border-radius:var(--r-sm);padding:9px 11px;font-size:13px;line-height:1.7;color:var(--tx)}
@@ -649,9 +658,38 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
     <span>週</span>
     <div class="seg"><button id="bvA" aria-pressed="true">A週</button><button id="bvB">B週</button></div>
     <button class="btn" id="baseCopy">A週をB週へ写す</button>
-    <button class="btn" id="basePrev">前年度から写す</button></div>
+    <button class="btn" id="basePrev">前年度から写す</button>
+    <button class="btn" id="baseImp">表から取り込む</button></div>
   <div id="baseGrid"></div>
   <div class="end"><button class="btn go" id="baseClose">閉じる</button></div>
+</div></dialog>
+
+<dialog id="impDlg"><div class="dlg">
+  <h2>固定時間割を取り込む</h2>
+  <p>学校の<b>固定時間割表</b>（1行1クラス・横に月〜金の各校時・各校時が<b>A週とB週の2列</b>）を、
+     そのまま読んで基本時間割にする。<br>
+     <b>見出し（曜日・校時・A/B）ごと</b>貼る。見出しから列の意味を決めているので、
+     数字の部分だけを貼ると読めない。</p>
+  <div class="row"><span>どこから</span>
+    <div class="seg" id="impSrc">
+      <button data-s="paste" aria-pressed="true">貼り付け</button>
+      <button data-s="sheet">シートから</button>
+      <button data-s="builtin">同梱の表</button>
+    </div>
+    <span class="hint" id="impSrcNote"></span></div>
+  <div id="impPasteBox">
+    <textarea id="impText" rows="5" placeholder="ここに表を貼る（Ctrl+V）"></textarea>
+  </div>
+  <div class="row"><button class="btn" id="impRead">読む</button>
+    <span class="hint" id="impStat"></span></div>
+  <div id="impWarn" class="tpwarn"></div>
+  <div class="row" id="impPickRow" hidden><span>見え方</span><select id="impCls"></select>
+    <span class="hint">読めた表のとおりに出す。<b>入れる前に1クラス見て確かめる</b></span></div>
+  <div id="impGrid" class="tpwrap"></div>
+  <div class="end">
+    <span class="hint" id="impCount"></span>
+    <button class="btn" id="impClose">閉じる</button>
+    <button class="btn go" id="impGo" disabled>基本時間割に入れる</button></div>
 </div></dialog>
 
 <dialog id="rosterDlg"><div class="dlg">
@@ -832,6 +870,9 @@ let SUBJECTS = [
   {code:"gaikoku", name:"外国語",short:"外", count:true},
   {code:"sogo",    name:"総合",  short:"総", count:true},
   {code:"gakkatsu",name:"学活",  short:"学", count:true},
+  /* 図書（固定時間割の「と」）。**時数に数えるかは学校が決める。**
+     数えるなら「時数表の1文字」を入れて count:true にする */
+  {code:"tosho",   name:"図書",  short:"",   count:false},
   {code:"gyoji",   name:"行事",  short:"",   count:false},
   {code:"kyushoku",name:"給食",  short:"",   count:false},
   {code:"club",    name:"クラブ",short:"",   count:false},
@@ -1295,6 +1336,27 @@ const Backend = (function(){
       .apiWriteBase(fy(), cls, variant, ((Y().base[cls] || {})[variant]) || {});
   }
 
+  /* 固定時間割の取り込み。**20クラス×A週B週を1回で送る。**
+     1クラスずつ送ると、途中で切れたときに半分だけ入った表が残る。 */
+  function saveBaseAll(list, after){
+    if(!onGas){ save(); return after && after(); }
+    const table = {}, B = Y().base;
+    for(const c of list) if(B[c]) table[c] = {A:B[c].A || {}, B:B[c].B || {}};
+    google.script.run
+      .withSuccessHandler(r => after && after(r))
+      .withFailureHandler(e => notify("基本時間割を保存できなかった（" + (e && e.message) + "）"))
+      .apiWriteBaseAll(fy(), table);
+  }
+
+  /* 貼り付け用シートを、そのままの形で読む。手元では使えない */
+  function readPaste(ok, ng){
+    if(!onGas) return ng("手元では、シートの代わりに貼り付け欄を使う");
+    google.script.run
+      .withSuccessHandler(g => ok(g || []))
+      .withFailureHandler(e => ng("シートを読めなかった（" + (e && e.message) + "）"))
+      .apiReadPaste();
+  }
+
   /* 画面を閉じる前に、貯めた差分を出し切る */
   addEventListener("beforeunload", ev => {
     if(onGas && (queue.length || sending)){
@@ -1304,9 +1366,259 @@ const Backend = (function(){
     }
   });
 
-  return {isGas, setNotifier, cellChanged, flush, boot, ready, saveRoster, saveBase};
+  return {isGas, setNotifier, cellChanged, flush, boot, ready,
+          saveRoster, saveBase, saveBaseAll, readPaste};
 })();
 /* ▲ src/js/backend.js ▲ */
+/* ▼ src/js/fixed.js ▼ */
+/* 固定時間割（基本時間割）の取り込み。
+
+   学校の「固定時間割案」は、1行が1クラス・横に 月〜金 の各校時が並び、
+   各校時が **A週とB週の2列**に分かれた表になっている。
+   その形のまま読んで、クラスごとの基本時間割にする。
+
+   **同じ教科が続く2列（A・B）は、片方だけに字が入っている。**
+   もとの表では2列をつないで1つのマスに見せているため、
+   値はその中のどちらか一方にしかない。だから
+   **片方が空なら、もう片方と同じ**として読む。
+   授業が無い校時は、空ではなく「ー」と書いてある。 */
+
+/* 表の1文字と教科コードの対応。**表示名（国語など）でも通す。** */
+const FIXED_MARK = {
+  "国":"kokugo", "社":"shakai", "算":"sansu", "理":"rika", "生":"seikatsu",
+  "音":"ongaku", "図":"zuko",   "家":"katei", "体":"taiiku", "道":"doutoku",
+  "外":"gaikoku","総":"sogo",   "学":"gakkatsu", "と":"tosho"
+};
+const DASHES = /^[-ー‐‑–—―−ｰ－~〜]+$/;
+
+/* 授業のコマ（休み時間を除く）だけを、表の 1・2・3… に当てる */
+const lessonSlots = () => SLOTS.filter(s => s.kind === "lesson");
+
+function fixNorm(v){
+  let s = String(v == null ? "" : v).normalize("NFKC").trim();
+  s = s.replace(/[　\s]+/g, "");
+  return s;
+}
+/* クラス名。**日付に化けた値（Date）でも元に戻す。** */
+function fixCls(v){
+  if(v && typeof v === "object" && typeof v.getMonth === "function")
+    return (v.getMonth() + 1) + "-" + v.getDate();
+  let s = fixNorm(v).replace(/[‐‑–—―ー−ｰ－]/g, "-");
+  const m = s.match(/^([1-9])\s*年\s*([1-9])\s*組$/);
+  if(m) return m[1] + "-" + m[2];
+  return s;
+}
+const isClsName = s => /^[1-9]-[1-9]$/.test(s);
+
+/* 1マスの値を、基本時間割の中身にする。
+   知らない字は**捨てずに題名として残し、あとで知らせる**。 */
+function fixCell(v, unknown){
+  const s = fixNorm(v);
+  if(!s || DASHES.test(s)) return null;
+  const code = FIXED_MARK[s]
+            || (SUB_BY_NAME[s] && SUB_BY_NAME[s].code)
+            || (SUB_BY_CODE[s] && s);
+  /* **「教科」シートに無い教科は、教科として入れない。**
+     1文字の対応表はこちらが持っているが、正本は「教科」シート。
+     こちらの対応表にあるからといって、その学校がその教科を持っているとは限らない。 */
+  const sub = code ? SUB_BY_CODE[code] : null;
+  if(!sub){
+    if(unknown.indexOf(s) < 0) unknown.push(s);
+    return {title:s, subject:null};
+  }
+  return {title:sub.name, subject:sub.code};
+}
+
+/* ── 表を読む ──────────────────────────────────
+   grid = 行の配列（1行は列の配列）。戻り値は
+     {classes:{クラス:{A:bank, B:bank}}, days, periods, unknown, notes} */
+function parseFixed(grid){
+  const notes = [], unknown = [];
+  const cell = (r, c) => (grid[r] && grid[r][c] !== undefined) ? grid[r][c] : "";
+
+  /* A週・B週の行を探す。この行がこの表の背骨になる */
+  let abRow = -1, abBest = 0;
+  for(let r = 0; r < grid.length; r++){
+    let n = 0;
+    for(let c = 0; c < grid[r].length; c++){
+      const s = fixNorm(cell(r, c)).toUpperCase();
+      if(s === "A" || s === "B") n++;
+    }
+    if(n > abBest){ abBest = n; abRow = r; }
+  }
+  if(abRow < 0 || abBest < 4)
+    return {error:"A週・B週の行が見つからない。表の見出しごと貼る"};
+
+  /* A と、その次の B で1つの校時 */
+  const pairs = [];
+  let openA = -1;
+  for(let c = 0; c < grid[abRow].length; c++){
+    const s = fixNorm(cell(abRow, c)).toUpperCase();
+    if(s === "A") openA = c;
+    else if(s === "B" && openA >= 0){ pairs.push([openA, c]); openA = -1; }
+  }
+  if(!pairs.length) return {error:"A と B の組が見つからない"};
+
+  /* 校時の行（A週B週の上）と、曜日の行（さらに上）。
+     **いちばん当てはまる行を選ぶ。**上から数えた位置で決めない
+     （学校の表は上に題名や空行が入る） */
+  let perRow = -1, perBest = 1;
+  for(let r = abRow - 1; r >= 0; r--){
+    let n = 0;
+    for(const [a, b] of pairs)
+      if(/^[1-9]$/.test(fixNorm(cell(r, a))) || /^[1-9]$/.test(fixNorm(cell(r, b)))) n++;
+    if(n > perBest){ perBest = n; perRow = r; }
+  }
+  if(perRow < 0) return {error:"校時（1・2・3…）の行が見つからない"};
+
+  let dayRow = -1, dayBest = 0;
+  for(let r = perRow - 1; r >= 0; r--){
+    let n = 0;
+    for(let c = 0; c < grid[r].length; c++)
+      if(DOW.indexOf(fixNorm(cell(r, c)).charAt(0)) >= 0) n++;
+    if(n > dayBest){ dayBest = n; dayRow = r; }
+  }
+  if(dayRow < 0) return {error:"曜日（月・火…）の行が見つからない"};
+
+  /* 曜日は1日ぶんをつないだマスなので、左から見て最後に出たものを引き継ぐ */
+  const dayAt = [];
+  let cur = -1;
+  for(let c = 0; c <= pairs[pairs.length - 1][1]; c++){
+    const d = DOW.indexOf(fixNorm(cell(dayRow, c)).charAt(0));
+    if(d >= 0) cur = d;
+    dayAt[c] = cur;
+  }
+
+  /* 校時の並び。曜日で校時数が違う（月・水は5校時までなど） */
+  const slots = lessonSlots();
+  const cols = [];
+  for(const [a, b] of pairs){
+    const d = dayAt[a];
+    const nStr = fixNorm(cell(perRow, a)) || fixNorm(cell(perRow, b));
+    const n = +nStr;
+    if(d < 0 || !(n >= 1 && n <= slots.length)){
+      notes.push("読めない見出しの列があった（" + (nStr || "空") + "）。その列は飛ばした");
+      continue;
+    }
+    cols.push({a, b, d, slot:slots[n - 1].id});
+  }
+  if(!cols.length) return {error:"曜日と校時のわかる列が1つも無い"};
+
+  /* 1行1クラス */
+  const classes = {}, order = [];
+  const left = pairs[0][0];
+  for(let r = abRow + 1; r < grid.length; r++){
+    let cls = "";
+    for(let c = 0; c < left && !cls; c++){
+      const s = fixCls(cell(r, c));
+      if(isClsName(s)) cls = s;
+    }
+    if(!cls) continue;
+    if(classes[cls]){ notes.push(cls + " の行が2つあった。**下の行を使った**"); }
+    else order.push(cls);
+    const A = {}, B = {};
+    for(const col of cols){
+      let a = fixCell(cell(r, col.a), unknown);
+      let b = fixCell(cell(r, col.b), unknown);
+      /* つないだマスは片方だけに字がある。**空いている側は同じ授業** */
+      if(a && !b) b = clone(a);
+      else if(b && !a) a = clone(b);
+      const k = ck(col.d, col.slot);
+      if(a) A[k] = a;
+      if(b) B[k] = b;
+    }
+    classes[cls] = {A, B};
+  }
+  if(!order.length) return {error:"クラスの行（1-1 など）が見つからない"};
+  return {classes, order, unknown, notes,
+          days:new Set(cols.map(c => c.d)).size, periods:cols.length};
+}
+
+/* ── 同梱の写し（2026年度 固定時間割案 4.15現在） ──────
+   1クラス2行（A週・B週）。1日6文字で、授業の無い校時は「.」。
+   **正本は学校の固定時間割表。**ここにあるのは取り込みの元にする写しで、
+   表が新しくなったら「貼り付けて取り込む」で入れ替える。 */
+const FIXED_YEAR = 2026;
+const FIXED_NAME = "2026年度 固定時間割案（4.15現在）";
+const FIXED_TABLE = {
+  "1-1": ["国算音国生./国体算生国./国道図図../算国体国学./体算と生音.",
+           "国算音国生./国体算生国./国道図図../算国体国学./体算と生音."],
+  "1-2": ["国国図図生./体国算生道./国音算国../算体生国学./国と体算音.",
+           "国国図図生./体国算生道./国音算国../算体生国学./国と体算音."],
+  "1-3": ["国算生学と./国算体生国./国算音国../体国図図道./国体算生音.",
+           "国算生学と./国算体生国./国算音国../体国図図道./国体算生音."],
+  "2-1": ["算国体生国./算国生道音./体算国と国./図図算国音./算国生体学.",
+           "算国体生国./算国生道音./体算国と国./図図算国音./算国生体学."],
+  "2-2": ["体算国道音./国算生国音./算体生国学./算生国体国./図図国と算.",
+           "体算国道音./国算生国音./算体生国学./算生国体国./図図国と算."],
+  "2-3": ["国体算国生./算国音生と./国算体生国./国算音道体./算国図図学.",
+           "国体算国生./算国音生と./国算体生国./国算音道体./算国図図学."],
+  "3-1": ["国体算社理./国外算総図図/体算道国音./国算理理と./国算体社学総",
+           "国体算社図./国外算総理理/体算道国音./国算音理と./国算体社学総"],
+  "3-2": ["国社体算図./国と外算理理/国体社算総./音国道算総./体算国学音理",
+           "国社体算理./国と外算図図/国体社算総./音国道算総./体算国学理理"],
+  "3-3": ["体と算国社./外国算道総社/国算体学理./理理算国総./算体図図国音",
+           "体と算国社./外国算道総社/国算体学図./理音算国総./算体理理国音"],
+  "4-1": ["国音社体算./理理体国道算/国理外算総./社体算学国社/と総国算図図",
+           "国音社体算./理理体国道算/国理外算総./社体算学国音/と総国算図社"],
+  "4-2": ["と国音社算./国体理理道算/外社算国総./図図体国社算/国理算総体学",
+           "と国音社算./国体理理道算/外社算国総./図社体国音算/国理算総体学"],
+  "4-3": ["音国理理算./と国算体道社/理外国算総./体国算社図図/国算社体学総",
+           "音国理理算./と国算体道社/理外国算総./体国算音図社/国算社体学総"],
+  "5-1": ["図総国算外./家家音体算国/社算理理国./体学算理国社/外体算社国道",
+           "図図国算外./家総音体算国/社算理理国./体と算理国社/外音算社国道"],
+  "5-2": ["理理算外国./図総体国音算/家家社国算./国体理社算学/国外社体算道",
+           "理理算外国./図図体国音算/家総社国算./国体理社算と/国外社音算道"],
+  "5-3": ["国外算体理./体算社音国学/図総社算国./算外家家国社/体国理理算道",
+           "国外算体理./体算社音国と/図図社算国./算外家総国社/音国理理算道"],
+  "5-4": ["算国外社体./国体理理算音/国学家家算./外国図総算社/理算体社国道",
+           "算国外社体./国体理理算音/国と家総算./外国図図算社/理算音社国道"],
+  "6-1": ["国体図図算./音国家総算社/理理算音国./算理体社外国/算国外道社と",
+           "国体図総算./音国家家算社/理理算体国./算理体社外国/算国外道社学"],
+  "6-2": ["算国体社音./社算国と理理/音国図図算./理道国外体算/国算家総外社",
+           "算国体社音./社算国学理理/体国図総算./理道国外体算/国算家家外社"],
+  "6-3": ["家総国音算./理理国社体算/国音社算理./算道外と社国/図図算国体外",
+           "家家国音算./理理国社体算/国体社算理./算道外学社国/図総算国体外"],
+  "6-4": ["体算理理国./社音図図算国/と社音国算./国算道体社外/家総国外理算",
+           "体算理理国./社音図総算国/学社体国算./国算道体社外/家家国外理算"]
+};
+
+/* 写しを、表を読んだのと同じ形にする */
+function fixedBuiltin(){
+  const slots = lessonSlots(), classes = {}, order = [], unknown = [];
+  for(const cls in FIXED_TABLE){
+    const [sa, sb] = FIXED_TABLE[cls];
+    const bank = s => {
+      const out = {};
+      s.split("/").forEach((day, d) => {
+        for(let i = 0; i < day.length && i < slots.length; i++){
+          if(day.charAt(i) === ".") continue;      /* 授業の無い校時 */
+          const v = fixCell(day.charAt(i), unknown);
+          if(v) out[ck(d, slots[i].id)] = v;
+        }
+      });
+      return out;
+    };
+    classes[cls] = {A:bank(sa), B:bank(sb)};
+    order.push(cls);
+  }
+  return {classes, order, unknown, notes:[], days:5, periods:28, name:FIXED_NAME};
+}
+
+/* ── 入れる ────────────────────────────────────
+   読めたクラスだけを入れ替える。表に無いクラスの基本時間割は触らない。 */
+function applyFixed(res){
+  const B = Y().base, done = [];
+  for(const cls of res.order){
+    if(allClasses().indexOf(cls) < 0) continue;   /* 編成に無いクラスは入れない */
+    B[cls] = {A:clone(res.classes[cls].A), B:clone(res.classes[cls].B)};
+    done.push(cls);
+  }
+  save();
+  Backend.saveBaseAll(done);
+  return done;
+}
+/* ▲ src/js/fixed.js ▲ */
 /* ▼ src/js/compose.js ▼ */
 /* 層の合成と書き込み。**この画面のいちばん大事な決まりがここにある。**
 
@@ -2247,6 +2559,139 @@ function drawBaseGrid(){
   $("baseFy").textContent = fy() + "年度";
 }
 
+/* ── 固定時間割の取り込み ─────────────────────
+   学校の固定時間割表を、そのままの形で読んで基本時間割にする。
+   **読んですぐ入れない。** 何クラス読めたか・読めない字はどれかを先に見せる。
+   入れ違いに気づかないまま20クラスぶんを入れ替えると、戻す手立てが無い。 */
+
+let impRes = null;              /* いま読めている表 */
+let impSrc = "paste";
+
+function openImpDlg(){
+  impRes = null;
+  $("impText").value = "";
+  drawImp();
+  $("impDlg").showModal();
+}
+function setImpSrc(v){
+  impSrc = v;
+  for(const b of $("impSrc").querySelectorAll("button"))
+    b.setAttribute("aria-pressed", String(b.dataset.s === v));
+  $("impPasteBox").hidden = v !== "paste";
+  $("impSrcNote").innerHTML =
+      v === "paste"   ? "学校の表を選んで写し、ここに貼る"
+    : v === "sheet"   ? "<b>固定時間割取り込み</b>シートに貼ってあるものを読む（本番のみ）"
+                      : escText(FIXED_NAME) + " を読む";
+  impRes = null;
+  drawImp();
+}
+
+/* 貼り付けた字を表にする。エクセルから写すと、
+   タブ区切りで1行1行が改行になっている。 */
+function tsvGrid(text){
+  return String(text).replace(/\r/g, "").split("\n").map(line => line.split("\t"));
+}
+
+function readImp(){
+  if(impSrc === "builtin"){ impRes = fixedBuiltin(); return drawImp(); }
+  if(impSrc === "paste"){
+    const t = $("impText").value;
+    if(!t.trim()){ impRes = {error:"まだ何も貼っていない"}; return drawImp(); }
+    impRes = parseFixed(tsvGrid(t));
+    return drawImp();
+  }
+  $("impStat").textContent = "シートを読んでいる…";
+  Backend.readPaste(
+    g => { impRes = g.length ? parseFixed(g) : {error:"シートが空だった"}; drawImp(); },
+    why => { impRes = {error:why}; drawImp(); });
+}
+
+function drawImp(){
+  const boxes = [], r = impRes;
+  const known = r && r.order ? r.order.filter(c => allClasses().indexOf(c) >= 0) : [];
+  const miss  = r && r.order ? r.order.filter(c => allClasses().indexOf(c) < 0)  : [];
+  const none  = r && r.order ? allClasses().filter(c => r.order.indexOf(c) < 0)   : [];
+
+  if(!r){
+    boxes.push("<div class='box ok'>まだ読んでいない。上で選んで「読む」を押す。</div>");
+  } else if(r.error){
+    boxes.push("<div class='box'><b>読めなかった。</b>" + escText(r.error) + "</div>");
+  } else {
+    if(r.unknown && r.unknown.length)
+      boxes.push("<div class='box'><b>教科として読めない字：" + r.unknown.map(escText).join("・")
+        + "</b><br>そのまま題名として入る。教科として数えたいときは、"
+        + "「教科」シートに足してから読み直す。</div>");
+    if(miss.length)
+      boxes.push("<div class='box'><b>" + miss.map(escText).join("・")
+        + "</b> は<b>いまの学級編成に無い</b>ので入れない。"
+        + "編成が古いなら「学級編成」で直してから読み直す。</div>");
+    if(none.length)
+      boxes.push("<div class='box'><b>" + none.map(escText).join("・")
+        + "</b> は表に無かった。<b>いまの基本時間割のまま</b>にする。</div>");
+    for(const n of (r.notes || [])) boxes.push("<div class='box'>" + escText(n) + "</div>");
+    if(!boxes.length)
+      boxes.push("<div class='box ok'>" + known.length
+        + " クラスぶんを読めた。気になるところは無い。</div>");
+  }
+  $("impWarn").innerHTML = boxes.join("");
+  $("impStat").textContent = r && !r.error
+    ? (r.name ? r.name + "／" : "") + known.length + " クラス・"
+      + (r.periods || 0) + " 校時ぶん"
+    : "";
+  $("impGo").disabled = !known.length;
+  $("impCount").innerHTML = known.length
+    ? "<b>" + known.length + " クラス</b>の A週・B週を入れ替える" : "";
+
+  /* 入れる前に、1クラスだけ表のとおりに見せる */
+  $("impPickRow").hidden = !known.length;
+  if(!known.length){ $("impGrid").innerHTML = ""; return; }
+  const cur = known.indexOf($("impCls").value) >= 0 ? $("impCls").value : known[0];
+  fillSelect($("impCls"), known.map(c => ({v:c, t:c})), cur);
+  drawImpGrid(cur);
+}
+
+function drawImpGrid(cls){
+  const got = impRes.classes[cls] || {A:{}, B:{}};
+  const slots = lessonSlots();
+  const head = "<tr><th></th><th></th>"
+    + slots.map(s => "<th>" + escText(s.name) + "</th>").join("") + "</tr>";
+  const body = [];
+  for(let d = 0; d < 5; d++)
+    for(const v of ["A", "B"]){
+      const bank = got[v] || {};
+      body.push("<tr" + (v === "B" ? " class='b'" : "") + ">"
+        + (v === "A" ? "<th rowspan='2'>" + DOW[d] + "</th>" : "")
+        + "<th>" + v + "週</th>"
+        + slots.map(s => {
+            const e = bank[ck(d, s.id)];
+            const same = (got.A || {})[ck(d, s.id)], other = (got.B || {})[ck(d, s.id)];
+            const diff = (same ? same.title : "") !== (other ? other.title : "");
+            return "<td" + (diff ? " class='diff'" : "") + ">"
+                 + (e ? escText(e.title) : "<i>—</i>") + "</td>";
+          }).join("") + "</tr>");
+    }
+  $("impGrid").innerHTML = "<table class='tp imp'>" + head + body.join("") + "</table>";
+}
+
+/* 入れる。**いまの基本時間割は消える**ので、そこを先に言う。 */
+function goImp(){
+  if(!impRes || impRes.error) return;
+  const known = impRes.order.filter(c => allClasses().indexOf(c) >= 0);
+  if(!known.length) return;
+  const yes = confirm(
+    fy() + "年度の基本時間割を、読んだ表で入れ替えます。\n\n"
+    + "・入れ替えるクラス：" + known.length + "（" + known.join("、") + "）\n"
+    + "・A週とB週の両方が入れ替わります\n"
+    + "・いま入っている基本時間割は消えます\n\n"
+    + "週案に手で書いたものは消えません。つづけますか？");
+  if(!yes) return;
+  const done = applyFixed(impRes);
+  toast("基本時間割に入れた（<b>" + done.length + " クラス</b>）");
+  $("impDlg").close();
+  if($("baseDlg").open) drawBaseGrid();
+  refreshWeek();
+}
+
 /* ── 学級編成 ───────────────────────────────────
    本番では「クラス」シートが正本。ここはその写し。
    **年度ごとに持つ。** 直しても前の年度は変わらない。 */
@@ -2553,6 +2998,16 @@ function wire(){
     toast("前年度の " + escText(c) + " を写した");
   });
   on("baseClose","click", () => { $("baseDlg").close(); if(view.kind !== "gate") buildSheet(); });
+  on("baseImp","click", openImpDlg);
+
+  /* 固定時間割の取り込み */
+  for(const b of $("impSrc").querySelectorAll("button"))
+    b.onclick = () => setImpSrc(b.dataset.s);
+  on("impRead","click", readImp);
+  on("impCls","change", () => drawImpGrid($("impCls").value));
+  on("impGo","click", goImp);
+  on("impClose","click", () => $("impDlg").close());
+  on("impText","paste", () => setTimeout(readImp, 0));   /* 貼ったらすぐ読む */
 
   /* 学級編成 */
   on("rsAddG","click", () => {
@@ -2653,7 +3108,8 @@ function start(){
   /* 本番は「設定」「時程」「教科」シートを先に読み、続けてその年度と週を読む。
      手元（localStorage）ではどちらも素通りして、そのまま次へ進む。 */
   Backend.boot(() => Backend.ready(() => {
-    /* 見本の基本時間割は手元でだけ入れる。本番はシートが正本で、空なら空のまま */
+    /* 手元では、同梱の固定時間割を入れて見えるようにする。
+       本番は基本時間割シートが正本で、空なら空のまま（取り込みで入れる） */
     if(!Backend.isGas() && !Object.keys(Y().base).length) seedBase();
     if(!Backend.isGas()) save();
     applyPaper();
@@ -2661,29 +3117,13 @@ function start(){
   }));
 }
 
-/* 見本の基本時間割。本番では基本時間割シートから来る。 */
+/* 手元で見せる基本時間割。**同梱の固定時間割の写しを入れる。**
+   本番では基本時間割シートから来るので、ここは通らない。 */
 function seedBase(){
-  const wheel = ["kokugo","sansu","rika","ongaku","taiiku","zuko","shakai","doutoku",
-                 "gaikoku","sogo","gakkatsu","kokugo","sansu","taiiku","kokugo",
-                 "sansu","shakai","rika","kokugo","sansu","zuko","ongaku","taiiku",
-                 "sansu","kokugo","sogo","gakkatsu","kokugo","sansu","rika"];
-  const B = Y().base;
-  allClasses().forEach((c, ci) => {
-    B[c] = {A:{}, B:{}};
-    let i = 0;
-    for(let d = 0; d < 5; d++) for(const s of SLOTS){
-      if(s.kind === "brk"){
-        if(s.id === "am2")
-          B[c].A[ck(d, s.id)] = {title:["漢字","計算","読書","漢字","計算"][d], subject:null};
-        if(s.id === "lun")
-          B[c].A[ck(d, s.id)] = {title:"給食・そうじ", subject:null};
-        continue;
-      }
-      const code = wheel[(i + ci * 7) % wheel.length]; i++;
-      B[c].A[ck(d, s.id)] = {title:SUB_BY_CODE[code].name, subject:code};
-    }
-    B[c].B = clone(B[c].A);
-  });
+  const res = fixedBuiltin(), B = Y().base;
+  for(const cls of res.order)
+    if(allClasses().indexOf(cls) >= 0)
+      B[cls] = {A:clone(res.classes[cls].A), B:clone(res.classes[cls].B)};
 }
 
 start();

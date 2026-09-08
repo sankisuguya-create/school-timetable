@@ -42,6 +42,11 @@ function fakeSheet(name){
           for(let i = 0; i < nr; i++) out.push(grid[r - 1 + i].slice(c - 1, c - 1 + nc));
           return out;
         },
+        setValue(v){
+          ensure(grid, r, c);
+          grid[r - 1][c - 1] = v;
+          return this;
+        },
         setValues(v){
           for(let i = 0; i < nr; i++) for(let j = 0; j < nc; j++)
             grid[r - 1 + i][c - 1 + j] = v[i][j];
@@ -108,7 +113,7 @@ const rowsOf = name => SHEETS[name].filter(r => r.some(v => v !== "" && v != nul
 /* ── シートを作る ─────────────────────────────── */
 console.log("■ シートを作る");
 let made = ev("Sheets.setup()");
-ok("8枚できる", made.made.length === 8, made.made);
+ok("8枚＋貼り付け用の1枚ができる", made.made.length === 9, made.made);
 made = ev("Sheets.setup()");
 ok("2回目は何も作らない（何度走らせても同じ）",
    made.made.length === 0 && made.kept.length === 8, made);
@@ -121,7 +126,7 @@ ok("1校時は授業で、時刻を持つ",
    slots[2].id === "p1" && slots[2].kind === "lesson" && slots[2].time.indexOf(":") > 0, slots[2]);
 ok("朝休みは休み", slots[0].kind === "brk");
 const subs = ev("Store.readSubjects()");
-ok("教科が17", subs.length === 17, subs.length);
+ok("教科が18（図書を含む）", subs.length === 18, subs.length);
 ok("国語は数える／行事は数えない",
    subs.find(s => s.code === "kokugo").count === true
    && subs.find(s => s.code === "gyoji").count === false);
@@ -245,6 +250,28 @@ ok("印は書き直したとおりになる",
    JSON.stringify(ev("Store.readRoster(2028).tanpopo")) === JSON.stringify(["3-1"]),
    ev("Store.readRoster(2028).tanpopo"));
 
+console.log("\n■ 固定時間割の取り込み（貼り付け用シート）");
+ok("貼り付け用のシートも作る", !!SHEETS["固定時間割取り込み"], Object.keys(SHEETS));
+ok("見出しは作らない（学校の表をそのまま貼るため）",
+   ev('Sheets.SPEC["固定時間割取り込み"]') === undefined);
+(function(){
+  const g = SHEETS["固定時間割取り込み"];
+  g.length = 0;
+  const put = rows => rows.forEach(r => g.push(r.concat(new Array(20 - r.length).fill(""))));
+  put([["", "", "月", "", "", ""],
+       ["", "", "1", "", "2", ""],
+       ["", "", "A", "B", "A", "B"],
+       ["1-1", "", "国", "", "算", "理"]]);
+})();
+const paste = ev("Store.readPaste()");
+ok("貼ったものを形のまま読む", paste.length === 4 && paste[2][2] === "A", paste[2]);
+ok("読み方はシートに持たせない（画面側で読む）",
+   paste[3][0] === "1-1" && paste[3][2] === "国", paste[3]);
+/* クラス名が日付に化けていても戻す */
+SHEETS["固定時間割取り込み"][3][0] = new Date(2026, 0, 1);
+ok("化けたクラス名は月-日に戻して渡す", ev("Store.readPaste()")[3][0] === "1-1",
+   ev("Store.readPaste()")[3][0]);
+
 console.log("\n■ 基本時間割");
 ev(`Store.writeBase(2026, "3-3", "A", {"0|p1":{title:"国語", subject:"kokugo"},
                                        "0|p2":{title:"算数", subject:"sansu"}})`);
@@ -259,10 +286,35 @@ base = ev("Store.readBase(2026)");
 ok("A週を入れ替えてもB週は残る",
    Object.keys(base["3-3"].A).length === 1 && base["3-3"].B["0|p1"].title === "体育");
 
+console.log("\n■ 固定時間割をまとめて入れる");
+ev(`Store.writeBaseAll(2026, {
+      "3-3": {A:{"0|p1":{title:"国語",subject:"kokugo"}, "1|p2":{title:"算数",subject:"sansu"}},
+              B:{"0|p1":{title:"体育",subject:"taiiku"}}},
+      "3-1": {A:{"0|p1":{title:"音楽",subject:"ongaku"}},
+              B:{"0|p1":{title:"音楽",subject:"ongaku"}}}})`);
+base = ev("Store.readBase(2026)");
+ok("2クラスぶんが1回で入る",
+   base["3-3"].A["1|p2"].title === "算数" && base["3-1"].B["0|p1"].title === "音楽",
+   [base["3-3"].A, base["3-1"].B]);
+ok("入れ替えなので前の内容は残らない",
+   Object.keys(base["3-3"].A).length === 2 && Object.keys(base["3-3"].B).length === 1,
+   base["3-3"]);
+/* 表に無いクラスと、ほかの年度には触らない */
+ev(`Store.writeBase(2027, "3-3", "A", {"0|p1":{title:"総合", subject:"sogo"}})`);
+ev(`Store.writeBase(2026, "6-1", "A", {"0|p1":{title:"家庭", subject:"katei"}})`);
+ev(`Store.writeBaseAll(2026, {"3-3": {A:{"0|p1":{title:"理科",subject:"rika"}}, B:{}}})`);
+base = ev("Store.readBase(2026)");
+ok("表に無いクラスは触らない", base["6-1"].A["0|p1"].title === "家庭", base["6-1"]);
+ok("ほかの年度も触らない",
+   ev("Store.readBase(2027)")["3-3"].A["0|p1"].title === "総合");
+ok("B週を空で渡せばB週は消える", !base["3-3"].B || !Object.keys(base["3-3"].B).length,
+   base["3-3"].B);
+
 console.log("\n■ 画面から呼ぶ口はすべて関門を通る");
 const gated = ["apiBoot()", 'apiReadYear(2026)', 'apiReadWeek(2026,"2026-11-16")',
                'apiWriteCells(2026,[])', 'apiWriteRoster(2026,{},[],"")',
-               'apiWriteBase(2026,"3-3","A",{})'];
+               'apiWriteBase(2026,"3-3","A",{})', 'apiWriteBaseAll(2026,{})',
+               'apiReadPaste()'];
 EMAIL = "12345678@kyoiku.edu.nishi.or.jp";
 for(const call of gated){
   let threw = false;
@@ -272,7 +324,7 @@ for(const call of gated){
 EMAIL = "tanaka@edu.nishi.or.jp";
 ok("教職員は apiBoot を通る", typeof ev("apiBoot()").me === "string");
 ok("apiBoot が時程と教科を渡す",
-   ev("apiBoot()").slots.length === 10 && ev("apiBoot()").subjects.length === 17);
+   ev("apiBoot()").slots.length === 10 && ev("apiBoot()").subjects.length === 18);
 
 console.log("\n■ クラス表記が日付に化けるのを防ぐ");
 ok("クラス列は書式なしテキストにしてある", FORMATS["クラス/3"] === "@", FORMATS);

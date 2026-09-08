@@ -239,6 +239,15 @@ table.tp td.f-none{background:repeating-linear-gradient(135deg,transparent 0 4px
 #tpSum .k.f-none{background:repeating-linear-gradient(135deg,transparent 0 3px,
   var(--line) 3px 4px)}
 table.tp tr.staff{opacity:.55}
+/* 固定時間割の取り込みプレビュー。**A週とB週で違うコマだけ目に入るようにする。**
+   全部に色を付けると、違うところが埋もれる（塗りは2色まで：docs/spec.md 9節） */
+table.tp.imp td{text-align:center;min-width:3.4em}
+table.tp.imp td.diff{background:var(--tint);font-weight:600}
+table.tp.imp tr.b th{color:var(--tx-sub);font-weight:400}
+#impText{width:100%;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;
+  border:1px solid var(--line);border-radius:var(--r-sm);padding:8px;resize:vertical;
+  background:var(--card);color:var(--tx)}
+#impGrid{margin-top:8px}
 ul.owlist{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:9px}
 ul.owlist li{border:1px solid var(--line);border-left:4px solid var(--cat-clash);
   border-radius:var(--r-sm);padding:9px 11px;font-size:13px;line-height:1.7;color:var(--tx)}

@@ -334,6 +334,118 @@ ok("曜日を変えると中身が変わる",
    (await p.locator("#tpGrid").innerText()) !== tpText);
 await p.locator("[data-close='tpDlg']").click(); await p.waitForTimeout(200);
 
+console.log("\n■ 固定時間割の取り込み");
+await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(300);
+await p.locator("[data-act='base']").click(); await p.waitForTimeout(250);
+await p.locator("#baseImp").click(); await p.waitForTimeout(250);
+ok("「表から取り込む」で窓が出る", await p.locator("#impDlg").evaluate(d => d.open) === true);
+ok("読む前は入れられない", await p.locator("#impGo").isDisabled() === true);
+
+/* 同梱の表（2026 固定時間割案） */
+await p.locator("#impSrc button[data-s='builtin']").click(); await p.waitForTimeout(150);
+await p.locator("#impRead").click(); await p.waitForTimeout(300);
+ok("同梱の表は20学級ぶん読める",
+   (await p.locator("#impStat").innerText()).indexOf("20 クラス") >= 0,
+   await p.locator("#impStat").innerText());
+ok("同梱の表に読めない字は無い",
+   (await p.locator("#impWarn").innerText()).indexOf("読めない字") < 0,
+   await p.locator("#impWarn").innerText());
+ok("表に無かったクラス（4-4）はそのままにすると言う",
+   (await p.locator("#impWarn").innerText()).indexOf("4-4") >= 0,
+   await p.locator("#impWarn").innerText());
+await p.locator("#impCls").selectOption("3-1"); await p.waitForTimeout(200);
+const imp31 = await p.evaluate(() => {
+  const rows = [...document.querySelectorAll("#impGrid tr")].map(r =>
+    [...r.children].map(c => c.innerText.trim()).join(" "));
+  return rows.join("\n");
+});
+ok("A週とB週を並べて見せる", /A週/.test(imp31) && /B週/.test(imp31), imp31.slice(0,120));
+ok("A週とB週で違うコマに印が付く",
+   await p.locator("#impGrid td.diff").count() > 0,
+   await p.locator("#impGrid td.diff").count());
+ok("3-1 の木は A週が理科・B週が音楽（表のとおり）",
+   await p.evaluate(() => {
+     const c = impRes.classes["3-1"];
+     return (c.A["3|p3"] || {}).title + "/" + (c.B["3|p3"] || {}).title;
+   }) === "理科/音楽",
+   await p.evaluate(() => {
+     const c = impRes.classes["3-1"];
+     return [(c.A["3|p3"]||{}).title, (c.B["3|p3"]||{}).title];
+   }));
+ok("つないだマス（片方が空）は両方に同じ授業が入る",
+   await p.evaluate(() => {
+     const c = impRes.classes["3-1"];
+     return (c.A["3|p4"] || {}).title === "理科" && (c.B["3|p4"] || {}).title === "理科";
+   }) === true);
+ok("月・水に6校時は入らない（表に列が無い）",
+   await p.evaluate(() => !impRes.classes["3-1"].A["0|p6"] && !impRes.classes["3-1"].A["2|p6"]),
+   await p.evaluate(() => [impRes.classes["3-1"].A["0|p6"], impRes.classes["3-1"].A["2|p6"]]));
+
+/* 貼り付け。学校の表と同じ見出しの形 */
+const impTsv = [
+  ["", "", "月", "", "", "", "火", "", "", ""],
+  ["", "", "1", "", "2", "", "1", "", "2", ""],
+  ["", "", "A", "B", "A", "B", "A", "B", "A", "B"],
+  ["1-1", "先生", "国", "", "算", "理", "ー", "ー", "体", ""],
+  ["9-1", "先生", "国", "", "謎", "", "国", "", "算", ""]
+].map(r => r.join("\t")).join("\n");
+await p.locator("#impSrc button[data-s='paste']").click(); await p.waitForTimeout(150);
+await p.locator("#impText").fill(impTsv);
+await p.locator("#impRead").click(); await p.waitForTimeout(300);
+const impW = await p.locator("#impWarn").innerText();
+ok("貼り付けた表も同じ読み方で読める",
+   (await p.locator("#impStat").innerText()).indexOf("1 クラス") >= 0,
+   await p.locator("#impStat").innerText());
+ok("片方が空のマスは両方に入る",
+   await p.evaluate(() => {
+     const c = impRes.classes["1-1"];
+     return (c.A["0|p1"]||{}).title === "国語" && (c.B["0|p1"]||{}).title === "国語";
+   }) === true,
+   await p.evaluate(() => impRes.classes["1-1"]));
+ok("A週とB週で字が違えば別々に入る",
+   await p.evaluate(() => {
+     const c = impRes.classes["1-1"];
+     return (c.A["0|p2"]||{}).title === "算数" && (c.B["0|p2"]||{}).title === "理科";
+   }) === true);
+ok("「ー」は授業なしとして空にする",
+   await p.evaluate(() => !impRes.classes["1-1"].A["1|p1"] && !impRes.classes["1-1"].B["1|p1"]));
+ok("知らない字は捨てずに知らせる", impW.indexOf("謎") >= 0, impW);
+ok("知らない字は題名として残る",
+   await p.evaluate(() => {
+     const e = impRes.classes["9-1"].A["0|p2"];
+     return e.title === "謎" && e.subject === null;
+   }) === true);
+ok("編成に無いクラスは入れないと言う",
+   impW.indexOf("9-1") >= 0 && impW.indexOf("学級編成に無い") >= 0, impW);
+ok("表に無かったクラスはそのままにすると言う",
+   impW.indexOf("表に無かった") >= 0 && impW.indexOf("3-1") >= 0, impW);
+
+/* 見出しが無ければ読まない（黙って別の校時に入れない） */
+await p.locator("#impText").fill("1-1\t国\t算\n1-2\t算\t国");
+await p.locator("#impRead").click(); await p.waitForTimeout(250);
+ok("見出しが無ければ読めないと言う",
+   (await p.locator("#impWarn").innerText()).indexOf("読めなかった") >= 0,
+   await p.locator("#impWarn").innerText());
+ok("読めないときは入れられない", await p.locator("#impGo").isDisabled() === true);
+
+/* 入れる */
+await p.locator("#impSrc button[data-s='builtin']").click(); await p.waitForTimeout(150);
+await p.locator("#impRead").click(); await p.waitForTimeout(300);
+let impAsked = null;
+const onImpDialog = async d => { impAsked = d.message(); await d.accept(); };
+p.on("dialog", onImpDialog);
+await p.locator("#impGo").click(); await p.waitForTimeout(400);
+p.off("dialog", onImpDialog);
+ok("入れる前に聞く", typeof impAsked === "string" && impAsked.indexOf("入れ替え") >= 0, impAsked);
+ok("いまの基本時間割が消えることを言う",
+   !!impAsked && impAsked.indexOf("消えます") >= 0, impAsked);
+ok("入れると基本時間割になる",
+   await p.evaluate(() => (Y().base["3-1"].B["3|p3"] || {}).title) === "音楽",
+   await p.evaluate(() => Y().base["3-1"].B["3|p3"]));
+ok("入れたら窓は閉じる", await p.locator("#impDlg").evaluate(d => d.open) === false);
+await p.locator("#baseClose").click(); await p.waitForTimeout(250);
+
 console.log("\n■ 時数のコピー");
 await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-3']").click(); await p.waitForTimeout(300);

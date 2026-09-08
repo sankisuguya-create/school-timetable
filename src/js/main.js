@@ -150,6 +150,16 @@ function wire(){
     toast("前年度の " + escText(c) + " を写した");
   });
   on("baseClose","click", () => { $("baseDlg").close(); if(view.kind !== "gate") buildSheet(); });
+  on("baseImp","click", openImpDlg);
+
+  /* 固定時間割の取り込み */
+  for(const b of $("impSrc").querySelectorAll("button"))
+    b.onclick = () => setImpSrc(b.dataset.s);
+  on("impRead","click", readImp);
+  on("impCls","change", () => drawImpGrid($("impCls").value));
+  on("impGo","click", goImp);
+  on("impClose","click", () => $("impDlg").close());
+  on("impText","paste", () => setTimeout(readImp, 0));   /* 貼ったらすぐ読む */
 
   /* 学級編成 */
   on("rsAddG","click", () => {
@@ -250,7 +260,8 @@ function start(){
   /* 本番は「設定」「時程」「教科」シートを先に読み、続けてその年度と週を読む。
      手元（localStorage）ではどちらも素通りして、そのまま次へ進む。 */
   Backend.boot(() => Backend.ready(() => {
-    /* 見本の基本時間割は手元でだけ入れる。本番はシートが正本で、空なら空のまま */
+    /* 手元では、同梱の固定時間割を入れて見えるようにする。
+       本番は基本時間割シートが正本で、空なら空のまま（取り込みで入れる） */
     if(!Backend.isGas() && !Object.keys(Y().base).length) seedBase();
     if(!Backend.isGas()) save();
     applyPaper();
@@ -258,29 +269,13 @@ function start(){
   }));
 }
 
-/* 見本の基本時間割。本番では基本時間割シートから来る。 */
+/* 手元で見せる基本時間割。**同梱の固定時間割の写しを入れる。**
+   本番では基本時間割シートから来るので、ここは通らない。 */
 function seedBase(){
-  const wheel = ["kokugo","sansu","rika","ongaku","taiiku","zuko","shakai","doutoku",
-                 "gaikoku","sogo","gakkatsu","kokugo","sansu","taiiku","kokugo",
-                 "sansu","shakai","rika","kokugo","sansu","zuko","ongaku","taiiku",
-                 "sansu","kokugo","sogo","gakkatsu","kokugo","sansu","rika"];
-  const B = Y().base;
-  allClasses().forEach((c, ci) => {
-    B[c] = {A:{}, B:{}};
-    let i = 0;
-    for(let d = 0; d < 5; d++) for(const s of SLOTS){
-      if(s.kind === "brk"){
-        if(s.id === "am2")
-          B[c].A[ck(d, s.id)] = {title:["漢字","計算","読書","漢字","計算"][d], subject:null};
-        if(s.id === "lun")
-          B[c].A[ck(d, s.id)] = {title:"給食・そうじ", subject:null};
-        continue;
-      }
-      const code = wheel[(i + ci * 7) % wheel.length]; i++;
-      B[c].A[ck(d, s.id)] = {title:SUB_BY_CODE[code].name, subject:code};
-    }
-    B[c].B = clone(B[c].A);
-  });
+  const res = fixedBuiltin(), B = Y().base;
+  for(const cls of res.order)
+    if(allClasses().indexOf(cls) >= 0)
+      B[cls] = {A:clone(res.classes[cls].A), B:clone(res.classes[cls].B)};
 }
 
 start();

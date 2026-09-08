@@ -54,6 +54,139 @@ function drawBaseGrid(){
   $("baseFy").textContent = fy() + "年度";
 }
 
+/* ── 固定時間割の取り込み ─────────────────────
+   学校の固定時間割表を、そのままの形で読んで基本時間割にする。
+   **読んですぐ入れない。** 何クラス読めたか・読めない字はどれかを先に見せる。
+   入れ違いに気づかないまま20クラスぶんを入れ替えると、戻す手立てが無い。 */
+
+let impRes = null;              /* いま読めている表 */
+let impSrc = "paste";
+
+function openImpDlg(){
+  impRes = null;
+  $("impText").value = "";
+  drawImp();
+  $("impDlg").showModal();
+}
+function setImpSrc(v){
+  impSrc = v;
+  for(const b of $("impSrc").querySelectorAll("button"))
+    b.setAttribute("aria-pressed", String(b.dataset.s === v));
+  $("impPasteBox").hidden = v !== "paste";
+  $("impSrcNote").innerHTML =
+      v === "paste"   ? "学校の表を選んで写し、ここに貼る"
+    : v === "sheet"   ? "<b>固定時間割取り込み</b>シートに貼ってあるものを読む（本番のみ）"
+                      : escText(FIXED_NAME) + " を読む";
+  impRes = null;
+  drawImp();
+}
+
+/* 貼り付けた字を表にする。エクセルから写すと、
+   タブ区切りで1行1行が改行になっている。 */
+function tsvGrid(text){
+  return String(text).replace(/\r/g, "").split("\n").map(line => line.split("\t"));
+}
+
+function readImp(){
+  if(impSrc === "builtin"){ impRes = fixedBuiltin(); return drawImp(); }
+  if(impSrc === "paste"){
+    const t = $("impText").value;
+    if(!t.trim()){ impRes = {error:"まだ何も貼っていない"}; return drawImp(); }
+    impRes = parseFixed(tsvGrid(t));
+    return drawImp();
+  }
+  $("impStat").textContent = "シートを読んでいる…";
+  Backend.readPaste(
+    g => { impRes = g.length ? parseFixed(g) : {error:"シートが空だった"}; drawImp(); },
+    why => { impRes = {error:why}; drawImp(); });
+}
+
+function drawImp(){
+  const boxes = [], r = impRes;
+  const known = r && r.order ? r.order.filter(c => allClasses().indexOf(c) >= 0) : [];
+  const miss  = r && r.order ? r.order.filter(c => allClasses().indexOf(c) < 0)  : [];
+  const none  = r && r.order ? allClasses().filter(c => r.order.indexOf(c) < 0)   : [];
+
+  if(!r){
+    boxes.push("<div class='box ok'>まだ読んでいない。上で選んで「読む」を押す。</div>");
+  } else if(r.error){
+    boxes.push("<div class='box'><b>読めなかった。</b>" + escText(r.error) + "</div>");
+  } else {
+    if(r.unknown && r.unknown.length)
+      boxes.push("<div class='box'><b>教科として読めない字：" + r.unknown.map(escText).join("・")
+        + "</b><br>そのまま題名として入る。教科として数えたいときは、"
+        + "「教科」シートに足してから読み直す。</div>");
+    if(miss.length)
+      boxes.push("<div class='box'><b>" + miss.map(escText).join("・")
+        + "</b> は<b>いまの学級編成に無い</b>ので入れない。"
+        + "編成が古いなら「学級編成」で直してから読み直す。</div>");
+    if(none.length)
+      boxes.push("<div class='box'><b>" + none.map(escText).join("・")
+        + "</b> は表に無かった。<b>いまの基本時間割のまま</b>にする。</div>");
+    for(const n of (r.notes || [])) boxes.push("<div class='box'>" + escText(n) + "</div>");
+    if(!boxes.length)
+      boxes.push("<div class='box ok'>" + known.length
+        + " クラスぶんを読めた。気になるところは無い。</div>");
+  }
+  $("impWarn").innerHTML = boxes.join("");
+  $("impStat").textContent = r && !r.error
+    ? (r.name ? r.name + "／" : "") + known.length + " クラス・"
+      + (r.periods || 0) + " 校時ぶん"
+    : "";
+  $("impGo").disabled = !known.length;
+  $("impCount").innerHTML = known.length
+    ? "<b>" + known.length + " クラス</b>の A週・B週を入れ替える" : "";
+
+  /* 入れる前に、1クラスだけ表のとおりに見せる */
+  $("impPickRow").hidden = !known.length;
+  if(!known.length){ $("impGrid").innerHTML = ""; return; }
+  const cur = known.indexOf($("impCls").value) >= 0 ? $("impCls").value : known[0];
+  fillSelect($("impCls"), known.map(c => ({v:c, t:c})), cur);
+  drawImpGrid(cur);
+}
+
+function drawImpGrid(cls){
+  const got = impRes.classes[cls] || {A:{}, B:{}};
+  const slots = lessonSlots();
+  const head = "<tr><th></th><th></th>"
+    + slots.map(s => "<th>" + escText(s.name) + "</th>").join("") + "</tr>";
+  const body = [];
+  for(let d = 0; d < 5; d++)
+    for(const v of ["A", "B"]){
+      const bank = got[v] || {};
+      body.push("<tr" + (v === "B" ? " class='b'" : "") + ">"
+        + (v === "A" ? "<th rowspan='2'>" + DOW[d] + "</th>" : "")
+        + "<th>" + v + "週</th>"
+        + slots.map(s => {
+            const e = bank[ck(d, s.id)];
+            const same = (got.A || {})[ck(d, s.id)], other = (got.B || {})[ck(d, s.id)];
+            const diff = (same ? same.title : "") !== (other ? other.title : "");
+            return "<td" + (diff ? " class='diff'" : "") + ">"
+                 + (e ? escText(e.title) : "<i>—</i>") + "</td>";
+          }).join("") + "</tr>");
+    }
+  $("impGrid").innerHTML = "<table class='tp imp'>" + head + body.join("") + "</table>";
+}
+
+/* 入れる。**いまの基本時間割は消える**ので、そこを先に言う。 */
+function goImp(){
+  if(!impRes || impRes.error) return;
+  const known = impRes.order.filter(c => allClasses().indexOf(c) >= 0);
+  if(!known.length) return;
+  const yes = confirm(
+    fy() + "年度の基本時間割を、読んだ表で入れ替えます。\n\n"
+    + "・入れ替えるクラス：" + known.length + "（" + known.join("、") + "）\n"
+    + "・A週とB週の両方が入れ替わります\n"
+    + "・いま入っている基本時間割は消えます\n\n"
+    + "週案に手で書いたものは消えません。つづけますか？");
+  if(!yes) return;
+  const done = applyFixed(impRes);
+  toast("基本時間割に入れた（<b>" + done.length + " クラス</b>）");
+  $("impDlg").close();
+  if($("baseDlg").open) drawBaseGrid();
+  refreshWeek();
+}
+
 /* ── 学級編成 ───────────────────────────────────
    本番では「クラス」シートが正本。ここはその写し。
    **年度ごとに持つ。** 直しても前の年度は変わらない。 */

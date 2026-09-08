@@ -157,6 +157,27 @@ const Backend = (function(){
       .apiWriteBase(fy(), cls, variant, ((Y().base[cls] || {})[variant]) || {});
   }
 
+  /* 固定時間割の取り込み。**20クラス×A週B週を1回で送る。**
+     1クラスずつ送ると、途中で切れたときに半分だけ入った表が残る。 */
+  function saveBaseAll(list, after){
+    if(!onGas){ save(); return after && after(); }
+    const table = {}, B = Y().base;
+    for(const c of list) if(B[c]) table[c] = {A:B[c].A || {}, B:B[c].B || {}};
+    google.script.run
+      .withSuccessHandler(r => after && after(r))
+      .withFailureHandler(e => notify("基本時間割を保存できなかった（" + (e && e.message) + "）"))
+      .apiWriteBaseAll(fy(), table);
+  }
+
+  /* 貼り付け用シートを、そのままの形で読む。手元では使えない */
+  function readPaste(ok, ng){
+    if(!onGas) return ng("手元では、シートの代わりに貼り付け欄を使う");
+    google.script.run
+      .withSuccessHandler(g => ok(g || []))
+      .withFailureHandler(e => ng("シートを読めなかった（" + (e && e.message) + "）"))
+      .apiReadPaste();
+  }
+
   /* 画面を閉じる前に、貯めた差分を出し切る */
   addEventListener("beforeunload", ev => {
     if(onGas && (queue.length || sending)){
@@ -166,5 +187,6 @@ const Backend = (function(){
     }
   });
 
-  return {isGas, setNotifier, cellChanged, flush, boot, ready, saveRoster, saveBase};
+  return {isGas, setNotifier, cellChanged, flush, boot, ready,
+          saveRoster, saveBase, saveBaseAll, readPaste};
 })();
