@@ -70,6 +70,17 @@ ok("「時間割の入力」の右に保存がある",
    await p.locator(".phead .pbtns #saveBtn").count() === 1);
 ok("その隣にロックがある",
    await p.locator(".phead .pbtns #lockBtn").count() === 1);
+ok("ロックと保存が折り返さず、見出しと同じ行に並ぶ",
+   await p.evaluate(() => {
+     const h = document.querySelector(".phead h2").getBoundingClientRect();
+     const b = document.querySelector(".pbtns").getBoundingClientRect();
+     return Math.abs(h.top - b.top) < 12 && b.width < 240;
+   }) === true,
+   await p.evaluate(() => {
+     const h = document.querySelector(".phead h2").getBoundingClientRect();
+     const b = document.querySelector(".pbtns").getBoundingClientRect();
+     return [Math.round(h.top), Math.round(b.top), Math.round(b.width)];
+   }));
 ok("待っている印は、左メニューの操作のすぐ下に出る",
    await p.locator(".side .wk + #busy").count() === 1);
 ok("手元では送るものが無いので「保存ずみ」",
@@ -513,6 +524,37 @@ ok("入れると基本時間割になる",
    await p.evaluate(() => Y().base["3-1"].B["3|p3"]));
 ok("入れたら窓は閉じる", await p.locator("#impDlg").evaluate(d => d.open) === false);
 await p.locator("#baseClose").click(); await p.waitForTimeout(250);
+
+console.log("\n■ 学年・全学年には「リセット」を出す");
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='1-1']").click(); await p.waitForTimeout(400);
+ok("担任の画面には出さない（そちらは「上位に戻す」がある）",
+   await p.locator(".pal.clear").count() === 0);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".master[data-g='1']").click(); await p.waitForTimeout(400);
+ok("学年の画面には出る", await p.locator(".pal.clear").count() === 1);
+ok("入れるものと見分けられる色になっている",
+   await p.evaluate(() => getComputedStyle(document.querySelector(".pal.clear"))
+     .backgroundColor) !== await p.evaluate(() => getComputedStyle(
+       document.querySelector(".pal[data-v='kokugo']")).backgroundColor));
+const g1 = "#sheet .cell[data-d='2'][data-s='p2']";
+await p.locator(g1 + " .t").click(); await p.waitForTimeout(150);
+await p.locator(".pal[data-v='taiiku']").click(); await p.waitForTimeout(250);
+ok("学年に入れたものは紙に出る",
+   (await p.locator(g1 + " .t").innerText()).trim() === "体育");
+ok("学年の各クラスにも降りている",
+   await p.evaluate(() => plain(compose("1-2", 2, "p2").title).trim()) === "体育",
+   await p.evaluate(() => plain(compose("1-2", 2, "p2").title)));
+await p.locator(".pal.clear").click(); await p.waitForTimeout(250);
+ok("リセットで、その学年から取り消せる",
+   await p.evaluate(() => !(week().grade["1"] || {})["2|p2"]) === true,
+   await p.evaluate(() => week().grade["1"]));
+ok("取り消すと、各クラスは自分の予定に戻る",
+   await p.evaluate(() => plain(compose("1-2", 2, "p2").title).trim()) !== "体育",
+   await p.evaluate(() => plain(compose("1-2", 2, "p2").title)));
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".master.all").click(); await p.waitForTimeout(400);
+ok("全学年の画面にも出る", await p.locator(".pal.clear").count() === 1);
 
 console.log("\n■ 入力ロック（見るだけのときに、うっかり直さない）");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);

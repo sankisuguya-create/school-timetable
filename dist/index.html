@@ -79,7 +79,9 @@ button,select,input,textarea{font:inherit;color:inherit}
 /* 4つとも置き場所を明示する。入口だけ位置を指定すると、
    自動配置が押し出されて中央と右パネルが下の行へ落ちる。 */
 .work.no-panel{grid-template-columns:228px minmax(0,1fr)}
-.work{display:grid;grid-template-columns:228px minmax(0,1fr) 312px;
+/* 右は1.5倍。**ボタンが折り返さない幅**にする（「保存ずみ」「ロック」が
+   縦に折れると、押すものが2行に散らばって読みにくい） */
+.work{display:grid;grid-template-columns:228px minmax(0,1fr) 468px;
   grid-template-rows:minmax(0,1fr);min-height:0}
 .side{grid-area:1/1/2/2;background:var(--card);border-right:1px solid var(--line);overflow:auto;
   padding:14px 10px;display:flex;flex-direction:column;gap:4px}
@@ -228,6 +230,11 @@ button,select,input,textarea{font:inherit;color:inherit}
   background:var(--card);cursor:grab;user-select:none;line-height:1.3}
 .pal:hover{background:var(--tint);border-color:var(--ink-link);color:var(--ink-link)}
 .pal:active{cursor:grabbing}
+/* リセット。**入れるものではないと、押す前に分かる形にする。**
+   教科の並びの中にあるので、色だけでなく枠の形でも分ける */
+.pal.clear{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff;
+  font-weight:700}
+.pal.clear:hover{filter:brightness(1.06)}
 .pal.off{color:var(--tx-sub);border-style:dashed}
 .pal.drag{opacity:.4}
 
@@ -409,7 +416,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .toast b{color:#FFC9BC}
 
 @media (max-width:1180px){
-  .work{grid-template-columns:200px minmax(0,1fr) 268px}
+  .work{grid-template-columns:200px minmax(0,1fr) 400px}
   .side .foot-note,.side .legend{display:none}
 }
 /* ▲ src/css/app.css ▲ */
@@ -2543,19 +2550,32 @@ const cellAt = (d, s) =>
 /* ── パレット ────────────────────────────────
    コマへ引っぱって落とすと入る。選んでから押しても入る。
    打って変換して確定する3手が、つかんで落とす1手になる。 */
+/* 学年・全学年からコマを取り消すためのしるし。教科と同じように引っぱって落とせる */
+const PAL_CLEAR = "__clear";
+
 function drawPalette(){
   const items = (view.kind === "special")
     ? allClasses().map(c => ({v:c, t:c, off:false}))
     : SUBJECTS.map(s => ({v:s.code, t:s.name, off:!s.count}));
 
+  /* **学年・全学年には「リセット」を出す。**
+     ここで入れたコマは全クラスに降りる。入れるのと同じ手数で取り消せないと、
+     間違えて降ろしたものを1コマずつ空にして回ることになる。
+     担任の画面には出さない（そちらは「上位に戻す」が同じ役をする）。 */
+  const canClear = (view.kind === "grade" || view.kind === "school");
+  if(canClear) items.push({v:PAL_CLEAR, t:"リセット", clear:true});
+
   $("pals").innerHTML = items.map(o =>
-    "<button class='pal" + (o.off ? " off" : "") + "' draggable='true'"
+    "<button class='pal" + (o.off ? " off" : "") + (o.clear ? " clear" : "")
+    + "' draggable='true'"
     + " data-v='" + escText(o.v) + "'>" + escText(o.t) + "</button>").join("");
 
   if(typeof applyLock === "function") setTimeout(applyLock, 0);
   $("palHint").innerHTML = (view.kind === "special")
     ? "コマへ<b>引っぱって入れる</b>。その時間に行くクラスを選ぶ。"
-    : "コマへ<b>引っぱって入れる</b>。コマを選んでから押しても入る。";
+    : "コマへ<b>引っぱって入れる</b>。コマを選んでから押しても入る。"
+      + (canClear ? "<br><b>リセット</b>を落とすと、そのコマをここから取り消す"
+                  + "（各クラスの予定が出るようになる）。" : "");
 
   for(const b of $("pals").querySelectorAll(".pal")){
     b.addEventListener("dragstart", ev => {
@@ -2592,6 +2612,15 @@ function okToOverwrite(d, sid, to){
 
 function applyPalette(d, sid, v, e){
   if(typeof isLocked === "function" && isLocked()) return toast("この画面はロック中");
+  /* リセット。**ここで入れたものを取り消すだけ。** 各クラスが自分で入れたものは消さない */
+  if(v === PAL_CLEAR){
+    const had = !!targetStore()[ck(d, sid)];
+    writeCell(d, sid, {title:"", note:"", subject:null});
+    paintSheet(); selectCell(d, sid, e || cellAt(d, sid));
+    toast(had ? "このコマを" + viewName() + "から取り消した"
+              : viewName() + "には、もともと入っていない");
+    return;
+  }
   if(view.kind === "special"){
     writeCell(d, sid, {cls:v});
     paintSheet(); selectCell(d, sid, e || cellAt(d, sid));

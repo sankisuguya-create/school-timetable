@@ -6,19 +6,32 @@ const cellAt = (d, s) =>
 /* ── パレット ────────────────────────────────
    コマへ引っぱって落とすと入る。選んでから押しても入る。
    打って変換して確定する3手が、つかんで落とす1手になる。 */
+/* 学年・全学年からコマを取り消すためのしるし。教科と同じように引っぱって落とせる */
+const PAL_CLEAR = "__clear";
+
 function drawPalette(){
   const items = (view.kind === "special")
     ? allClasses().map(c => ({v:c, t:c, off:false}))
     : SUBJECTS.map(s => ({v:s.code, t:s.name, off:!s.count}));
 
+  /* **学年・全学年には「リセット」を出す。**
+     ここで入れたコマは全クラスに降りる。入れるのと同じ手数で取り消せないと、
+     間違えて降ろしたものを1コマずつ空にして回ることになる。
+     担任の画面には出さない（そちらは「上位に戻す」が同じ役をする）。 */
+  const canClear = (view.kind === "grade" || view.kind === "school");
+  if(canClear) items.push({v:PAL_CLEAR, t:"リセット", clear:true});
+
   $("pals").innerHTML = items.map(o =>
-    "<button class='pal" + (o.off ? " off" : "") + "' draggable='true'"
+    "<button class='pal" + (o.off ? " off" : "") + (o.clear ? " clear" : "")
+    + "' draggable='true'"
     + " data-v='" + escText(o.v) + "'>" + escText(o.t) + "</button>").join("");
 
   if(typeof applyLock === "function") setTimeout(applyLock, 0);
   $("palHint").innerHTML = (view.kind === "special")
     ? "コマへ<b>引っぱって入れる</b>。その時間に行くクラスを選ぶ。"
-    : "コマへ<b>引っぱって入れる</b>。コマを選んでから押しても入る。";
+    : "コマへ<b>引っぱって入れる</b>。コマを選んでから押しても入る。"
+      + (canClear ? "<br><b>リセット</b>を落とすと、そのコマをここから取り消す"
+                  + "（各クラスの予定が出るようになる）。" : "");
 
   for(const b of $("pals").querySelectorAll(".pal")){
     b.addEventListener("dragstart", ev => {
@@ -55,6 +68,15 @@ function okToOverwrite(d, sid, to){
 
 function applyPalette(d, sid, v, e){
   if(typeof isLocked === "function" && isLocked()) return toast("この画面はロック中");
+  /* リセット。**ここで入れたものを取り消すだけ。** 各クラスが自分で入れたものは消さない */
+  if(v === PAL_CLEAR){
+    const had = !!targetStore()[ck(d, sid)];
+    writeCell(d, sid, {title:"", note:"", subject:null});
+    paintSheet(); selectCell(d, sid, e || cellAt(d, sid));
+    toast(had ? "このコマを" + viewName() + "から取り消した"
+              : viewName() + "には、もともと入っていない");
+    return;
+  }
   if(view.kind === "special"){
     writeCell(d, sid, {cls:v});
     paintSheet(); selectCell(d, sid, e || cellAt(d, sid));

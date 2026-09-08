@@ -19,7 +19,9 @@ button,select,input,textarea{font:inherit;color:inherit}
 /* 4つとも置き場所を明示する。入口だけ位置を指定すると、
    自動配置が押し出されて中央と右パネルが下の行へ落ちる。 */
 .work.no-panel{grid-template-columns:228px minmax(0,1fr)}
-.work{display:grid;grid-template-columns:228px minmax(0,1fr) 312px;
+/* 右は1.5倍。**ボタンが折り返さない幅**にする（「保存ずみ」「ロック」が
+   縦に折れると、押すものが2行に散らばって読みにくい） */
+.work{display:grid;grid-template-columns:228px minmax(0,1fr) 468px;
   grid-template-rows:minmax(0,1fr);min-height:0}
 .side{grid-area:1/1/2/2;background:var(--card);border-right:1px solid var(--line);overflow:auto;
   padding:14px 10px;display:flex;flex-direction:column;gap:4px}
@@ -168,6 +170,11 @@ button,select,input,textarea{font:inherit;color:inherit}
   background:var(--card);cursor:grab;user-select:none;line-height:1.3}
 .pal:hover{background:var(--tint);border-color:var(--ink-link);color:var(--ink-link)}
 .pal:active{cursor:grabbing}
+/* リセット。**入れるものではないと、押す前に分かる形にする。**
+   教科の並びの中にあるので、色だけでなく枠の形でも分ける */
+.pal.clear{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff;
+  font-weight:700}
+.pal.clear:hover{filter:brightness(1.06)}
 .pal.off{color:var(--tx-sub);border-style:dashed}
 .pal.drag{opacity:.4}
 
@@ -349,6 +356,6 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .toast b{color:#FFC9BC}
 
 @media (max-width:1180px){
-  .work{grid-template-columns:200px minmax(0,1fr) 268px}
+  .work{grid-template-columns:200px minmax(0,1fr) 400px}
   .side .foot-note,.side .legend{display:none}
 }
