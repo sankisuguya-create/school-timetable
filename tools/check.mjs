@@ -51,8 +51,20 @@ console.log("\n■ 週案をひらく");
 await p.locator(".tile[data-c='3-3']").click();
 await p.waitForTimeout(400);
 ok("入口が閉じる", await p.locator("#gate").isHidden());
-ok("紙が出る", await p.locator("#sheet .cell").count() === 50,
+ok("紙が出る（11行×5日）", await p.locator("#sheet .cell").count() === 55,
    await p.locator("#sheet .cell").count());
+ok("放課後を選ぶと、右も備考だけになる", await (async () => {
+  await p.locator("#sheet .cell[data-d='2'][data-s='after'] .n").click();
+  await p.waitForTimeout(150);
+  const t = await p.locator("#pTitleWrap").isHidden();
+  const n = await p.locator("#pNoteWrap").isVisible();
+  return t && n;
+})() === true);
+ok("放課後は備考だけ（題名の欄を作らない）",
+   await p.locator("#sheet .cell[data-s='after'] .n").count() === 5
+   && await p.locator("#sheet .cell[data-s='after'] .t").count() === 0,
+   [await p.locator("#sheet .cell[data-s='after'] .n").count(),
+    await p.locator("#sheet .cell[data-s='after'] .t").count()]);
 ok("時程に時刻が出る",
    (await p.locator("#sheet .lab .tm").first().innerText()).includes(":"));
 const fit = await p.evaluate(() => db.settings.vz);

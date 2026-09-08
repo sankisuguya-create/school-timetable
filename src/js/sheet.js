@@ -58,17 +58,22 @@ function weekendEl(cap, r1, r2){
 }
 
 function cellEl(d, s){
-  const e = el("div", "cell " + (s.kind === "lesson" ? "lesson" : "brk row-break"),
-    "<span class='tag' hidden></span><div class='t' contenteditable></div>"
-    + (s.kind === "lesson" ? "<div class='n' contenteditable></div>" : ""));
+  /* lesson は題名＋備考、note は**備考だけ**（放課後）、brk は題名だけ */
+  const kls = s.kind === "lesson" ? "lesson" : s.kind === "note" ? "note row-break"
+                                             : "brk row-break";
+  const e = el("div", "cell " + kls,
+    "<span class='tag' hidden></span>"
+    + (s.kind === "note" ? "" : "<div class='t' contenteditable></div>")
+    + (s.kind === "lesson" || s.kind === "note"
+         ? "<div class='n' contenteditable></div>" : ""));
   e.dataset.d = d; e.dataset.s = s.id;
   const t = e.querySelector(".t"), n = e.querySelector(".n");
 
   const focus = () => selectCell(d, s.id, e);
-  t.addEventListener("focus", focus);
+  if(t) t.addEventListener("focus", focus);
   if(n) n.addEventListener("focus", focus);
 
-  t.addEventListener("input", () => {
+  if(t) t.addEventListener("input", () => {
     /* 打ち始めた1打目で聞く。«いいえ»なら元に戻す */
     if(!okToOverwrite(d, s.id, plain(t.innerHTML))){
       t.innerHTML = (cellFor(d, s.id).title || "");
@@ -108,7 +113,7 @@ function paintSheet(one){
 
     /* 中身が変わったときだけ書き換える。同じ字を入れ直すとカーソルが先頭へ跳ぶ */
     const wantT = c.title || "", wantN = c.note || "";
-    if(t !== typing && t.innerHTML !== wantT) t.innerHTML = wantT;
+    if(t && t !== typing && t.innerHTML !== wantT) t.innerHTML = wantT;
     if(n && n !== typing && n.innerHTML !== wantN) n.innerHTML = wantN;
 
     e.dataset.layer = c.layer;

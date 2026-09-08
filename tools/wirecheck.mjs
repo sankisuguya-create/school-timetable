@@ -95,6 +95,10 @@ await p.addInitScript(() => {
         call("apiWriteBaseAll", [y, table]);
         setTimeout(() => okFn({classes:Object.keys(table).length}), 0);
       },
+      apiExportTanpopo(y, m, titles, classes){
+        call("apiExportTanpopo", [y, m, titles, classes]);
+        setTimeout(() => okFn({wrote:60, days:5, skipped:[], unknown:[], file:"たんぽぽ時間割"}), 0);
+      },
       apiReadPaste(){
         const g = call("apiReadPaste", [], [
           ["", "", "月", "", "", ""],
@@ -305,6 +309,30 @@ const tq = await lastCall("apiWriteRoster");
 ok("選び直すとシートへ書く",
    !!tq && JSON.stringify(tq.args[4]) === JSON.stringify(["5-1","5-2"]),
    tq && tq.args[4]);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(300);
+
+console.log("\n■ たんぽぽ時間割へ出す");
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
+await p.locator(".master.tp").click(); await p.waitForTimeout(400);
+await p.evaluate(() => { window.__calls.length = 0; });
+p.once("dialog", d => d.accept());
+await p.locator("#tpGo").click(); await p.waitForTimeout(900);
+const tp = await lastCall("apiExportTanpopo");
+ok("apiExportTanpopo を呼ぶ", !!tp, await calls());
+ok("出す前に、書いたぶんを先に送る",
+   (await calls()).indexOf("apiWriteCells") <
+   (await calls()).indexOf("apiExportTanpopo")
+   || (await calls()).indexOf("apiWriteCells") < 0, await calls());
+ok("選んだ交流級を渡す",
+   !!tp && JSON.stringify(tp.args[3]) === JSON.stringify(["5-1", "5-2"]), tp && tp.args[3]);
+ok("紙に出ているとおりの授業名を渡す（月〜金・6校時ぶん）",
+   !!tp && Object.keys(tp.args[2]["5-1"]).length === 5
+        && Object.keys(tp.args[2]["5-1"]["0"]).length === 6,
+   tp && tp.args[2]["5-1"]);
+ok("出したあと、何コマ入ったかを出す",
+   (await p.locator("#tpWarn").innerText()).indexOf("60") >= 0,
+   await p.locator("#tpWarn").innerText());
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(300);
 

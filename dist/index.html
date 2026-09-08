@@ -363,7 +363,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   --h-break:6mm;
   --h-title:8mm;
   --h-note:21mm;
-  --h-foot:33mm;
+  --h-foot:16mm;   /* 週のメモ。放課後の欄を作ったぶん、半分にした */
   --fs:8.5pt;
   --fs-s:6pt;
 
@@ -441,6 +441,10 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .wk .t{flex:1;padding:1px calc(1.2mm*var(--k));outline:none;
   font-size:calc(var(--fs-s)*var(--k));overflow:hidden;word-break:break-word}
 .wk .t:focus{background:#FFFBEA;box-shadow:inset 0 0 0 1.6px var(--ink-link)}
+
+/* 放課後。**備考だけの行。** 教科を入れるところではないので題名を作らない */
+.cell.note .n{height:100%;min-height:calc(6mm*var(--k))}
+.cell.note{background:var(--sheet)}
 
 /* 下の帯 */
 .foot{grid-column:1/8;min-height:calc(var(--h-foot)*var(--k));display:grid;
@@ -627,7 +631,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
           <p class="where" id="pWhere"></p>
           <p style="margin:3px 0 0;font-size:12px;color:var(--tx-sub)" id="pWho"></p>
         </div>
-        <div>
+        <div id="pTitleWrap">
           <label id="pTitleLabel" for="pTitle">教科名・行事名</label>
           <div class="fld" id="pTitle" contenteditable></div>
         </div>
@@ -866,7 +870,9 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
    ここにあるのは、シートが空のときの初期値だけ。 */
 
 /* 時程。行を固定しない（学校ごとに違う）。
-   tally = 時数集計表のどの列に当たるか。chips = 教科を選べるか。 */
+   tally = 時数集計表のどの列に当たるか。chips = 教科を選べるか。
+   kind  = lesson（題名＋備考）／brk（題名だけ）／note（**備考だけ**）。
+           放課後は教科を入れるところではないので、備考だけにしてある。 */
 let SLOTS = [
   {id:"am1", name:"朝休み", kind:"brk",    time:"8:10〜8:25"},
   {id:"am2", name:"朝学習", kind:"brk",    time:"8:25〜8:40", tally:"朝", chips:true},
@@ -877,7 +883,8 @@ let SLOTS = [
   {id:"p4",  name:"4",     kind:"lesson", time:"11:40〜12:25",tally:"4校時"},
   {id:"lun", name:"昼休み",kind:"brk",    time:"12:25〜13:25",tally:"昼"},
   {id:"p5",  name:"5",     kind:"lesson", time:"13:25〜14:10",tally:"5校時"},
-  {id:"p6",  name:"6",     kind:"lesson", time:"14:20〜15:05",tally:"6校時"}
+  {id:"p6",  name:"6",     kind:"lesson", time:"14:20〜15:05",tally:"6校時"},
+  {id:"after",name:"放課後", kind:"note",   time:""}
 ];
 let SLOT_BY_ID = Object.fromEntries(SLOTS.map(s => [s.id, s]));
 
@@ -1459,6 +1466,17 @@ const Backend = (function(){
       .apiReadPaste();
   }
 
+  /* たんぽぽ時間割へ出す。**中身はこちらで組んで渡す。**
+     どのクラスのどの校時が何かを決めるのは画面（層の重ね方を知っている）。
+     どの行・どの列に置くかを決めるのはシート側（実物の形を知っている）。 */
+  function exportTanpopo(titles, classes, ok, ng){
+    if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
+    google.script.run
+      .withSuccessHandler(r => ok(r))
+      .withFailureHandler(e => ng(String((e && e.message) || "書き込めなかった")))
+      .apiExportTanpopo(fy(), wkKey(), titles, classes);
+  }
+
   /* 画面を閉じる前に、貯めたぶんを出し切る。
      出し切れないうちに閉じられそうなときは、引き止める。 */
   addEventListener("beforeunload", ev => {
@@ -1471,7 +1489,7 @@ const Backend = (function(){
 
   return {isGas, setNotifier, setDirtyWatcher, unsaved,
           cellChanged, flush, boot, ready, readyYear,
-          saveRoster, saveBase, saveBaseAll, readPaste};
+          saveRoster, saveBase, saveBaseAll, readPaste, exportTanpopo};
 })();
 /* ▲ src/js/backend.js ▲ */
 /* ▼ src/js/fixed.js ▼ */
@@ -2087,17 +2105,22 @@ function weekendEl(cap, r1, r2){
 }
 
 function cellEl(d, s){
-  const e = el("div", "cell " + (s.kind === "lesson" ? "lesson" : "brk row-break"),
-    "<span class='tag' hidden></span><div class='t' contenteditable></div>"
-    + (s.kind === "lesson" ? "<div class='n' contenteditable></div>" : ""));
+  /* lesson は題名＋備考、note は**備考だけ**（放課後）、brk は題名だけ */
+  const kls = s.kind === "lesson" ? "lesson" : s.kind === "note" ? "note row-break"
+                                             : "brk row-break";
+  const e = el("div", "cell " + kls,
+    "<span class='tag' hidden></span>"
+    + (s.kind === "note" ? "" : "<div class='t' contenteditable></div>")
+    + (s.kind === "lesson" || s.kind === "note"
+         ? "<div class='n' contenteditable></div>" : ""));
   e.dataset.d = d; e.dataset.s = s.id;
   const t = e.querySelector(".t"), n = e.querySelector(".n");
 
   const focus = () => selectCell(d, s.id, e);
-  t.addEventListener("focus", focus);
+  if(t) t.addEventListener("focus", focus);
   if(n) n.addEventListener("focus", focus);
 
-  t.addEventListener("input", () => {
+  if(t) t.addEventListener("input", () => {
     /* 打ち始めた1打目で聞く。«いいえ»なら元に戻す */
     if(!okToOverwrite(d, s.id, plain(t.innerHTML))){
       t.innerHTML = (cellFor(d, s.id).title || "");
@@ -2137,7 +2160,7 @@ function paintSheet(one){
 
     /* 中身が変わったときだけ書き換える。同じ字を入れ直すとカーソルが先頭へ跳ぶ */
     const wantT = c.title || "", wantN = c.note || "";
-    if(t !== typing && t.innerHTML !== wantT) t.innerHTML = wantT;
+    if(t && t !== typing && t.innerHTML !== wantT) t.innerHTML = wantT;
     if(n && n !== typing && n.innerHTML !== wantN) n.innerHTML = wantN;
 
     e.dataset.layer = c.layer;
@@ -2282,7 +2305,9 @@ function fillPanel(){
   const t = $("pTitle"), n = $("pNote");
   if(t !== typing && t.innerHTML !== (c.title || "")) t.innerHTML = c.title || "";
   if(n !== typing && n.innerHTML !== (c.note  || "")) n.innerHTML = c.note  || "";
-  $("pNoteWrap").hidden = slot.kind !== "lesson";
+  /* lesson は題名＋備考、note（放課後）は**備考だけ**、brk は題名だけ */
+  $("pNoteWrap").hidden   = slot.kind === "brk";
+  $("pTitleWrap").hidden  = slot.kind === "note";
   $("pTitleLabel").textContent =
     view.kind === "special" ? "行き先のクラス" : "教科名・行事名";
 
@@ -2483,7 +2508,23 @@ function drawTanpopo(){
     + "<span class='k f-none'></span>書かない <b>" + none + "</b>";
 }
 
-/* 出す。**たんぽぽ側の直しは消える**ので、そこを先に言う。 */
+/* 出す中身を組む。**層を重ねたあとの、紙に出ているとおりの授業名。**
+   {クラス: {"0":{p1:"国語", …}, …}}（0〜4 は月〜金） */
+function tanpopoTitles(list){
+  const out = {};
+  for(const cls of list){
+    const per = {};
+    for(let d = 0; d < 5; d++){
+      const one = {};
+      for(const s of TANPOPO_SLOTS) one[s] = plain(compose(cls, d, s).title).trim();
+      per[String(d)] = one;
+    }
+    out[cls] = per;
+  }
+  return out;
+}
+
+/* 出す。**たんぽぽ側の直しは消える**ので、そこを先に言う。 *//* 出す。**たんぽぽ側の直しは消える**ので、そこを先に言う。 */
 function reflectTanpopo(){
   const chosen = tpChosen().filter(c => allClasses().indexOf(c) >= 0);
   if(!chosen.length) return toast("先に交流級を選ぶ");
@@ -2495,9 +2536,50 @@ function reflectTanpopo(){
     + "\nたんぽぽ時間割の授業名は、この週のぶんが全部入れ替わります。\n"
     + "たんぽぽ側で直した内容は消えます。\n\nつづけますか？");
   if(!yes) return;
-  openTanpopoDlg();
-  toast("いまは<b>書き込まない</b>。実物のたんぽぽ時間割につないでいないため、"
-      + "入るところをプレビューで見せている");
+
+  if(!Backend.isGas()){
+    openTanpopoDlg();
+    toast("いまは<b>書き込まない</b>。実物のたんぽぽ時間割につないでいないため、"
+        + "入るところをプレビューで見せている");
+    return;
+  }
+  /* 先に、書いたぶんをシートへ送る。送る前に出すと、出した紙と週案が食い違う */
+  $("tpGo").disabled = true;
+  $("tpCount").innerHTML = "たんぽぽ時間割へ書いている…";
+  Backend.flush(() => {
+    Backend.exportTanpopo(tanpopoTitles(chosen), chosen,
+      r => {
+        $("tpGo").disabled = false;
+        drawTanpopoView();
+        showTanpopoResult(r);
+      },
+      why => {
+        $("tpGo").disabled = false;
+        drawTanpopoView();
+        $("tpWarn").innerHTML =
+          "<div class='box'><b>たんぽぽ時間割へ出せませんでした。</b><br>"
+          + escText(why) + "</div>" + $("tpWarn").innerHTML;
+      });
+  });
+}
+
+/* 出したあとに、何がどうなったかを出す。**数と、飛ばした日を必ず見せる。**
+   「出しました」だけだと、形が合わずに飛ばした日に気づけない。 */
+function showTanpopoResult(r){
+  const box = [];
+  box.push("<div class='box ok'><b>たんぽぽ時間割に出した。</b>"
+    + escText(r.file || "") + "／" + (r.days || 0) + "日ぶん・"
+    + (r.wrote || 0) + "コマ</div>");
+  if(r.skipped && r.skipped.length)
+    box.push("<div class='box'><b>書かなかった日がある。</b><br>"
+      + r.skipped.map(escText).join("<br>")
+      + "<br>たんぽぽ時間割の日ブロックの形（+5 中休み・+10 給食・+11 昼休み）を"
+      + "確かめる（docs/setup.md Step 8）</div>");
+  if(r.unknown && r.unknown.length)
+    box.push("<div class='box'>たんぽぽ時間割の列見出しにあるが、こちらで選んでいない"
+      + "クラス：<b>" + r.unknown.map(escText).join("・") + "</b></div>");
+  $("tpWarn").innerHTML = box.join("") + $("tpWarn").innerHTML;
+  toast("たんぽぽ時間割に <b>" + (r.wrote || 0) + " コマ</b>入れた");
 }
 /* ▲ src/js/tanpopo.js ▲ */
 /* ▼ src/js/gate.js ▼ */

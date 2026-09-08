@@ -68,6 +68,43 @@ function fakeSheet(name){
     setFrozenRows(){}
   };
 }
+/* たんぽぽ時間割（別のファイル）。openById で開く先 */
+const TPFILE = {name:"たんぽぽ時間割", sheets:{}};
+function tpSheet(name){
+  const grid = TPFILE.sheets[name];
+  const base = fakeSheetOn(grid, name);
+  return base;
+}
+function fakeSheetOn(grid, name){
+  const s0 = {
+    getName: () => name,
+    getLastRow(){ let last = 0;
+      grid.forEach((row, i) => { if(row.some(v => v !== "" && v != null)) last = i + 1; });
+      return last; },
+    getLastColumn(){ let last = 0;
+      for(const row of grid) row.forEach((v, i) => { if(v !== "" && v != null) last = Math.max(last, i + 1); });
+      return last; },
+    getRange(r, c, nr, nc){
+      nr = nr || 1; nc = nc || 1;
+      ensure(grid, r + nr - 1, c + nc - 1);
+      return {
+        getValues(){ const out = [];
+          for(let i = 0; i < nr; i++) out.push(grid[r - 1 + i].slice(c - 1, c - 1 + nc));
+          return out; },
+        setValues(v){ for(let i = 0; i < nr; i++) for(let j = 0; j < nc; j++)
+            grid[r - 1 + i][c - 1 + j] = v[i][j];
+          return this; },
+        setValue(v){ grid[r - 1][c - 1] = v; return this; },
+        clearContent(){ return this; },
+        setFontWeight(){ return this; }, setNumberFormat(){ return this; }
+      };
+    },
+    getMaxRows(){ return Math.max(200, grid.length); },
+    setFrozenRows(){}
+  };
+  return s0;
+}
+
 let EMAIL = "tanaka@edu.nishi.or.jp";
 const locks = {held:0};
 
@@ -81,6 +118,14 @@ const sandbox = {
       insertSheet(n){ SHEETS[n] = []; return fakeSheet(n); },
       getSheets(){ return Object.keys(SHEETS).map(fakeSheet); }
     }),
+    openById(id){
+      if(id !== "TPID") throw new Error("そんなファイルは無い: " + id);
+      return {
+        getName: () => TPFILE.name,
+        getSheets: () => Object.keys(TPFILE.sheets).map(tpSheet),
+        getSheetByName: n => (n in TPFILE.sheets) ? tpSheet(n) : null
+      };
+    },
     flush(){},
     getUi(){ throw new Error("UI 無し"); }
   },
@@ -122,10 +167,12 @@ ok("列は名前で引ける", Object.keys(ev('Sheets.head("週案").at')).lengt
 
 console.log("\n■ 既定値の読み取り");
 const slots = ev("Store.readSlots()");
-ok("時程が10行", slots.length === 10, slots.length);
+ok("時程が11行（放課後を含む）", slots.length === 11, slots.length);
 ok("1校時は授業で、時刻を持つ",
    slots[2].id === "p1" && slots[2].kind === "lesson" && slots[2].time.indexOf(":") > 0, slots[2]);
 ok("朝休みは休み", slots[0].kind === "brk");
+ok("放課後は備考だけの行", slots.find(x => x.id === "after").kind === "note",
+   slots.find(x => x.id === "after"));
 const subs = ev("Store.readSubjects()");
 ok("教科が18（図書を含む）", subs.length === 18, subs.length);
 ok("国語は数える／行事は数えない",
@@ -390,11 +437,87 @@ ok("ほかの年度も触らない",
 ok("B週を空で渡せばB週は消える", !base["3-3"].B || !Object.keys(base["3-3"].B).length,
    base["3-3"].B);
 
+console.log("\n■ たんぽぽ時間割へ出す");
+(function(){
+  /* 実物と同じ形の1週ぶん。1日16行・各校時は2行（上が授業名、下が担当者・場所） */
+  const W = 12;
+  const blank = () => new Array(W).fill("");
+  const g = [];
+  g.push(blank());                                     /* 1行目：取り扱い注意など */
+  const days = [[2026,10,16], [2026,10,17], [2026,10,18], [2026,10,19], [2026,10,20]];
+  for(const d of days){
+    const head = blank();
+    head[0] = new Date(d[0], d[1], d[2]);
+    head[1] = "3-3"; head[2] = "３－３"; head[3] = "5-1"; head[4] = "大屋";
+    g.push(head);
+    for(let i = 1; i <= 15; i++){
+      const row = blank();
+      if(i === 5)  row[0] = "中休み";
+      if(i === 10) row[0] = "給食";
+      if(i === 11) row[0] = "昼休み";
+      /* 担当者・場所の行。**ここは触らせない** */
+      if([2,4,7,9,13,15].indexOf(i) >= 0){ row[1] = "交：丸山"; row[2] = "た：桝村"; row[3] = "交：星川"; }
+      if([1,3,6,8,12,14].indexOf(i) >= 0){ row[3] = "のこす"; }   /* 選ばない列の授業名 */
+      g.push(row);
+    }
+  }
+  TPFILE.sheets["週案"] = g;
+  /* 設定にファイルIDを入れる */
+  const at = ev('Sheets.head("設定").at');
+  for(const row of SHEETS["設定"])
+    if(String(row[at["キー"]]) === "たんぽぽファイルID") row[at["値"]] = "TPID";
+})();
+const titles = {"3-3":{}, "5-1":{}};
+for(let d = 0; d < 5; d++){
+  titles["3-3"][String(d)] = {p1:"国語" + d, p2:"算数", p3:"", p4:"体育", p5:"理科", p6:"総合"};
+  titles["5-1"][String(d)] = {p1:"だめ", p2:"だめ", p3:"だめ", p4:"だめ", p5:"だめ", p6:"だめ"};
+}
+const rep = ev(`Store.exportTanpopo(2026, "2026-11-16", ${JSON.stringify(titles)}, ["3-3"])`);
+ok("5日ぶん書く", rep.days === 5, rep);
+ok("書いたコマ数を返す", rep.wrote === 5 * 6 * 2, rep.wrote);   /* 3-3 の列が2つ */
+const G = TPFILE.sheets["週案"];
+ok("1校時の授業名の行に入る", G[2][1] === "国語0", G[2].slice(0,5));
+ok("同じ交流学級の列が2つあれば両方に入る", G[2][2] === "国語0", G[2].slice(0,5));
+ok("6校時は +14 の行", G[15][1] === "総合", G[15].slice(0,5));
+ok("空の校時は空で入る（先週の授業名を残さない）", G[7][1] === "", G[7].slice(0,5));
+ok("担当者・場所の行は触らない", G[3][1] === "交：丸山" && G[3][2] === "た：桝村",
+   G[3].slice(0,5));
+ok("選んでいない交流級の列は触らない", G[2][3] === "のこす", G[2].slice(0,5));
+ok("中休み・給食・昼休みの行は触らない",
+   G[6][0] === "中休み" && G[11][0] === "給食" && G[12][0] === "昼休み",
+   [G[6][0], G[11][0], G[12][0]]);
+ok("見出しの日付は触らない",
+   !!G[1][0] && typeof G[1][0] === "object" && typeof G[1][0].getMonth === "function",
+   String(G[1][0]));
+
+/* 形が合わない日は、その日だけ書かない */
+TPFILE.sheets["週案"][6][0] = "こわれた";     /* 月曜の +5 を「中休み」でなくする */
+const rep2 = ev(`Store.exportTanpopo(2026, "2026-11-16", ${JSON.stringify(titles)}, ["3-3"])`);
+ok("形が合わない日は書かない", rep2.days === 4, rep2);
+ok("どの日をなぜ飛ばしたかを言う",
+   rep2.skipped.length === 1 && rep2.skipped[0].indexOf("中休み") >= 0, rep2.skipped);
+TPFILE.sheets["週案"][6][0] = "中休み";
+
+/* この週の日付が無ければ、黙って何もしない代わりに理由を返す */
+const rep3 = ev(`Store.exportTanpopo(2026, "2026-12-07", ${JSON.stringify(titles)}, ["3-3"])`);
+ok("その週が無ければ書かず、理由を返す",
+   rep3.days === 0 && rep3.skipped.length === 1, rep3);
+
+/* ファイルIDが空なら止める */
+(function(){
+  const at = ev('Sheets.head("設定").at');
+  for(const row of SHEETS["設定"])
+    if(String(row[at["キー"]]) === "たんぽぽファイルID") row[at["値"]] = "";
+})();
+let noId = false;
+try{ ev(`Store.exportTanpopo(2026, "2026-11-16", {}, ["3-3"])`); }catch(e){ noId = true; }
+ok("ファイルIDが空なら、何もせず知らせる", noId === true);
+
 console.log("\n■ 画面から呼ぶ口はすべて関門を通る");
 const gated = ["apiBoot()", 'apiReadYear(2026)', 'apiReadWeek(2026,"2026-11-16")',
                'apiWriteCells(2026,[])', 'apiWriteRoster(2026,{},[],"")',
                'apiWriteBase(2026,"3-3","A",{})', 'apiWriteBaseAll(2026,{})',
-               'apiReadPaste()'];
+               'apiReadPaste()', 'apiExportTanpopo(2026,"2026-11-16",{},[])'];
 EMAIL = "12345678@kyoiku.edu.nishi.or.jp";
 for(const call of gated){
   let threw = false;
@@ -404,7 +527,7 @@ for(const call of gated){
 EMAIL = "tanaka@edu.nishi.or.jp";
 ok("教職員は apiBoot を通る", typeof ev("apiBoot()").me === "string");
 ok("apiBoot が時程と教科を渡す",
-   ev("apiBoot()").slots.length === 10 && ev("apiBoot()").subjects.length === 18);
+   ev("apiBoot()").slots.length === 11 && ev("apiBoot()").subjects.length === 18);
 
 console.log("\n■ クラス表記が日付に化けるのを防ぐ");
 ok("クラス列は書式なしテキストにしてある", FORMATS["クラス/3"] === "@", FORMATS);

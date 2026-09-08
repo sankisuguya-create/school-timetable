@@ -253,6 +253,17 @@ const Backend = (function(){
       .apiReadPaste();
   }
 
+  /* たんぽぽ時間割へ出す。**中身はこちらで組んで渡す。**
+     どのクラスのどの校時が何かを決めるのは画面（層の重ね方を知っている）。
+     どの行・どの列に置くかを決めるのはシート側（実物の形を知っている）。 */
+  function exportTanpopo(titles, classes, ok, ng){
+    if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
+    google.script.run
+      .withSuccessHandler(r => ok(r))
+      .withFailureHandler(e => ng(String((e && e.message) || "書き込めなかった")))
+      .apiExportTanpopo(fy(), wkKey(), titles, classes);
+  }
+
   /* 画面を閉じる前に、貯めたぶんを出し切る。
      出し切れないうちに閉じられそうなときは、引き止める。 */
   addEventListener("beforeunload", ev => {
@@ -265,5 +276,5 @@ const Backend = (function(){
 
   return {isGas, setNotifier, setDirtyWatcher, unsaved,
           cellChanged, flush, boot, ready, readyYear,
-          saveRoster, saveBase, saveBaseAll, readPaste};
+          saveRoster, saveBase, saveBaseAll, readPaste, exportTanpopo};
 })();

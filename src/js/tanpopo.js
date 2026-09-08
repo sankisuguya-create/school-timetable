@@ -127,7 +127,23 @@ function drawTanpopo(){
     + "<span class='k f-none'></span>書かない <b>" + none + "</b>";
 }
 
-/* 出す。**たんぽぽ側の直しは消える**ので、そこを先に言う。 */
+/* 出す中身を組む。**層を重ねたあとの、紙に出ているとおりの授業名。**
+   {クラス: {"0":{p1:"国語", …}, …}}（0〜4 は月〜金） */
+function tanpopoTitles(list){
+  const out = {};
+  for(const cls of list){
+    const per = {};
+    for(let d = 0; d < 5; d++){
+      const one = {};
+      for(const s of TANPOPO_SLOTS) one[s] = plain(compose(cls, d, s).title).trim();
+      per[String(d)] = one;
+    }
+    out[cls] = per;
+  }
+  return out;
+}
+
+/* 出す。**たんぽぽ側の直しは消える**ので、そこを先に言う。 *//* 出す。**たんぽぽ側の直しは消える**ので、そこを先に言う。 */
 function reflectTanpopo(){
   const chosen = tpChosen().filter(c => allClasses().indexOf(c) >= 0);
   if(!chosen.length) return toast("先に交流級を選ぶ");
@@ -139,7 +155,48 @@ function reflectTanpopo(){
     + "\nたんぽぽ時間割の授業名は、この週のぶんが全部入れ替わります。\n"
     + "たんぽぽ側で直した内容は消えます。\n\nつづけますか？");
   if(!yes) return;
-  openTanpopoDlg();
-  toast("いまは<b>書き込まない</b>。実物のたんぽぽ時間割につないでいないため、"
-      + "入るところをプレビューで見せている");
+
+  if(!Backend.isGas()){
+    openTanpopoDlg();
+    toast("いまは<b>書き込まない</b>。実物のたんぽぽ時間割につないでいないため、"
+        + "入るところをプレビューで見せている");
+    return;
+  }
+  /* 先に、書いたぶんをシートへ送る。送る前に出すと、出した紙と週案が食い違う */
+  $("tpGo").disabled = true;
+  $("tpCount").innerHTML = "たんぽぽ時間割へ書いている…";
+  Backend.flush(() => {
+    Backend.exportTanpopo(tanpopoTitles(chosen), chosen,
+      r => {
+        $("tpGo").disabled = false;
+        drawTanpopoView();
+        showTanpopoResult(r);
+      },
+      why => {
+        $("tpGo").disabled = false;
+        drawTanpopoView();
+        $("tpWarn").innerHTML =
+          "<div class='box'><b>たんぽぽ時間割へ出せませんでした。</b><br>"
+          + escText(why) + "</div>" + $("tpWarn").innerHTML;
+      });
+  });
+}
+
+/* 出したあとに、何がどうなったかを出す。**数と、飛ばした日を必ず見せる。**
+   「出しました」だけだと、形が合わずに飛ばした日に気づけない。 */
+function showTanpopoResult(r){
+  const box = [];
+  box.push("<div class='box ok'><b>たんぽぽ時間割に出した。</b>"
+    + escText(r.file || "") + "／" + (r.days || 0) + "日ぶん・"
+    + (r.wrote || 0) + "コマ</div>");
+  if(r.skipped && r.skipped.length)
+    box.push("<div class='box'><b>書かなかった日がある。</b><br>"
+      + r.skipped.map(escText).join("<br>")
+      + "<br>たんぽぽ時間割の日ブロックの形（+5 中休み・+10 給食・+11 昼休み）を"
+      + "確かめる（docs/setup.md Step 8）</div>");
+  if(r.unknown && r.unknown.length)
+    box.push("<div class='box'>たんぽぽ時間割の列見出しにあるが、こちらで選んでいない"
+      + "クラス：<b>" + r.unknown.map(escText).join("・") + "</b></div>");
+  $("tpWarn").innerHTML = box.join("") + $("tpWarn").innerHTML;
+  toast("たんぽぽ時間割に <b>" + (r.wrote || 0) + " コマ</b>入れた");
 }

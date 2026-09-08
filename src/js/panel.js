@@ -100,7 +100,9 @@ function fillPanel(){
   const t = $("pTitle"), n = $("pNote");
   if(t !== typing && t.innerHTML !== (c.title || "")) t.innerHTML = c.title || "";
   if(n !== typing && n.innerHTML !== (c.note  || "")) n.innerHTML = c.note  || "";
-  $("pNoteWrap").hidden = slot.kind !== "lesson";
+  /* lesson は題名＋備考、note（放課後）は**備考だけ**、brk は題名だけ */
+  $("pNoteWrap").hidden   = slot.kind === "brk";
+  $("pTitleWrap").hidden  = slot.kind === "note";
   $("pTitleLabel").textContent =
     view.kind === "special" ? "行き先のクラス" : "教科名・行事名";
 

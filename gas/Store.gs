@@ -126,7 +126,9 @@ const Store = (function(){
     return Sheets.readAll("時程").rows.map(r => ({
       id:    String(r["ID"]).trim(),
       name:  String(r["表示名"]),
-      kind:  String(r["種別"]).indexOf("授業") >= 0 ? "lesson" : "brk",
+      /* 授業＝題名と備考／備考＝備考だけ／それ以外＝題名だけ */
+      kind:  String(r["種別"]).indexOf("授業") >= 0 ? "lesson"
+           : String(r["種別"]).indexOf("備考") >= 0 ? "note" : "brk",
       time:  String(r["時刻"] || ""),
       tally: String(r["時数表の列"] || "") || undefined,
       chips: truthy(r["教科を選べる"])
@@ -210,6 +212,116 @@ const Store = (function(){
     } finally {
       lock.releaseLock();
     }
+  }
+
+  /* ── たんぽぽ時間割へ出す ──────────────────────
+     実物の形（docs/spec.md 7節）。1日ぶんが縦のブロックで、各校時は2行。
+     上が授業名、下が担当者・場所。列は児童ごとで、見出しはその日の交流学級。
+
+       +0  日付 ／ その日の交流学級
+       +1  1校時 授業名   +2  担当者・場所
+       +3  2校時 授業名   +4  担当者・場所
+       +5  中休み
+       +6  3校時 授業名   +7  担当者・場所
+       +8  4校時 授業名   +9  担当者・場所
+       +10 給食
+       +11 昼休み
+       +12 5校時 授業名   +13 担当者・場所
+       +14 6校時 授業名   +15 担当者・場所
+
+     **書く前に形を確かめる。** 形が合わない日はその日だけ書かない。
+     合わない日に書くと、別の校時の行に授業名が入る。落ちないので気づかない。 */
+  const TP_TITLE_ROW = [1, 3, 6, 8, 12, 14];      /* 1〜6校時の授業名の行 */
+  const TP_MARK = [[5, "中休み"], [10, "給食"], [11, "昼休み"]];
+
+  function tpNorm(v){
+    let t = String(v == null ? "" : v).normalize("NFKC").trim().replace(/[　\s]+/g, "");
+    return t.replace(/[‐‑–—―ー−ｰ－]/g, "-");
+  }
+  /* A列の値を日付にする。Date でも「11/16」でも「11月16日」でも読む */
+  function tpDate(v, year){
+    if(Sheets.isDate(v)) return ymd(v);
+    const t = tpNorm(v);
+    let m = t.match(/^(\d{1,2})[\/-](\d{1,2})$/);
+    if(m) return ymd(new Date(+year, +m[1] - 1, +m[2]));
+    m = t.match(/^(\d{1,2})月(\d{1,2})日?$/);
+    if(m) return ymd(new Date(+year, +m[1] - 1, +m[2]));
+    m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if(m) return ymd(new Date(+m[1], +m[2] - 1, +m[3]));
+    return "";
+  }
+
+  /* titles = {クラス: {"0": {p1:"国語", …}, …}}（0〜4 は月〜金）
+     classes = 出す交流級。**選んだ交流級の列だけに書く。** */
+  function exportTanpopo(year, mondayISO, titles, classes){
+    const cfg = readConfig();
+    const id = String(cfg["たんぽぽファイルID"] || "").trim();
+    if(!id) throw new Error("「設定」シートの「たんぽぽファイルID」が空です。"
+                          + "たんぽぽ時間割のスプレッドシートIDを入れてください");
+    const ss = SpreadsheetApp.openById(id);
+    const want = String(cfg["たんぽぽシート名"] || "").trim();
+    const sh = want ? ss.getSheetByName(want) : ss.getSheets()[0];
+    if(!sh) throw new Error("たんぽぽ時間割に「" + want + "」というシートがありません");
+
+    const pick = {};
+    for(const c of (classes || [])) pick[tpNorm(c)] = true;
+    const dayOf = {};                       /* 日付 → 月〜金の何日目か */
+    for(let i = 0; i < 5; i++) dayOf[ymd(addDays_(mondayISO, i))] = i;
+
+    const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
+    if(lastRow < 2 || lastCol < 2) throw new Error("たんぽぽ時間割のシートが空です");
+    const colA = sh.getRange(1, 1, lastRow, 1).getValues();
+
+    /* 日付の入った行を探す。**先頭行を決め打ちしない**（行が足された表もある） */
+    const blocks = [];
+    for(let r = 0; r < lastRow; r++){
+      const d = tpDate(colA[r][0], year);
+      if(d && dayOf[d] !== undefined) blocks.push({row: r + 1, day: dayOf[d], date: d});
+    }
+
+    const slotIds = ["p1", "p2", "p3", "p4", "p5", "p6"];
+    const report = {wrote:0, days:0, skipped:[], unknown:{}, file:ss.getName()};
+
+    for(const b of blocks){
+      if(b.row + 15 > lastRow){ report.skipped.push(b.date + "（行が足りない）"); continue; }
+      const grid = sh.getRange(b.row, 1, 16, lastCol).getValues();
+      /* 形を確かめる。合わない日は書かない */
+      let bad = "";
+      for(const m of TP_MARK)
+        if(tpNorm(grid[m[0]][0]).indexOf(tpNorm(m[1])) < 0)
+          bad = bad || ("+" + m[0] + " が「" + m[1] + "」でない");
+      if(bad){ report.skipped.push(b.date + "（" + bad + "）"); continue; }
+
+      /* その日の見出しを読んで、書く列を決める */
+      const cols = [];
+      for(let c = 1; c < lastCol; c++){
+        const cls = tpNorm(grid[0][c]);
+        if(!/^[1-9]-[1-9]$/.test(cls)) continue;      /* 支援員などの列は飛ばす */
+        if(!pick[cls]){ continue; }
+        if(!titles[cls]){ report.unknown[cls] = true; continue; }
+        cols.push({c, cls});
+      }
+      if(!cols.length){ report.skipped.push(b.date + "（出す交流級の列が無い）"); continue; }
+
+      const from = Math.min.apply(null, cols.map(x => x.c));
+      const to   = Math.max.apply(null, cols.map(x => x.c));
+      for(let i = 0; i < TP_TITLE_ROW.length; i++){
+        const rowIdx = TP_TITLE_ROW[i];
+        const line = grid[rowIdx].slice(from, to + 1);   /* 触らない列はそのまま戻す */
+        for(const x of cols){
+          const v = ((titles[x.cls] || {})[String(b.day)] || {})[slotIds[i]];
+          line[x.c - from] = (v === undefined || v === null) ? "" : String(v);
+          report.wrote++;
+        }
+        sh.getRange(b.row + rowIdx, from + 1, 1, line.length).setValues([line]);
+      }
+      report.days++;
+    }
+    SpreadsheetApp.flush();
+    report.unknown = Object.keys(report.unknown);
+    if(!report.days && !report.skipped.length)
+      report.skipped.push("この週の日付が、たんぽぽ時間割のA列に見つかりません");
+    return report;
   }
 
   /* 旧・週案（1枚に全クラス）を、クラスごとのシートへ移す。
@@ -387,7 +499,7 @@ const Store = (function(){
 
   return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects,
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste,
-          migratePlan, ymd};
+          exportTanpopo, migratePlan, ymd};
 })();
 
 /* ── 画面から呼ぶ口。**すべて1行目で Gate.check()。** ───────── */
@@ -465,4 +577,8 @@ function apiWriteBaseAll(year, table){
 function apiReadPaste(){
   Gate.check();
   return Store.readPaste();
+}
+function apiExportTanpopo(year, mondayISO, titles, classes){
+  Gate.check();
+  return Store.exportTanpopo(year, mondayISO, titles, classes);
 }

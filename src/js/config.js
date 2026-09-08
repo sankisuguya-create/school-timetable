@@ -2,7 +2,9 @@
    ここにあるのは、シートが空のときの初期値だけ。 */
 
 /* 時程。行を固定しない（学校ごとに違う）。
-   tally = 時数集計表のどの列に当たるか。chips = 教科を選べるか。 */
+   tally = 時数集計表のどの列に当たるか。chips = 教科を選べるか。
+   kind  = lesson（題名＋備考）／brk（題名だけ）／note（**備考だけ**）。
+           放課後は教科を入れるところではないので、備考だけにしてある。 */
 let SLOTS = [
   {id:"am1", name:"朝休み", kind:"brk",    time:"8:10〜8:25"},
   {id:"am2", name:"朝学習", kind:"brk",    time:"8:25〜8:40", tally:"朝", chips:true},
@@ -13,7 +15,8 @@ let SLOTS = [
   {id:"p4",  name:"4",     kind:"lesson", time:"11:40〜12:25",tally:"4校時"},
   {id:"lun", name:"昼休み",kind:"brk",    time:"12:25〜13:25",tally:"昼"},
   {id:"p5",  name:"5",     kind:"lesson", time:"13:25〜14:10",tally:"5校時"},
-  {id:"p6",  name:"6",     kind:"lesson", time:"14:20〜15:05",tally:"6校時"}
+  {id:"p6",  name:"6",     kind:"lesson", time:"14:20〜15:05",tally:"6校時"},
+  {id:"after",name:"放課後", kind:"note",   time:""}
 ];
 let SLOT_BY_ID = Object.fromEntries(SLOTS.map(s => [s.id, s]));
 
