@@ -1609,9 +1609,14 @@ const Backend = (function(){
     if(!onGas) return after();
     const want = targetsForView().filter(t => !loadedWeek[weekTag(t)]);
     if(!want.length) return after();
+    /* **どの年度・どの週に頼んだのかを覚えておく。**
+       返事が来るころには、もう別の週を見ているかもしれない。
+       いま見ている週へ入れてしまうと、その週の中身が消える。
+       校内の回線では返事の順序が入れ替わる（古い週の返事があとから届く）。 */
+    const year = fy(), mon = wkKey();
     google.script.run
       .withSuccessHandler(w => {
-        mergeWeek(want, w);      /* 頼んだぶんだけ入れ替える。控えは残す */
+        mergeWeek(want, w, year, mon);   /* 頼んだぶんだけ入れ替える。控えは残す */
         after();
       })
       .withFailureHandler(e => {
@@ -1619,9 +1624,11 @@ const Backend = (function(){
              + "）。<b>この週はまだ書かない</b>");
         after();
       })
-      .apiReadWeek(fy(), wkKey(), want);
+      .apiReadWeek(year, mon, want);
   }
-  const weekTag = t => fy() + "/" + wkKey() + "/" + t.layer + "/" + (t.target || "");
+  const weekTag = (t, year, mon) =>
+    (year === undefined ? fy() : year) + "/" + (mon === undefined ? wkKey() : mon)
+    + "/" + t.layer + "/" + (t.target || "");
 
   /* まだ送っていないコマがある対象は、読み直しで上書きしない。
      **上書きすると、書いたのに消えたように見える。** */
@@ -1647,10 +1654,7 @@ const Backend = (function(){
       if(!want.length || sending) return;
       const year = fy(), mon = wkKey();
       google.script.run
-        .withSuccessHandler(w => {
-          if(fy() !== year || wkKey() !== mon) return;   /* もう別の週を見ている */
-          mergeWeek(want, w);
-        })
+        .withSuccessHandler(w => mergeWeek(want, w, year, mon))
         .withFailureHandler(() => {})     /* 先読みが失敗しても、開くときに読み直す */
         .apiReadWeek(year, mon, want);
     }, 1200);
@@ -1662,8 +1666,16 @@ const Backend = (function(){
     return out;
   }
 
-  function mergeWeek(want, w){
-    const cur = week();
+  /* year/mon は「頼んだときの年度と週」。渡されなければ、いまの年度と週。
+     **頼んだ先の週へ入れる。** いま見ている週へ入れると、
+     返事が遅れたぶんだけ別の週の中身が消える。 */
+  function mergeWeek(want, w, year, mon){
+    const y = (year === undefined) ? fy() : year;
+    const m = (mon  === undefined) ? wkKey() : mon;
+    const Yr = db.years[String(y)];
+    if(!Yr || !Yr.weeks) return;      /* その年度がもう無い */
+    const cur = Yr.weeks[m] || (Yr.weeks[m] =
+      {school:{}, grade:{}, special:{}, home:{}, acked:[], variant:"A"});
     for(const t of want){
       /* まだ送っていないコマがある対象は触らない */
       if(hasPending(t.layer, t.target)) continue;
@@ -1673,7 +1685,7 @@ const Backend = (function(){
         cur.home[t.target]    = (w.home    || {})[t.target] || {};
         cur.special[t.target] = (w.special || {})[t.target] || {};
       }
-      loadedWeek[weekTag(t)] = true;
+      loadedWeek[weekTag(t, y, m)] = true;
     }
   }
   /* 週や年度を開くときの入口。手元では即その場で続く。

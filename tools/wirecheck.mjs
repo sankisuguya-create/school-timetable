@@ -112,7 +112,10 @@ await p.addInitScript(() => {
           }
         }
         call("apiReadWeek", [y, m, t], out);
-        setTimeout(() => okFn(out), window.__slow || 0);
+        /* __lag に週を書いておくと、その週の返事だけ遅れる
+           （校内の回線では、古い週の返事があとから届くことがある） */
+        const lag = (window.__lag && window.__lag[m]) || window.__slow || 0;
+        setTimeout(() => okFn(out), lag);
       },
       apiWriteCells(y, patches){
         call("apiWriteCells", [y, patches]);
@@ -520,6 +523,41 @@ ok("週を読み直すより先に送る", await p.evaluate(() => {
 ok("送れたら控えは消す",
    await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")) === null,
    await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")));
+
+console.log("\n■ 古い週の返事が、いま見ている週を消さない");
+/* **返事の順序は入れ替わる。** 今週ぶんの返事が来る前に来週へ動くと、
+   遅れて届いた今週ぶんが、来週の中身を上書きしてしまう形があった。 */
+await p.evaluate(() => { window.__slow = 0; window.__hang = false; });
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
+await p.locator(".tile[data-c='5-4']").click(); await p.waitForTimeout(400);
+/* 来週に1コマ書いて、シート側に入れておく */
+await p.locator("#nextWk").click(); await p.waitForTimeout(500);
+await p.locator("#sheet .cell[data-d='0'][data-s='p2'] .t").click(); await p.waitForTimeout(120);
+await p.locator(".pal[data-v='gyoji']").click(); await p.waitForTimeout(150);
+await p.locator("#saveBtn").click(); await p.waitForTimeout(600);
+const nextMon = await p.evaluate(() => wkKey());
+await p.locator("#prevWk").click(); await p.waitForTimeout(400);
+const thisMon = await p.evaluate(() => wkKey());
+/* この端末の控えを捨てて、シートから読み直させる。今週ぶんの返事だけ遅らせる */
+await p.evaluate(m => {
+  localStorage.removeItem("school-timetable/v3");
+  window.__lagNext = m;
+}, thisMon);
+await p.reload();
+await p.waitForTimeout(400);
+await p.evaluate(m => { window.__lag = {}; window.__lag[m] = 1500; }, thisMon);
+await p.locator(".tile[data-c='5-4']").click(); await p.waitForTimeout(150);
+await p.locator("#nextWk").click();                 /* 今週ぶんの返事はまだ来ていない */
+await p.waitForTimeout(2500);
+ok("来週を見ているあいだに今週の返事が届いても、来週の中身は消えない",
+   (await p.locator("#sheet .cell[data-d='0'][data-s='p2'] .t").innerText()).trim() === "行事",
+   [await p.evaluate(() => wkKey()),
+    await p.locator("#sheet .cell[data-d='0'][data-s='p2'] .t").innerText()]);
+ok("今週へ戻ると、今週の中身が出る", await (async () => {
+  await p.locator("#prevWk").click(); await p.waitForTimeout(700);
+  return (await p.evaluate(() => wkKey())) === thisMon;
+})() === true);
+await p.evaluate(() => { window.__lag = {}; });
 
 console.log("\n■ 書いたコマは、次に開いても残っている");
 /* **ここが抜けると、シートには入っているのに基本時間割に戻って見える。**
