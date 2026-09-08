@@ -99,6 +99,9 @@ button,select,input,textarea{font:inherit;color:inherit}
 .tpchip i{width:9px;height:9px;border-radius:50%;background:var(--line);flex:none}
 .tpchip[aria-pressed=true] i{background:var(--ink-link)}
 .tpchip.warn i{background:var(--cat-clash)}
+/* 人数。**1人と2人が並んでいて見分けられること**が要る（印の数ではなく字で出す） */
+.tpchip b{font-weight:700;font-size:11.5px;color:var(--ink-link)}
+.tpchip.n2 i{box-shadow:0 0 0 3px var(--tint)}
 .tpwarn{display:flex;flex-direction:column;gap:8px}
 .tpwarn .box{border:1px solid var(--line);border-left:4px solid var(--cat-clash);
   border-radius:var(--r-sm);padding:11px 13px;font-size:13px;line-height:1.75}
@@ -118,6 +121,23 @@ button,select,input,textarea{font:inherit;color:inherit}
 /* 入力パネルの頭。**保存はいちばん目立つところに1つだけ置く。**
    打つたびに送らない作りなので、押す場所が分からないと書いたものが宙に浮く */
 .phead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.pbtns{display:flex;align-items:center;gap:7px}
+/* ロック。**押すまで、この画面からは直せない。**
+   見るだけのつもりで開いたクラスに、うっかり字を入れてしまうのを止める。
+   かかっているかどうかが、押す前から分かる形にする（塗りと字の両方） */
+.lock{display:inline-flex;align-items:center;gap:5px;padding:7px 11px;font-size:12.5px;
+  font-weight:600;border-radius:var(--r-sm);cursor:pointer;
+  border:1px solid var(--line);background:var(--card);color:var(--tx-sub)}
+.lock:hover{background:var(--hover)}
+.lock[aria-pressed=true]{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff}
+.lockmsg{margin:0;padding:8px 11px;font-size:12px;line-height:1.7;
+  border-radius:var(--r-sm);background:var(--tint);color:var(--tx);
+  border-left:4px solid var(--cat-clash)}
+.lockmsg b{color:var(--tx)}
+/* ロック中は、紙の上でも触れないことが見て分かる */
+.sheet.locked .cell .t,.sheet.locked .cell .n,.sheet.locked .wk .t,.sheet.locked .foot .t{
+  cursor:default;background:transparent}
+.sheet.locked .cell.sel{box-shadow:inset 0 0 0 1.6px var(--cat-clash)}
 .save{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:13px;
   font-weight:700;border-radius:var(--r-sm);cursor:pointer;
   border:1px solid var(--line);background:var(--card);color:var(--tx-sub)}

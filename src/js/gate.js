@@ -32,9 +32,11 @@ function drawGate(){
       : "<span class='tile none'></span>");
   /* いちばん下にたんぽぽ。ここで交流級を選び、ここからだけ出す */
   out.push("<button class='master tp' data-go='tanpopo'><i></i>たんぽぽ</button>");
-  const tpN = tpChosen().filter(c => allClasses().indexOf(c) >= 0).length;
+  const tpCs = tpChosen().filter(c => allClasses().indexOf(c) >= 0);
+  const tpP  = tpCs.reduce((a, c) => a + tpCount(c), 0);
   out.push("<span class='tile note' style='grid-column:span " + cols + "'>"
-    + (tpN ? "交流級 " + tpN + " クラスを選んでいる" : "交流級をまだ選んでいない")
+    + (tpCs.length ? "交流級 " + tpCs.length + " クラス・児童 " + tpP + " 人"
+                   : "交流級をまだ選んでいない")
     + "</span>");
   g.innerHTML = out.join("");
 
@@ -84,6 +86,7 @@ function openView(v){
     if(!tp) drawPalette();
     refreshWeek();
     if(!tp) fillPanel();
+    applyLock();                  /* 画面ごとにロックを持つ */
   };
 
   let landed = false, drawn = false;

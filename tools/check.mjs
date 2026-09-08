@@ -67,7 +67,9 @@ console.log("\n■ 手の届くところ");
 ok("「週案」の右にグリッドメニューのボタンがある",
    await p.locator(".side h2 #gridBtn").count() === 1);
 ok("「時間割の入力」の右に保存がある",
-   await p.locator(".phead h2 + #saveBtn").count() === 1);
+   await p.locator(".phead .pbtns #saveBtn").count() === 1);
+ok("その隣にロックがある",
+   await p.locator(".phead .pbtns #lockBtn").count() === 1);
 ok("手元では送るものが無いので「保存ずみ」",
    (await p.locator("#saveTxt").innerText()).indexOf("ずみ") >= 0,
    await p.locator("#saveTxt").innerText());
@@ -509,6 +511,52 @@ ok("入れると基本時間割になる",
    await p.evaluate(() => Y().base["3-1"].B["3|p3"]));
 ok("入れたら窓は閉じる", await p.locator("#impDlg").evaluate(d => d.open) === false);
 await p.locator("#baseClose").click(); await p.waitForTimeout(250);
+
+console.log("\n■ 入力ロック（見るだけのときに、うっかり直さない）");
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='2-2']").click(); await p.waitForTimeout(400);
+const cell22 = "#sheet .cell[data-d='1'][data-s='p3']";
+await p.locator(cell22 + " .t").click(); await p.waitForTimeout(150);
+await p.locator(".pal[data-v='rika']").click(); await p.waitForTimeout(250);
+const before22 = (await p.locator(cell22 + " .t").innerText()).trim();
+ok("ロックする前は入る", before22 === "理科", before22);
+
+await p.locator("#lockBtn").click(); await p.waitForTimeout(250);
+ok("押すとロック中になる",
+   await p.locator("#lockBtn").getAttribute("aria-pressed") === "true");
+ok("ロック中だと画面に出る", await p.locator("#lockMsg").isVisible() === true);
+ok("紙の欄は書けなくなる",
+   await p.locator(cell22 + " .t").getAttribute("contenteditable") === "false");
+ok("教科のボタンは押せなくなる",
+   await p.locator(".pal[data-v='kokugo']").isDisabled() === true);
+ok("「空にする」も押せなくなる", await p.locator("#pClear").isDisabled() === true);
+/* 押しても入らない（ボタンが効かないだけでなく、書き込みの道でも止める） */
+await p.evaluate(() => applyPalette(1, "p3", "kokugo"));
+await p.waitForTimeout(200);
+ok("ロック中は、どこから入れても入らない",
+   (await p.locator(cell22 + " .t").innerText()).trim() === "理科",
+   await p.locator(cell22 + " .t").innerText());
+ok("直に書き込もうとしても入らない",
+   await p.evaluate(() => writeCell(1, "p3", {title:"だめ", subject:null})) === false);
+
+/* ロックは画面ごと。ほかのクラスは直せる */
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='2-3']").click(); await p.waitForTimeout(400);
+ok("ほかのクラスはロックされない",
+   await p.locator("#lockBtn").getAttribute("aria-pressed") === "false");
+ok("ほかのクラスは書ける",
+   await p.locator("#sheet .cell[data-d='1'][data-s='p3'] .t")
+     .getAttribute("contenteditable") === "true");
+
+/* 戻ってくるとロックは続いている */
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='2-2']").click(); await p.waitForTimeout(400);
+ok("開き直してもロックは続く",
+   await p.locator("#lockBtn").getAttribute("aria-pressed") === "true");
+await p.locator("#lockBtn").click(); await p.waitForTimeout(250);
+ok("もう一度押すと外れる",
+   await p.locator("#lockBtn").getAttribute("aria-pressed") === "false"
+   && await p.locator(cell22 + " .t").getAttribute("contenteditable") === "true");
 
 console.log("\n■ 時数のコピー");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);

@@ -339,24 +339,34 @@ threwEmpty = false;
 try{ ev(`Store.writeRoster(2026, {"1":[], "2":[]}, [], "")`); }catch(e){ threwEmpty = true; }
 ok("学年だけあってクラスが無いのも断る", threwEmpty === true);
 
-console.log("\n■ たんぽぽ交流級の印");
+console.log("\n■ たんぽぽ交流級は人数で持つ");
 ev(`Store.writeRoster(2028, {"3":["3-1","3-2","3-3"]},
-    [{code:"ongaku", label:"音楽"}], "2028-04-03", ["3-1","3-3"])`);
+    [{code:"ongaku", label:"音楽"}], "2028-04-03", {"3-1":1, "3-3":2})`);
 const r28 = ev("Store.readRoster(2028)");
-ok("印を付けたクラスだけ返る",
-   JSON.stringify(r28.tanpopo) === JSON.stringify(["3-1","3-3"]), r28.tanpopo);
+ok("人数のまま返る（2人いる交流級がある）",
+   JSON.stringify(r28.tanpopo) === JSON.stringify({"3-1":1, "3-3":2}), r28.tanpopo);
+ok("シートには数で書く", (function(){
+     const at = ev('Sheets.head("クラス").at');
+     return SHEETS["クラス"].some(r => String(r[at["年度"]]) === "2028"
+       && String(r[at["クラス"]]) === "3-3" && String(r[at["たんぽぽ交流級"]]) === "2");
+   })() === true);
+/* 前の形（クラス名の並び）でも受ける */
+ev(`Store.writeRoster(2029, {"3":["3-1","3-2"]}, [], "", ["3-1"])`);
+ok("前の形（並び）で渡されても1人として受ける",
+   JSON.stringify(ev("Store.readRoster(2029)").tanpopo) === JSON.stringify({"3-1":1}),
+   ev("Store.readRoster(2029)").tanpopo);
 ok("印はクラス表の欄で持つ（コードに書かない）",
    ev('Sheets.head("クラス").at["たんぽぽ交流級"]') >= 0,
    ev('Sheets.head("クラス").cols'));
-/* シートに手で ○ 以外を書いても通す。消したいときは空にする */
+/* 前は○で持っていた。書き直させない */
 (function(){
   const at = ev('Sheets.head("クラス").at');
   for(const row of SHEETS["クラス"])
     if(String(row[at["年度"]]) === "2028" && String(row[at["クラス"]]) === "3-2")
-      row[at["たんぽぽ交流級"]] = "あり";
+      row[at["たんぽぽ交流級"]] = "○";
 })();
-ok("○ でなくても、空でなければ印として読む",
-   ev("Store.readRoster(2028).tanpopo").indexOf("3-2") >= 0,
+ok("○ と書いてあれば1人として読む",
+   ev("Store.readRoster(2028).tanpopo")["3-2"] === 1,
    ev("Store.readRoster(2028).tanpopo"));
 
 console.log("\n■ 学級編成を直しても、人が入れた欄を消さない");
@@ -370,7 +380,7 @@ console.log("\n■ 学級編成を直しても、人が入れた欄を消さな�
     if(String(row[sat["年度"]]) === "2028") row[sat["メール"]] = "sp@edu.nishi.or.jp";
 })();
 ev(`Store.writeRoster(2028, {"3":["3-1","3-2","3-3","3-4"]},
-    [{code:"ongaku", label:"音楽"}], "2028-04-03", ["3-1"])`);
+    [{code:"ongaku", label:"音楽"}], "2028-04-03", {"3-1":1})`);
 ok("担任メールは残る", (function(){
      const at = ev('Sheets.head("クラス").at');
      return SHEETS["クラス"].some(r => String(r[at["年度"]]) === "2028"
@@ -383,7 +393,7 @@ ok("専科のメールも残る", (function(){
        && String(r[at["メール"]]) === "sp@edu.nishi.or.jp");
    })() === true);
 ok("印は書き直したとおりになる",
-   JSON.stringify(ev("Store.readRoster(2028).tanpopo")) === JSON.stringify(["3-1"]),
+   JSON.stringify(ev("Store.readRoster(2028).tanpopo")) === JSON.stringify({"3-1":1}),
    ev("Store.readRoster(2028).tanpopo"));
 
 console.log("\n■ 固定時間割の取り込み（貼り付け用シート）");
@@ -558,6 +568,20 @@ ok("形が合わない日は書かない", rep2.days === 4, rep2);
 ok("どの日をなぜ飛ばしたかを言う",
    rep2.skipped.length === 1 && rep2.skipped[0].indexOf("中休み") >= 0, rep2.skipped);
 TPFILE.sheets["週案"][6][0] = "中休み";
+
+/* **人数と列の数が合っているか。** 2人いるのに1列しかなければ、片方が入らない */
+const rn = ev(`Store.exportTanpopo(2026, "2026-11-16", ${JSON.stringify(titles)}, {"3-3":2})`);
+ok("2人ぶん2列あれば、食い違いは出ない",
+   (rn.short || []).length === 0, rn.short);
+const rn1 = ev(`Store.exportTanpopo(2026, "2026-11-16", ${JSON.stringify(titles)}, {"3-3":1})`);
+ok("1人と書いてあるのに2列あれば知らせる",
+   (rn1.short || []).length === 5 && rn1.short[0].indexOf("1人だが列は2つ") >= 0,
+   rn1.short && rn1.short[0]);
+const rn3 = ev(`Store.exportTanpopo(2026, "2026-11-16", ${JSON.stringify(titles)}, {"3-3":3})`);
+ok("3人と書いてあるのに2列でも知らせる",
+   (rn3.short || []).length === 5 && rn3.short[0].indexOf("3人だが列は2つ") >= 0,
+   rn3.short && rn3.short[0]);
+ok("食い違っても、ある列には書く", rn3.days === 5, rn3);
 
 /* 実物は日によって行数が違う（16・18・15・18・18）。**揃っていなくても書く。**
    骨（中休み・給食・昼休み）を探して、そこから校時の行を数える */

@@ -77,7 +77,9 @@ function newYear(y){
     specials: prev ? clone(prev.specials) : clone(DEFAULT_SPECIALS),
     base:{}, weeks:{}, week1: firstMonday(y),
     /* たんぽぽ児童がいる交流級。ここで選んだクラスだけを たんぽぽ時間割へ出す */
-    tanpopo: prev ? clone(prev.tanpopo || []) : []
+    /* たんぽぽ児童がいる交流級と、その**人数**。{"3-3":2} のように持つ。
+       たんぽぽ時間割は児童ごとに1列なので、2人いれば2列に書く */
+    tanpopo: prev ? clone(prev.tanpopo || {}) : {}
   };
 }
 /* 読むだけ。**ここでは保存しない**（描画のたびに呼ばれるため）。
@@ -91,9 +93,25 @@ function Y(){
   if(!Yr.base)  Yr.base  = {};
   if(!Yr.weeks) Yr.weeks = {};
   if(!Yr.week1) Yr.week1 = firstMonday(+y);
-  if(!Array.isArray(Yr.tanpopo)) Yr.tanpopo = [];
+  /* **毎回作り直さない。** 作り直すと、直した中身が次の呼び出しで捨てられる */
+  if(!Yr.tanpopo || typeof Yr.tanpopo !== "object" || Array.isArray(Yr.tanpopo))
+    Yr.tanpopo = tpNorm_(Yr.tanpopo);
   return Yr;
 }
+/* 前は「クラス名の並び」で持っていた。人数を持つ形に直す。
+   **古い控えを捨てない。** 捨てると、選び直しからやることになる。 */
+function tpNorm_(v){
+  const out = {};
+  if(Array.isArray(v)){ for(const c of v) out[c] = 1; return out; }
+  if(v && typeof v === "object")
+    for(const c in v){ const n = +v[c] || 0; if(n > 0) out[c] = Math.min(9, n); }
+  return out;
+}
+/* そのクラスに何人いるか。0 なら出さない */
+const tpCount  = c => (Y().tanpopo || {})[c] || 0;
+const tpChosen = () => Object.keys(Y().tanpopo || {}).filter(c => tpCount(c) > 0);
+const tpTotal  = () => tpChosen().reduce((a, c) => a + tpCount(c), 0);
+
 const knownYears = () => Object.keys(db.years).sort();
 
 /* ── クラス編成 ──────────────────────────────── */

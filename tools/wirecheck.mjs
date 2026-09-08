@@ -349,17 +349,25 @@ ok("A週とB週の両方が届く",
 await p.locator("#baseClose").click(); await p.waitForTimeout(250);
 
 console.log("\n■ たんぽぽ交流級もシートで持つ");
-ok("シートの印がそのまま選択になる",
-   JSON.stringify(await p.evaluate(() => tpChosen())) === JSON.stringify(["5-1"]),
-   await p.evaluate(() => tpChosen()));
+ok("シートの印がそのまま選択になる（人数つき）",
+   JSON.stringify(await p.evaluate(() => Y().tanpopo)) === JSON.stringify({"5-1":1}),
+   await p.evaluate(() => Y().tanpopo));
 await p.evaluate(() => { window.__calls.length = 0; });
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".master.tp").click(); await p.waitForTimeout(300);
 await p.locator("#tpSel .tpchip[data-c='5-2']").click(); await p.waitForTimeout(300);
 const tq = await lastCall("apiWriteRoster");
-ok("選び直すとシートへ書く",
-   !!tq && JSON.stringify(tq.args[4]) === JSON.stringify(["5-1","5-2"]),
+ok("選び直すとシートへ書く（人数で）",
+   !!tq && JSON.stringify(tq.args[4]) === JSON.stringify({"5-1":1, "5-2":1}),
    tq && tq.args[4]);
+/* 押すたびに 0人 → 1人 → 2人 → 0人 */
+await p.locator("#tpSel .tpchip[data-c='5-2']").click(); await p.waitForTimeout(250);
+ok("もう一度押すと2人になる", await p.evaluate(() => tpCount("5-2")) === 2,
+   await p.evaluate(() => tpCount("5-2")));
+await p.locator("#tpSel .tpchip[data-c='5-2']").click(); await p.waitForTimeout(250);
+ok("もう一度押すと0人に戻る", await p.evaluate(() => tpCount("5-2")) === 0,
+   await p.evaluate(() => Y().tanpopo));
+await p.locator("#tpSel .tpchip[data-c='5-2']").click(); await p.waitForTimeout(250);
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(300);
 
@@ -375,8 +383,9 @@ ok("出す前に、書いたぶんを先に送る",
    (await calls()).indexOf("apiWriteCells") <
    (await calls()).indexOf("apiExportTanpopo")
    || (await calls()).indexOf("apiWriteCells") < 0, await calls());
-ok("選んだ交流級を渡す",
-   !!tp && JSON.stringify(tp.args[3]) === JSON.stringify(["5-1", "5-2"]), tp && tp.args[3]);
+ok("選んだ交流級を人数のまま渡す（2人いれば2列いる）",
+   !!tp && JSON.stringify(tp.args[3]) === JSON.stringify({"5-1":1, "5-2":1}),
+   tp && tp.args[3]);
 ok("紙に出ているとおりの授業名を渡す（月〜金ぶん）",
    !!tp && Object.keys(tp.args[2]["5-1"]).length === 5, tp && tp.args[2]["5-1"]);
 /* この学校の時程は授業が3コマしかない。**時程シートの授業の行に合わせる** */

@@ -136,7 +136,7 @@ function targetsForView(){
     return school.concat([grdT(v.grade)], classesOfGrade(v.grade).map(clsT));
 
   if(v.kind === "tanpopo"){
-    const cs = (Y().tanpopo || []).filter(c => allClasses().indexOf(c) >= 0);
+    const cs = tpChosen().filter(c => allClasses().indexOf(c) >= 0);
     const gs = {};
     for(const c of cs) gs[gradeOf(c)] = true;
     return school.concat(Object.keys(gs).map(grdT), cs.map(clsT));
@@ -244,6 +244,9 @@ function overwrittenHere(){
 }
 
 function writeCell(d, s, patch){
+  /* **ロック中は書かない。** ここが書き込みの1本道なので、ここで止めれば
+     引っぱって入れても、打っても、パレットを押しても入らない */
+  if(typeof isLocked === "function" && isLocked()) return false;
   const w = week(), key = ck(d, s);
 
   /* 専科の週では、コマの中身は「どのクラスへ行くか」 */

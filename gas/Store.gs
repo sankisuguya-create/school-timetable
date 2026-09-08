@@ -115,21 +115,27 @@ const Store = (function(){
     return out;
   }
 
-  /* たんぽぽ児童がいる交流級の印。○ でも 1 でも「はい」でも通す。
-     消したいときに空にするのが自然なので、**空だけを「いいえ」**とする。 */
-  const marked = v => {
+  /* たんぽぽ児童がいる交流級と、その**人数**。
+     たんぽぽ時間割は児童ごとに1列なので、2人いれば2列に書く。
+     数で書くのが本筋だが、○ や「あり」と書いてあれば1人として読む
+     （前は○で持っていた。書き直させない）。 */
+  function tpNum(v){
     const t = String(v == null ? "" : v).trim().toLowerCase();
-    return t !== "" && t !== "false" && t !== "0" && t !== "×" && t !== "x" && t !== "-";
-  };
+    if(t === "" || t === "false" || t === "0" || t === "×" || t === "x" || t === "-") return 0;
+    const m = t.match(/^(\d+)/);
+    if(m) return Math.min(9, +m[1]);
+    return 1;
+  }
 
   /* 年度の欄が空の行は「どの年度でも使う既定」。年度を書いた行があれば、そちらが勝つ。 */
   function readRoster(year){
-    const tanpopo = [];
+    const tanpopo = {};
     const classes = pickYear_("クラス", year).reduce((a, r) => {
       const g = Sheets.asClass(r["学年"]), c = Sheets.asClass(r["クラス"]);
       if(g && c){
         (a[g] || (a[g] = [])).push(c);
-        if(marked(r["たんぽぽ交流級"]) && tanpopo.indexOf(c) < 0) tanpopo.push(c);
+        const n = tpNum(r["たんぽぽ交流級"]);
+        if(n > 0) tanpopo[c] = n;
       }
       return a;
     }, {});
@@ -352,8 +358,10 @@ const Store = (function(){
       + "あるのは「" + ss.getSheets().map(function(x){ return x.getName(); }).join("」「")
       + "」");
 
+    /* classes は {クラス:人数} でも、クラス名の並びでも受ける */
     const pick = {};
-    for(const c of (classes || [])) pick[tpNorm(c)] = true;
+    if(Array.isArray(classes)) for(const c of classes) pick[tpNorm(c)] = 1;
+    else for(const c in (classes || {})) if(+classes[c] > 0) pick[tpNorm(c)] = +classes[c];
     const dayOf = {};                       /* 日付 → 月〜金の何日目か */
     for(let i = 0; i < 5; i++) dayOf[ymd(addDays_(mondayISO, i))] = i;
 
@@ -371,7 +379,7 @@ const Store = (function(){
     /* 校時のIDは画面から受け取る。時程シートを直した学校でも合う */
     const slotIds = (slots && slots.length === 6)
       ? slots : ["p1", "p2", "p3", "p4", "p5", "p6"];
-    const report = {wrote:0, days:0, skipped:[], unknown:{}, file:ss.getName()};
+    const report = {wrote:0, days:0, skipped:[], short:[], unknown:{}, file:ss.getName()};
 
     /* 次の日の日付までが、その日のブロック */
     for(let bi = 0; bi < blocks.length; bi++){
@@ -387,13 +395,21 @@ const Store = (function(){
         report.skipped.push(b.date + "（" + found.miss.join("・") + "校時の行が無い）");
 
       /* その日の見出しを読んで、書く列を決める */
-      const cols = [];
+      const cols = [], seen = {};
       for(let c = 1; c < lastCol; c++){
         const cls = tpNorm(grid[0][c]);
         if(!/^[1-9]-[1-9]$/.test(cls)) continue;      /* 支援員などの列は飛ばす */
         if(!pick[cls]){ continue; }
         if(!titles[cls]){ report.unknown[cls] = true; continue; }
+        seen[cls] = (seen[cls] || 0) + 1;
         cols.push({c, cls});
+      }
+      /* **人数と列の数が合っているか。** 合わないと、誰かのぶんが入らないか、
+         もう居ない児童の列に入る。落ちないので気づかない */
+      for(const cls in pick){
+        const got = seen[cls] || 0;
+        if(got !== pick[cls])
+          report.short.push(b.date + " " + cls + "：" + pick[cls] + "人だが列は" + got + "つ");
       }
       if(!cols.length){ report.skipped.push(b.date + "（出す交流級の列が無い）"); continue; }
 
@@ -494,7 +510,7 @@ const Store = (function(){
     const lock = LockService.getScriptLock();
     lock.waitLock(20000);
     try{
-      const tp = tanpopo || [];
+      const tp = tpNormObj_(tanpopo);
       /* **人の手で入れた欄を消さない。** 画面が持っていないのは
          担任メールと専科のメールだけなので、いまの行から引き継ぐ。
          引き継がないと、学級編成を1回直すたびに連絡先が全部消える。 */
@@ -504,7 +520,7 @@ const Store = (function(){
       for(const g of Object.keys(classes || {}).sort())
         for(const c of classes[g]) clsRows.push({
           "年度":year, "学年":g, "クラス":c, "担任メール": mailOf[c] || "",
-          "たんぽぽ交流級": tp.indexOf(c) >= 0 ? "○" : ""
+          "たんぽぽ交流級": tp[c] ? tp[c] : ""
         });
       replaceYear_("クラス", year, clsRows);
       replaceYear_("専科", year, (specials || []).map(s =>
@@ -516,6 +532,15 @@ const Store = (function(){
       lock.releaseLock();
     }
   }
+  /* 前は「クラス名の並び」で来ていた。人数の形に直す */
+  function tpNormObj_(v){
+    const out = {};
+    if(Array.isArray(v)){ for(const c of v) out[Sheets.asClass(c)] = 1; return out; }
+    if(v && typeof v === "object")
+      for(const c in v){ const n = +v[c] || 0; if(n > 0) out[Sheets.asClass(c)] = Math.min(9, n); }
+    return out;
+  }
+
   /* いまその年度で使っている行から、画面が持たない欄を拾っておく。
      年度の行が無ければ既定（年度が空）の行から拾う。 */
   function keep_(name, year, keyOf_, valOf_){

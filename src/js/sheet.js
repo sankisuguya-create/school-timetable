@@ -42,9 +42,13 @@ function buildSheet(){
     + "<div class='t' contenteditable></div>"));
   const ft = foot.querySelector(".t");
   ft.innerHTML = week().memo || "";
-  ft.addEventListener("input", () => { week().memo = clean(ft.innerHTML); save(); });
+  ft.addEventListener("input", () => {
+    if(typeof isLocked === "function" && isLocked()) return;
+    week().memo = clean(ft.innerHTML); save();
+  });
 
   paintSheet();
+  if(typeof applyLock === "function") applyLock();
 }
 
 function weekendEl(cap, r1, r2){
@@ -55,6 +59,7 @@ function weekendEl(cap, r1, r2){
   const t = e.querySelector(".t");
   t.innerHTML = (week().weekend || {})[cap] || "";
   t.addEventListener("input", () => {
+    if(typeof isLocked === "function" && isLocked()) return;
     const w = week();
     (w.weekend || (w.weekend = {}))[cap] = clean(t.innerHTML);
     save();

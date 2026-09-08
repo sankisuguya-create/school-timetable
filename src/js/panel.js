@@ -15,6 +15,7 @@ function drawPalette(){
     "<button class='pal" + (o.off ? " off" : "") + "' draggable='true'"
     + " data-v='" + escText(o.v) + "'>" + escText(o.t) + "</button>").join("");
 
+  if(typeof applyLock === "function") setTimeout(applyLock, 0);
   $("palHint").innerHTML = (view.kind === "special")
     ? "コマへ<b>引っぱって入れる</b>。その時間に行くクラスを選ぶ。"
     : "コマへ<b>引っぱって入れる</b>。コマを選んでから押しても入る。";
@@ -53,6 +54,7 @@ function okToOverwrite(d, sid, to){
 }
 
 function applyPalette(d, sid, v, e){
+  if(typeof isLocked === "function" && isLocked()) return toast("この画面はロック中");
   if(view.kind === "special"){
     writeCell(d, sid, {cls:v});
     paintSheet(); selectCell(d, sid, e || cellAt(d, sid));

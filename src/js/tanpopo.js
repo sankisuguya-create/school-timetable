@@ -33,26 +33,31 @@ const TANPOPO_DUTY = ["交：丸山", "た：桝村", "交：星川", "た：西
 const tpSlots = () => SLOTS.filter(s => s.kind === "lesson").slice(0, 6).map(s => s.id);
 let tpDay = 0;
 
-const tpChosen  = () => Y().tanpopo || [];
-const tpHasCls  = c => tpChosen().indexOf(c) >= 0;
+const tpHasCls  = c => tpCount(c) > 0;
 
 /* ── たんぽぽの面 ────────────────────────────── */
 
+/* 押すたびに 0人 → 1人 → 2人 → 0人。
+   **たんぽぽ時間割は児童ごとに1列。** 同じ交流級に2人いれば2列いる。
+   人数をここで持っておくと、たんぽぽ側の列数と食い違ったときに気づける。 */
+const TP_MAX = 2;
+
 function drawTanpopoView(){
-  /* 交流級を選ぶ。**選んだクラスだけを出す。** */
   $("tpSel").innerHTML = grades().map(g =>
     "<div class='tprow'><span>" + escText(g) + "年</span><div class='tpchips'>"
     + classesOfGrade(g).map(c => {
-        const st = planState(c), on = tpHasCls(c);
-        return "<button class='tpchip" + (on && st !== "ok" ? " warn" : "") + "'"
-             + " aria-pressed='" + on + "' data-c='" + escText(c) + "'><i></i>"
-             + escText(c) + "</button>";
+        const st = planState(c), n = tpCount(c);
+        return "<button class='tpchip n" + n + (n && st !== "ok" ? " warn" : "") + "'"
+             + " aria-pressed='" + (n > 0) + "'"
+             + " title='押すたびに 0人→1人→2人→0人'"
+             + " data-c='" + escText(c) + "'><i></i>"
+             + escText(c) + (n ? "<b>" + n + "人</b>" : "") + "</button>";
       }).join("")
     + "</div></div>").join("");
   for(const b of $("tpSel").querySelectorAll(".tpchip")) b.onclick = () => {
-    const c = b.dataset.c, list = Y().tanpopo;
-    const i = list.indexOf(c);
-    if(i >= 0) list.splice(i, 1); else list.push(c);
+    const c = b.dataset.c, t = Y().tanpopo;
+    const n = (tpCount(c) + 1) % (TP_MAX + 1);
+    if(n) t[c] = n; else delete t[c];
     save(); Backend.saveRoster(); drawTanpopoView();
   };
 
@@ -78,7 +83,8 @@ function drawTanpopoView(){
 
   $("tpGo").disabled = !chosen.length;
   $("tpCount").innerHTML = chosen.length
-    ? "選んでいるのは <b>" + chosen.length + " クラス</b>"
+    ? "選んでいるのは <b>" + chosen.length + " クラス</b>・<b>"
+      + chosen.reduce((a, c) => a + tpCount(c), 0) + " 人</b>"
     : "";
 }
 
@@ -153,7 +159,7 @@ function reflectTanpopo(){
   const bad = chosen.filter(c => planState(c) !== "ok");
   const yes = confirm(
     md(monday) + " → " + md(addDays(monday, 4)) + " の週を、たんぽぽ時間割へ出します。\n\n"
-    + "・選んだ交流級：" + chosen.join("、") + "\n"
+    + "・選んだ交流級：" + chosen.map(c => c + "（" + tpCount(c) + "人）").join("、") + "\n"
     + (bad.length ? "・まだ基本時間割のまま：" + bad.join("、") + "\n" : "")
     + "\nたんぽぽ時間割の授業名は、この週のぶんが全部入れ替わります。\n"
     + "たんぽぽ側で直した内容は消えます。\n\nつづけますか？");
@@ -169,7 +175,10 @@ function reflectTanpopo(){
   $("tpGo").disabled = true;
   $("tpCount").innerHTML = "たんぽぽ時間割へ書いている…";
   Backend.flush(() => {
-    Backend.exportTanpopo(tanpopoTitles(chosen), chosen, tpSlots(),
+    /* **人数のまま渡す。** たんぽぽ側の列の数と合っているかを、あちらで見る */
+    const nums = {};
+    for(const c of chosen) nums[c] = tpCount(c);
+    Backend.exportTanpopo(tanpopoTitles(chosen), nums, tpSlots(),
       r => {
         $("tpGo").disabled = false;
         drawTanpopoView();
@@ -192,6 +201,12 @@ function showTanpopoResult(r){
   box.push("<div class='box ok'><b>たんぽぽ時間割に出した。</b>"
     + escText(r.file || "") + "／" + (r.days || 0) + "日ぶん・"
     + (r.wrote || 0) + "コマ</div>");
+  if(r.short && r.short.length)
+    box.push("<div class='box'><b>人数と、たんぽぽ時間割の列の数が合っていない。</b><br>"
+      + r.short.slice(0, 8).map(escText).join("<br>")
+      + (r.short.length > 8 ? "<br>ほか " + (r.short.length - 8) + "件" : "")
+      + "<br>たんぽぽ時間割は<b>児童ごとに1列</b>。2人いる交流級は2列いる。"
+      + "列を足すか、こちらの人数を直す</div>");
   if(r.skipped && r.skipped.length)
     box.push("<div class='box'><b>書かなかった日がある。</b><br>"
       + r.skipped.map(escText).join("<br>")

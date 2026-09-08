@@ -159,6 +159,9 @@ button,select,input,textarea{font:inherit;color:inherit}
 .tpchip i{width:9px;height:9px;border-radius:50%;background:var(--line);flex:none}
 .tpchip[aria-pressed=true] i{background:var(--ink-link)}
 .tpchip.warn i{background:var(--cat-clash)}
+/* 人数。**1人と2人が並んでいて見分けられること**が要る（印の数ではなく字で出す） */
+.tpchip b{font-weight:700;font-size:11.5px;color:var(--ink-link)}
+.tpchip.n2 i{box-shadow:0 0 0 3px var(--tint)}
 .tpwarn{display:flex;flex-direction:column;gap:8px}
 .tpwarn .box{border:1px solid var(--line);border-left:4px solid var(--cat-clash);
   border-radius:var(--r-sm);padding:11px 13px;font-size:13px;line-height:1.75}
@@ -178,6 +181,23 @@ button,select,input,textarea{font:inherit;color:inherit}
 /* 入力パネルの頭。**保存はいちばん目立つところに1つだけ置く。**
    打つたびに送らない作りなので、押す場所が分からないと書いたものが宙に浮く */
 .phead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.pbtns{display:flex;align-items:center;gap:7px}
+/* ロック。**押すまで、この画面からは直せない。**
+   見るだけのつもりで開いたクラスに、うっかり字を入れてしまうのを止める。
+   かかっているかどうかが、押す前から分かる形にする（塗りと字の両方） */
+.lock{display:inline-flex;align-items:center;gap:5px;padding:7px 11px;font-size:12.5px;
+  font-weight:600;border-radius:var(--r-sm);cursor:pointer;
+  border:1px solid var(--line);background:var(--card);color:var(--tx-sub)}
+.lock:hover{background:var(--hover)}
+.lock[aria-pressed=true]{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff}
+.lockmsg{margin:0;padding:8px 11px;font-size:12px;line-height:1.7;
+  border-radius:var(--r-sm);background:var(--tint);color:var(--tx);
+  border-left:4px solid var(--cat-clash)}
+.lockmsg b{color:var(--tx)}
+/* ロック中は、紙の上でも触れないことが見て分かる */
+.sheet.locked .cell .t,.sheet.locked .cell .n,.sheet.locked .wk .t,.sheet.locked .foot .t{
+  cursor:default;background:transparent}
+.sheet.locked .cell.sel{box-shadow:inset 0 0 0 1.6px var(--cat-clash)}
 .save{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:13px;
   font-weight:700;border-radius:var(--r-sm);cursor:pointer;
   border:1px solid var(--line);background:var(--card);color:var(--tx-sub)}
@@ -577,6 +597,10 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
     stroke-linecap="round" stroke-linejoin="round">
     <circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+    stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4.5" y="10.5" width="15" height="10" rx="2"/>
+    <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></symbol>
   <symbol id="i-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
     stroke-linecap="round" stroke-linejoin="round">
     <path d="M4 4h11l5 5v11H4z"/><path d="M8 4v5h7M8 20v-6h8v6"/></symbol>
@@ -678,9 +702,17 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
     <aside class="panel">
       <div class="phead">
         <h2>時間割の入力</h2>
-        <button class="save" id="saveBtn" aria-live="polite">
-          <svg width="16" height="16"><use href="#i-save"/></svg><span id="saveTxt">保存</span></button>
+        <div class="pbtns">
+          <!-- ロック。**押すまで、この画面からは直せない。** 見るだけのときに使う -->
+          <button class="lock" id="lockBtn" aria-pressed="false"
+                  title="この画面からの書き込みを止める">
+            <svg width="15" height="15"><use href="#i-lock"/></svg><span id="lockTxt">ロック</span></button>
+          <button class="save" id="saveBtn" aria-live="polite">
+            <svg width="16" height="16"><use href="#i-save"/></svg><span id="saveTxt">保存</span></button>
+        </div>
       </div>
+      <p class="lockmsg" id="lockMsg" hidden>
+        <b>この画面はロック中。</b>直すには右上の「ロック中」を押す。</p>
 
       <div>
         <h3>教科・行事</h3>
@@ -1213,7 +1245,9 @@ function newYear(y){
     specials: prev ? clone(prev.specials) : clone(DEFAULT_SPECIALS),
     base:{}, weeks:{}, week1: firstMonday(y),
     /* たんぽぽ児童がいる交流級。ここで選んだクラスだけを たんぽぽ時間割へ出す */
-    tanpopo: prev ? clone(prev.tanpopo || []) : []
+    /* たんぽぽ児童がいる交流級と、その**人数**。{"3-3":2} のように持つ。
+       たんぽぽ時間割は児童ごとに1列なので、2人いれば2列に書く */
+    tanpopo: prev ? clone(prev.tanpopo || {}) : {}
   };
 }
 /* 読むだけ。**ここでは保存しない**（描画のたびに呼ばれるため）。
@@ -1227,9 +1261,25 @@ function Y(){
   if(!Yr.base)  Yr.base  = {};
   if(!Yr.weeks) Yr.weeks = {};
   if(!Yr.week1) Yr.week1 = firstMonday(+y);
-  if(!Array.isArray(Yr.tanpopo)) Yr.tanpopo = [];
+  /* **毎回作り直さない。** 作り直すと、直した中身が次の呼び出しで捨てられる */
+  if(!Yr.tanpopo || typeof Yr.tanpopo !== "object" || Array.isArray(Yr.tanpopo))
+    Yr.tanpopo = tpNorm_(Yr.tanpopo);
   return Yr;
 }
+/* 前は「クラス名の並び」で持っていた。人数を持つ形に直す。
+   **古い控えを捨てない。** 捨てると、選び直しからやることになる。 */
+function tpNorm_(v){
+  const out = {};
+  if(Array.isArray(v)){ for(const c of v) out[c] = 1; return out; }
+  if(v && typeof v === "object")
+    for(const c in v){ const n = +v[c] || 0; if(n > 0) out[c] = Math.min(9, n); }
+  return out;
+}
+/* そのクラスに何人いるか。0 なら出さない */
+const tpCount  = c => (Y().tanpopo || {})[c] || 0;
+const tpChosen = () => Object.keys(Y().tanpopo || {}).filter(c => tpCount(c) > 0);
+const tpTotal  = () => tpChosen().reduce((a, c) => a + tpCount(c), 0);
+
 const knownYears = () => Object.keys(db.years).sort();
 
 /* ── クラス編成 ──────────────────────────────── */
@@ -1489,7 +1539,9 @@ const Backend = (function(){
       if(r.roster.classes && Object.keys(r.roster.classes).length) Yr.classes = r.roster.classes;
       if(r.roster.specials && r.roster.specials.length)            Yr.specials = r.roster.specials;
       if(r.roster.week1) Yr.week1 = r.roster.week1;
-      if(Array.isArray(r.roster.tanpopo)) Yr.tanpopo = r.roster.tanpopo;
+      /* 空も答えのうち（全部外した年度がある）。有無ではなく、返ってきたかで見る */
+      if(r.roster.tanpopo !== undefined && r.roster.tanpopo !== null)
+        Yr.tanpopo = tpNorm_(r.roster.tanpopo);
     }
     Yr.base = r.base || {};
     /* **読めなかった行は黙って捨てない。** 入っていないのか読めていないのかが
@@ -1610,7 +1662,7 @@ const Backend = (function(){
     const Yr = Y();
     google.script.run
       .withFailureHandler(e => notify("学級編成を保存できなかった（" + escText(String(e && e.message)) + "）"))
-      .apiWriteRoster(fy(), Yr.classes, Yr.specials, Yr.week1, Yr.tanpopo || []);
+      .apiWriteRoster(fy(), Yr.classes, Yr.specials, Yr.week1, Yr.tanpopo || {});
   }
   function saveBase(cls, variant){
     if(!onGas) return save();
@@ -2055,7 +2107,7 @@ function targetsForView(){
     return school.concat([grdT(v.grade)], classesOfGrade(v.grade).map(clsT));
 
   if(v.kind === "tanpopo"){
-    const cs = (Y().tanpopo || []).filter(c => allClasses().indexOf(c) >= 0);
+    const cs = tpChosen().filter(c => allClasses().indexOf(c) >= 0);
     const gs = {};
     for(const c of cs) gs[gradeOf(c)] = true;
     return school.concat(Object.keys(gs).map(grdT), cs.map(clsT));
@@ -2163,6 +2215,9 @@ function overwrittenHere(){
 }
 
 function writeCell(d, s, patch){
+  /* **ロック中は書かない。** ここが書き込みの1本道なので、ここで止めれば
+     引っぱって入れても、打っても、パレットを押しても入らない */
+  if(typeof isLocked === "function" && isLocked()) return false;
   const w = week(), key = ck(d, s);
 
   /* 専科の週では、コマの中身は「どのクラスへ行くか」 */
@@ -2267,9 +2322,13 @@ function buildSheet(){
     + "<div class='t' contenteditable></div>"));
   const ft = foot.querySelector(".t");
   ft.innerHTML = week().memo || "";
-  ft.addEventListener("input", () => { week().memo = clean(ft.innerHTML); save(); });
+  ft.addEventListener("input", () => {
+    if(typeof isLocked === "function" && isLocked()) return;
+    week().memo = clean(ft.innerHTML); save();
+  });
 
   paintSheet();
+  if(typeof applyLock === "function") applyLock();
 }
 
 function weekendEl(cap, r1, r2){
@@ -2280,6 +2339,7 @@ function weekendEl(cap, r1, r2){
   const t = e.querySelector(".t");
   t.innerHTML = (week().weekend || {})[cap] || "";
   t.addEventListener("input", () => {
+    if(typeof isLocked === "function" && isLocked()) return;
     const w = week();
     (w.weekend || (w.weekend = {}))[cap] = clean(t.innerHTML);
     save();
@@ -2455,6 +2515,7 @@ function drawPalette(){
     "<button class='pal" + (o.off ? " off" : "") + "' draggable='true'"
     + " data-v='" + escText(o.v) + "'>" + escText(o.t) + "</button>").join("");
 
+  if(typeof applyLock === "function") setTimeout(applyLock, 0);
   $("palHint").innerHTML = (view.kind === "special")
     ? "コマへ<b>引っぱって入れる</b>。その時間に行くクラスを選ぶ。"
     : "コマへ<b>引っぱって入れる</b>。コマを選んでから押しても入る。";
@@ -2493,6 +2554,7 @@ function okToOverwrite(d, sid, to){
 }
 
 function applyPalette(d, sid, v, e){
+  if(typeof isLocked === "function" && isLocked()) return toast("この画面はロック中");
   if(view.kind === "special"){
     writeCell(d, sid, {cls:v});
     paintSheet(); selectCell(d, sid, e || cellAt(d, sid));
@@ -2649,26 +2711,31 @@ const TANPOPO_DUTY = ["交：丸山", "た：桝村", "交：星川", "た：西
 const tpSlots = () => SLOTS.filter(s => s.kind === "lesson").slice(0, 6).map(s => s.id);
 let tpDay = 0;
 
-const tpChosen  = () => Y().tanpopo || [];
-const tpHasCls  = c => tpChosen().indexOf(c) >= 0;
+const tpHasCls  = c => tpCount(c) > 0;
 
 /* ── たんぽぽの面 ────────────────────────────── */
 
+/* 押すたびに 0人 → 1人 → 2人 → 0人。
+   **たんぽぽ時間割は児童ごとに1列。** 同じ交流級に2人いれば2列いる。
+   人数をここで持っておくと、たんぽぽ側の列数と食い違ったときに気づける。 */
+const TP_MAX = 2;
+
 function drawTanpopoView(){
-  /* 交流級を選ぶ。**選んだクラスだけを出す。** */
   $("tpSel").innerHTML = grades().map(g =>
     "<div class='tprow'><span>" + escText(g) + "年</span><div class='tpchips'>"
     + classesOfGrade(g).map(c => {
-        const st = planState(c), on = tpHasCls(c);
-        return "<button class='tpchip" + (on && st !== "ok" ? " warn" : "") + "'"
-             + " aria-pressed='" + on + "' data-c='" + escText(c) + "'><i></i>"
-             + escText(c) + "</button>";
+        const st = planState(c), n = tpCount(c);
+        return "<button class='tpchip n" + n + (n && st !== "ok" ? " warn" : "") + "'"
+             + " aria-pressed='" + (n > 0) + "'"
+             + " title='押すたびに 0人→1人→2人→0人'"
+             + " data-c='" + escText(c) + "'><i></i>"
+             + escText(c) + (n ? "<b>" + n + "人</b>" : "") + "</button>";
       }).join("")
     + "</div></div>").join("");
   for(const b of $("tpSel").querySelectorAll(".tpchip")) b.onclick = () => {
-    const c = b.dataset.c, list = Y().tanpopo;
-    const i = list.indexOf(c);
-    if(i >= 0) list.splice(i, 1); else list.push(c);
+    const c = b.dataset.c, t = Y().tanpopo;
+    const n = (tpCount(c) + 1) % (TP_MAX + 1);
+    if(n) t[c] = n; else delete t[c];
     save(); Backend.saveRoster(); drawTanpopoView();
   };
 
@@ -2694,7 +2761,8 @@ function drawTanpopoView(){
 
   $("tpGo").disabled = !chosen.length;
   $("tpCount").innerHTML = chosen.length
-    ? "選んでいるのは <b>" + chosen.length + " クラス</b>"
+    ? "選んでいるのは <b>" + chosen.length + " クラス</b>・<b>"
+      + chosen.reduce((a, c) => a + tpCount(c), 0) + " 人</b>"
     : "";
 }
 
@@ -2769,7 +2837,7 @@ function reflectTanpopo(){
   const bad = chosen.filter(c => planState(c) !== "ok");
   const yes = confirm(
     md(monday) + " → " + md(addDays(monday, 4)) + " の週を、たんぽぽ時間割へ出します。\n\n"
-    + "・選んだ交流級：" + chosen.join("、") + "\n"
+    + "・選んだ交流級：" + chosen.map(c => c + "（" + tpCount(c) + "人）").join("、") + "\n"
     + (bad.length ? "・まだ基本時間割のまま：" + bad.join("、") + "\n" : "")
     + "\nたんぽぽ時間割の授業名は、この週のぶんが全部入れ替わります。\n"
     + "たんぽぽ側で直した内容は消えます。\n\nつづけますか？");
@@ -2785,7 +2853,10 @@ function reflectTanpopo(){
   $("tpGo").disabled = true;
   $("tpCount").innerHTML = "たんぽぽ時間割へ書いている…";
   Backend.flush(() => {
-    Backend.exportTanpopo(tanpopoTitles(chosen), chosen, tpSlots(),
+    /* **人数のまま渡す。** たんぽぽ側の列の数と合っているかを、あちらで見る */
+    const nums = {};
+    for(const c of chosen) nums[c] = tpCount(c);
+    Backend.exportTanpopo(tanpopoTitles(chosen), nums, tpSlots(),
       r => {
         $("tpGo").disabled = false;
         drawTanpopoView();
@@ -2808,6 +2879,12 @@ function showTanpopoResult(r){
   box.push("<div class='box ok'><b>たんぽぽ時間割に出した。</b>"
     + escText(r.file || "") + "／" + (r.days || 0) + "日ぶん・"
     + (r.wrote || 0) + "コマ</div>");
+  if(r.short && r.short.length)
+    box.push("<div class='box'><b>人数と、たんぽぽ時間割の列の数が合っていない。</b><br>"
+      + r.short.slice(0, 8).map(escText).join("<br>")
+      + (r.short.length > 8 ? "<br>ほか " + (r.short.length - 8) + "件" : "")
+      + "<br>たんぽぽ時間割は<b>児童ごとに1列</b>。2人いる交流級は2列いる。"
+      + "列を足すか、こちらの人数を直す</div>");
   if(r.skipped && r.skipped.length)
     box.push("<div class='box'><b>書かなかった日がある。</b><br>"
       + r.skipped.map(escText).join("<br>")
@@ -2855,9 +2932,11 @@ function drawGate(){
       : "<span class='tile none'></span>");
   /* いちばん下にたんぽぽ。ここで交流級を選び、ここからだけ出す */
   out.push("<button class='master tp' data-go='tanpopo'><i></i>たんぽぽ</button>");
-  const tpN = tpChosen().filter(c => allClasses().indexOf(c) >= 0).length;
+  const tpCs = tpChosen().filter(c => allClasses().indexOf(c) >= 0);
+  const tpP  = tpCs.reduce((a, c) => a + tpCount(c), 0);
   out.push("<span class='tile note' style='grid-column:span " + cols + "'>"
-    + (tpN ? "交流級 " + tpN + " クラスを選んでいる" : "交流級をまだ選んでいない")
+    + (tpCs.length ? "交流級 " + tpCs.length + " クラス・児童 " + tpP + " 人"
+                   : "交流級をまだ選んでいない")
     + "</span>");
   g.innerHTML = out.join("");
 
@@ -2907,6 +2986,7 @@ function openView(v){
     if(!tp) drawPalette();
     refreshWeek();
     if(!tp) fillPanel();
+    applyLock();                  /* 画面ごとにロックを持つ */
   };
 
   let landed = false, drawn = false;
@@ -3421,6 +3501,55 @@ function goWeek(n){
   if(landed) setBusy(false);
 }
 
+/* ── 入力ロック ──────────────────────────────
+   **押すまで、この画面からは直せない。**
+   見るだけのつもりで開いたクラスに、うっかり字を入れてしまうのを止める。
+   画面ごと（クラスごと）に持ち、この端末に残る。
+   ロックは**この端末の中だけの話**で、シートには書かない。
+   ほかの先生の画面を止めるものではない。 */
+function lockKey(v){
+  const x = v || view;
+  return x.kind === "class"   ? "class:" + x.cls
+       : x.kind === "grade"   ? "grade:" + x.grade
+       : x.kind === "special" ? "special:" + x.sp
+       : x.kind === "school"  ? "school:" : "";
+}
+const isLocked = () => {
+  const k = lockKey();
+  return !!k && !!(db.settings.locks || {})[k];
+};
+function setLock(on){
+  const k = lockKey();
+  if(!k) return;
+  const l = db.settings.locks || (db.settings.locks = {});
+  if(on) l[k] = true; else delete l[k];
+  save();
+  applyLock();
+  toast(on ? "この画面をロックした。<b>直すには、もう一度押す</b>"
+           : "ロックを外した");
+}
+/* かかっているかどうかを、押す前から見て分かる形にする。
+   **止めるのは書き込みだけ。** 読むこと・刷ること・時数を写すことは止めない。 */
+function applyLock(){
+  const on = isLocked(), has = !!lockKey();
+  const b = $("lockBtn");
+  if(b){
+    b.hidden = !has;
+    b.setAttribute("aria-pressed", String(on));
+    $("lockTxt").textContent = on ? "ロック中" : "ロック";
+  }
+  $("lockMsg").hidden = !on;
+  const sh = $("sheet");
+  if(sh) sh.classList.toggle("locked", on);
+  /* 紙とパネルの書ける欄を、まとめて開け閉めする */
+  for(const e of document.querySelectorAll("#sheet [contenteditable], .panel .fld"))
+    e.setAttribute("contenteditable", String(!on));
+  for(const e of document.querySelectorAll(".pal")) e.disabled = on;
+  for(const id of ["pClear", "pRevert", "pAll", "pAddLink"]){
+    const e = $(id); if(e) e.disabled = on;
+  }
+}
+
 /* ── 待っているあいだの印 ────────────────────
    **押したのに何も起きない時間を作らない。** 校内の回線ではシートを読むのに
    1秒前後かかる。黙っていると、押せていないのかと思ってもう一度押す。
@@ -3536,6 +3665,7 @@ function wire(){
 
   /* 保存。**打つたびには送らない。** ここで1コマ1件にまとめて送る */
   on("saveBtn","click", () => doSave(true));
+  on("lockBtn","click", () => setLock(!isLocked()));
   on("baseImp","click", openImpDlg);
 
   /* 固定時間割の取り込み */

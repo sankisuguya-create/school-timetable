@@ -101,6 +101,55 @@ function goWeek(n){
   if(landed) setBusy(false);
 }
 
+/* ── 入力ロック ──────────────────────────────
+   **押すまで、この画面からは直せない。**
+   見るだけのつもりで開いたクラスに、うっかり字を入れてしまうのを止める。
+   画面ごと（クラスごと）に持ち、この端末に残る。
+   ロックは**この端末の中だけの話**で、シートには書かない。
+   ほかの先生の画面を止めるものではない。 */
+function lockKey(v){
+  const x = v || view;
+  return x.kind === "class"   ? "class:" + x.cls
+       : x.kind === "grade"   ? "grade:" + x.grade
+       : x.kind === "special" ? "special:" + x.sp
+       : x.kind === "school"  ? "school:" : "";
+}
+const isLocked = () => {
+  const k = lockKey();
+  return !!k && !!(db.settings.locks || {})[k];
+};
+function setLock(on){
+  const k = lockKey();
+  if(!k) return;
+  const l = db.settings.locks || (db.settings.locks = {});
+  if(on) l[k] = true; else delete l[k];
+  save();
+  applyLock();
+  toast(on ? "この画面をロックした。<b>直すには、もう一度押す</b>"
+           : "ロックを外した");
+}
+/* かかっているかどうかを、押す前から見て分かる形にする。
+   **止めるのは書き込みだけ。** 読むこと・刷ること・時数を写すことは止めない。 */
+function applyLock(){
+  const on = isLocked(), has = !!lockKey();
+  const b = $("lockBtn");
+  if(b){
+    b.hidden = !has;
+    b.setAttribute("aria-pressed", String(on));
+    $("lockTxt").textContent = on ? "ロック中" : "ロック";
+  }
+  $("lockMsg").hidden = !on;
+  const sh = $("sheet");
+  if(sh) sh.classList.toggle("locked", on);
+  /* 紙とパネルの書ける欄を、まとめて開け閉めする */
+  for(const e of document.querySelectorAll("#sheet [contenteditable], .panel .fld"))
+    e.setAttribute("contenteditable", String(!on));
+  for(const e of document.querySelectorAll(".pal")) e.disabled = on;
+  for(const id of ["pClear", "pRevert", "pAll", "pAddLink"]){
+    const e = $(id); if(e) e.disabled = on;
+  }
+}
+
 /* ── 待っているあいだの印 ────────────────────
    **押したのに何も起きない時間を作らない。** 校内の回線ではシートを読むのに
    1秒前後かかる。黙っていると、押せていないのかと思ってもう一度押す。
@@ -216,6 +265,7 @@ function wire(){
 
   /* 保存。**打つたびには送らない。** ここで1コマ1件にまとめて送る */
   on("saveBtn","click", () => doSave(true));
+  on("lockBtn","click", () => setLock(!isLocked()));
   on("baseImp","click", openImpDlg);
 
   /* 固定時間割の取り込み */
