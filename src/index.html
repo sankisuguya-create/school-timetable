@@ -87,6 +87,12 @@
         <select class="target" id="target" aria-label="開いているもの"></select>
       </div>
 
+      <!-- 待っている印。**押した操作のすぐ下に出す。**
+           手を動かした場所のとなりに出れば、探さなくても目に入る -->
+      <div class="busy" id="busy" hidden>
+        <span class="spin" aria-hidden="true"></span><span id="busyTxt">読み込み中</span>
+      </div>
+
       <hr>
       <button class="nav" data-screen="gate" data-act="gate">
         <svg width="17" height="17"><use href="#i-layers"/></svg><span>ほかの週案をひらく</span></button>
@@ -122,11 +128,6 @@
     </aside>
 
     <main class="center" id="centerWrap">
-      <!-- 待っているあいだの印。**押した手ごたえがここに出る。**
-           画面は止めない（止めると、開いたのに何も出ない時間ができる） -->
-      <div class="busy" id="busy" hidden>
-        <span class="spin" aria-hidden="true"></span><span id="busyTxt">読み込み中</span>
-      </div>
       <div class="stage" id="stage"><div class="paper" id="paper"><div class="sheet" id="sheet"></div></div></div>
 
       <!-- たんぽぽの面。週案の紙ではないので、紙の代わりにここを出す -->

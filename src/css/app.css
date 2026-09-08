@@ -257,13 +257,12 @@ dialog::backdrop{background:rgba(20,28,38,.42)}
    ・画面の上端に細い帯を通す（どこを見ていても目に入る）
    ・紙の上に何をしているかを字で出す
    画面は止めない。控えで描いた紙はそのあいだも読める。 */
-/* 紙の下端に置く。**上に置くと日付の見出しが隠れる**（読みたいものを隠さない） */
-.busy{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:6;
-  display:flex;align-items:center;gap:8px;
-  padding:7px 16px;border-radius:999px;font-size:12.5px;font-weight:600;
-  background:var(--tx);color:var(--card);pointer-events:none;
-  box-shadow:0 3px 14px var(--shade-2)}
-.center{position:relative}
+/* **押した操作のすぐ下に出す。** 週送り・A週B週・行き先の真下。
+   手を動かした場所のとなりに出れば、探さなくても目に入る。
+   紙の上に浮かせると、読みたい日付の見出しを隠すことになる。 */
+.busy{margin:10px 6px 0;display:flex;align-items:center;gap:8px;
+  padding:8px 12px;border-radius:var(--r-sm);font-size:12.5px;font-weight:600;
+  background:var(--tx);color:var(--card);pointer-events:none}
 .spin{width:12px;height:12px;border-radius:50%;flex:none;
   border:2px solid rgba(255,255,255,.35);border-top-color:#fff;
   animation:spin .7s linear infinite}

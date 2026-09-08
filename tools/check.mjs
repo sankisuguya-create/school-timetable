@@ -70,6 +70,8 @@ ok("「時間割の入力」の右に保存がある",
    await p.locator(".phead .pbtns #saveBtn").count() === 1);
 ok("その隣にロックがある",
    await p.locator(".phead .pbtns #lockBtn").count() === 1);
+ok("待っている印は、左メニューの操作のすぐ下に出る",
+   await p.locator(".side .wk + #busy").count() === 1);
 ok("手元では送るものが無いので「保存ずみ」",
    (await p.locator("#saveTxt").innerText()).indexOf("ずみ") >= 0,
    await p.locator("#saveTxt").innerText());
