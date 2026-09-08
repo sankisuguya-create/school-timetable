@@ -76,7 +76,9 @@ const Sheets = (function(){
       cols: ["年度", "クラス", "週", "曜日", "時程", "教科コード", "表示名"],
       seed: []
     },
-    /* **1行1コマ。** 書かれたものだけが行になる（基本時間割どおりの週は0行）。 */
+    /* 旧・週案（1枚に全クラス）。**いまは使わない。**
+       migratePlanSheets() でクラス別のシートへ移したあと、置いたままにしておく。
+       消さないのは、移し損ねたときに元を見られるようにするため。 */
     "週案": {
       cols: ["年度", "日付", "時程", "層", "対象", "題名", "詳細",
              "教科コード", "担当", "更新者", "更新時刻"],
@@ -93,6 +95,89 @@ const Sheets = (function(){
   /* 見出しの決まっていないシート。**学校の固定時間割表をそのまま貼る場所。**
      列の並びは学校の表しだいなので、列名では読まない（読み方は src/js/fixed.js）。 */
   const PASTE = "固定時間割取り込み";
+
+  /* ── 週案はクラスごとに1枚 ──────────────────────
+     1枚に全クラスを積むと、担任が自分の週案を目で確かめられない。
+     シートを開いても、どの行が自分のものか分からない。
+     **クラスごとに分け、中は日付順に並べる。**
+
+       週案 3-3    … 担任が書いたもの・専科がそのクラスに入れたもの
+       週案 3年    … 学年で入れたもの
+       週案 全校    … 学校全体で入れたもの
+
+     並べ替えは書くたびにこちらで行う。人が並べ替えなくても日付順に見える。 */
+  const PLAN_PREFIX = "週案 ";
+  const PLAN_ALL    = "全校";
+  const PLAN_COLS = ["年度", "日付", "曜日", "時程", "題名", "詳細",
+                     "教科コード", "層", "対象", "担当", "更新者", "更新時刻"];
+  const PLAN_CLASS_COLS = ["対象"];
+
+  /* 層と対象から、どのシートに置くかを決める。
+     専科がクラスに入れたコマも、そのクラスのシートに置く。
+     **担任が自分のシートを見れば、その週のすべてが載っている。** */
+  function planName(layer, target){
+    if(layer === "school") return PLAN_PREFIX + PLAN_ALL;
+    if(layer === "grade")  return PLAN_PREFIX + asClass(target) + "年";
+    return PLAN_PREFIX + asClass(target);
+  }
+
+  function ensurePlan(name){
+    const ss = SpreadsheetApp.getActive();
+    let sh = ss.getSheetByName(name);
+    if(sh) return sh;
+    sh = ss.insertSheet(name);
+    sh.getRange(1, 1, 1, PLAN_COLS.length).setValues([PLAN_COLS]).setFontWeight("bold");
+    sh.setFrozenRows(1);
+    /* 対象の列は書式なしテキスト。**3-3 が「3月3日」に化けるのを止める。** */
+    for(const col of PLAN_CLASS_COLS){
+      const i = PLAN_COLS.indexOf(col);
+      if(i >= 0) sh.getRange(1, i + 1, sh.getMaxRows(), 1).setNumberFormat("@");
+    }
+    return sh;
+  }
+
+  /* 週案シートを読む。無ければ空。**日付は文字に直して返す。**
+     シートに入れた "2026-09-07" は日付として取り込まれ、読むと Date で返る。
+     文字のまま比べると、書いた行を二度と見つけられなくなる。 */
+  function readPlan(name, ymdFn){
+    const sh = sheet(name);
+    if(!sh) return [];
+    const last = sh.getLastRow();
+    if(last < 2) return [];
+    const head = sh.getRange(1, 1, 1, Math.max(1, sh.getLastColumn())).getValues()[0];
+    const at = {};
+    head.forEach((v, i) => { const k = String(v).trim(); if(k) at[k] = i; });
+    const v = sh.getRange(2, 1, last - 1, head.length).getValues();
+    const out = [];
+    for(const row of v){
+      const o = {};
+      for(const k of PLAN_COLS) o[k] = (k in at) ? row[at[k]] : "";
+      o["日付"] = ymdFn(o["日付"]);
+      o["対象"] = asClass(o["対象"]);
+      if(!o["日付"] || !String(o["時程"]).trim()) continue;    /* 空行は飛ばす */
+      out.push(o);
+    }
+    return out;
+  }
+
+  /* 並べ替えたものを丸ごと書き戻す。**行番号を覚えない。**
+     行番号を覚えて1行ずつ直すやり方は、間に行が入ると別の行を書き換える。 */
+  function writePlan(name, rows){
+    const sh = ensurePlan(name);
+    const w = PLAN_COLS.length;
+    const body = rows.map(o => PLAN_COLS.map(c => (c in o && o[c] != null) ? o[c] : ""));
+    if(body.length) sh.getRange(2, 1, body.length, w).setValues(body);
+    const last = sh.getLastRow();
+    if(last > body.length + 1)
+      sh.getRange(body.length + 2, 1, last - body.length - 1, w).clearContent();
+  }
+
+  /* いまある週案シートの名前。**移行や書き出しで、全部を見たいときに使う。** */
+  function planNames(){
+    return SpreadsheetApp.getActive().getSheets()
+      .map(sh => sh.getName())
+      .filter(n => n.indexOf(PLAN_PREFIX) === 0);
+  }
 
   /* **クラス名は日付に化ける。**
      スプレッドシートは 1-1 を「1月1日」、6-3 を「6月3日」として取り込む。
@@ -232,11 +317,14 @@ const Sheets = (function(){
   }
 
   return {SPEC, NAMES, PASTE, CLASS_COLS, TANPOPO_FILL, asClass, isDate, readGrid,
+          PLAN_PREFIX, PLAN_ALL, PLAN_COLS, planName, ensurePlan, readPlan, writePlan,
+          planNames,
           setup, head, readAll, appendRows, toArray, setRow, blankRow, sheet};
 })();
 
 /* シートを作る。エディタから1回実行する。 */
 function setupSheets(){
+  Gate.check();                 /* URL を開ける人は直接叩ける。ここも関門を通す */
   const r = Sheets.setup();
   const msg = "作った: " + (r.made.join("、") || "なし")
             + "\nもうあった: " + (r.kept.join("、") || "なし");

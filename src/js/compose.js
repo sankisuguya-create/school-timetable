@@ -120,6 +120,34 @@ function cellFor(d, s){
 /* そのクラスの今週が、基本時間割から動いているか。
    **動いていないクラスをたんぽぽへ出すと、担任がまだ書いていない予定を
    本物のように配ることになる。** 出す前に知らせる。 */
+/* ── その画面に要る週案シート ────────────────
+   週案はクラスごとに1枚。**開いた画面に要るものだけを読む。**
+   担任が自分の週案を開くのに、ほかの19クラスを読む理由が無い。 */
+function targetsForView(){
+  const school = [{layer:"school", target:""}];
+  const clsT = c => ({layer:"home", target:c});
+  const grdT = g => ({layer:"grade", target:g});
+  const v = (typeof view === "undefined") ? {kind:"gate"} : view;
+
+  if(v.kind === "class")
+    return school.concat([grdT(gradeOf(v.cls)), clsT(v.cls)]);
+
+  if(v.kind === "grade")
+    return school.concat([grdT(v.grade)], classesOfGrade(v.grade).map(clsT));
+
+  if(v.kind === "tanpopo"){
+    const cs = (Y().tanpopo || []).filter(c => allClasses().indexOf(c) >= 0);
+    const gs = {};
+    for(const c of cs) gs[gradeOf(c)] = true;
+    return school.concat(Object.keys(gs).map(grdT), cs.map(clsT));
+  }
+  /* 全学年・専科は、どのクラスを潰すかを見せるために全部が要る */
+  if(v.kind === "school" || v.kind === "special")
+    return school.concat(grades().map(grdT), allClasses().map(clsT));
+
+  return [];                    /* 入口。まだ何も開いていない */
+}
+
 function planState(cls){
   const w = week(), g = gradeOf(cls);
   let upper = false, own = false;
@@ -228,7 +256,7 @@ function writeCell(d, s, patch){
       if(e && e.sp === view.sp) delete w.special[c][key];
     }
     for(const c of allClasses()){            /* どけたぶんをサーバにも伝える */
-      if(c !== target) Backend.cellChanged("special", c, d, s, null);
+      if(c !== target) Backend.cellChanged("special", c, d, s);
     }
     if(target && allClasses().indexOf(target) >= 0){
       const sub = SUB_BY_CODE[view.sp];
@@ -238,7 +266,7 @@ function writeCell(d, s, patch){
         note: ("note" in patch) ? clean(patch.note) : (cur.note || ""),
         at: Date.now(), by: viewName()
       };
-      Backend.cellChanged("special", target, d, s, w.special[target][key]);
+      Backend.cellChanged("special", target, d, s);
     }
     return save();
   }
@@ -256,7 +284,7 @@ function writeCell(d, s, patch){
   e.by = viewName();
   e.at = Date.now();
   if(isEmptyCell(e)) delete st[key]; else st[key] = e;
-  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s, st[key] || null);
+  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s);
   return save();
 }
 

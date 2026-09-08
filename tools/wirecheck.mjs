@@ -73,9 +73,15 @@ await p.addInitScript(() => {
     const api = {
       withSuccessHandler(f){ okFn = f; return api; },
       withFailureHandler(f){ ngFn = f; return api; },
-      apiBoot(){ const r = call("apiBoot", [], DATA.boot); setTimeout(() => okFn(r), 0); },
+      apiBoot(y){
+        /* 本番と同じく、年度を渡されたら学級編成と基本時間割も一緒に返す */
+        const r = Object.assign({}, DATA.boot,
+                    y ? {year:y, roster:DATA.year.roster, base:DATA.year.base} : {});
+        call("apiBoot", [y], r);
+        setTimeout(() => okFn(r), 0);
+      },
       apiReadYear(y){ const r = call("apiReadYear", [y], DATA.year); setTimeout(() => okFn(r), 0); },
-      apiReadWeek(y, m){ const r = call("apiReadWeek", [y, m], DATA.week); setTimeout(() => okFn(r), 0); },
+      apiReadWeek(y, m, t){ const r = call("apiReadWeek", [y, m, t], DATA.week); setTimeout(() => okFn(r), 0); },
       apiWriteCells(y, patches){
         call("apiWriteCells", [y, patches]);
         const at = {};
@@ -114,8 +120,13 @@ const lastCall = n => p.evaluate(nn =>
 console.log("■ 立ち上がり");
 ok("本番として動く", await p.evaluate(() => Backend.isGas()) === true);
 ok("apiBoot を呼ぶ", (await calls()).indexOf("apiBoot") >= 0, await calls());
-ok("apiReadYear を呼ぶ", (await calls()).indexOf("apiReadYear") >= 0);
-ok("apiReadWeek を呼ぶ", (await calls()).indexOf("apiReadWeek") >= 0);
+ok("年度のぶんも同じ1回でもらう（別に取りに行かない）",
+   (await calls()).indexOf("apiReadYear") < 0
+   && (await lastCall("apiBoot")).args[0] === 2026,
+   [await calls(), (await lastCall("apiBoot")).args]);
+/* 入口を出すのに週案は要らない。**開いた画面のぶんだけ、あとから読む。** */
+ok("入口を出すだけなら週は読まない",
+   (await calls()).indexOf("apiReadWeek") < 0, await calls());
 
 console.log("\n■ シートの値がコードの既定に勝つ");
 ok("時程はシートの5行になる", await p.evaluate(() => SLOTS.length) === 5,
@@ -143,18 +154,40 @@ ok("見本の基本時間割を入れない（シートが正本）",
    await p.evaluate(() => Object.keys(Y().base).join(",")) === "5-1",
    await p.evaluate(() => Object.keys(Y().base)));
 
-console.log("\n■ 書いたコマがサーバへ差分で届く");
+console.log("\n■ 開いた画面に要るシートだけ読む");
+await p.evaluate(() => { window.__calls.length = 0; });
 await p.locator(".tile[data-c='5-1']").click();
 await p.waitForTimeout(400);
+const rw = await lastCall("apiReadWeek");
+ok("クラスを開くと、その週を読みに行く", !!rw, rw);
+ok("読むのは 全校・その学年・そのクラス の3枚だけ",
+   rw && JSON.stringify(rw.args[2]) === JSON.stringify([
+     {layer:"school", target:""}, {layer:"grade", target:"5"},
+     {layer:"home", target:"5-1"}]),
+   rw && rw.args[2]);
+
+console.log("\n■ 書いても、押すまで送らない");
 ok("紙は5行ぶんになる", await p.locator("#sheet .cell").count() === 25,
    await p.locator("#sheet .cell").count());
+await p.evaluate(() => { window.__calls.length = 0; });
 await p.locator("#sheet .cell[data-d='1'][data-s='p2'] .t").click();
 await p.waitForTimeout(150);
 await p.locator(".pal[data-v='sansu']").click();
-await p.waitForTimeout(1200);                       /* まとめ送りを待つ */
+await p.waitForTimeout(1200);
+ok("打っただけでは送らない",
+   (await calls()).indexOf("apiWriteCells") < 0, await calls());
+ok("まだ入っていないコマの数を出す",
+   (await p.locator("#saveTxt").innerText()).indexOf("1") >= 0,
+   await p.locator("#saveTxt").innerText());
+ok("入っていないうちは保存が目立つ",
+   await p.locator("#saveBtn").evaluate(e => e.classList.contains("dirty")) === true);
+
+console.log("\n■ 保存を押すと送る");
+await p.locator("#saveBtn").click();
+await p.waitForTimeout(600);
 const wc = await lastCall("apiWriteCells");
 ok("apiWriteCells が呼ばれる", !!wc, wc);
-ok("1件だけ送る（打つたびに送らない）", wc && wc.args[1].length === 1, wc && wc.args[1]);
+ok("1コマは1件（打鍵のぶんだけ増えない）", wc && wc.args[1].length === 1, wc && wc.args[1]);
 const q = wc && wc.args[1][0];
 ok("層と対象が正しい", q && q.layer === "home" && q.target === "5-1", q);
 ok("日付は曜日ではなく実日付", q && /^\d{4}-\d{2}-\d{2}$/.test(q.date), q && q.date);
@@ -162,6 +195,23 @@ ok("題名と教科が入る", q && q.title === "算数" && q.subject === "sansu
 ok("サーバが打った時刻で手元を直す",
    await p.evaluate(() => week().home["5-1"]["1|p2"].at) === 1700000000000,
    await p.evaluate(() => week().home["5-1"]["1|p2"]));
+ok("送り終わったら「保存ずみ」になる",
+   (await p.locator("#saveTxt").innerText()).indexOf("ずみ") >= 0,
+   await p.locator("#saveTxt").innerText());
+
+console.log("\n■ 同じコマを何度直しても1件");
+await p.evaluate(() => { window.__calls.length = 0; });
+for(const v of ["kokugo", "sansu", "kokugo"]){
+  await p.locator(".pal[data-v='" + v + "']").click();
+  await p.waitForTimeout(80);
+}
+await p.locator("#saveBtn").click(); await p.waitForTimeout(500);
+const again = await p.evaluate(() =>
+  window.__calls.filter(c => c.name === "apiWriteCells").map(c => c.args[1].length));
+ok("3回直しても送るのは1件", JSON.stringify(again) === JSON.stringify([1]), again);
+ok("送るのは最後の中身",
+   (await lastCall("apiWriteCells")).args[1][0].title === "国語",
+   (await lastCall("apiWriteCells")).args[1][0]);
 
 console.log("\n■ まとめ送り");
 await p.evaluate(() => { window.__calls.length = 0; });
@@ -171,10 +221,22 @@ for(const d of [0, 2, 3]){
   await p.locator(".pal[data-v='kokugo']").click();
   await p.waitForTimeout(80);
 }
-await p.waitForTimeout(1200);
+await p.locator("#saveBtn").click(); await p.waitForTimeout(600);
 const many = await p.evaluate(() =>
   window.__calls.filter(c => c.name === "apiWriteCells").map(c => c.args[1].length));
 ok("3コマを1回で送る", many.length === 1 && many[0] === 3, many);
+
+console.log("\n■ 週や画面を変えるときは、押さなくても送る");
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator("#sheet .cell[data-d='2'][data-s='p2'] .t").click();
+await p.waitForTimeout(120);
+await p.locator(".pal[data-v='sansu']").click();
+await p.waitForTimeout(150);
+await p.locator("#nextWk").click();
+await p.waitForTimeout(600);
+ok("週を動かすと、書いたぶんが先に届く",
+   (await calls()).indexOf("apiWriteCells") >= 0, await calls());
+await p.locator("#prevWk").click(); await p.waitForTimeout(500);
 
 console.log("\n■ 入れる先を変えると層も変わる");
 await p.evaluate(() => { window.__calls.length = 0; });
@@ -182,7 +244,7 @@ await p.locator("#sheet .cell[data-d='4'][data-s='p3'] .t").click();
 await p.waitForTimeout(150);
 await p.locator("#pScope input[value='grade']").check();
 await p.locator(".pal[data-v='kokugo']").click();
-await p.waitForTimeout(1200);
+await p.locator("#saveBtn").click(); await p.waitForTimeout(600);
 const gq = (await lastCall("apiWriteCells")).args[1][0];
 ok("学年に反映すると層は grade・対象は学年",
    gq.layer === "grade" && gq.target === "5", gq);
@@ -192,7 +254,7 @@ await p.evaluate(() => { window.__calls.length = 0; });
 await p.locator("#sheet .cell[data-d='1'][data-s='p2'] .t").click();
 await p.waitForTimeout(150);
 await p.locator("#pClear").click();
-await p.waitForTimeout(1200);
+await p.locator("#saveBtn").click(); await p.waitForTimeout(600);
 const dq = (await lastCall("apiWriteCells")).args[1].slice(-1)[0];
 ok("消す指示になる", dq.remove === true || (!dq.title && !dq.note), dq);
 
@@ -236,21 +298,21 @@ ok("シートの印がそのまま選択になる",
    JSON.stringify(await p.evaluate(() => tpChosen())) === JSON.stringify(["5-1"]),
    await p.evaluate(() => tpChosen()));
 await p.evaluate(() => { window.__calls.length = 0; });
-await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".master.tp").click(); await p.waitForTimeout(300);
 await p.locator("#tpSel .tpchip[data-c='5-2']").click(); await p.waitForTimeout(300);
 const tq = await lastCall("apiWriteRoster");
 ok("選び直すとシートへ書く",
    !!tq && JSON.stringify(tq.args[4]) === JSON.stringify(["5-1","5-2"]),
    tq && tq.args[4]);
-await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(300);
 
 console.log("\n■ 週を動かすと、その週を読みに行く");
 await p.evaluate(() => { window.__calls.length = 0; });
-await p.locator("#nextWk").click();
-await p.waitForTimeout(500);
-ok("次の週で apiReadWeek を呼ぶ",
+await p.locator("#nextWk").click(); await p.waitForTimeout(400);
+await p.locator("#nextWk").click(); await p.waitForTimeout(500);
+ok("まだ見ていない週で apiReadWeek を呼ぶ",
    (await calls()).indexOf("apiReadWeek") >= 0, await calls());
 await p.evaluate(() => { window.__calls.length = 0; });
 await p.locator("#prevWk").click();

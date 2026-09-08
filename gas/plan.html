@@ -175,6 +175,23 @@ button,select,input,textarea{font:inherit;color:inherit}
 .panel{grid-area:1/3/2/4;background:var(--card);border-left:1px solid var(--line);overflow:auto;
   padding:14px;display:flex;flex-direction:column;gap:15px;min-height:0}
 .panel h2{margin:0;font-size:15px;font-weight:700}
+/* 入力パネルの頭。**保存はいちばん目立つところに1つだけ置く。**
+   打つたびに送らない作りなので、押す場所が分からないと書いたものが宙に浮く */
+.phead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.save{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:13px;
+  font-weight:700;border-radius:var(--r-sm);cursor:pointer;
+  border:1px solid var(--line);background:var(--card);color:var(--tx-sub)}
+.save:hover{background:var(--hover)}
+.save[disabled]{opacity:.6;cursor:default}
+/* まだ入っていない：**塗る。** 入っている：ふつうの淡いボタン */
+.save.dirty{background:var(--ink-link);border-color:var(--ink-link);color:#fff}
+.save.dirty:hover{filter:brightness(1.06)}
+.save.bad{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff}
+/* 左の「週案」の右。入口へ1押しで戻れる */
+.gridbtn{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;
+  width:30px;height:30px;border-radius:var(--r-sm);cursor:pointer;
+  border:1px solid var(--line);background:var(--card);color:var(--tx-sub)}
+.gridbtn:hover{background:var(--hover);color:var(--tx);border-color:var(--tx-sub)}
 .panel h3{margin:0 0 7px;font-size:11px;letter-spacing:.09em;color:var(--tx-sub);
   font-weight:600}
 .panel .where{font-size:14px;font-weight:600;margin:0;line-height:1.45}
@@ -496,6 +513,9 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
     stroke-linecap="round" stroke-linejoin="round">
     <circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+    stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 4h11l5 5v11H4z"/><path d="M8 4v5h7M8 20v-6h8v6"/></symbol>
   <symbol id="i-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
     stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></symbol>
   <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -509,7 +529,10 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   <div class="work">
 
     <aside class="side">
-      <h2><svg width="19" height="19"><use href="#i-school"/></svg><span>週案</span></h2>
+      <h2><svg width="19" height="19"><use href="#i-school"/></svg><span>週案</span>
+        <button class="gridbtn" id="gridBtn" data-act="gate" title="ほかの週案をひらく"
+                aria-label="ほかの週案をひらく">
+          <svg width="17" height="17"><use href="#i-grid"/></svg></button></h2>
 
       <!-- 週。**紙の上下には何も置かない**ので、ここに寄せる -->
       <div class="wk">
@@ -584,7 +607,11 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
     </main>
 
     <aside class="panel">
-      <h2>時間割の入力</h2>
+      <div class="phead">
+        <h2>時間割の入力</h2>
+        <button class="save" id="saveBtn" aria-live="polite">
+          <svg width="16" height="16"><use href="#i-save"/></svg><span id="saveTxt">保存</span></button>
+      </div>
 
       <div>
         <h3>教科・行事</h3>
@@ -1192,53 +1219,97 @@ const Backend = (function(){
 
   const onGas = typeof google !== "undefined" && google.script && google.script.run;
 
-  let queue = [];        /* まだ送っていない差分 */
+  /* **まだ送っていないコマの「場所」だけを覚える。中身は覚えない。**
+     打鍵のたびに中身を積むと、1コマ書くだけで何十件も送ることになる。
+     送る直前に、そのとき画面が持っている中身を読んで1件にまとめる。 */
+  let dirty = {};        /* "層|対象|曜日|時程" → {layer,target,d,slot} */
+  let dirtyN = 0;
   let timer = 0;
   let sending = false;
   let notify = () => {};
+  let onDirty = () => {};   /* 未保存の数が変わったら画面に知らせる */
+  let lastErr = "";
 
   /* ── 共通 ────────────────────────────────────── */
 
   const isGas = () => !!onGas;
   const setNotifier = fn => { notify = fn; };
 
-  /* 1コマ変わった。手元では db を丸ごと書き出すので、差分は本番だけで使う。 */
-  function cellChanged(layer, target, d, slotId, entry){
+  /* 1コマ変わった。**場所を覚えるだけで、まだ送らない。**
+     手元（localStorage）はそのつど丸ごと書き出しているので、
+     ここで覚えるのは本番のシートへ送るぶん。 */
+  function cellChanged(layer, target, d, slotId){
     if(!onGas) return;
-    queue.push({
-      date: iso(addDays(monday, d)), slot: slotId, layer, target: target || "",
-      title:   entry ? entry.title   : "",
-      note:    entry ? entry.note    : "",
-      subject: entry ? (entry.subject || "") : "",
-      sp:      entry ? (entry.sp || "")      : "",
-      remove:  !entry
-    });
+    const k = [layer, target || "", fy(), wkKey(), d, slotId].join("|");
+    if(!dirty[k]){ dirty[k] = {layer, target:target || "", year:fy(),
+                               monday:wkKey(), d, slot:slotId}; dirtyN++; }
+    onDirty(dirtyN, lastErr);
     schedule();
   }
 
-  /* 打ち終わってから少し待って、まとめて送る。
-     打鍵のたびに送ると、1週ぶんで数十回の往復になる。 */
+  /* **打鍵では送らない。** 手が止まってしばらく経ってから、念のため送る。
+     ふだんは「保存」を押したとき・週や画面を変えたとき・閉じるときに送る。 */
   function schedule(){
     clearTimeout(timer);
-    timer = setTimeout(flush, 600);
+    timer = setTimeout(flush, 180000);          /* 3分。取りこぼしの受け皿 */
   }
-  function flush(){
-    if(!onGas || sending || !queue.length) return;
-    const batch = queue; queue = []; sending = true;
-    google.script.run
-      .withSuccessHandler(res => {
-        sending = false;
-        applyServerTimes(res && res.at);
-        if(queue.length) schedule();
-      })
-      .withFailureHandler(err => {
-        sending = false;
-        queue = batch.concat(queue);      /* 送れなかったぶんは捨てない */
-        notify("保存できていない（" + (err && err.message ? err.message : "通信できない")
-             + "）。この画面を閉じない");
-      })
-      .apiWriteCells(fy(), batch);
+
+  /* 送る直前に、いま画面が持っている中身を読んで1コマ1件にする。 */
+  function patchOf(m){
+    const w = (db.years[String(m.year)] || {weeks:{}}).weeks[m.monday];
+    const bank = !w ? null
+               : m.layer === "school" ? w.school
+               : m.layer === "grade"  ? (w.grade[m.target]   || {})
+               : m.layer === "special"? (w.special[m.target] || {})
+               :                        (w.home[m.target]    || {});
+    const e = bank ? bank[ck(m.d, m.slot)] : null;
+    const p = m.monday.split("-");
+    const date = iso(new Date(+p[0], +p[1] - 1, +p[2] + m.d));
+    return {date, slot:m.slot, layer:m.layer, target:m.target,
+            title:   e ? e.title : "",
+            note:    e ? e.note  : "",
+            subject: e ? (e.subject || "") : "",
+            sp:      e ? (e.sp || "")      : "",
+            remove:  !e};
   }
+
+  /* 貯めたぶんを送る。after は送り終わってから呼ぶ（押した手ごたえを返すため）。 */
+  function flush(after){
+    if(!onGas || !dirtyN){ lastErr = ""; onDirty(0, ""); return after && after(true); }
+    if(sending){ schedule(); return after && after(false); }
+    const batch = dirty, n = dirtyN;
+    dirty = {}; dirtyN = 0; sending = true;
+    onDirty(0, lastErr);
+    const byYear = {};
+    for(const k in batch){
+      const m = batch[k];
+      (byYear[m.year] || (byYear[m.year] = [])).push(patchOf(m));
+    }
+    /* ふつうは1年度ぶん。年度をまたいで直したときだけ2回に分かれる */
+    const years = Object.keys(byYear);
+    let left = years.length, bad = false;
+    for(const y of years){
+      google.script.run
+        .withSuccessHandler(res => {
+          applyServerTimes(res && res.at);
+          if(!--left){ sending = false; lastErr = bad ? lastErr : "";
+                       onDirty(dirtyN, lastErr); after && after(!bad); }
+        })
+        .withFailureHandler(err => {
+          bad = true;
+          /* 送れなかったぶんは捨てない。次の保存でもう一度送る */
+          for(const k in batch) if(String(batch[k].year) === String(y)){
+            if(!dirty[k]){ dirty[k] = batch[k]; dirtyN++; }
+          }
+          lastErr = err && err.message ? err.message : "通信できない";
+          notify("<b>保存できていない</b>（" + escText(lastErr) + "）。もう一度「保存」を押す");
+          if(!--left){ sending = false; onDirty(dirtyN, lastErr); after && after(false); }
+        })
+        .apiWriteCells(+y, byYear[y]);
+    }
+  }
+  const unsaved = () => dirtyN;
+  const setDirtyWatcher = fn => { onDirty = fn; fn(dirtyN, lastErr); };
 
   /* サーバが打った時刻で手元の控えを直す。
      教師それぞれの PC の時計で勝ち負けを決めると、時計が進んでいる人が always 勝つ。 */
@@ -1262,63 +1333,94 @@ const Backend = (function(){
      手元では何もしない（db がそのまま正本）。
      本番では、その年度と週をシートから引いてメモリに載せる。 */
 
+  /* 立ち上がり。**設定と、いまの年度のぶんを1回でもらう。**
+     別々に取りに行くと、入口が出るまでにその回数だけ待つことになる。 */
+  let booted = false;
+  const waiters = [];
   function boot(after){
-    if(!onGas) return after();
+    if(!onGas){ booted = true; return after(); }
     google.script.run
       .withSuccessHandler(b => {
         if(b.slots    && b.slots.length)    setSlots(b.slots);
         if(b.subjects && b.subjects.length) setSubjects(b.subjects);
         if(b.config)  applyConfig(b.config);
+        if(b.year) applyYear(String(b.year), b);
+        booted = true;
         after();
+        while(waiters.length) waiters.shift()();
       })
-      .withFailureHandler(e => notify("開けなかった（" + (e && e.message) + "）"))
-      .apiBoot();
+      .withFailureHandler(e => {
+        booted = true;             /* 開けなくても止めない。手元の控えで続ける */
+        notify("開けなかった（" + escText(String(e && e.message)) + "）");
+        after();
+        while(waiters.length) waiters.shift()();
+      })
+      .apiBoot(fy());
   }
+  const whenBooted = fn => booted ? fn() : waiters.push(fn);
 
   const loadedYear = {}, loadedWeek = {};
+
+  function applyYear(y, r){
+    if(String(y) !== String(fy())) return;  /* いま開いている年度のぶんだけ */
+    const Yr = Y();
+    if(r.roster){
+      if(r.roster.classes && Object.keys(r.roster.classes).length) Yr.classes = r.roster.classes;
+      if(r.roster.specials && r.roster.specials.length)            Yr.specials = r.roster.specials;
+      if(r.roster.week1) Yr.week1 = r.roster.week1;
+      if(Array.isArray(r.roster.tanpopo)) Yr.tanpopo = r.roster.tanpopo;
+    }
+    Yr.base = r.base || {};
+    loadedYear[y] = true;
+  }
 
   function ensureYear(after){
     if(!onGas) return after();
     const y = String(fy());
+    Y();                                   /* その年度の入れ物を用意しておく */
     if(loadedYear[y]) return after();
     google.script.run
       .withSuccessHandler(r => {
-        const Yr = Y();
-        if(r.roster){
-          if(r.roster.classes && Object.keys(r.roster.classes).length) Yr.classes = r.roster.classes;
-          if(r.roster.specials && r.roster.specials.length)            Yr.specials = r.roster.specials;
-          if(r.roster.week1) Yr.week1 = r.roster.week1;
-          /* たんぽぽ交流級は空も答えのうち（全部外した年度がある）。
-             有無ではなく、配列が返ってきたかどうかで見る */
-          if(Array.isArray(r.roster.tanpopo)) Yr.tanpopo = r.roster.tanpopo;
-        }
-        Yr.base = r.base || {};
-        loadedYear[y] = true;
+        /* たんぽぽ交流級は空も答えのうち（全部外した年度がある）。
+           有無ではなく、配列が返ってきたかどうかで見る（applyYear の中） */
+        applyYear(y, r);
         after();
       })
-      .withFailureHandler(e => notify("年度の設定を読めなかった（" + (e && e.message) + "）"))
+      .withFailureHandler(e => notify("年度の設定を読めなかった（" + escText(String(e && e.message)) + "）"))
       .apiReadYear(+y);
   }
 
+  /* **その画面に要るシートだけを読む。**
+     週案はクラスごとに1枚あるので、全部読むと27枚ぶん待つことになる。
+     3-3 を開くなら「週案 3-3」「週案 3年」「週案 全校」の3枚で足りる。 */
   function ensureWeek(after){
     if(!onGas) return after();
-    const k = fy() + "/" + wkKey();
-    if(loadedWeek[k]) return after();
+    const want = targetsForView().filter(t => !loadedWeek[weekTag(t)]);
+    if(!want.length) return after();
     google.script.run
       .withSuccessHandler(w => {
         const cur = week();
-        cur.school = w.school || {};
-        cur.grade  = w.grade  || {};
-        cur.special= w.special|| {};
-        cur.home   = w.home   || {};
-        loadedWeek[k] = true;
+        /* 頼んだぶんだけ入れ替える。頼んでいないクラスの控えは残す */
+        for(const t of want){
+          if(t.layer === "school")     cur.school = w.school || {};
+          else if(t.layer === "grade") cur.grade[t.target]  = (w.grade || {})[t.target] || {};
+          else {
+            cur.home[t.target]    = (w.home    || {})[t.target] || {};
+            cur.special[t.target] = (w.special || {})[t.target] || {};
+          }
+          loadedWeek[weekTag(t)] = true;
+        }
         after();
       })
-      .withFailureHandler(e => notify("この週を読めなかった（" + (e && e.message) + "）"))
-      .apiReadWeek(fy(), wkKey());
+      .withFailureHandler(e => notify("この週を読めなかった（" + escText(String(e && e.message)) + "）"))
+      .apiReadWeek(fy(), wkKey(), want);
   }
-  /* 週や年度を開くときの入口。手元では即その場で続く。 */
-  const ready = after => ensureYear(() => ensureWeek(after));
+  const weekTag = t => fy() + "/" + wkKey() + "/" + t.layer + "/" + (t.target || "");
+  /* 週や年度を開くときの入口。手元では即その場で続く。
+     立ち上がりの1回がまだ返っていなければ、それを待ってから読む
+     （待たないと、シートの時程を知らないまま紙を組んでしまう）。 */
+  const ready = after => whenBooted(() => ensureYear(() => ensureWeek(after)));
+  const readyYear = after => whenBooted(() => ensureYear(after));
 
   /* ── 設定の書き込み ─────────────────────────── */
 
@@ -1326,13 +1428,13 @@ const Backend = (function(){
     if(!onGas) return save();
     const Yr = Y();
     google.script.run
-      .withFailureHandler(e => notify("学級編成を保存できなかった（" + (e && e.message) + "）"))
+      .withFailureHandler(e => notify("学級編成を保存できなかった（" + escText(String(e && e.message)) + "）"))
       .apiWriteRoster(fy(), Yr.classes, Yr.specials, Yr.week1, Yr.tanpopo || []);
   }
   function saveBase(cls, variant){
     if(!onGas) return save();
     google.script.run
-      .withFailureHandler(e => notify("基本時間割を保存できなかった（" + (e && e.message) + "）"))
+      .withFailureHandler(e => notify("基本時間割を保存できなかった（" + escText(String(e && e.message)) + "）"))
       .apiWriteBase(fy(), cls, variant, ((Y().base[cls] || {})[variant]) || {});
   }
 
@@ -1357,16 +1459,18 @@ const Backend = (function(){
       .apiReadPaste();
   }
 
-  /* 画面を閉じる前に、貯めた差分を出し切る */
+  /* 画面を閉じる前に、貯めたぶんを出し切る。
+     出し切れないうちに閉じられそうなときは、引き止める。 */
   addEventListener("beforeunload", ev => {
-    if(onGas && (queue.length || sending)){
+    if(onGas && (dirtyN || sending)){
       flush();
       ev.preventDefault();
       ev.returnValue = "";
     }
   });
 
-  return {isGas, setNotifier, cellChanged, flush, boot, ready,
+  return {isGas, setNotifier, setDirtyWatcher, unsaved,
+          cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveBase, saveBaseAll, readPaste};
 })();
 /* ▲ src/js/backend.js ▲ */
@@ -1742,6 +1846,34 @@ function cellFor(d, s){
 /* そのクラスの今週が、基本時間割から動いているか。
    **動いていないクラスをたんぽぽへ出すと、担任がまだ書いていない予定を
    本物のように配ることになる。** 出す前に知らせる。 */
+/* ── その画面に要る週案シート ────────────────
+   週案はクラスごとに1枚。**開いた画面に要るものだけを読む。**
+   担任が自分の週案を開くのに、ほかの19クラスを読む理由が無い。 */
+function targetsForView(){
+  const school = [{layer:"school", target:""}];
+  const clsT = c => ({layer:"home", target:c});
+  const grdT = g => ({layer:"grade", target:g});
+  const v = (typeof view === "undefined") ? {kind:"gate"} : view;
+
+  if(v.kind === "class")
+    return school.concat([grdT(gradeOf(v.cls)), clsT(v.cls)]);
+
+  if(v.kind === "grade")
+    return school.concat([grdT(v.grade)], classesOfGrade(v.grade).map(clsT));
+
+  if(v.kind === "tanpopo"){
+    const cs = (Y().tanpopo || []).filter(c => allClasses().indexOf(c) >= 0);
+    const gs = {};
+    for(const c of cs) gs[gradeOf(c)] = true;
+    return school.concat(Object.keys(gs).map(grdT), cs.map(clsT));
+  }
+  /* 全学年・専科は、どのクラスを潰すかを見せるために全部が要る */
+  if(v.kind === "school" || v.kind === "special")
+    return school.concat(grades().map(grdT), allClasses().map(clsT));
+
+  return [];                    /* 入口。まだ何も開いていない */
+}
+
 function planState(cls){
   const w = week(), g = gradeOf(cls);
   let upper = false, own = false;
@@ -1850,7 +1982,7 @@ function writeCell(d, s, patch){
       if(e && e.sp === view.sp) delete w.special[c][key];
     }
     for(const c of allClasses()){            /* どけたぶんをサーバにも伝える */
-      if(c !== target) Backend.cellChanged("special", c, d, s, null);
+      if(c !== target) Backend.cellChanged("special", c, d, s);
     }
     if(target && allClasses().indexOf(target) >= 0){
       const sub = SUB_BY_CODE[view.sp];
@@ -1860,7 +1992,7 @@ function writeCell(d, s, patch){
         note: ("note" in patch) ? clean(patch.note) : (cur.note || ""),
         at: Date.now(), by: viewName()
       };
-      Backend.cellChanged("special", target, d, s, w.special[target][key]);
+      Backend.cellChanged("special", target, d, s);
     }
     return save();
   }
@@ -1878,7 +2010,7 @@ function writeCell(d, s, patch){
   e.by = viewName();
   e.at = Date.now();
   if(isEmptyCell(e)) delete st[key]; else st[key] = e;
-  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s, st[key] || null);
+  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s);
   return save();
 }
 
@@ -2432,10 +2564,13 @@ function drawGate(){
 }
 
 function openView(v){
+  Backend.flush();                /* いまの画面を出る前に、書いたぶんを送る */
+  /* **どこを開くかを先に決める。** そのあとで、その画面に要るシートだけを読む
+     （読むものは view から決まるので、読む前に決まっていないといけない） */
+  view = v;
+  lastTarget = v;
+  selCell = null;
   Backend.ready(() => {
-    view = v;
-    lastTarget = v;
-    selCell = null;
     $("gate").hidden = true;
     /* たんぽぽの面は週案の紙ではない。紙と入力パネルを引っこめて入れ替える */
     const tp = v.kind === "tanpopo";
@@ -2453,6 +2588,7 @@ function openView(v){
   });
 }
 function showGate(){
+  Backend.flush();
   view = {kind:"gate"};
   selCell = null;
   $("gate").hidden = false;
@@ -2857,6 +2993,37 @@ function toast(msg){
   toastT = setTimeout(() => { t.hidden = true; }, 4200);
 }
 
+/* ── 保存 ────────────────────────────────────
+   **打つたびにシートへ書かない。** 1コマぶんの打鍵が何十件にもなる。
+   書いたコマの「場所」だけを覚えておいて、ここで1コマ1件にまとめて送る。
+   手元（この端末）には打つたびに残しているので、押し忘れても消えない。 */
+
+let saveState = {n:0, err:"", busy:false};
+
+function paintSave(){
+  const b = $("saveBtn"), t = $("saveTxt");
+  if(!b) return;
+  const {n, err, busy} = saveState;
+  b.classList.toggle("dirty", !!n && !err);
+  b.classList.toggle("bad", !!err);
+  b.disabled = busy;
+  t.textContent = busy ? "保存中…"
+                : err  ? "保存できていない"
+                : n    ? "保存（" + n + "）"
+                       : "保存ずみ";
+  b.title = err ? "もう一度押す。閉じると消える"
+          : n   ? n + " コマぶんがまだシートに入っていない"
+                : "シートに入っている";
+}
+function doSave(loud){
+  if(!Backend.isGas()){ save(); if(loud) toast("この端末に保存した（本番ではシートへ）"); return; }
+  saveState.busy = true; paintSave();
+  Backend.flush(okAll => {
+    saveState.busy = false; paintSave();
+    if(loud && okAll) toast("シートに保存した");
+  });
+}
+
 /* ── 紙の大きさ ──────────────────────────────
    既定は「画面に合わせる」。週案がいちばん大きく出る。
    **印刷の倍率とは別**にしてある。1つにすると、読むために拡大した人が
@@ -2896,6 +3063,7 @@ function refreshWeek(){
   autoFit();
 }
 function goWeek(n){
+  Backend.flush();                /* 週を出る前に、書いたぶんを送る */
   monday = addDays(monday, n);
   const fresh = !db.years[String(fy())];
   clearSelection();
@@ -2998,6 +3166,9 @@ function wire(){
     toast("前年度の " + escText(c) + " を写した");
   });
   on("baseClose","click", () => { $("baseDlg").close(); if(view.kind !== "gate") buildSheet(); });
+
+  /* 保存。**打つたびには送らない。** ここで1コマ1件にまとめて送る */
+  on("saveBtn","click", () => doSave(true));
   on("baseImp","click", openImpDlg);
 
   /* 固定時間割の取り込み */
@@ -3101,20 +3272,27 @@ function wire(){
 function start(){
   loadDb();
   onStoreError = why => toast("<b>保存できていない</b>　" + escText(why));
-  Backend.setNotifier(why => toast("<b>" + escText(why) + "</b>"));
+  Backend.setNotifier(why => toast("<b>" + why + "</b>"));
+  Backend.setDirtyWatcher((n, err) => {
+    saveState.n = n; saveState.err = err; paintSave();
+  });
   wire();
   if(storeBroken) toast("<b>" + escText(storeBroken) + "</b>");
 
-  /* 本番は「設定」「時程」「教科」シートを先に読み、続けてその年度と週を読む。
-     手元（localStorage）ではどちらも素通りして、そのまま次へ進む。 */
-  Backend.boot(() => Backend.ready(() => {
-    /* 手元では、同梱の固定時間割を入れて見えるようにする。
-       本番は基本時間割シートが正本で、空なら空のまま（取り込みで入れる） */
-    if(!Backend.isGas() && !Object.keys(Y().base).length) seedBase();
-    if(!Backend.isGas()) save();
+  /* **入口はすぐ出す。** シートを読み終わるまで待たない。
+     入口に要るのは学級編成だけで、それはこの端末に前回ぶんが残っている。
+     読み終わったら、その場で描き直す（クラスが増減していれば、そこで直る）。 */
+  if(!Backend.isGas() && !Object.keys(Y().base).length) seedBase();
+  if(!Backend.isGas()) save();
+  applyPaper();
+  showGate();
+
+  /* 設定・時程・教科・その年度は、立ち上がりの1回でまとめてもらう。
+     別々に取りに行くと、その回数だけ待つことになる。 */
+  Backend.boot(() => {
     applyPaper();
-    showGate();
-  }));
+    if(view.kind === "gate") drawGate();
+  });
 }
 
 /* 手元で見せる基本時間割。**同梱の固定時間割の写しを入れる。**

@@ -78,7 +78,8 @@ const sandbox = {
   SpreadsheetApp: {
     getActive: () => ({
       getSheetByName: n => (n in SHEETS) ? fakeSheet(n) : null,
-      insertSheet(n){ SHEETS[n] = []; return fakeSheet(n); }
+      insertSheet(n){ SHEETS[n] = []; return fakeSheet(n); },
+      getSheets(){ return Object.keys(SHEETS).map(fakeSheet); }
     }),
     flush(){},
     getUi(){ throw new Error("UI 無し"); }
@@ -144,15 +145,36 @@ ok("専科が4つ（音楽・図工・理科・外国語）",
    roster.specials.length === 4
    && roster.specials.map(s => s.code).indexOf("gaikoku") >= 0, roster.specials);
 
-console.log("\n■ 週案を書いて読み直す");
+console.log("\n■ 週案はクラスごとのシートに、日付順で入る");
 let res = ev(`Store.writeCells(2026, [
+  {date:"2026-11-20", slot:"p1", layer:"home",   target:"3-3", title:"あとの日"},
   {date:"2026-11-16", slot:"p2", layer:"home",   target:"3-3", title:"算数", note:"わり算", subject:"sansu"},
+  {date:"2026-11-16", slot:"am1",layer:"home",   target:"3-3", title:"朝の会"},
   {date:"2026-11-18", slot:"p3", layer:"grade",  target:"3",   title:"学年体育", subject:"taiiku"},
   {date:"2026-11-20", slot:"am1",layer:"school", target:"",    title:"避難訓練"},
   {date:"2026-11-17", slot:"p2", layer:"special",target:"2-1", title:"音楽", subject:"ongaku", sp:"ongaku"}
 ])`);
-ok("4件書いた", res.count === 4);
-ok("週案シートが 見出し+4行", rowsOf("週案").length === 5, rowsOf("週案").length);
+ok("6件書いた", res.count === 6);
+ok("担任のコマは「週案 3-3」に入る", !!SHEETS["週案 3-3"], Object.keys(SHEETS));
+ok("学年のコマは「週案 3年」に入る", !!SHEETS["週案 3年"]);
+ok("全校のコマは「週案 全校」に入る", !!SHEETS["週案 全校"]);
+ok("専科がクラスに入れたコマも、そのクラスのシートに入る",
+   !!SHEETS["週案 2-1"], Object.keys(SHEETS));
+ok("1枚に全クラスを積まない", rowsOf("週案 3-3").length === 4, rowsOf("週案 3-3").length);
+/* 入力した順ではなく日付順。同じ日は時程の順 */
+const dates = (function(){
+  const at = ev('(function(){const o={};Sheets.PLAN_COLS.forEach((c,i)=>o[c]=i);return o;})()');
+  return rowsOf("週案 3-3").slice(1)
+    .map(r => String(r[at["日付"]]) + " " + String(r[at["時程"]]));
+})();
+ok("日付順・時程順に並ぶ（入力した順ではない）",
+   JSON.stringify(dates) === JSON.stringify(
+     ["2026-11-16 am1", "2026-11-16 p2", "2026-11-20 p1"]), dates);
+ok("曜日も入る（人が読むため）", (function(){
+     const at = ev('(function(){const o={};Sheets.PLAN_COLS.forEach((c,i)=>o[c]=i);return o;})()');
+     return String(rowsOf("週案 3-3")[1][at["曜日"]]) === "月";
+   })() === true);
+
 let w = ev('Store.readWeek(2026, "2026-11-16")');
 ok("担任のコマが戻る", w.home["3-3"]["2026-11-16|p2"].title === "算数", w.home);
 ok("学年のコマが戻る", w.grade["3"]["2026-11-18|p3"].title === "学年体育");
@@ -161,6 +183,12 @@ ok("専科のコマは担当付きで戻る",
    w.special["2-1"]["2026-11-17|p2"].sp === "ongaku", w.special);
 ok("更新時刻はサーバが打つ（0でない）",
    w.home["3-3"]["2026-11-16|p2"].at > 0, w.home["3-3"]["2026-11-16|p2"].at);
+
+console.log("\n■ 要るシートだけ読む");
+const only = ev(`Store.readWeek(2026, "2026-11-16",
+   [{layer:"school",target:""},{layer:"grade",target:"3"},{layer:"home",target:"3-3"}])`);
+ok("頼んだクラスは戻る", !!only.home["3-3"]["2026-11-16|p2"]);
+ok("頼んでいないクラスは読まない", !only.special["2-1"], only.special);
 
 console.log("\n■ 週と年度でしぼる");
 ev(`Store.writeCells(2026, [{date:"2026-11-24", slot:"p1", layer:"home", target:"3-3", title:"来週"}])`);
@@ -171,26 +199,65 @@ ok("別の年度のコマは混ざらない", !w.home["3-3"]["2026-11-16|p1"]);
 ok("別の年度は残っている",
    !!ev('Store.readWeek(2027, "2026-11-16")').home["3-3"]["2026-11-16|p1"]);
 
-console.log("\n■ 同じコマを書き直す");
-const before = rowsOf("週案").length;
+console.log("\n■ 同じコマを書き直しても行は増えない");
+const before = rowsOf("週案 3-3").length;
 ev(`Store.writeCells(2026, [
   {date:"2026-11-16", slot:"p2", layer:"home", target:"3-3", title:"国語", subject:"kokugo"}
 ])`);
-ok("行は増えない（同じコマは同じ行を直す）", rowsOf("週案").length === before, rowsOf("週案").length);
+ok("行は増えない", rowsOf("週案 3-3").length === before, rowsOf("週案 3-3").length);
+/* 日付はシートの中で日付型になる。**そこで取り違えると、打つたびに行が増える。** */
+(function(){
+  const at = ev('(function(){const o={};Sheets.PLAN_COLS.forEach((c,i)=>o[c]=i);return o;})()');
+  for(const row of SHEETS["週案 3-3"])
+    if(String(row[at["日付"]]) === "2026-11-16") row[at["日付"]] = new Date(2026, 10, 16);
+})();
+ev(`Store.writeCells(2026, [
+  {date:"2026-11-16", slot:"p2", layer:"home", target:"3-3", title:"社会", subject:"shakai"}
+])`);
+ok("日付が日付型になっていても、同じ行を直す",
+   rowsOf("週案 3-3").length === before, rowsOf("週案 3-3").length);
 w = ev('Store.readWeek(2026, "2026-11-16")');
-ok("中身が入れ替わる", w.home["3-3"]["2026-11-16|p2"].title === "国語");
+ok("中身が入れ替わる", w.home["3-3"]["2026-11-16|p2"].title === "社会",
+   w.home["3-3"]["2026-11-16|p2"]);
 
-console.log("\n■ 空にすると消える。ただし行番号はずらさない");
-const rowOfGrade = SHEETS["週案"].findIndex(r => r[3] === "grade") + 1;
+console.log("\n■ 空にすると、その行だけ消える");
 ev(`Store.writeCells(2026, [
   {date:"2026-11-16", slot:"p2", layer:"home", target:"3-3", title:"", note:""}
 ])`);
 w = ev('Store.readWeek(2026, "2026-11-16")');
 ok("消える", !(w.home["3-3"] || {})["2026-11-16|p2"], w.home["3-3"]);
-ok("下の行はずれない（消さずに空にしている）",
-   SHEETS["週案"][rowOfGrade - 1][3] === "grade",
-   SHEETS["週案"][rowOfGrade - 1]);
-ok("学年のコマは残っている", !!w.grade["3"]["2026-11-18|p3"]);
+ok("同じシートのほかのコマは残る", !!w.home["3-3"]["2026-11-16|am1"], w.home["3-3"]);
+ok("学年のコマも残っている", !!w.grade["3"]["2026-11-18|p3"]);
+ok("消したぶん行が減る", rowsOf("週案 3-3").length === before - 1,
+   rowsOf("週案 3-3").length);
+
+console.log("\n■ 旧・週案（1枚に全クラス）から移す");
+(function(){
+  const cols = ev('Sheets.SPEC["週案"].cols');
+  const g = SHEETS["週案"];
+  g.length = 0;
+  g.push(cols.concat());
+  const put = o => g.push(cols.map(c => (c in o) ? o[c] : ""));
+  put({"年度":2026, "日付":new Date(2026,10,19), "時程":"p4", "層":"home", "対象":"5-2",
+       "題名":"理科", "教科コード":"rika", "更新者":"a@edu.nishi.or.jp"});
+  /* 旧版は同じコマを打鍵のたびに積んでいた。**移すときに1つにまとめる** */
+  put({"年度":2026, "日付":new Date(2026,10,19), "時程":"p4", "層":"home", "対象":"5-2",
+       "題名":"理", "教科コード":"", "更新者":"a@edu.nishi.or.jp"});
+  put({"年度":2026, "日付":new Date(2026,10,17), "時程":"p1", "層":"home", "対象":"5-2",
+       "題名":"国語", "教科コード":"kokugo", "更新者":"a@edu.nishi.or.jp"});
+})();
+const mig = ev("Store.migratePlan()");
+ok("移した", mig.moved > 0, mig);
+ok("クラスのシートができる", !!SHEETS["週案 5-2"], Object.keys(SHEETS));
+const w52 = ev('Store.readWeek(2026, "2026-11-16")').home["5-2"];
+ok("旧シートのコマが読めるようになる", !!w52 && !!w52["2026-11-19|p4"], w52);
+ok("同じコマが積まれていても1つにまとまる",
+   rowsOf("週案 5-2").length === 3, rowsOf("週案 5-2").length);
+ok("移しても旧シートは消さない", rowsOf("週案").length === 4, rowsOf("週案").length);
+ok("二度実行しても増えない", (function(){
+     ev("Store.migratePlan()");
+     return rowsOf("週案 5-2").length === 3;
+   })() === true, rowsOf("週案 5-2").length);
 
 console.log("\n■ 学級編成を年度ごとに入れ替える");
 ev(`Store.writeRoster(2027, {"1":["1-1","1-2"], "6":["6-1","6-2","6-3","6-4"]},
@@ -202,6 +269,19 @@ ok("2027年度の第1週の月曜が入る", r27.week1 === "2027-04-05", r27.wee
 ok("2026年度は変わらない（既定のまま20学級）",
    Object.keys(r26.classes).reduce((a,g) => a + r26.classes[g].length, 0) === 20);
 ok("2027年度の専科は1つ", r27.specials.length === 1, r27.specials);
+
+console.log("\n■ 空の編成では上書きしない");
+const keep26 = Object.keys(ev("Store.readRoster(2026).classes"))
+  .reduce((a, g) => a + ev("Store.readRoster(2026).classes")[g].length, 0);
+let threwEmpty = false;
+try{ ev(`Store.writeRoster(2026, {}, [], "")`); }catch(e){ threwEmpty = true; }
+ok("空の編成は断る", threwEmpty === true);
+ok("断ったのでクラスは消えない",
+   Object.keys(ev("Store.readRoster(2026).classes"))
+     .reduce((a, g) => a + ev("Store.readRoster(2026).classes")[g].length, 0) === keep26);
+threwEmpty = false;
+try{ ev(`Store.writeRoster(2026, {"1":[], "2":[]}, [], "")`); }catch(e){ threwEmpty = true; }
+ok("学年だけあってクラスが無いのも断る", threwEmpty === true);
 
 console.log("\n■ たんぽぽ交流級の印");
 ev(`Store.writeRoster(2028, {"3":["3-1","3-2","3-3"]},

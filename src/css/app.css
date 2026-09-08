@@ -115,6 +115,23 @@ button,select,input,textarea{font:inherit;color:inherit}
 .panel{grid-area:1/3/2/4;background:var(--card);border-left:1px solid var(--line);overflow:auto;
   padding:14px;display:flex;flex-direction:column;gap:15px;min-height:0}
 .panel h2{margin:0;font-size:15px;font-weight:700}
+/* 入力パネルの頭。**保存はいちばん目立つところに1つだけ置く。**
+   打つたびに送らない作りなので、押す場所が分からないと書いたものが宙に浮く */
+.phead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.save{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:13px;
+  font-weight:700;border-radius:var(--r-sm);cursor:pointer;
+  border:1px solid var(--line);background:var(--card);color:var(--tx-sub)}
+.save:hover{background:var(--hover)}
+.save[disabled]{opacity:.6;cursor:default}
+/* まだ入っていない：**塗る。** 入っている：ふつうの淡いボタン */
+.save.dirty{background:var(--ink-link);border-color:var(--ink-link);color:#fff}
+.save.dirty:hover{filter:brightness(1.06)}
+.save.bad{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff}
+/* 左の「週案」の右。入口へ1押しで戻れる */
+.gridbtn{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;
+  width:30px;height:30px;border-radius:var(--r-sm);cursor:pointer;
+  border:1px solid var(--line);background:var(--card);color:var(--tx-sub)}
+.gridbtn:hover{background:var(--hover);color:var(--tx);border-color:var(--tx-sub)}
 .panel h3{margin:0 0 7px;font-size:11px;letter-spacing:.09em;color:var(--tx-sub);
   font-weight:600}
 .panel .where{font-size:14px;font-weight:600;margin:0;line-height:1.45}

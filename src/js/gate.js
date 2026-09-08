@@ -61,10 +61,13 @@ function drawGate(){
 }
 
 function openView(v){
+  Backend.flush();                /* いまの画面を出る前に、書いたぶんを送る */
+  /* **どこを開くかを先に決める。** そのあとで、その画面に要るシートだけを読む
+     （読むものは view から決まるので、読む前に決まっていないといけない） */
+  view = v;
+  lastTarget = v;
+  selCell = null;
   Backend.ready(() => {
-    view = v;
-    lastTarget = v;
-    selCell = null;
     $("gate").hidden = true;
     /* たんぽぽの面は週案の紙ではない。紙と入力パネルを引っこめて入れ替える */
     const tp = v.kind === "tanpopo";
@@ -82,6 +85,7 @@ function openView(v){
   });
 }
 function showGate(){
+  Backend.flush();
   view = {kind:"gate"};
   selCell = null;
   $("gate").hidden = false;

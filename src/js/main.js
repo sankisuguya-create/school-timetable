@@ -9,6 +9,37 @@ function toast(msg){
   toastT = setTimeout(() => { t.hidden = true; }, 4200);
 }
 
+/* ── 保存 ────────────────────────────────────
+   **打つたびにシートへ書かない。** 1コマぶんの打鍵が何十件にもなる。
+   書いたコマの「場所」だけを覚えておいて、ここで1コマ1件にまとめて送る。
+   手元（この端末）には打つたびに残しているので、押し忘れても消えない。 */
+
+let saveState = {n:0, err:"", busy:false};
+
+function paintSave(){
+  const b = $("saveBtn"), t = $("saveTxt");
+  if(!b) return;
+  const {n, err, busy} = saveState;
+  b.classList.toggle("dirty", !!n && !err);
+  b.classList.toggle("bad", !!err);
+  b.disabled = busy;
+  t.textContent = busy ? "保存中…"
+                : err  ? "保存できていない"
+                : n    ? "保存（" + n + "）"
+                       : "保存ずみ";
+  b.title = err ? "もう一度押す。閉じると消える"
+          : n   ? n + " コマぶんがまだシートに入っていない"
+                : "シートに入っている";
+}
+function doSave(loud){
+  if(!Backend.isGas()){ save(); if(loud) toast("この端末に保存した（本番ではシートへ）"); return; }
+  saveState.busy = true; paintSave();
+  Backend.flush(okAll => {
+    saveState.busy = false; paintSave();
+    if(loud && okAll) toast("シートに保存した");
+  });
+}
+
 /* ── 紙の大きさ ──────────────────────────────
    既定は「画面に合わせる」。週案がいちばん大きく出る。
    **印刷の倍率とは別**にしてある。1つにすると、読むために拡大した人が
@@ -48,6 +79,7 @@ function refreshWeek(){
   autoFit();
 }
 function goWeek(n){
+  Backend.flush();                /* 週を出る前に、書いたぶんを送る */
   monday = addDays(monday, n);
   const fresh = !db.years[String(fy())];
   clearSelection();
@@ -150,6 +182,9 @@ function wire(){
     toast("前年度の " + escText(c) + " を写した");
   });
   on("baseClose","click", () => { $("baseDlg").close(); if(view.kind !== "gate") buildSheet(); });
+
+  /* 保存。**打つたびには送らない。** ここで1コマ1件にまとめて送る */
+  on("saveBtn","click", () => doSave(true));
   on("baseImp","click", openImpDlg);
 
   /* 固定時間割の取り込み */
@@ -253,20 +288,27 @@ function wire(){
 function start(){
   loadDb();
   onStoreError = why => toast("<b>保存できていない</b>　" + escText(why));
-  Backend.setNotifier(why => toast("<b>" + escText(why) + "</b>"));
+  Backend.setNotifier(why => toast("<b>" + why + "</b>"));
+  Backend.setDirtyWatcher((n, err) => {
+    saveState.n = n; saveState.err = err; paintSave();
+  });
   wire();
   if(storeBroken) toast("<b>" + escText(storeBroken) + "</b>");
 
-  /* 本番は「設定」「時程」「教科」シートを先に読み、続けてその年度と週を読む。
-     手元（localStorage）ではどちらも素通りして、そのまま次へ進む。 */
-  Backend.boot(() => Backend.ready(() => {
-    /* 手元では、同梱の固定時間割を入れて見えるようにする。
-       本番は基本時間割シートが正本で、空なら空のまま（取り込みで入れる） */
-    if(!Backend.isGas() && !Object.keys(Y().base).length) seedBase();
-    if(!Backend.isGas()) save();
+  /* **入口はすぐ出す。** シートを読み終わるまで待たない。
+     入口に要るのは学級編成だけで、それはこの端末に前回ぶんが残っている。
+     読み終わったら、その場で描き直す（クラスが増減していれば、そこで直る）。 */
+  if(!Backend.isGas() && !Object.keys(Y().base).length) seedBase();
+  if(!Backend.isGas()) save();
+  applyPaper();
+  showGate();
+
+  /* 設定・時程・教科・その年度は、立ち上がりの1回でまとめてもらう。
+     別々に取りに行くと、その回数だけ待つことになる。 */
+  Backend.boot(() => {
     applyPaper();
-    showGate();
-  }));
+    if(view.kind === "gate") drawGate();
+  });
 }
 
 /* 手元で見せる基本時間割。**同梱の固定時間割の写しを入れる。**

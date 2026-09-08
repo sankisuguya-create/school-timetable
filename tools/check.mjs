@@ -38,6 +38,15 @@ ok("専科が4つ（音楽・図工・理科・外国語）",
    await p.locator(".tile.sp").count() === 4,
    await p.locator(".tile.sp").count());
 
+console.log("\n■ 手の届くところ");
+ok("「週案」の右にグリッドメニューのボタンがある",
+   await p.locator(".side h2 #gridBtn").count() === 1);
+ok("「時間割の入力」の右に保存がある",
+   await p.locator(".phead h2 + #saveBtn").count() === 1);
+ok("手元では送るものが無いので「保存ずみ」",
+   (await p.locator("#saveTxt").innerText()).indexOf("ずみ") >= 0,
+   await p.locator("#saveTxt").innerText());
+
 console.log("\n■ 週案をひらく");
 await p.locator(".tile[data-c='3-3']").click();
 await p.waitForTimeout(400);
@@ -48,6 +57,13 @@ ok("時程に時刻が出る",
    (await p.locator("#sheet .lab .tm").first().innerText()).includes(":"));
 const fit = await p.evaluate(() => db.settings.vz);
 ok("紙が画面に合わせて拡大される", fit > 40 && fit <= 160, fit);
+
+ok("グリッドのボタンで入口へ戻れる", await (async () => {
+  await p.locator("#gridBtn").click(); await p.waitForTimeout(250);
+  const shown = await p.locator("#gate").isVisible();
+  await p.locator(".tile[data-c='3-3']").click(); await p.waitForTimeout(300);
+  return shown;
+})() === true);
 
 console.log("\n■ 教科を入れる");
 await p.locator(".pal[data-v='taiiku']").dragTo(p.locator("#sheet .cell[data-d='2'][data-s='p5']"));
@@ -119,7 +135,7 @@ ok("別のコマを選ぶと「この学級のみ」へ戻る",
    await p.locator("#pScope input[value='self']").isChecked());
 
 console.log("\n■ 層（マスターはその層のものだけ出す）");
-await p.locator("[data-act='gate']").click(); await p.waitForTimeout(250);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
 await p.locator(".master[data-g='3']").click(); await p.waitForTimeout(300);
 ok("学年マスターに学年の予定が出る",
    (await p.locator("#sheet .cell[data-d='3'][data-s='p3'] .t").innerText()).trim() === "総合");
@@ -127,7 +143,7 @@ ok("担任が入れた分は出ない",
    (await p.locator("#sheet .cell[data-d='0'][data-s='p1'] .t").innerText()).trim() === "");
 
 console.log("\n■ 専科（同じデータをクラス名で見る）");
-await p.locator("[data-act='gate']").click(); await p.waitForTimeout(250);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
 await p.locator(".tile.sp[data-s='ongaku']").click(); await p.waitForTimeout(300);
 await p.locator("#sheet .cell[data-d='1'][data-s='p2'] .t").click(); await p.waitForTimeout(150);
 await p.locator(".pal[data-v='2-1']").click(); await p.waitForTimeout(250);
@@ -137,7 +153,7 @@ ok("専科の週にはクラス名が出る",
 await p.locator(".pal[data-v='2-2']").click(); await p.waitForTimeout(250);
 ok("行き先を変えると前のクラスから消える",
    await p.evaluate(() => !(week().special["2-1"] || {})["1|p2"]));
-await p.locator("[data-act='gate']").click(); await p.waitForTimeout(250);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
 await p.locator(".tile[data-c='2-2']").click(); await p.waitForTimeout(300);
 ok("担任からは教科名で出る",
    (await p.locator("#sheet .cell[data-d='1'][data-s='p2'] .t").innerText()).trim() === "音楽");
@@ -176,11 +192,11 @@ await p.locator("#rsClose").click(); await p.waitForTimeout(250);
 console.log("\n■ 上書きの警告（書く側）");
 /* 学年マスターで 3年 の木3校時に「学年体育」を入れる。
    3-3 には担任の「総合」が入っているので、聞かれるはず */
-await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-3']").click(); await p.waitForTimeout(300);
 await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").click(); await p.waitForTimeout(150);
 await p.locator(".pal[data-v='kokugo']").click(); await p.waitForTimeout(250);
-await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".master[data-g='3']").click(); await p.waitForTimeout(300);
 
 let asked = null, answer = true;
@@ -208,7 +224,7 @@ ok("誰の予定も潰さないときは聞かない", asked === null, asked);
 
 /* «いいえ»なら入らない */
 answer = false; asked = null;
-await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(300);
 const beforeCancel = (await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText()).trim();
 await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").click(); await p.waitForTimeout(150);
@@ -221,7 +237,7 @@ answer = true;
 
 console.log("\n■ 上書きされた側への知らせ");
 /* 3-3 の担任が入れた「国語」は、学年の「体育」に上書きされている */
-await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-3']").click(); await p.waitForTimeout(500);
 ok("開いたときに知らせが出る", await p.locator("#owDlg").evaluate(d => d.open) === true);
 const owText = await p.locator("#owList").innerText();
@@ -231,13 +247,13 @@ ok("いつ・何が・何に上書きされたかを言う",
    && owText.indexOf("上書きされました") > 0, owText);
 ok("誰が入れたかも言う", owText.indexOf("学年") >= 0, owText);
 await p.locator("#owDlg .btn").click(); await p.waitForTimeout(300);
-await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-3']").click(); await p.waitForTimeout(500);
 ok("同じ上書きについては二度出ない",
    await p.locator("#owDlg").evaluate(d => d.open) === false);
 
 console.log("\n■ たんぽぽ（交流級を選ぶところから出す）");
-await p.locator("[data-act='gate']").click(); await p.waitForTimeout(250);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
 ok("他のクラスの画面に反映ボタンは無い",
    await p.locator("[data-act='tanpopo']").count() === 0,
    await p.locator("[data-act='tanpopo']").count());
@@ -335,7 +351,7 @@ ok("曜日を変えると中身が変わる",
 await p.locator("[data-close='tpDlg']").click(); await p.waitForTimeout(200);
 
 console.log("\n■ 固定時間割の取り込み");
-await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(300);
 await p.locator("[data-act='base']").click(); await p.waitForTimeout(250);
 await p.locator("#baseImp").click(); await p.waitForTimeout(250);
@@ -447,7 +463,7 @@ ok("入れたら窓は閉じる", await p.locator("#impDlg").evaluate(d => d.ope
 await p.locator("#baseClose").click(); await p.waitForTimeout(250);
 
 console.log("\n■ 時数のコピー");
-await p.locator("[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-3']").click(); await p.waitForTimeout(300);
 const tsv = await p.evaluate(() => tallyTsv());
 ok("5日 × 1日ぶんの行数 の矩形になる", tsv.split("\n").length === 50, tsv.split("\n").length);
