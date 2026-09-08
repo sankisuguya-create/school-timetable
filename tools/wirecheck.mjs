@@ -64,6 +64,14 @@ await p.addInitScript(() => {
       home: {"5-1": {}}
     }
   };
+  /* 偽のシート。**開き直しても残る**ようにしておく（本物のシートと同じ） */
+  const SHEET_KEY = "fake-sheet";
+  window.__sheet = () => {
+    try{ return JSON.parse(localStorage.getItem(SHEET_KEY) || "{}"); }catch(e){ return {}; }
+  };
+  window.__sheetSet = v => {
+    try{ localStorage.setItem(SHEET_KEY, JSON.stringify(v)); }catch(e){}
+  };
   const call = (name, args, ret) => {
     window.__calls.push({name, args});
     return ret;
@@ -82,13 +90,45 @@ await p.addInitScript(() => {
       },
       apiReadYear(y){ const r = call("apiReadYear", [y], DATA.year); setTimeout(() => okFn(r), 0); },
       apiReadWeek(y, m, t){
-        const r = call("apiReadWeek", [y, m, t], DATA.week);
-        setTimeout(() => okFn(r), window.__slow || 0);
+        /* **本番と同じ形で返す。** 画面は「何日目|時程」でコマを持つので、
+           日付で覚えているものをここで直して返す（Store.readWeek と同じ） */
+        const out = {school:{}, grade:{}, special:{}, home:{}};
+        const mon = Date.parse(m + "T00:00:00");
+        const store = window.__sheet();
+        for(const key in store){
+          const p = key.split("\u0001");           /* 年度・層・対象 */
+          if(String(p[0]) !== String(y)) continue;
+          if(t && t.length && !t.some(x => x.layer === p[1] && (x.target || "") === p[2])) continue;
+          const bank = store[key];
+          for(const dk in bank){
+            const q = dk.split("|");
+            const off = Math.round((Date.parse(q[0] + "T00:00:00") - mon) / 86400000);
+            if(off < 0 || off > 6) continue;
+            const kk = off + "|" + q[1];
+            if(p[1] === "school") out.school[kk] = bank[dk];
+            else if(p[1] === "grade") (out.grade[p[2]] || (out.grade[p[2]] = {}))[kk] = bank[dk];
+            else if(p[1] === "special") (out.special[p[2]] || (out.special[p[2]] = {}))[kk] = bank[dk];
+            else (out.home[p[2]] || (out.home[p[2]] = {}))[kk] = bank[dk];
+          }
+        }
+        call("apiReadWeek", [y, m, t], out);
+        setTimeout(() => okFn(out), window.__slow || 0);
       },
       apiWriteCells(y, patches){
         call("apiWriteCells", [y, patches]);
         /* __hang のあいだは返事をしない（送れないまま閉じた形を作る） */
         if(window.__hang) return;
+        /* シートに入ったことにして覚える */
+        const st = window.__sheet();
+        for(const q of patches){
+          const key = [y, q.layer, q.target || ""].join("\u0001");
+          const bank = st[key] || (st[key] = {});
+          const dk = q.date + "|" + q.slot;
+          if(q.remove || (!q.title && !q.note)) delete bank[dk];
+          else bank[dk] = {title:q.title, note:q.note, subject:q.subject || null,
+                           sp:q.sp || "", at:1700000000000, by:"tanaka@edu.nishi.or.jp"};
+        }
+        window.__sheetSet(st);
         const at = {};
         for(const q of patches)
           at[[q.date, q.slot, q.layer, q.target].join("|")] = q.remove ? 0 : 1700000000000;
@@ -480,6 +520,35 @@ ok("週を読み直すより先に送る", await p.evaluate(() => {
 ok("送れたら控えは消す",
    await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")) === null,
    await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")));
+
+console.log("\n■ 書いたコマは、次に開いても残っている");
+/* **ここが抜けると、シートには入っているのに基本時間割に戻って見える。**
+   書く → 送る → 開き直す → 出る、まで通しで見る */
+await p.evaluate(() => { window.__slow = 0; window.__hang = false; });
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
+await p.locator(".tile[data-c='5-3']").click(); await p.waitForTimeout(500);
+await p.locator("#sheet .cell[data-d='2'][data-s='p1'] .t").click();
+await p.waitForTimeout(120);
+await p.locator(".pal[data-v='rika']").click(); await p.waitForTimeout(200);
+await p.locator("#saveBtn").click(); await p.waitForTimeout(600);
+ok("送ったコマがシート側に入る",
+   await p.evaluate(() => {
+     const k = ["2026", "home", "5-3"].join("\u0001");
+     const b = window.__sheet()[k] || {};
+     return Object.keys(b).some(x => /\|p1$/.test(x) && b[x].title === "理科");
+   }) === true, await p.evaluate(() => window.__sheet()));
+
+/* この端末の控えを捨てて、シートから読み直させる */
+await p.evaluate(() => { localStorage.removeItem("school-timetable/v3"); });
+await p.reload();
+await p.waitForTimeout(900);
+await p.locator(".tile[data-c='5-3']").click(); await p.waitForTimeout(900);
+ok("開き直しても、書いたコマが出る（基本時間割に戻らない）",
+   (await p.locator("#sheet .cell[data-d='2'][data-s='p1'] .t").innerText()).trim() === "理科",
+   await p.locator("#sheet .cell[data-d='2'][data-s='p1'] .t").innerText());
+ok("入れた層のまま戻る（担任が入れたものとして出る）",
+   await p.locator("#sheet .cell[data-d='2'][data-s='p1']").getAttribute("data-layer") === "home",
+   await p.locator("#sheet .cell[data-d='2'][data-s='p1']").getAttribute("data-layer"));
 
 console.log(errs.length ? "\n【エラー】\n" + errs.join("\n") : "\nJSエラーなし");
 if(errs.length) ng += errs.length;

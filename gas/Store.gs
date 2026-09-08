@@ -32,6 +32,16 @@ const Store = (function(){
 
   /* ── 読む ────────────────────────────────────
      targets = [{layer, target}]。渡されなければ、いまあるシートを全部読む。 */
+  /* 何日目か。**画面は「月曜から数えて何日目か」でコマを持っている。**
+     シートは日付で持っているので、返すときにここで直す。
+     ここを日付のまま返すと、書いたものは正しくシートに入るのに、
+     次に開いたときに画面が見つけられず、基本時間割に戻って見える。 */
+  function dayOffset_(dateISO, mondayISO){
+    const a = String(dateISO).split("-"), b = String(mondayISO).split("-");
+    const x = Date.UTC(+a[0], +a[1] - 1, +a[2]), y = Date.UTC(+b[0], +b[1] - 1, +b[2]);
+    return Math.round((x - y) / 86400000);
+  }
+
   function readWeek(year, mondayISO, targets){
     const start = mondayISO, end = ymd(addDays_(mondayISO, 6));
     const w = {school:{}, grade:{}, special:{}, home:{}};
@@ -55,7 +65,9 @@ const Store = (function(){
           at:      Sheets.isDate(r["更新時刻"]) ? r["更新時刻"].getTime() : 0,
           by:      String(r["更新者"] || "")
         };
-        const k = date + "|" + r["時程"];      /* 画面は 日付|時程 で持つ */
+        const off = dayOffset_(date, mondayISO);
+        if(off < 0 || off > 6) continue;
+        const k = off + "|" + r["時程"];      /* **画面は 何日目|時程 で持つ** */
         const layer = String(r["層"]), target = Sheets.asClass(r["対象"]);
         if(layer === "school")       w.school[k] = cell;
         else if(layer === "grade")   (w.grade[target]   || (w.grade[target]   = {}))[k] = cell;

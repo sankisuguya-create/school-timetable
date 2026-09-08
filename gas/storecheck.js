@@ -242,28 +242,39 @@ ok("曜日も入る（人が読むため）", (function(){
    })() === true);
 
 let w = ev('Store.readWeek(2026, "2026-11-16")');
-ok("担任のコマが戻る", w.home["3-3"]["2026-11-16|p2"].title === "算数", w.home);
-ok("学年のコマが戻る", w.grade["3"]["2026-11-18|p3"].title === "学年体育");
-ok("全校のコマが戻る", w.school["2026-11-20|am1"].title === "避難訓練");
+ok("担任のコマが戻る", w.home["3-3"]["0|p2"].title === "算数", w.home);
+ok("学年のコマが戻る", w.grade["3"]["2|p3"].title === "学年体育");
+ok("全校のコマが戻る", w.school["4|am1"].title === "避難訓練");
 ok("専科のコマは担当付きで戻る",
-   w.special["2-1"]["2026-11-17|p2"].sp === "ongaku", w.special);
+   w.special["2-1"]["1|p2"].sp === "ongaku", w.special);
+/* **画面は「月曜から何日目か」でコマを持つ。** 日付のまま返すと、
+   シートには正しく入るのに、次に開いたとき画面が見つけられず、
+   基本時間割に戻って見える。ここは形の取り決めなので、字で押さえる。 */
+ok("画面と同じキー（何日目|時程）で返す",
+   Object.keys(w.home["3-3"]).every(k => /^[0-6]\|/.test(k)),
+   Object.keys(w.home["3-3"]));
+ok("日付のままのキーは返さない",
+   !Object.keys(w.home["3-3"]).some(k => /^\d{4}-/.test(k)),
+   Object.keys(w.home["3-3"]));
+ok("月曜は0、金曜は4", !!w.home["3-3"]["0|p2"] && !!w.school["4|am1"],
+   [Object.keys(w.home["3-3"]), Object.keys(w.school)]);
 ok("更新時刻はサーバが打つ（0でない）",
-   w.home["3-3"]["2026-11-16|p2"].at > 0, w.home["3-3"]["2026-11-16|p2"].at);
+   w.home["3-3"]["0|p2"].at > 0, w.home["3-3"]["0|p2"].at);
 
 console.log("\n■ 要るシートだけ読む");
 const only = ev(`Store.readWeek(2026, "2026-11-16",
    [{layer:"school",target:""},{layer:"grade",target:"3"},{layer:"home",target:"3-3"}])`);
-ok("頼んだクラスは戻る", !!only.home["3-3"]["2026-11-16|p2"]);
+ok("頼んだクラスは戻る", !!only.home["3-3"]["0|p2"]);
 ok("頼んでいないクラスは読まない", !only.special["2-1"], only.special);
 
 console.log("\n■ 週と年度でしぼる");
 ev(`Store.writeCells(2026, [{date:"2026-11-24", slot:"p1", layer:"home", target:"3-3", title:"来週"}])`);
 ev(`Store.writeCells(2027, [{date:"2026-11-16", slot:"p1", layer:"home", target:"3-3", title:"別年度"}])`);
 w = ev('Store.readWeek(2026, "2026-11-16")');
-ok("次の週のコマは混ざらない", !w.home["3-3"]["2026-11-24|p1"], Object.keys(w.home["3-3"]));
-ok("別の年度のコマは混ざらない", !w.home["3-3"]["2026-11-16|p1"]);
+ok("次の週のコマは混ざらない", !w.home["3-3"]["1|p1"], Object.keys(w.home["3-3"]));
+ok("別の年度のコマは混ざらない", !w.home["3-3"]["0|p1"]);
 ok("別の年度は残っている",
-   !!ev('Store.readWeek(2027, "2026-11-16")').home["3-3"]["2026-11-16|p1"]);
+   !!ev('Store.readWeek(2027, "2026-11-16")').home["3-3"]["0|p1"]);
 
 console.log("\n■ 同じコマを書き直しても行は増えない");
 const before = rowsOf("週案 3-3").length;
@@ -283,17 +294,17 @@ ev(`Store.writeCells(2026, [
 ok("日付が日付型になっていても、同じ行を直す",
    rowsOf("週案 3-3").length === before, rowsOf("週案 3-3").length);
 w = ev('Store.readWeek(2026, "2026-11-16")');
-ok("中身が入れ替わる", w.home["3-3"]["2026-11-16|p2"].title === "社会",
-   w.home["3-3"]["2026-11-16|p2"]);
+ok("中身が入れ替わる", w.home["3-3"]["0|p2"].title === "社会",
+   w.home["3-3"]["0|p2"]);
 
 console.log("\n■ 空にすると、その行だけ消える");
 ev(`Store.writeCells(2026, [
   {date:"2026-11-16", slot:"p2", layer:"home", target:"3-3", title:"", note:""}
 ])`);
 w = ev('Store.readWeek(2026, "2026-11-16")');
-ok("消える", !(w.home["3-3"] || {})["2026-11-16|p2"], w.home["3-3"]);
-ok("同じシートのほかのコマは残る", !!w.home["3-3"]["2026-11-16|am1"], w.home["3-3"]);
-ok("学年のコマも残っている", !!w.grade["3"]["2026-11-18|p3"]);
+ok("消える", !(w.home["3-3"] || {})["0|p2"], w.home["3-3"]);
+ok("同じシートのほかのコマは残る", !!w.home["3-3"]["0|am1"], w.home["3-3"]);
+ok("学年のコマも残っている", !!w.grade["3"]["2|p3"]);
 ok("消したぶん行が減る", rowsOf("週案 3-3").length === before - 1,
    rowsOf("週案 3-3").length);
 
@@ -316,7 +327,7 @@ const mig = ev("Store.migratePlan()");
 ok("移した", mig.moved > 0, mig);
 ok("クラスのシートができる", !!SHEETS["週案 5-2"], Object.keys(SHEETS));
 const w52 = ev('Store.readWeek(2026, "2026-11-16")').home["5-2"];
-ok("旧シートのコマが読めるようになる", !!w52 && !!w52["2026-11-19|p4"], w52);
+ok("旧シートのコマが読めるようになる", !!w52 && !!w52["3|p4"], w52);
 ok("同じコマが積まれていても1つにまとまる",
    rowsOf("週案 5-2").length === 3, rowsOf("週案 5-2").length);
 ok("移しても旧シートは消さない", rowsOf("週案").length === 4, rowsOf("週案").length);
@@ -819,7 +830,7 @@ ev(`Store.writeCells(2026, [{date:"2026-12-01", slot:"p1", layer:"home", target:
 ok("対象が化けていても同じ行を直す（行が増えない）",
    rowsOf("週案").length === rows0, rowsOf("週案").length - rows0);
 ok("読み直すと 6-3 のコマとして戻る",
-   ev('Store.readWeek(2026, "2026-11-30")').home["6-3"]["2026-12-01|p1"].title === "理科");
+   ev('Store.readWeek(2026, "2026-11-30")').home["6-3"]["1|p1"].title === "理科");
 
 console.log("\n■ ロック");
 ok("書き込みのあとロックは残らない", locks.held === 0, locks.held);
