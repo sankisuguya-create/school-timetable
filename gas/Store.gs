@@ -302,6 +302,22 @@ const Store = (function(){
     return {rows, miss};
   }
 
+  /* ファイルの指定。**URL をそのまま貼っても通す。**
+     ID だけを抜いて貼るのは、知っていないとできない操作。
+     知らずに URL を貼ると「Illegal spreadsheet id or key」とだけ出て、
+     何が悪いのか分からない。 */
+  function fileId(v, label){
+    const t = String(v == null ? "" : v).trim();
+    if(!t) throw new Error("「設定」シートの「" + label + "」が空です。"
+                         + "スプレッドシートのURL（またはID）を入れてください");
+    const m = t.match(/\/spreadsheets\/d\/([A-Za-z0-9_-]{20,})/)
+           || t.match(/[?&]id=([A-Za-z0-9_-]{20,})/);
+    if(m) return m[1];
+    if(/^[A-Za-z0-9_-]{20,}$/.test(t)) return t;
+    throw new Error("「設定」シートの「" + label + "」が読めません（" + t.slice(0, 40)
+                  + "…）。スプレッドシートのURLをそのまま貼ってください");
+  }
+
   function tpNorm(v){
     let t = String(v == null ? "" : v).normalize("NFKC").trim().replace(/[　\s]+/g, "");
     return t.replace(/[‐‑–—―ー−ｰ－]/g, "-");
@@ -323,13 +339,18 @@ const Store = (function(){
      classes = 出す交流級。**選んだ交流級の列だけに書く。** */
   function exportTanpopo(year, mondayISO, titles, classes, slots){
     const cfg = readConfig();
-    const id = String(cfg["たんぽぽファイルID"] || "").trim();
-    if(!id) throw new Error("「設定」シートの「たんぽぽファイルID」が空です。"
-                          + "たんぽぽ時間割のスプレッドシートIDを入れてください");
-    const ss = SpreadsheetApp.openById(id);
+    const id = fileId(cfg["たんぽぽファイルID"], "たんぽぽファイルID");
+    let ss;
+    try{ ss = SpreadsheetApp.openById(id); }
+    catch(e){
+      throw new Error("たんぽぽ時間割のファイルを開けません（ID " + id + "）。"
+        + "URLが正しいか、このスクリプトを置いたアカウントに共有されているかを見てください");
+    }
     const want = String(cfg["たんぽぽシート名"] || "").trim();
     const sh = want ? ss.getSheetByName(want) : ss.getSheets()[0];
-    if(!sh) throw new Error("たんぽぽ時間割に「" + want + "」というシートがありません");
+    if(!sh) throw new Error("たんぽぽ時間割に「" + want + "」というシートがありません。"
+      + "あるのは「" + ss.getSheets().map(function(x){ return x.getName(); }).join("」「")
+      + "」");
 
     const pick = {};
     for(const c of (classes || [])) pick[tpNorm(c)] = true;

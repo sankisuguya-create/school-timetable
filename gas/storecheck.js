@@ -73,6 +73,7 @@ function fakeSheet(name){
   };
 }
 /* たんぽぽ時間割（別のファイル）。openById で開く先 */
+const TPID = "1FNJFrJP_bjdA2fA8I3pUTtHeXLt9Df25rRttKWkIXGo";   /* 実物と同じ長さのID */
 const TPFILE = {name:"たんぽぽ時間割", sheets:{}};
 function tpSheet(name){
   const grid = TPFILE.sheets[name];
@@ -127,7 +128,7 @@ const sandbox = {
       getSheets(){ return Object.keys(SHEETS).map(fakeSheet); }
     }),
     openById(id){
-      if(id !== "TPID") throw new Error("そんなファイルは無い: " + id);
+      if(id !== TPID) throw new Error("そんなファイルは無い: " + id);
       return {
         getName: () => TPFILE.name,
         getSheets: () => Object.keys(TPFILE.sheets).map(tpSheet),
@@ -525,7 +526,7 @@ console.log("\n■ たんぽぽ時間割へ出す");
   /* 設定にファイルIDを入れる */
   const at = ev('Sheets.head("設定").at');
   for(const row of SHEETS["設定"])
-    if(String(row[at["キー"]]) === "たんぽぽファイルID") row[at["値"]] = "TPID";
+    if(String(row[at["キー"]]) === "たんぽぽファイルID") row[at["値"]] = TPID;
 })();
 const titles = {"3-3":{}, "5-1":{}};
 for(let d = 0; d < 5; d++){
@@ -585,7 +586,7 @@ TPFILE.sheets["週案"][6][0] = "中休み";
   TPFILE.sheets["ずれ"] = g;
   const at = ev('Sheets.head("設定").at');
   for(const row of SHEETS["設定"]){
-    if(String(row[at["キー"]]) === "たんぽぽファイルID") row[at["値"]] = "TPID";
+    if(String(row[at["キー"]]) === "たんぽぽファイルID") row[at["値"]] = TPID;
     if(String(row[at["キー"]]) === "たんぽぽシート名")  row[at["値"]] = "ずれ";
   }
 })();
@@ -627,6 +628,26 @@ ok("書けなかった校時があることは言う",
 const rep3 = ev(`Store.exportTanpopo(2026, "2026-12-07", ${JSON.stringify(titles)}, ["3-3"])`);
 ok("その週が無ければ書かず、理由を返す",
    rep3.days === 0 && rep3.skipped.length === 1, rep3);
+
+/* **URL をそのまま貼っても通す。** ID だけ抜くのは知らないとできない操作 */
+const setId = v => {
+  const at = ev('Sheets.head("設定").at');
+  for(const row of SHEETS["設定"])
+    if(String(row[at["キー"]]) === "たんぽぽファイルID") row[at["値"]] = v;
+};
+setId("https://docs.google.com/spreadsheets/d/" + TPID + "/edit?pli=1&gid=0#gid=0");
+ok("URLをそのまま貼っても開ける",
+   ev(`Store.exportTanpopo(2026, "2026-11-16", ${JSON.stringify(titles)}, ["3-3"])`).days === 5);
+setId("  " + TPID + "  ");
+ok("IDだけでも開ける（前後の空白ごと）",
+   ev(`Store.exportTanpopo(2026, "2026-11-16", ${JSON.stringify(titles)}, ["3-3"])`).days === 5);
+setId("これはURLではない");
+let badId = "";
+try{ ev(`Store.exportTanpopo(2026, "2026-11-16", {}, ["3-3"])`); }
+catch(e){ badId = String(e.message || e); }
+ok("URLでもIDでもなければ、何が悪いかを言う",
+   badId.indexOf("たんぽぽファイルID") >= 0 && badId.indexOf("URL") >= 0, badId);
+setId(TPID);
 
 /* ファイルIDが空なら止める */
 (function(){
