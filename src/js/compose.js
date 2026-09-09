@@ -185,6 +185,30 @@ function planState(cls){
   return "base";                   /* どの層からも1つも入っていない */
 }
 
+/* ── 年間行事計画表 ────────────────────────────
+   **行事は日付にしか結びついていない。** 何校時かは表に書いていないので、
+   自動でコマに入れない（外れたものを毎週打ち消す作業のほうが多くなる）。
+   紙の日付ごとに候補として出し、押した人がコマを決める（docs/spec.md 6節）。 */
+function eventsOn(d){
+  const key = iso(addDays(monday, d));
+  const e = (Y().events || {})[key];
+  if(!e) return [];
+  const out = [];
+  if(e.c) out.push({text:e.c, who:"児童"});
+  if(e.s) out.push({text:e.s, who:"職員"});
+  return out;
+}
+const hasEvents = d => eventsOn(d).length > 0;
+/* 年間行事計画表が持っている、その週の A週／B週。**参考として出すだけ。**
+   どちらの週かは日付から決めている（3節）ので、こちらが勝つことはない。 */
+function eventVariant(){
+  for(let d = 0; d < DAYS; d++){
+    const e = (Y().events || {})[iso(addDays(monday, d))];
+    if(e && e.w) return e.w;
+  }
+  return "";
+}
+
 /* ── 週メモ ────────────────────────────────────
    **刷る紙は学級ごとなので、メモも学級ごとに持つ。**
    前は週にひとつしか無かったので、3-1 で書いたメモが 3-2 の紙にも出た。

@@ -76,6 +76,13 @@
 .hd .mark{display:inline-block;border:1px solid var(--ink);border-radius:2px;
   font-size:calc(5.5pt*var(--k));padding:0 .25em;margin-left:.25em;
   font-weight:700;line-height:1.35}
+/* 年間行事のある日の印。**画面だけ。** 紙には出さない
+   （どの校時か決まっていないものを版面に居座らせない） */
+.hd.hasev::after{content:"";position:absolute;left:50%;bottom:1px;
+  width:3px;height:3px;border-radius:50%;background:var(--ink-link);
+  transform:translateX(-50%)}
+@media print{ .hd.hasev::after{display:none} }
+
 /* 全学年の面だけ、日付の見出しを押せる。**押せることは画面でだけ見せる** */
 .hd.pick{cursor:pointer}
 .hd.pick:hover{background:var(--fill-a)}

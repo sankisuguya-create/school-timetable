@@ -986,6 +986,66 @@ ok("紙の外に置いたものは、body の高さを押し広げない（白�
 
 await p.emulateMedia({media:"screen"});      /* 刷るときの見え方から画面へ戻す */
 
+console.log("\n■ 年間行事は、日付ごとに候補として出す");
+/* **校時への割り付けはしない。** 行事は日付にしか結びついていないので、
+   自動でコマに入れると、外れたものを毎週打ち消す作業が生まれる。 */
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(400);
+await p.evaluate(() => {
+  Y().events = {};
+  Y().events[iso(addDays(monday, 1))] = {c:"校外学習6年(奈良)", s:"職員会議15:00", w:"A"};
+  Y().events[iso(addDays(monday, 3))] = {c:"", s:"定時退勤日", w:""};
+  save(); buildSheet();
+});
+await p.waitForTimeout(300);
+ok("行事のある日には、見出しに印が付く",
+   await p.locator("#sheet .hd.hasev").count() === 2,
+   await p.locator("#sheet .hd.hasev").count());
+ok("印は画面だけ（紙には出さない）", await (async () => {
+     await p.emulateMedia({media:"print"}); await p.waitForTimeout(200);
+     const v = await p.evaluate(() => getComputedStyle(
+       document.querySelector("#sheet .hd.hasev"), "::after").display);
+     await p.emulateMedia({media:"screen"}); await p.waitForTimeout(200);
+     return v;
+   })() === "none");
+ok("行事の無い日には印を付けない",
+   await p.locator("#sheet .hd[data-d='0'].hasev").count() === 0);
+await p.locator("#sheet .cell[data-d='1'][data-s='p3'] .t").click();
+await p.waitForTimeout(250);
+ok("コマを選ぶと、その日の行事が右に出る",
+   await p.locator("#pEvWrap").isVisible() === true);
+ok("児童と職員の2つとも出る",
+   await p.locator("#pEvs .ev").count() === 2,
+   await p.locator("#pEvs .ev").count());
+ok("どちらの欄のものかを添える",
+   (await p.locator("#pEvs").innerText()).indexOf("児童") >= 0
+   && (await p.locator("#pEvs").innerText()).indexOf("職員") >= 0,
+   await p.locator("#pEvs").innerText());
+ok("押すと、選んでいるコマに入る", await (async () => {
+     await p.locator("#pEvs .ev").first().click(); await p.waitForTimeout(350);
+     return await p.evaluate(() => plain(cellFor(1, "p3").title));
+   })() === "校外学習6年(奈良)");
+ok("教科は「行事」にする（時数に数えない）",
+   await p.evaluate(() => cellFor(1, "p3").subject) === "gyoji",
+   await p.evaluate(() => cellFor(1, "p3").subject));
+ok("時数のコピーには出てこない", await p.evaluate(() => {
+     db.settings.tally.classes = "3-1";
+     const block = Math.max(1, +db.settings.tally.block || 10);
+     const line = tallyGrid()[1 * block];
+     return line.join("").indexOf("校外") < 0;
+   }) === true);
+await p.locator("#sheet .cell[data-d='0'][data-s='p3'] .t").click();
+await p.waitForTimeout(250);
+ok("行事の無い日には、その欄を出さない",
+   await p.locator("#pEvWrap").isVisible() === false);
+ok("自動ではコマに入れない（押すまで入らない）",
+   await p.evaluate(() => plain(cellFor(3, "p3").title)) !== "定時退勤日",
+   await p.evaluate(() => plain(cellFor(3, "p3").title)));
+/* 片づける */
+await p.evaluate(() => { delete (week().home["3-1"] || {})["1|p3"]; Y().events = {};
+                         save(); buildSheet(); });
+await p.waitForTimeout(250);
+
 console.log("\n■ この日の形（ふつう／特別校時／休み）");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(400);

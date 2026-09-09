@@ -336,6 +336,8 @@ const Backend = (function(){
         Yr.tanpopo = tpNorm_(r.roster.tanpopo);
     }
     Yr.base = r.base || {};
+    /* 年間行事。**空も答えのうち**（まだ貼っていない年度がある） */
+    if(r.events !== undefined && r.events !== null) Yr.events = r.events;
     /* **読めなかった行は黙って捨てない。** 入っていないのか読めていないのかが
        分からないと、シートを見ながら何度も書き直すことになる */
     if(r.warn && r.warn.length)

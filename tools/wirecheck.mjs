@@ -52,6 +52,7 @@ await p.addInitScript(() => {
       ]
     },
     year: {
+      events: {"2026-09-08": {c:"校外学習6年(奈良)", s:"職員会議15:00", w:"A"}},
       roster: {
         classes: {"1":["1-1","1-2"], "5":["5-1","5-2","5-3","5-4"]},
         specials: [{code:"ongaku", label:"音楽"}],
@@ -85,7 +86,8 @@ await p.addInitScript(() => {
       apiBoot(y){
         /* 本番と同じく、年度を渡されたら学級編成と基本時間割も一緒に返す */
         const r = Object.assign({}, DATA.boot,
-                    y ? {year:y, roster:DATA.year.roster, base:DATA.year.base} : {});
+                    y ? {year:y, roster:DATA.year.roster, base:DATA.year.base,
+                         events:DATA.year.events} : {});
         call("apiBoot", [y], r);
         setTimeout(() => okFn(r), 0);
       },
@@ -733,6 +735,31 @@ ok("上位に戻したので、上位か基本時間割のものが出る",
    await p.evaluate(() => cellFor(4, "p3").layer) !== "home",
    await p.evaluate(() => cellFor(4, "p3").layer));
 
+console.log("\n■ 年間行事も、立ち上がりの1回で一緒に来る");
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(500);
+ok("シートから読んだ行事を持っている",
+   await p.evaluate(() => !!(Y().events || {})["2026-09-08"]) === true,
+   await p.evaluate(() => Y().events));
+ok("別に取りに行かない（apiBoot が一緒に返す）",
+   (await calls()).indexOf("apiReadEvents") < 0, await calls());
+ok("行事のある日の見出しに印が付く",
+   await p.locator("#sheet .hd[data-d='1'].hasev").count() === 1,
+   await p.locator("#sheet .hd.hasev").count());
+await p.locator("#sheet .cell[data-d='1'][data-s='p2'] .t").click();
+await p.waitForTimeout(250);
+ok("コマを選ぶと候補が出る", await p.locator("#pEvs .ev").count() === 2,
+   await p.locator("#pEvs .ev").count());
+await p.locator("#pEvs .ev").first().click(); await p.waitForTimeout(400);
+await p.locator("#saveBtn").click(); await p.waitForTimeout(800);
+const evSent = await p.evaluate(() =>
+  window.__calls.filter(c => c.name === "apiWriteCells").map(c => c.args[1]).flat());
+ok("押して入れたものは、ふつうのコマとしてシートへ行く",
+   evSent.some(q => q.slot === "p2" && q.title.indexOf("校外学習") >= 0
+                 && q.subject === "gyoji"), evSent);
+await p.evaluate(() => { writeCell(1, "p2", {title:"", note:"", subject:null}); });
+await p.locator("#saveBtn").click(); await p.waitForTimeout(600);
+
 console.log("\n■ 週メモもシートへ送る");
 /* **前はこの端末にしか残らなかった。** 刷る紙は学級ごとなのに
    週にひとつしか無く、ほかの先生にも見えなかった。 */
@@ -763,7 +790,10 @@ console.log("\n■ 開きっぱなしの画面も、たまに読み直す");
 /* **前は一度読んだら二度と読み直さなかった。** 30人が同じ週を触る運用なのに、
    タブを開いたままの担任には、その日ほかの誰が何を入れても映らなかった。 */
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
-await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(500);
+await p.locator(".tile[data-c='5-1']").click();
+/* **先読みが終わるまで待ってから数え始める。**
+   先読みは開いた 1.2 秒後に走るので、そこで数えると開き直しのぶんと混ざる */
+await p.waitForTimeout(1800);
 await p.evaluate(() => { window.__calls.length = 0; });
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(500);

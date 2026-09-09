@@ -121,6 +121,13 @@ const Sheets = (function(){
      列の並びは学校の表しだいなので、列名では読まない（読み方は src/js/fixed.js）。 */
   const PASTE = "固定時間割取り込み";
 
+  /* 年間行事計画表の取り込み用。**1行1日の縦長の表**（docs/spec.md 6節）。
+     元の表は3か月が横に並んでいるが、**そのままは読ませない。**
+     月ブロックの開始列を1つ間違えると、別の月の行事が別の日付に静かに入る。
+     日付の列があれば読み違えようがない。 */
+  const EVENTS = "行事取り込み";
+  const EVENT_COLS = ["日付", "週", "行事計画（児童）", "行事計画（職員）"];
+
   /* ── 週案はクラスごとに1枚 ──────────────────────
      1枚に全クラスを積むと、担任が自分の週案を目で確かめられない。
      シートを開いても、どの行が自分のものか分からない。
@@ -351,6 +358,13 @@ const Sheets = (function(){
       }
       made.push(name);
     }
+    /* 行事の取り込み用。**見出しは作る**（1行1日の形が決まっているため） */
+    if(!ss.getSheetByName(EVENTS)){
+      const sh = ss.insertSheet(EVENTS);
+      sh.getRange(1, 1, 1, EVENT_COLS.length).setValues([EVENT_COLS]).setFontWeight("bold");
+      sh.setFrozenRows(1);
+      made.push(EVENTS);
+    }
     /* 貼り付け用のシート。見出しは作らない（学校の表をそのまま貼るため） */
     if(!ss.getSheetByName(PASTE)){
       const sh = ss.insertSheet(PASTE);
@@ -460,7 +474,7 @@ const Sheets = (function(){
              .map(row => row.map(v => isDate(v) ? asClass(v) : String(v == null ? "" : v)));
   }
 
-  return {SPEC, NAMES, PASTE, CLASS_COLS, TANPOPO_FILL, asClass, isDate, readGrid,
+  return {SPEC, NAMES, PASTE, EVENTS, EVENT_COLS, CLASS_COLS, TANPOPO_FILL, asClass, isDate, readGrid,
           book, bookName, stash, shapeOk, shapeError, readAllSoft, grow, fillAfterRow,
           PLAN_PREFIX, PLAN_ALL, PLAN_COLS, planName, ensurePlan, readPlan, writePlan,
           planNames, planMap,

@@ -206,6 +206,15 @@
           <label for="pNote">詳細・備考</label>
           <div class="fld tall" id="pNote" contenteditable></div>
         </div>
+        <!-- 年間行事計画表。**日付にしか結びついていない**ので、
+             どの校時に入れるかは押した人が決める（docs/spec.md 6節） -->
+        <div id="pEvWrap" hidden>
+          <h3>この日の行事</h3>
+          <div class="evs" id="pEvs"></div>
+          <p class="hint" style="margin:6px 0 0">年間行事計画表から読んだもの。
+            <b>押すと、選んでいるコマに入る。</b>何校時かは表に書いていないので、
+            決めるのは人。</p>
+        </div>
         <div>
           <h3>リンク</h3>
           <div class="links" id="pLinks"></div>
@@ -407,6 +416,13 @@
      いつでも「ふつう」に戻せます。<b>戻すと、書いてある予定はそのまま出てきます</b>
      ——休みにしても、コマの中身は消していません。</p>
   <div class="dayforms" id="dayForms"></div>
+  <div id="dayEvWrap" hidden>
+    <h3 style="margin:16px 0 6px">この日の行事</h3>
+    <ul class="owlist" id="dayEvs"></ul>
+    <p style="margin:0">年間行事計画表から読んだもの。
+      <b>コマに入れるのは、紙のコマを選んでから右の欄で。</b>
+      何校時かは表に書いていないので、決めるのは人。</p>
+  </div>
 </div></dialog>
 
 <!-- 上書きの窓。**既定は「変更しない」。**

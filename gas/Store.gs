@@ -213,6 +213,93 @@ const Store = (function(){
     })).filter(s => s.code);
   }
 
+  /* ── 年間行事計画表 ────────────────────────────
+     **1行1日の縦長の表を読む**（docs/spec.md 6節）。
+     元の表は3か月が横に並んでいるが、そのままは読ませない。
+     月ブロックの開始列を1つ間違えると、別の月の行事が別の日付に静かに入る。
+     落ちずに、間違った予定が週案に出る。いちばん気づきにくい壊れ方。
+
+     **校時への割り付けはしない。** 行事は日付にしか結びついていない。
+     自動でコマに入れると、外れたものを毎週打ち消す作業が生まれる。
+     打ち消す作業は、最初から入れない作業より必ず多い。 */
+  function eventSheet_(){
+    const cfg = readConfig();
+    const url = String(cfg["行事ファイルID"] || "").trim();
+    if(!url) return Sheets.sheet(Sheets.EVENTS);        /* 本体のシート */
+    let ss;
+    try{ ss = SpreadsheetApp.openById(fileId(url, "行事ファイルID")); }
+    catch(e){
+      throw new Error("年間行事計画表のファイルを開けません（" + String(e && e.message)
+        + "）。URLが正しいか、このスクリプトを置いたアカウントに共有されているかを見てください");
+    }
+    return ss.getSheetByName(Sheets.EVENTS);
+  }
+  /* 日付。**Date でも「2026-11-16」でも「11/18」でも読む。**
+     年の無い書き方は、その年度の中の日として当てる（4月〜12月はその年、
+     1月〜3月は翌年）。 */
+  function evDate_(v, year){
+    if(Sheets.isDate(v)) return ymd(v);
+    const t = String(v == null ? "" : v).normalize("NFKC").trim().replace(/[\s　]/g, "");
+    let m = t.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+    if(m) return ymd(new Date(+m[1], +m[2] - 1, +m[3]));
+    m = t.match(/^(\d{1,2})[\/-](\d{1,2})$/) || t.match(/^(\d{1,2})月(\d{1,2})日?$/);
+    if(m){
+      const mo = +m[1];
+      return ymd(new Date(mo >= 4 ? +year : +year + 1, mo - 1, +m[2]));
+    }
+    return "";
+  }
+
+  /* 見出しの語は決まっているが、括弧や空白の揺れは通す */
+  function eventCols_(head){
+    const at = {};
+    head.forEach(function(v, i){
+      const t = String(v == null ? "" : v).normalize("NFKC").replace(/[\s　]/g, "");
+      if(at.date === undefined && t.indexOf("日付") >= 0) at.date = i;
+      else if(at.child === undefined && t.indexOf("児童") >= 0) at.child = i;
+      else if(at.staff === undefined && t.indexOf("職員") >= 0) at.staff = i;
+      else if(at.week === undefined && t === "週") at.week = i;
+    });
+    return at;
+  }
+  /* 年度（4/1 起点）のぶんだけ返す。365行を毎回まるごと返しても仕方がない */
+  function readEvents(year){
+    const y = +year;
+    const sh = eventSheet_();
+    if(!sh) return {events:{}, rows:0, warn:["「" + Sheets.EVENTS + "」シートがありません"]};
+    const last = sh.getLastRow(), wide = sh.getLastColumn();
+    if(last < 2 || !wide) return {events:{}, rows:0, warn:[]};
+    const v = sh.getRange(1, 1, last, wide).getValues();
+    const at = eventCols_(v[0]);
+    if(at.date === undefined)
+      return {events:{}, rows:0,
+              warn:["「" + Sheets.EVENTS + "」シートに「日付」の列がありません。"
+                  + "見出しは " + Sheets.EVENT_COLS.join("／") + " の4つです"]};
+    const from = y + "-04-01", to = (y + 1) + "-03-31";
+    const out = {}, warn = [];
+    let n = 0, bad = 0;
+    for(let i = 1; i < v.length; i++){
+      const row = v[i];
+      const d = evDate_(row[at.date], y);
+      if(!d){
+        if(String(row[at.date] == null ? "" : row[at.date]).trim()){ bad++;
+          if(bad <= 3) warn.push((i + 1) + "行目：日付「"
+            + String(row[at.date]).slice(0, 20) + "」が読めない"); }
+        continue;
+      }
+      if(d < from || d > to) continue;                 /* ほかの年度のぶん */
+      const c = at.child !== undefined ? String(row[at.child] || "").trim() : "";
+      const st = at.staff !== undefined ? String(row[at.staff] || "").trim() : "";
+      const w = at.week !== undefined
+        ? String(row[at.week] || "").normalize("NFKC").trim().toUpperCase() : "";
+      if(!c && !st && !w) continue;                    /* 何も書いていない日 */
+      out[d] = {c: c, s: st, w: (w === "A" || w === "B") ? w : ""};
+      n++;
+    }
+    if(bad > 3) warn.push("ほか " + (bad - 3) + " 行の日付が読めない");
+    return {events: out, rows: n, warn: warn};
+  }
+
   /* ── 年度の検査 ──────────────────────────────
      4月に開けたとき、**何が足りないかを1画面で言う**。
      足りないまま使い始めると、担任が「自分のクラスが無い」と探すことになる。
@@ -291,6 +378,17 @@ const Store = (function(){
     else if(!tpN) say("warn", "たんぽぽ", "交流級が1つも選ばれていない", "「クラス」シートの たんぽぽ交流級 に人数を入れる");
     else say("ok", "たんぽぽ", tpN + "組・" +
              Object.keys(r.tanpopo).reduce((a, c) => a + r.tanpopo[c].length, 0) + "人", "");
+
+    /* 7.5 年間行事計画表 */
+    let ev = null;
+    try{ ev = readEvents(y); }catch(e){ ev = {events:{}, rows:0, warn:[String(e && e.message)]}; }
+    if(ev.warn && ev.warn.length)
+      say("warn", "年間行事", ev.warn.slice(0, 2).join(" / "),
+          "1行1日の縦長の表を「" + Sheets.EVENTS + "」シートに貼る（docs/setup.md Step 9）");
+    else if(!ev.rows)
+      say("warn", "年間行事", "1日も読めない",
+          "1行1日の縦長の表を「" + Sheets.EVENTS + "」シートに貼る（docs/setup.md Step 9）");
+    else say("ok", "年間行事", ev.rows + "日ぶん読めている", "");
 
     /* 8. 週案シート。**担任が開く前に揃えておく。** */
     const have = Sheets.planNames();
@@ -1089,7 +1187,7 @@ const Store = (function(){
 
   return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects,
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste,
-          exportWeek, weekSheetName, weekOrder, migratePlan, checkYear,
+          exportWeek, weekSheetName, weekOrder, migratePlan, checkYear, readEvents,
           archiveCount, archiveVerify, archivePurge, archivedAll, ymd,
           /* 検査から呼ぶ。**画面からは呼ばない**（形を読むための道具） */
           __tpCls: tpCls, __tpColumns: tpColumns_};
@@ -1117,6 +1215,10 @@ function apiBoot(year){
     out.year   = +year;
     out.roster = Store.readRoster(+year);
     out.base   = Store.readBase(+year, warn);
+    /* **年間行事も一緒に返す。** 別に取りに行くと、その回数だけ待つ */
+    try{ const ev = Store.readEvents(+year);
+         out.events = ev.events; if(ev.warn) warn.push.apply(warn, ev.warn); }
+    catch(e){ out.events = {}; warn.push(String(e && e.message)); }
     out.warn   = warn;
   }
   return out;
@@ -1145,7 +1247,11 @@ function apiReadYear(year){
   Gate.check();
   const warn = [];
   const base = Store.readBase(year, warn);
-  return {roster: Store.readRoster(year), base, warn};
+  let events = {};
+  try{ const ev = Store.readEvents(year);
+       events = ev.events; if(ev.warn) warn.push.apply(warn, ev.warn); }
+  catch(e){ warn.push(String(e && e.message)); }
+  return {roster: Store.readRoster(year), base, events, warn};
 }
 function apiReadWeek(year, mondayISO, targets){
   Gate.check();

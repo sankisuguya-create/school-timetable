@@ -44,6 +44,9 @@ function buildSheet(){
       "<span>" + md(dt) + "</span><span class='dow'>" + DOW[d] + "</span>"
       + (f ? "<span class='mark'>" + DAY_FORM[f].mark + "</span>" : ""));
     hd.dataset.d = d;
+    /* 年間行事のある日に、小さな印。**画面だけ**（紙には出さない）。
+       紙に出すと、どの校時か決まっていないものが版面に居座る */
+    if(hasEvents(d)) hd.classList.add("hasev");
     /* **決められるのは全学年の面だけ。** 効く範囲が全クラスなので、
        担任の画面から押せると、自分の学級を直したついでに全校が動く */
     if(view.kind === "school"){

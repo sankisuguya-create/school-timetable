@@ -21,9 +21,9 @@
 npm install               検査に playwright が要る（1回だけ）
 python3 build.py          src/ から dist/index.html と gas/plan.html を作る
 python3 build.py --check  生成物が src と一致するか調べる
-node tools/check.mjs      画面を動かして確かめる（272件）
-node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（165件）
-node gas/storecheck.js    シートの読み書きを確かめる（235件）
+node tools/check.mjs      画面を動かして確かめる（283件）
+node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（170件）
+node gas/storecheck.js    シートの読み書きを確かめる（251件）
 node gas/gatecheck.js     関門を確かめる（27件）
 node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明を見る（52件）
 ```
@@ -139,3 +139,6 @@ GitHub のこのリポジトリが正本。エディタで直すと、次に誰�
 
 **B5で1枚刷って教務必携に当て、余白と倍率を確定する。**
 ここが合わないと以降の機能が全部無駄になる（`docs/spec.md` 0節 a）。
+
+そのあとは、時数集計表に1回貼って**列のずれを確定する**（0節 b）。
+どちらも画面から動かせるようにしてあるので、実物を見てから決める。

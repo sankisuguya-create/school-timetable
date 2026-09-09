@@ -177,6 +177,28 @@ function fillPanel(){
   $("pTitleLabel").textContent =
     view.kind === "special" ? "行き先のクラス" : "教科名・行事名";
 
+  /* **この日の行事。** 年間行事計画表から読んだもの。
+     押すと、選んでいるコマに入る（何校時かは表に書いていないので、決めるのは人）。
+     教科は「行事」にする——時数に数えない教科なので、Excel 側の集計が増えない。 */
+  const evs = eventsOn(selCell.d);
+  $("pEvWrap").hidden = !evs.length;
+  if(evs.length){
+    $("pEvs").innerHTML = evs.map((x, i) =>
+      "<button class='ev' data-i='" + i + "'><i>" + escText(x.who) + "</i>"
+      + "<span>" + escText(x.text) + "</span></button>").join("");
+    for(const b of $("pEvs").querySelectorAll(".ev"))
+      b.onclick = () => {
+        if(isLocked()) return toast("この画面はロック中");
+        const x = evs[+b.dataset.i], at = {d:selCell.d, s:selCell.s};
+        okToOverwrite(at.d, at.s, x.text, () => {
+          writeCell(at.d, at.s, {title:escText(x.text),
+                                 subject: SUB_BY_CODE["gyoji"] ? "gyoji" : null});
+          paintSheet(); selectCell(at.d, at.s, cellAt(at.d, at.s));
+          toast("「" + escText(x.text) + "」を入れた");
+        });
+      };
+  }
+
   /* リンクは1コマにいくつでも */
   const ls = linksIn(c.title).map(x => Object.assign({f:"title"}, x))
        .concat(linksIn(c.note ).map(x => Object.assign({f:"note" }, x)));

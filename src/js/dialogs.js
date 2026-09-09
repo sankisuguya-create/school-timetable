@@ -266,6 +266,14 @@ function openDayDlg(d){
 }
 function drawDayForms(){
   const now = dayForm(dayPick);
+  /* **この日の行事も出す。** 読むだけ（コマに入れるのは紙のコマを選んでから）。
+     ここに入れるボタンを置くと、窓を開けたままコマを選ぶことになる */
+  const evs = eventsOn(dayPick);
+  $("dayEvWrap").hidden = !evs.length;
+  if(evs.length)
+    $("dayEvs").innerHTML = evs.map(x =>
+      "<li><b>" + escText(x.text) + "</b>"
+      + "<br><span class=\"who\">行事計画（" + escText(x.who) + "）</span></li>").join("");
   $("dayForms").innerHTML = ["", "special", "off"].map(f =>
     "<button class='dayform' data-f='" + f + "' aria-pressed='" + (f === now) + "'>"
     + "<b>" + escText(DAY_FORM[f].label)

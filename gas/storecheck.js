@@ -279,7 +279,7 @@ const Sheets_asClass = v => ev("Sheets.asClass")(v);
 /* ── シートを作る ─────────────────────────────── */
 console.log("■ シートを作る");
 let made = ev("Sheets.setup()");
-ok("9枚＋貼り付け用の1枚ができる", made.made.length === 10, made.made);
+ok("9枚＋取り込み用の2枚ができる", made.made.length === 11, made.made);
 made = ev("Sheets.setup()");
 ok("2回目は何も作らない（何度走らせても同じ）",
    made.made.length === 0 && made.kept.length === 9, made);
@@ -1166,10 +1166,79 @@ ok("読み直すと 6-3 のコマとして戻る",
 
 /* 4月に開けたとき、**足りないものを名指しできるか**。
    ここが黙ると、担任が「自分のクラスが無い」と探すことになる。 */
+console.log("\n■ 年間行事計画表を読む（1行1日の縦長の表）");
+(function(){
+  const g = SHEETS["行事取り込み"];
+  const put = (d, c, st, w) => {
+    const row = new Array(6).fill("");
+    row[0] = d; row[1] = w || ""; row[2] = c || ""; row[3] = st || "";
+    g.push(row);
+  };
+  put(new Date(2026, 10, 16), "校外学習6年(奈良)", "職員会議15:00", "A");
+  put("2026-11-17", "", "定時退勤日", "");
+  put("11/18", "ジャンボ落語・計画", "", "B");
+  put("2026-11-19", "", "", "");              /* 何も書いていない日は入れない */
+  put("2027-05-01", "来年度の行事", "", "");   /* 別の年度は入れない */
+  put("よめない", "だめ", "", "");             /* 日付が読めない行 */
+})();
+const evs = ev("Store.readEvents(2026)");
+ok("日付ごとに読める", evs.rows === 3, evs);
+ok("児童と職員を分けて持つ",
+   evs.events["2026-11-16"].c === "校外学習6年(奈良)"
+   && evs.events["2026-11-16"].s === "職員会議15:00", evs.events["2026-11-16"]);
+ok("日付が Date でも読める", !!evs.events["2026-11-16"], Object.keys(evs.events));
+ok("「2026-11-17」の形でも読める", evs.events["2026-11-17"].s === "定時退勤日");
+ok("「11/18」の形でも読める（年度の年を当てる）",
+   evs.events["2026-11-18"].c === "ジャンボ落語・計画", Object.keys(evs.events));
+ok("A週B週も持つ（参考として）",
+   evs.events["2026-11-16"].w === "A" && evs.events["2026-11-18"].w === "B");
+ok("何も書いていない日は入れない", !evs.events["2026-11-19"], Object.keys(evs.events));
+ok("別の年度の行は入れない", !evs.events["2027-05-01"], Object.keys(evs.events));
+ok("日付が読めない行は、何行目かを言う",
+   evs.warn.join("").indexOf("よめない") >= 0, evs.warn);
+ok("読めない行があっても、ほかは読む", evs.rows === 3, evs);
+ok("年度の初めから終わりまで（4/1〜翌3/31）で切る", (function(){
+     const r = ev("Store.readEvents(2027)");
+     return !!r.events["2027-05-01"] && !r.events["2026-11-16"] && !r.events["2026-11-17"];
+   })() === true, ev("Store.readEvents(2027)").events);
+/* **年の無い書き方（11/18）は、読む年度の日として当てる。**
+   どちらの年度で読んでも入るので、年間行事計画表には年まで書いてもらう */
+ok("年の無い日付は、読む年度に当てる",
+   !!ev("Store.readEvents(2027)").events["2027-11-18"],
+   ev("Store.readEvents(2027)").events);
+
+console.log("\n■ 行事の見出しは、括弧や空白が揺れても読む");
+(function(){
+  const g = SHEETS["行事取り込み"];
+  g[0] = ["日 付", "週", "行事計画 (児童)", "行事計画（職員）", "", ""];
+})();
+ok("全角半角と空白の揺れを通す",
+   ev("Store.readEvents(2026)").events["2026-11-16"].c === "校外学習6年(奈良)",
+   ev("Store.readEvents(2026)").events["2026-11-16"]);
+(function(){
+  const g = SHEETS["行事取り込み"];
+  g[0] = ["ひづけ", "週", "児童", "職員", "", ""];
+})();
+ok("「日付」の列が無ければ、何が足りないかを言う", (function(){
+     const r = ev("Store.readEvents(2026)");
+     return r.rows === 0 && r.warn.join("").indexOf("日付") >= 0;
+   })() === true, ev("Store.readEvents(2026)").warn);
+(function(){ SHEETS["行事取り込み"][0] = ["日付", "週", "行事計画（児童）", "行事計画（職員）", "", ""]; })();
+
+console.log("\n■ 立ち上がりの1回で、年間行事も返す");
+ok("apiBoot が行事を返す", (function(){
+     const b = ev("apiBoot(2026)");
+     return !!b.events && !!b.events["2026-11-16"];
+   })() === true, ev("apiBoot(2026)").events);
+ok("apiReadYear も返す", (function(){
+     const r = ev("apiReadYear(2026)");
+     return !!r.events && !!r.events["2026-11-16"];
+   })() === true);
+
 console.log("\n■ 年度の検査");
 let chk = ev("Store.checkYear(2026)");
 const item = w => chk.items.find(x => x.what === w);
-ok("8項目を見る", chk.items.length === 8, chk.items.map(x => x.what));
+ok("9項目を見る", chk.items.length === 9, chk.items.map(x => x.what));
 ok("クラスは20組と言う", item("クラス").detail.indexOf("20組") >= 0, item("クラス"));
 ok("時程の校時数を言う", item("時程").level === "ok", item("時程"));
 ok("基本時間割が空なら止める（ng）", item("基本時間割").level === "ng", item("基本時間割"));

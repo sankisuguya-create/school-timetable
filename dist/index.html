@@ -389,6 +389,15 @@ dialog::backdrop{background:rgba(20,28,38,.42)}
 /* この日の形。**3つを縦に並べる。** 横に並べると、選んでいるものと
    これから選ぶものの区別が付きにくい */
 .dayforms{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+
+/* 年間行事の候補。**押すと、選んでいるコマに入る** */
+.evs{display:flex;flex-direction:column;gap:6px}
+.ev{display:flex;align-items:flex-start;gap:7px;padding:7px 10px;width:100%;
+  border:1px solid var(--line);border-radius:var(--r);background:var(--card);
+  cursor:pointer;font-family:inherit;font-size:12.5px;text-align:left;line-height:1.6}
+.ev:hover{border-color:var(--ink-link);color:var(--ink-link)}
+.ev i{font-style:normal;font-size:10.5px;color:var(--tx-sub);border:1px solid var(--line);
+  border-radius:3px;padding:0 .35em;flex:0 0 auto;margin-top:1px}
 .dayform{display:flex;flex-direction:column;gap:2px;align-items:flex-start;
   padding:10px 13px;border:1px solid var(--line);border-radius:var(--r);
   background:var(--card);cursor:pointer;font-family:inherit;text-align:left;width:100%}
@@ -603,6 +612,13 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .hd .mark{display:inline-block;border:1px solid var(--ink);border-radius:2px;
   font-size:calc(5.5pt*var(--k));padding:0 .25em;margin-left:.25em;
   font-weight:700;line-height:1.35}
+/* 年間行事のある日の印。**画面だけ。** 紙には出さない
+   （どの校時か決まっていないものを版面に居座らせない） */
+.hd.hasev::after{content:"";position:absolute;left:50%;bottom:1px;
+  width:3px;height:3px;border-radius:50%;background:var(--ink-link);
+  transform:translateX(-50%)}
+@media print{ .hd.hasev::after{display:none} }
+
 /* 全学年の面だけ、日付の見出しを押せる。**押せることは画面でだけ見せる** */
 .hd.pick{cursor:pointer}
 .hd.pick:hover{background:var(--fill-a)}
@@ -920,6 +936,15 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
           <label for="pNote">詳細・備考</label>
           <div class="fld tall" id="pNote" contenteditable></div>
         </div>
+        <!-- 年間行事計画表。**日付にしか結びついていない**ので、
+             どの校時に入れるかは押した人が決める（docs/spec.md 6節） -->
+        <div id="pEvWrap" hidden>
+          <h3>この日の行事</h3>
+          <div class="evs" id="pEvs"></div>
+          <p class="hint" style="margin:6px 0 0">年間行事計画表から読んだもの。
+            <b>押すと、選んでいるコマに入る。</b>何校時かは表に書いていないので、
+            決めるのは人。</p>
+        </div>
         <div>
           <h3>リンク</h3>
           <div class="links" id="pLinks"></div>
@@ -1121,6 +1146,13 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
      いつでも「ふつう」に戻せます。<b>戻すと、書いてある予定はそのまま出てきます</b>
      ——休みにしても、コマの中身は消していません。</p>
   <div class="dayforms" id="dayForms"></div>
+  <div id="dayEvWrap" hidden>
+    <h3 style="margin:16px 0 6px">この日の行事</h3>
+    <ul class="owlist" id="dayEvs"></ul>
+    <p style="margin:0">年間行事計画表から読んだもの。
+      <b>コマに入れるのは、紙のコマを選んでから右の欄で。</b>
+      何校時かは表に書いていないので、決めるのは人。</p>
+  </div>
 </div></dialog>
 
 <!-- 上書きの窓。**既定は「変更しない」。**
@@ -1163,7 +1195,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.6.0";
+let APP_VERSION = "1.7.0";
 let BUILD_DATE  = "2026-09-09";
 
 /* 時程。行を固定しない（学校ごとに違う）。
@@ -1529,6 +1561,9 @@ function newYear(y){
     classes:  prev ? clone(prev.classes)  : clone(DEFAULT_CLASSES),
     specials: prev ? clone(prev.specials) : clone(DEFAULT_SPECIALS),
     base:{}, weeks:{}, week1: firstMonday(y),
+    /* 年間行事計画表から読んだもの。**日付にしか結びついていない**
+       （校時への割り付けは人がする。docs/spec.md 6節） */
+    events:{},
     /* たんぽぽ児童を、**たんぽぽの組ごとに**持つ。{"1":["1-3","3-2"], "2":["4-1"]}。
        たんぽぽ時間割は児童ごとに1列で、たんぽぽ担当は組ごとに見るので、
        出す列も 1組の全員 → 2組の全員 … の順に並べる。
@@ -1547,6 +1582,7 @@ function Y(){
   if(!Yr.base)  Yr.base  = {};
   if(!Yr.weeks) Yr.weeks = {};
   if(!Yr.week1) Yr.week1 = firstMonday(+y);
+  if(!Yr.events || typeof Yr.events !== "object") Yr.events = {};
   /* **毎回作り直さない。** 作り直すと、直した中身が次の呼び出しで捨てられる。
      組ごとの並び（値が配列）になっていなければ、そのときだけ直す。 */
   if(!Yr.tanpopo || typeof Yr.tanpopo !== "object" || Array.isArray(Yr.tanpopo)
@@ -2017,6 +2053,8 @@ const Backend = (function(){
         Yr.tanpopo = tpNorm_(r.roster.tanpopo);
     }
     Yr.base = r.base || {};
+    /* 年間行事。**空も答えのうち**（まだ貼っていない年度がある） */
+    if(r.events !== undefined && r.events !== null) Yr.events = r.events;
     /* **読めなかった行は黙って捨てない。** 入っていないのか読めていないのかが
        分からないと、シートを見ながら何度も書き直すことになる */
     if(r.warn && r.warn.length)
@@ -2726,6 +2764,30 @@ function planState(cls){
   return "base";                   /* どの層からも1つも入っていない */
 }
 
+/* ── 年間行事計画表 ────────────────────────────
+   **行事は日付にしか結びついていない。** 何校時かは表に書いていないので、
+   自動でコマに入れない（外れたものを毎週打ち消す作業のほうが多くなる）。
+   紙の日付ごとに候補として出し、押した人がコマを決める（docs/spec.md 6節）。 */
+function eventsOn(d){
+  const key = iso(addDays(monday, d));
+  const e = (Y().events || {})[key];
+  if(!e) return [];
+  const out = [];
+  if(e.c) out.push({text:e.c, who:"児童"});
+  if(e.s) out.push({text:e.s, who:"職員"});
+  return out;
+}
+const hasEvents = d => eventsOn(d).length > 0;
+/* 年間行事計画表が持っている、その週の A週／B週。**参考として出すだけ。**
+   どちらの週かは日付から決めている（3節）ので、こちらが勝つことはない。 */
+function eventVariant(){
+  for(let d = 0; d < DAYS; d++){
+    const e = (Y().events || {})[iso(addDays(monday, d))];
+    if(e && e.w) return e.w;
+  }
+  return "";
+}
+
 /* ── 週メモ ────────────────────────────────────
    **刷る紙は学級ごとなので、メモも学級ごとに持つ。**
    前は週にひとつしか無かったので、3-1 で書いたメモが 3-2 の紙にも出た。
@@ -3006,6 +3068,9 @@ function buildSheet(){
       "<span>" + md(dt) + "</span><span class='dow'>" + DOW[d] + "</span>"
       + (f ? "<span class='mark'>" + DAY_FORM[f].mark + "</span>" : ""));
     hd.dataset.d = d;
+    /* 年間行事のある日に、小さな印。**画面だけ**（紙には出さない）。
+       紙に出すと、どの校時か決まっていないものが版面に居座る */
+    if(hasEvents(d)) hd.classList.add("hasev");
     /* **決められるのは全学年の面だけ。** 効く範囲が全クラスなので、
        担任の画面から押せると、自分の学級を直したついでに全校が動く */
     if(view.kind === "school"){
@@ -3420,6 +3485,28 @@ function fillPanel(){
   $("pTitleWrap").hidden  = slot.kind === "note";
   $("pTitleLabel").textContent =
     view.kind === "special" ? "行き先のクラス" : "教科名・行事名";
+
+  /* **この日の行事。** 年間行事計画表から読んだもの。
+     押すと、選んでいるコマに入る（何校時かは表に書いていないので、決めるのは人）。
+     教科は「行事」にする——時数に数えない教科なので、Excel 側の集計が増えない。 */
+  const evs = eventsOn(selCell.d);
+  $("pEvWrap").hidden = !evs.length;
+  if(evs.length){
+    $("pEvs").innerHTML = evs.map((x, i) =>
+      "<button class='ev' data-i='" + i + "'><i>" + escText(x.who) + "</i>"
+      + "<span>" + escText(x.text) + "</span></button>").join("");
+    for(const b of $("pEvs").querySelectorAll(".ev"))
+      b.onclick = () => {
+        if(isLocked()) return toast("この画面はロック中");
+        const x = evs[+b.dataset.i], at = {d:selCell.d, s:selCell.s};
+        okToOverwrite(at.d, at.s, x.text, () => {
+          writeCell(at.d, at.s, {title:escText(x.text),
+                                 subject: SUB_BY_CODE["gyoji"] ? "gyoji" : null});
+          paintSheet(); selectCell(at.d, at.s, cellAt(at.d, at.s));
+          toast("「" + escText(x.text) + "」を入れた");
+        });
+      };
+  }
 
   /* リンクは1コマにいくつでも */
   const ls = linksIn(c.title).map(x => Object.assign({f:"title"}, x))
@@ -4154,6 +4241,14 @@ function openDayDlg(d){
 }
 function drawDayForms(){
   const now = dayForm(dayPick);
+  /* **この日の行事も出す。** 読むだけ（コマに入れるのは紙のコマを選んでから）。
+     ここに入れるボタンを置くと、窓を開けたままコマを選ぶことになる */
+  const evs = eventsOn(dayPick);
+  $("dayEvWrap").hidden = !evs.length;
+  if(evs.length)
+    $("dayEvs").innerHTML = evs.map(x =>
+      "<li><b>" + escText(x.text) + "</b>"
+      + "<br><span class=\"who\">行事計画（" + escText(x.who) + "）</span></li>").join("");
   $("dayForms").innerHTML = ["", "special", "off"].map(f =>
     "<button class='dayform' data-f='" + f + "' aria-pressed='" + (f === now) + "'>"
     + "<b>" + escText(DAY_FORM[f].label)
