@@ -6,8 +6,6 @@ let selCell = null;   /* いま選んでいるコマ {d, s} */
    字が変わらず、入れた本人には反映されていないように見える。 */
 let typing = null;
 
-const memoOf = () => ((week().memos || {})[viewName()] || "");
-
 /* 行の高さ。**mm で決め打ちする。**
    `auto` にしてコマの高さから決めさせると、日ごとに別の格子（下の dayColEl）を
    敷いたときに、外の格子には高さを決める中身が無くなって行が潰れる。 */
@@ -75,16 +73,13 @@ function buildSheet(){
     "<div class='lab'><span>週の</span><span>メモ</span></div>"
     + "<div class='t' contenteditable></div>"), "1 / 8", 3);
   const ft = foot.querySelector(".t");
-  /* **週メモは画面（学級）ごとに持つ。** 前は週にひとつだったので、
-     3-1 で書いたメモが 3-2 の紙にも出ていた（刷る紙は学級ごとなのに）。
-     いまはこの端末の中だけに残る。シートには持っていない */
+  /* **週メモは画面（学級）ごとに持ち、シートへも送る**（compose.js の setMemo）。
+     前は週にひとつしか無く、この端末にしか残らなかったので、
+     3-1 で書いたメモが 3-2 の紙にも出て、ほかの先生には見えなかった */
   ft.innerHTML = memoOf() || "";
   ft.addEventListener("input", () => {
     if(typeof isLocked === "function" && isLocked()) return;
-    const w = week();
-    if(!w.memos || typeof w.memos !== "object") w.memos = {};
-    w.memos[viewName()] = clean(ft.innerHTML);
-    save();
+    setMemo(ft.innerHTML);
   });
 
   paintSheet();
@@ -157,7 +152,9 @@ function cellEl(d, s){
       t.innerHTML = (cellFor(d, s.id).title || "");
       typing = null; paintSheet(); fillPanel();
     };
-    okToOverwrite(d, s.id, plain(t.innerHTML), put, undo);
+    /* 専科の週では、打った字が「行き先のクラス」。潰す相手はその学級 */
+    okToOverwrite(d, s.id, plain(t.innerHTML), put, undo,
+                  view.kind === "special" ? normCls(plain(t.innerHTML)) : undefined);
   });
   if(n) n.addEventListener("input", () => {
     typing = n;

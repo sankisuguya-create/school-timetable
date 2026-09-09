@@ -430,7 +430,8 @@ function wire(){
           f.innerHTML = (cellFor(at.d, at.s).title || "");
           typing = null; paintSheet();
         };
-        return okToOverwrite(at.d, at.s, plain(f.innerHTML), put, undo);
+        return okToOverwrite(at.d, at.s, plain(f.innerHTML), put, undo,
+                             view.kind === "special" ? normCls(plain(f.innerHTML)) : undefined);
       }
       writeCell(selCell.d, selCell.s, {note:f.innerHTML});
       paintSheet(); typing = null;
@@ -460,6 +461,7 @@ function start(){
   /* 設定・時程・教科・その年度は、立ち上がりの1回でまとめてもらう。
      別々に取りに行くと、その回数だけ待つことになる。 */
   Backend.boot(() => {
+    Backend.watch();              /* 開きっぱなしの画面も、たまに読み直す */
     applyPaper();
     /* **本番では、古い週の控えをここで間引く。** 溢れてから慌てない。
        捨てた週はシートに残っているので、開けば読み直される。 */

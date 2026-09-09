@@ -312,6 +312,17 @@ const Backend = (function(){
   const whenBooted = fn => booted ? fn() : waiters.push(fn);
 
   const loadedYear = {}, loadedWeek = {};
+  /* **一度読んだら二度と読み直さない、をやめる。**
+     30人が同じ週を触る運用なのに、タブを開いたままの担任には
+     その日ほかの誰が何を入れても映らなかった。「次に開いたときに知らせる」
+     （docs/spec.md 3節）の"開いたとき"が、実際には再読み込みしか無かった。
+
+     読んだ時刻を覚えておき、古くなっていたら画面を開くときに読み直す。
+     すぐに読み直すのではなく間を置くのは、クラスを続けて見るときに
+     1つずつ往復させないため。 */
+  const FRESH_MS = 60000;          /* これより古い控えは、開くときに読み直す */
+  const WATCH_MS = 180000;         /* 開きっぱなしの画面を、これごとに見に行く */
+  const fresh_ = tag => (loadedWeek[tag] || 0) > Date.now() - FRESH_MS;
 
   function applyYear(y, r){
     if(String(y) !== String(fy())) return;  /* いま開いている年度のぶんだけ */
@@ -361,7 +372,7 @@ const Backend = (function(){
      3-3 を開くなら「週案 3-3」「週案 3年」「週案 全校」の3枚で足りる。 */
   function ensureWeek(after){
     if(!onGas) return after();
-    const want = targetsForView().filter(t => !loadedWeek[weekTag(t)]);
+    const want = targetsForView().filter(t => !fresh_(weekTag(t)));
     if(!want.length) return after();
     /* **どの年度・どの週に頼んだのかを覚えておく。**
        返事が来るころには、もう別の週を見ているかもしれない。
@@ -404,6 +415,8 @@ const Backend = (function(){
     if(!onGas) return;
     clearTimeout(preT);
     preT = setTimeout(() => {
+      /* 先読みは**一度も読んでいないもの**だけ。古くなっただけのものまで
+         先読みすると、開いてもいないクラスのために毎分読みに行くことになる */
       const want = allTargets().filter(t => !loadedWeek[weekTag(t)]);
       if(!want.length || sending) return;
       const year = fy(), mon = wkKey();
@@ -439,9 +452,37 @@ const Backend = (function(){
         cur.home[t.target]    = (w.home    || {})[t.target] || {};
         cur.special[t.target] = (w.special || {})[t.target] || {};
       }
-      loadedWeek[weekTag(t, y, m)] = true;
+      loadedWeek[weekTag(t, y, m)] = Date.now();
     }
   }
+  /* **開きっぱなしの画面を、たまに読み直す。**
+     木曜の夕方に30人が同じ週を触る運用で、開いたまま置いている担任に
+     ほかの人の書き込みが1つも映らないのがいちばん困る。
+
+     見ていないタブでは読まない（電池と回線を使わない）。
+     まだ送っていないコマがある対象は、読み直しても触らない（hasPending）。 */
+  let watchT = 0;
+  function watch(){
+    clearInterval(watchT);
+    if(!onGas) return;
+    watchT = setInterval(() => {
+      if(document.hidden || sending) return;
+      if(typeof view === "undefined" || view.kind === "gate") return;
+      ensureWeek(() => { if(typeof paintSheet === "function" && view.kind !== "tanpopo") paintSheet(); });
+    }, WATCH_MS);
+  }
+  /* いま開いている画面の控えを「古い」ことにする。次に読むときに読み直す。
+     **タブへ戻ってきた人がいちばん古いものを見ている**ので、そこで必ず1回読む。 */
+  function stale(){
+    for(const t of targetsForView()) delete loadedWeek[weekTag(t)];
+  }
+  addEventListener("visibilitychange", () => {
+    if(document.hidden || !onGas || !booted) return;
+    if(typeof view === "undefined" || view.kind === "gate" || view.kind === "tanpopo") return;
+    stale();
+    ensureWeek(() => { if(typeof paintSheet === "function") paintSheet(); });
+  });
+
   /* 週や年度を開くときの入口。手元では即その場で続く。
      立ち上がりの1回がまだ返っていなければ、それを待ってから読む
      （待たないと、シートの時程を知らないまま紙を組んでしまう）。 */
@@ -547,7 +588,7 @@ const Backend = (function(){
     }
   });
 
-  return {isGas, info, setNotifier, setDirtyWatcher, unsaved, prefetchWeek,
+  return {isGas, info, setNotifier, setDirtyWatcher, unsaved, prefetchWeek, watch, stale,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek};

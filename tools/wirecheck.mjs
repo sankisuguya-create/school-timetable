@@ -733,6 +733,71 @@ ok("上位に戻したので、上位か基本時間割のものが出る",
    await p.evaluate(() => cellFor(4, "p3").layer) !== "home",
    await p.evaluate(() => cellFor(4, "p3").layer));
 
+console.log("\n■ 週メモもシートへ送る");
+/* **前はこの端末にしか残らなかった。** 刷る紙は学級ごとなのに
+   週にひとつしか無く、ほかの先生にも見えなかった。 */
+await p.evaluate(() => { window.__slow = 0; window.__hang = false; window.__failWrite = false; });
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='5-2']").click(); await p.waitForTimeout(400);
+await p.evaluate(() => { window.__calls.length = 0; setMemo("下校時刻がちがう"); });
+await p.locator("#saveBtn").click(); await p.waitForTimeout(800);
+const memoSent = await p.evaluate(() =>
+  window.__calls.filter(c => c.name === "apiWriteCells").map(c => c.args[1]).flat());
+ok("メモがシートへ送られる",
+   memoSent.some(q => q.slot === "memo" && q.layer === "home" && q.target === "5-2"
+                   && q.title.indexOf("下校時刻") >= 0), memoSent);
+ok("月曜の行として送る（週にひとつ）",
+   memoSent.some(q => q.slot === "memo" && q.date === "2026-09-07"), memoSent);
+ok("開き直しても残っている", await (async () => {
+     await p.reload(); await p.waitForTimeout(1400);
+     await p.locator(".tile[data-c='5-2']").click(); await p.waitForTimeout(500);
+     return (await p.locator("#sheet .foot .t").innerText()).indexOf("下校時刻") >= 0;
+   })() === true, await p.locator("#sheet .foot .t").innerText());
+ok("ほかの学級の紙には出ない", await (async () => {
+     await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+     await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(400);
+     return (await p.locator("#sheet .foot .t").innerText()).indexOf("下校時刻") < 0;
+   })() === true);
+
+console.log("\n■ 開きっぱなしの画面も、たまに読み直す");
+/* **前は一度読んだら二度と読み直さなかった。** 30人が同じ週を触る運用なのに、
+   タブを開いたままの担任には、その日ほかの誰が何を入れても映らなかった。 */
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(500);
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(500);
+ok("すぐ開き直したときは読みに行かない（続けて見るたびに待たせない）",
+   (await calls()).filter(n => n === "apiReadWeek").length === 0, await calls());
+ok("見張りの口がある（開きっぱなしでも読み直す）",
+   await p.evaluate(() => typeof Backend.watch === "function"
+                       && typeof Backend.stale === "function") === true);
+ok("控えを古くすれば、開くときに読み直す", await (async () => {
+     await p.evaluate(() => { window.__calls.length = 0; Backend.stale(); });
+     await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+     await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(700);
+     return (await calls()).filter(n => n === "apiReadWeek").length > 0;
+   })() === true, await calls());
+/* ほかの先生が入れたことにして、読み直しで映るかを見る */
+await p.evaluate(() => {
+  const st = window.__sheet();
+  const key = ["2026", "home", "5-1"].join("\u0001");
+  const bank = st[key] || (st[key] = {});
+  bank["2026-09-09|p2"] = {title:"ほかの人が入れた", note:"", subject:null,
+                           sp:"", at:1700000009999, by:"inoue@edu.nishi.or.jp"};
+  window.__sheetSet(st);
+});
+/* タブへ戻ってきた形を作る（headless では hidden にならないので、
+   同じ道を通す：控えを古くしてから読み直す） */
+await p.locator("#saveBtn").click(); await p.waitForTimeout(600);
+await p.evaluate(() => { Backend.stale();
+  document.dispatchEvent(new Event("visibilitychange", {bubbles:true})); });
+await p.waitForTimeout(1200);
+ok("いったん離れて戻ると、ほかの人の書き込みが映る",
+   (await p.locator("#sheet .cell[data-d='2'][data-s='p2'] .t").innerText())
+     .indexOf("ほかの人が入れた") >= 0,
+   await p.locator("#sheet .cell[data-d='2'][data-s='p2'] .t").innerText());
+
 console.log("\n■ 古い週の返事が、いま見ている週を消さない");
 /* **返事の順序は入れ替わる。** 今週ぶんの返事が来る前に来週へ動くと、
    遅れて届いた今週ぶんが、来週の中身を上書きしてしまう形があった。 */

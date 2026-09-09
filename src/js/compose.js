@@ -185,6 +185,46 @@ function planState(cls){
   return "base";                   /* どの層からも1つも入っていない */
 }
 
+/* ── 週メモ ────────────────────────────────────
+   **刷る紙は学級ごとなので、メモも学級ごとに持つ。**
+   前は週にひとつしか無かったので、3-1 で書いたメモが 3-2 の紙にも出た。
+   しかもこの端末にしか残らず、ほかの先生には見えなかった。
+
+   持ち方はふつうのコマと同じ（時程のIDに `memo` を使い、月曜の行に置く）。
+   専用の入れ物を作らないので、送る・読む・年度の退避が、そのまま全部効く。
+   専科の週だけは置き場が無いので、全校のシートに `memo:教科コード` で置く。 */
+function memoAt(){
+  if(view.kind === "class")   return {layer:"home",   target:view.cls,   slot:"memo"};
+  if(view.kind === "grade")   return {layer:"grade",  target:view.grade, slot:"memo"};
+  if(view.kind === "school")  return {layer:"school", target:"",         slot:"memo"};
+  if(view.kind === "special") return {layer:"school", target:"",         slot:"memo:" + view.sp};
+  return null;
+}
+function memoBank(a){
+  const w = week();
+  if(a.layer === "school") return w.school;
+  if(a.layer === "grade")  return (w.grade[a.target] || (w.grade[a.target] = {}));
+  return (w.home[a.target] || (w.home[a.target] = {}));
+}
+function memoOf(){
+  const a = memoAt();
+  if(!a) return "";
+  const e = memoBank(a)[ck(0, a.slot)];
+  if(e && e.title) return e.title;
+  /* 前の版はこの端末に `memos` として持っていた。捨てずに読む */
+  return (week().memos || {})[viewName()] || "";
+}
+function setMemo(html){
+  const a = memoAt();
+  if(!a) return false;
+  const bank = memoBank(a), key = ck(0, a.slot), t = clean(html);
+  if(!plain(t).trim() && !/<a\b/i.test(t)) delete bank[key];
+  else bank[key] = {title:t, note:"", subject:null, by:myEmail(), at:Date.now()};
+  if((week().memos || {})[viewName()] !== undefined) delete week().memos[viewName()];
+  Backend.cellChanged(a.layer, a.target, 0, a.slot);
+  return save();
+}
+
 /* ── その日の形（ふつう／特別校時／休み） ──────
    **学校全体で決まるもの**なので、全学年の面からだけ入れられる。
    持ち方はふつうのコマと同じ（週案 全校 シートの1行・時程は `day`）。
@@ -234,18 +274,26 @@ function targetStore(){
    いま書こうとしているコマに、**別の人が入れた予定**が出ているか。
    基本時間割は数えない（それを直すのがふだんの作業で、毎回聞かれても困る）。
    戻すのは [{cls, from}]。空なら誰の予定も潰さない。 */
-function wouldOverwrite(d, s){
+/* forCls = 専科のとき、これから入れる行き先のクラス。
+   **専科もここを通す。** 前は専科だけ素通りしていたので、音楽専科が
+   2-1 の担任の「国語」を潰しても、書く側には何も出なかった
+   （された側の担任には次に開いたときに出るので、片肺になっていた）。 */
+function wouldOverwrite(d, s, forCls){
   const hit = [], layer = layerOfStore(), target = targetOfStore();
-  const list = view.kind === "special" ? []
+  const list = view.kind === "special" ? (forCls ? [forCls] : [])
              : view.kind === "class" && scope === "self" ? [view.cls]
              : view.kind === "class" && scope === "grade" ? classesOfGrade(gradeOf(view.cls))
              : view.kind === "class" ? allClasses()
              : view.kind === "grade" ? classesOfGrade(view.grade)
              : allClasses();
   for(const c of list){
+    if(allClasses().indexOf(c) < 0) continue;          /* 編成に無いクラス */
     const cur = compose(c, d, s);
     if(cur.layer === "base") continue;                 /* 基本時間割は潰してよい */
-    if(cur.layer === layer && sameTarget(cur.layer, c, target)) continue;  /* 自分の続き */
+    /* 自分の続き。専科は「自分が受け持っているコマか」で見る */
+    if(view.kind === "special"){
+      if(cur.layer === "special" && cur.sp === view.sp) continue;
+    } else if(cur.layer === layer && sameTarget(cur.layer, c, target)) continue;
     const t = plain(cur.title).trim();
     /* **自分が入れたものは聞かない。** 自分の予定を自分で直すたびに
        窓が出ると、窓を読まずに閉じる癖がつく。それでは他人の予定も守れない */

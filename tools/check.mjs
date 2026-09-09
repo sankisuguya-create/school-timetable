@@ -378,6 +378,93 @@ await p.evaluate(() => {
   save(); paintSheet();
 });
 
+console.log("\n■ 専科が他人の予定を潰すときも、書く前に聞く");
+/* 前の節で開いたままの窓と、答えの覚えを片づけてから始める */
+await p.evaluate(() => {
+  for(const d of document.querySelectorAll("dialog[open]")) d.close();
+  for(const k in askedCells) delete askedCells[k];
+});
+await p.waitForTimeout(200);
+/* **前は専科だけ素通りしていた。** された側の担任には次に開いたときに
+   出るので、片肺になっていた（docs/spec.md 3節は両側に出すと決めている）。 */
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='2-1']").click(); await p.waitForTimeout(400);
+await p.evaluate(() => {
+  /* 前の節で入れた専科のコマを片づけてから始める */
+  for(const c of allClasses()) delete (week().special[c] || {})["1|p2"];
+  writeCell(1, "p2", {title:"国語", subject:"kokugo"});
+  /* 担任が入れたことにする（自分が入れたものでは聞かないので） */
+  (week().home["2-1"] || {})["1|p2"].by = "hoka@edu.nishi.or.jp";
+  save();
+});
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile.sp[data-s='ongaku']").click(); await p.waitForTimeout(400);
+ok("専科の週で、行き先のクラスの予定を数える",
+   await p.evaluate(() => wouldOverwrite(1, "p2", "2-1").length) === 1,
+   await p.evaluate(() => wouldOverwrite(1, "p2", "2-1")));
+ok("行き先を渡さなければ、誰も潰さない（コマだけでは相手が決まらない）",
+   await p.evaluate(() => wouldOverwrite(1, "p2").length) === 0);
+/* パレットは「先にコマを選ぶ」。専科の週の、そのコマを選んでから押す */
+await p.locator("#sheet .cell[data-d='1'][data-s='p2'] .t").click();
+await p.waitForTimeout(200);
+await p.locator(".pal[data-v='2-1']").click(); await p.waitForTimeout(400);
+ok("クラスを落とすと窓が出る", await p.locator("#swDlg").evaluate(d => d.open) === true);
+ok("誰の何を潰すのかを言う",
+   (await p.locator("#swList").innerText()).indexOf("国語") >= 0
+   && (await p.locator("#swList").innerText()).indexOf("2-1") >= 0,
+   await p.locator("#swList").innerText());
+ok("既定は「変更しない」",
+   await p.evaluate(() => document.activeElement && document.activeElement.id) === "swNo");
+await p.locator("#swNo").click(); await p.waitForTimeout(250);
+ok("「変更しない」なら入らない",
+   await p.evaluate(() => plain(ownCell(1, "p2").title)) === "",
+   await p.evaluate(() => ownCell(1, "p2")));
+await p.locator("#sheet .cell[data-d='1'][data-s='p2'] .t").click();
+await p.waitForTimeout(200);
+await p.locator(".pal[data-v='2-1']").click(); await p.waitForTimeout(400);
+await p.locator("#swYes").click(); await p.waitForTimeout(400);
+ok("「上書きする」なら入る",
+   await p.evaluate(() => plain(ownCell(1, "p2").title)) === "2-1",
+   await p.evaluate(() => ownCell(1, "p2")));
+ok("自分が受け持っているコマでは、もう聞かない",
+   await p.evaluate(() => wouldOverwrite(1, "p2", "2-1").length) === 0);
+await p.evaluate(() => {
+  for(const c of allClasses()) delete (week().special[c] || {})["1|p2"];
+  delete (week().home["2-1"] || {})["1|p2"];
+  save();
+});
+
+console.log("\n■ 上書きの確認は、入れる先ごとに聞く");
+await p.evaluate(() => {
+  for(const d of document.querySelectorAll("dialog[open]")) d.close();
+  for(const k in askedCells) delete askedCells[k];
+});
+await p.waitForTimeout(200);
+/* **前は画面とコマだけを鍵にしていた。** «この学級のみ» で1回答えると、
+   同じコマを «全校に反映» で入れるときには聞かれなかった。
+   効く範囲が1クラスから20クラスへ変わっているのに、無言で通っていた。 */
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='3-2']").click(); await p.waitForTimeout(400);
+await p.evaluate(() => {
+  writeCell(2, "p4", {title:"体育", subject:"taiiku"});
+  (week().home["3-2"] || {})["2|p4"].by = "hoka@edu.nishi.or.jp";
+  save();
+});
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(400);
+ok("鍵に入れる先が入っている", await p.evaluate(() => {
+     scope = "self";  const a = [viewName(), layerOfStore(), targetOfStore(), "", ck(2,"p4")].join("|");
+     scope = "school"; const b = [viewName(), layerOfStore(), targetOfStore(), "", ck(2,"p4")].join("|");
+     scope = "self";
+     return a !== b;
+   }) === true);
+ok("この学級のみでは、3-2 の予定を潰さない",
+   await p.evaluate(() => { scope = "self"; return wouldOverwrite(2, "p4").length; }) === 0);
+ok("全校に反映にすると、3-2 の予定を潰すと分かる",
+   await p.evaluate(() => { const n = (scope = "school", wouldOverwrite(2, "p4").length);
+                            scope = "self"; return n; }) > 0);
+await p.evaluate(() => { delete (week().home["3-2"] || {})["2|p4"]; save(); });
+
 console.log("\n■ 上書きされた側への知らせ");
 /* 3-3 の担任が入れた「国語」は、学年の「体育」に上書きされている */
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
@@ -1044,18 +1131,67 @@ const fsN = await p.evaluate(() => parseFloat(getComputedStyle(
 ok("備考は題名の 0.6 〜 0.9 倍", fsN > fsT * 0.6 && fsN < fsT * 0.95, [fsT, fsN]);
 ok("前（7pt）より大きい", fsN >= 14, fsN);
 
-console.log("\n■ 週メモは、学級ごとに持つ");
+console.log("\n■ 週メモは、学級ごとに持ち、シートへ送る");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-3']").click(); await p.waitForTimeout(400);
-await p.evaluate(() => { const w = week(); w.memos = {}; w.memos["3-3"] = "3-3のメモ"; buildSheet(); });
+await p.evaluate(() => { setMemo("3-3のメモ"); buildSheet(); });
 await p.waitForTimeout(200);
 ok("3-3 で書いたメモが 3-3 に出る",
    (await p.locator("#sheet .foot .t").innerText()).indexOf("3-3のメモ") >= 0);
+ok("その学級のコマとして持つ（時程は memo・月曜の行）",
+   await p.evaluate(() => !!(week().home["3-3"] || {})["0|memo"]) === true,
+   await p.evaluate(() => (week().home["3-3"] || {})["0|memo"]));
+ok("誰が書いたかも残る",
+   await p.evaluate(() => "by" in ((week().home["3-3"] || {})["0|memo"] || {})) === true);
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(400);
 ok("ほかの学級の紙には出ない",
    (await p.locator("#sheet .foot .t").innerText()).indexOf("3-3のメモ") < 0,
    await p.locator("#sheet .foot .t").innerText());
+ok("学年の面は学年のシートに持つ", await (async () => {
+     await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+     await p.locator(".master[data-g='3']").click(); await p.waitForTimeout(400);
+     await p.evaluate(() => setMemo("3年のメモ"));
+     return await p.evaluate(() => plain(((week().grade["3"] || {})["0|memo"] || {}).title || ""));
+   })() === "3年のメモ");
+ok("専科の面は全校のシートに、教科コードを付けて持つ", await (async () => {
+     await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+     await p.locator(".tile.sp[data-s='ongaku']").click(); await p.waitForTimeout(400);
+     await p.evaluate(() => setMemo("音楽のメモ"));
+     return await p.evaluate(() => plain((week().school["0|memo:ongaku"] || {}).title || ""));
+   })() === "音楽のメモ");
+ok("メモは紙のコマには出てこない（時程の行が無いので）",
+   await p.evaluate(() => SLOTS.every(s => s.id !== "memo")) === true);
+await p.evaluate(() => {
+  delete (week().home["3-3"] || {})["0|memo"];
+  delete (week().grade["3"] || {})["0|memo"];
+  delete week().school["0|memo:ongaku"];
+  save();
+});
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(400);
+
+console.log("\n■ 時数の列は、時程シートの行を全部出す");
+/* **前は「もう列のずれが入っているもの」だけを出していた。**
+   時程シートのIDを既定から変えた学校では一覧に出ず、
+   時数のコピーが空のまま画面からは直せなかった。 */
+await p.locator("[data-act='tally']").click(); await p.waitForTimeout(300);
+ok("時程の行の数だけ、列のずれの欄が出る",
+   await p.locator("#tyCols input").count() === await p.evaluate(() => SLOTS.length),
+   [await p.locator("#tyCols input").count(), await p.evaluate(() => SLOTS.length)]);
+ok("列のずれを持っていない行にも欄が出る（放課後）",
+   await p.locator("#tyCols input[data-s='after']").count() === 1);
+ok("空欄にすると、その校時は写さない", await (async () => {
+     const before = await p.evaluate(() => tallyGrid()[0].join("|"));
+     await p.locator("#tyCols input[data-s='p1']").fill(""); await p.waitForTimeout(250);
+     const after = await p.evaluate(() => "p1" in db.settings.tally.cols);
+     await p.locator("#tyCols input[data-s='p1']").fill("2"); await p.waitForTimeout(250);
+     return after === false && before.length > 0;
+   })() === true);
+ok("入れれば、その校時が写るようになる",
+   await p.evaluate(() => db.settings.tally.cols.p1) === 2,
+   await p.evaluate(() => db.settings.tally.cols));
+await p.locator("#tallyDlg .dlgx").click(); await p.waitForTimeout(250);
 
 console.log("\n■ A週・B週は日付から決まる（交互）");
 ok("9/7 の週は A週",

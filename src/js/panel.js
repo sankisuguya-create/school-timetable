@@ -85,10 +85,15 @@ function owAnswer(yes){
 
 /* 聞かずに済むときは、その場で yes を呼んで true を返す。
    聞くときは false を返し、返事が出たあとで yes / no のどちらかを呼ぶ。 */
-function okToOverwrite(d, sid, to, yes, no){
+function okToOverwrite(d, sid, to, yes, no, forCls){
   yes = yes || function(){}; no = no || function(){};
-  const hit = wouldOverwrite(d, sid);
-  const key = viewName() + "|" + ck(d, sid);
+  const hit = wouldOverwrite(d, sid, forCls);
+  /* **鍵に「入れる先」も入れる。** 前は画面とコマだけだったので、
+     «この学級のみ» で1回「上書きする」と答えると、同じコマを
+     «全校に反映» で入れるときには聞かれなかった。
+     効く範囲が1クラスから20クラスへ変わっているのに、無言で通っていた。 */
+  const key = [viewName(), layerOfStore(), targetOfStore(), forCls || "",
+               ck(d, sid)].join("|");
   if(!hit.length || askedCells[key]){ yes(); return true; }
   askOverwrite(whenLabel(d, sid), to, hit,
                () => { askedCells[key] = true; yes(); }, no);
@@ -107,9 +112,14 @@ function applyPalette(d, sid, v, e){
     return;
   }
   if(view.kind === "special"){
-    writeCell(d, sid, {cls:v});
-    paintSheet(); selectCell(d, sid, e || cellAt(d, sid));
-    toast(escText(v) + " へ行く時間にした");
+    /* **専科も、他人の予定を潰すときは聞く。** 行き先のクラスの
+       そのコマに、担任や別の専科の予定が入っていることがある */
+    const target = normCls(plain(v));
+    okToOverwrite(d, sid, v, () => {
+      writeCell(d, sid, {cls:v});
+      paintSheet(); selectCell(d, sid, e || cellAt(d, sid));
+      toast(escText(v) + " へ行く時間にした");
+    }, undefined, target);
     return;
   }
   const sub = SUB_BY_CODE[v];

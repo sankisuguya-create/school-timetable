@@ -315,7 +315,8 @@ const tallyClasses = () =>
 function tallyGrid(){
   const t = db.settings.tally;
   const list = tallyClasses(), block = Math.max(1, +t.block || 10);
-  const width = Math.max.apply(null, Object.keys(t.cols).map(k => t.cols[k])) + 1;
+  const used = Object.keys(t.cols).map(k => +t.cols[k] || 0);
+  const width = (used.length ? Math.max.apply(null, used) : 0) + 1;
   const rows = [];
   for(let d = 0; d < WEEKDAYS; d++) for(let r = 0; r < block; r++){
     const line = new Array(width).fill("");
@@ -342,12 +343,22 @@ function openTallyDlg(){
   $("tyAnchor").value = t.anchor;
   $("tyCls").value    = t.classes;
   $("tyBlock").value  = t.block;
-  $("tyCols").innerHTML = "<span>列のずれ</span>" + SLOTS.filter(s => s.id in t.cols)
-    .map(s => "<label style='font-size:12px;color:var(--tx-sub)'>" + (s.tally || s.name)
-      + " <input type='number' data-s='" + s.id + "' value='" + t.cols[s.id]
-      + "' min='0' max='40' style='width:4.4em'></label>").join("");
+  /* **時程の行を全部出す。** 前は「もう列のずれが入っているもの」だけを
+     出していたので、時程シートのIDを既定から変えた学校では一覧に出ず、
+     時数のコピーが空のまま**画面からは直せなかった**。
+     空欄＝その校時は写さない。 */
+  $("tyCols").innerHTML = "<span>列のずれ</span>" + SLOTS
+    .map(s => "<label style='font-size:12px;color:var(--tx-sub)'>"
+      + escText(s.tally || s.name)
+      + " <input type='number' data-s='" + escText(s.id) + "' value='"
+      + (s.id in t.cols ? t.cols[s.id] : "")
+      + "' min='0' max='40' placeholder='—' style='width:4.4em'></label>").join("")
+    + "<span class='hint' style='flex:1 0 100%;margin:2px 0 0'>"
+    + "空欄にすると、その校時は写さない</span>";
   for(const e of $("tyCols").querySelectorAll("input")) e.oninput = () => {
-    t.cols[e.dataset.s] = +e.value || 0; save(); drawTallyPreview();
+    if(String(e.value).trim() === "") delete t.cols[e.dataset.s];
+    else t.cols[e.dataset.s] = Math.max(0, +e.value || 0);
+    save(); drawTallyPreview();
   };
   drawTallyPreview();
   $("tallyDlg").showModal();
