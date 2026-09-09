@@ -147,15 +147,21 @@ function copyBook(){
 let EMAIL = "tanaka@edu.nishi.or.jp";
 const locks = {held:0};
 
+const CFRULES = [];                      /* 入れた条件付き書式（式と背景色） */
 const sandbox = {
   console,
   Logger: {log(){}},
   Session: {getActiveUser: () => ({getEmail: () => EMAIL})},
   SpreadsheetApp: {
     BorderStyle: {SOLID_THICK: "SOLID_THICK"},
+    /* **条件付き書式の式を覚える。** 塗り分けの決まりはこの式にしかないので、
+       捨てると「白になるはずのコマが灰色のまま」を検査で見つけられない。 */
     newConditionalFormatRule(){
-      const r = {whenFormulaSatisfied(){ return r; }, setBackground(){ return r; },
-                 setRanges(){ return r; }, build(){ return {}; }};
+      const got = {formula:"", bg:""};
+      const r = {whenFormulaSatisfied(f){ got.formula = f; return r; },
+                 setBackground(c){ got.bg = c; return r; },
+                 setRanges(){ return r; },
+                 build(){ CFRULES.push(got); return got; }};
       return r;
     },
     getActive: () => activeBook(),
@@ -832,6 +838,27 @@ ok("2人ぶんの列に同じ授業が入る",
    String(G2[2][2]) === "国語" && String(G2[2][3]) === "国語", G2[2].slice(0, 5));
 ok("担当者・場所の行は空のまま（たんぽぽ担当が書く）",
    String(G2[3][2]) === "", G2[3].slice(0, 5));
+
+/* **たんぽぽの中で受けるコマを白に戻す条件付き書式。**
+   決まりはこの式にしかない。式が抜けると、たんぽぽ担当は自分の持ちコマを
+   灰色の中から探すことになる。 */
+const white = CFRULES.filter(r => r.bg === "#FFFFFF");
+ok("白に戻す書式を、授業名の行の数だけ入れる", white.length === 6 * 5, white.length);
+ok("担当者・場所が「た」で始まると白",
+   white[0].formula.indexOf('LEFT(B4,1)="た"') >= 0, white[0].formula);
+ok("授業名が「国語」で始まっても白",
+   white[0].formula.indexOf('LEFT(B3,2)="国語"') >= 0, white[0].formula);
+ok("「算数」「自立」も同じ",
+   white[0].formula.indexOf('LEFT(B3,2)="算数"') >= 0
+   && white[0].formula.indexOf('LEFT(B3,2)="自立"') >= 0, white[0].formula);
+ok("どれか1つ当てはまれば白（OR）",
+   white[0].formula.indexOf("=OR(") === 0, white[0].formula);
+ok("**前方一致で見る。**「外国語」は「国語」を含むので、含むかどうかでは見ない",
+   white[0].formula.indexOf("SEARCH") < 0 && white[0].formula.indexOf("FIND") < 0
+   && white[0].formula.indexOf("COUNTIF") < 0, white[0].formula);
+ok("授業名は自分の行、担当者・場所はすぐ下の行を見る",
+   white[1].formula.indexOf('LEFT(B6,1)="た"') >= 0
+   && white[1].formula.indexOf('LEFT(B5,2)="国語"') >= 0, white[1].formula);
 (function(){
   const at = ev('Sheets.head("設定").at');
   for(const row of SHEETS["設定"])

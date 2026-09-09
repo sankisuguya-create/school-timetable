@@ -273,12 +273,13 @@ const Sheets = (function(){
   /* たんぽぽ時間割の塗り分け。**モノクロ印刷で見分けるための色。**
        このサイトから入れたコマ  … 灰色
        担当者・場所が「た」で始まる … 白（たんぽぽの中で受ける授業）
+       授業名が 国語・算数・自立 で始まる … 白（同上。TANPOPO_OWN）
      灰は #DCDCDC。白との明るさの差が 1.4 倍あり、黒い字は 12.7:1 で読める。
      #F2F2F2 まで薄くすると差が 1.1 倍しかなく、トナーを節約する設定の
      プリンタや白黒コピーで消える（実測して落とした）。
 
      **この色はこちらが塗らない。** たんぽぽ時間割の側の条件付き書式
-     （すぐ下の担当者・場所が「た」で始まるか）が塗る。
+     （すぐ下の担当者・場所が「た」で始まるか、授業名が TANPOPO_OWN で始まるか）が塗る。
      こちらが塗ると、たんぽぽ担当が担当者・場所を直したあとに色と中身が食い違う。
      ここに残しているのは、シート側の書式を作るときの値の控え（docs/setup.md Step 8）。 */
   const TANPOPO_FILL = {
@@ -291,6 +292,15 @@ const Sheets = (function(){
     evenImported: "#C3D2E2",   /* 偶数組の授業名の行 */
     evenBody:     "#EDF2F8"    /* 偶数組のそれ以外の行 */
   };
+
+  /* **たんぽぽの中で受ける授業の名前。** 授業名がこれで始まるコマも白にする。
+     担当者・場所を直す前でも、たんぽぽ担当が自分の持ちコマを見つけられる。
+
+     **前方一致にする。** 「含むか」で見ると **「外国語」が「国語」を含む**ので、
+     5・6年の外国語がすべて白くなる。「国語 音読テスト」のように書き足された
+     コマは白にしたいので、完全一致でもない。
+     画面の下見も同じ規則で塗る（→ src/js/tanpopo.js TANPOPO_OWN）。 */
+  const TANPOPO_OWN = ["国語", "算数", "自立"];
 
   function asClass(v){
     if(isDate(v)) return (v.getMonth() + 1) + "-" + v.getDate();
@@ -405,7 +415,8 @@ const Sheets = (function(){
              .map(row => row.map(v => isDate(v) ? asClass(v) : String(v == null ? "" : v)));
   }
 
-  return {SPEC, NAMES, PASTE, CLASS_COLS, TANPOPO_FILL, asClass, isDate, readGrid,
+  return {SPEC, NAMES, PASTE, CLASS_COLS, TANPOPO_FILL, TANPOPO_OWN,
+          asClass, isDate, readGrid,
           book, bookName, stash, shapeOk, shapeError, readAllSoft,
           PLAN_PREFIX, PLAN_ALL, PLAN_COLS, planName, ensurePlan, readPlan, writePlan,
           planNames, planMap,

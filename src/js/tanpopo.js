@@ -25,6 +25,13 @@ const TANPOPO_COLS = [
 ];
 /* 担当者・場所の見本。**実物ではシートのその行を読む。**
    ここは、塗りがどう決まるかを見せるための仮置き。 */
+/* **たんぽぽの中で受ける授業の名前。** 授業名がこれで始まるコマは白。
+   シート側の条件付き書式と同じ規則にする（→ gas/Sheets.gs TANPOPO_OWN）。
+   ずれると、下見で見た色と出したあとの色が食い違う。
+   前方一致にする理由：「含むか」で見ると「外国語」が「国語」を含む。 */
+const TANPOPO_OWN = ["国語", "算数", "自立"];
+const tpOwnTitle = t => TANPOPO_OWN.some(w => String(t || "").indexOf(w) === 0);
+
 const TANPOPO_DUTY = ["交：丸山", "た：桝村", "交：星川", "た：西本",
                       "", "交：朝倉", "支：大屋", "た：安部"];
 /* たんぽぽ時間割は1日6校時ぶんの行を持っている。
@@ -150,8 +157,10 @@ function tanpopoCell(colIdx, col, slotId){
   if(allClasses().indexOf(col.cls) < 0) return {fill:"none", duty, why:"編成に無いクラス"};
   if(!tpHasCls(col.cls))                return {fill:"none", duty, why:"選んでいない交流級"};
   const t = plain(compose(col.cls, tpDay, slotId).title).trim();
-  /* **全部入れる。** 塗りはシート側の条件付き書式が担当者・場所を見て決める */
-  return {fill: duty.charAt(0) === "た" ? "own" : "imported",
+  /* **全部入れる。** 塗りはシート側の条件付き書式が決める。
+     ここは同じ規則で下見を出すだけ（担当者・場所が「た」か、授業名が
+     たんぽぽで受けるものか）。 */
+  return {fill: (duty.charAt(0) === "た" || tpOwnTitle(t)) ? "own" : "imported",
           title: t, empty: !t, duty};
 }
 
@@ -185,7 +194,7 @@ function drawTanpopo(){
   $("tpGrid").innerHTML = "<table class='tp'>" + head + body + "</table>";
   $("tpSum").innerHTML =
       "<span class='k f-imported'></span>入れる（灰） <b>" + imported + "</b>　"
-    + "<span class='k f-own'></span>入れる（担当が「た」なので白） <b>" + own + "</b>　"
+    + "<span class='k f-own'></span>入れる（たんぽぽで受けるので白） <b>" + own + "</b>　"
     + "<span class='k f-none'></span>書かない <b>" + none + "</b>";
 }
 
@@ -292,7 +301,8 @@ function buildShape(){
     + "（合わせて " + n + " 列）\n"
     + "・偶数の組の列には地の色を敷き、組の境目に太い縦線を引きます\n"
     + "・1日16行 × 5日。各コマは 授業名 と 担当者・場所 の2行\n"
-    + "・授業名の行は灰色。担当者・場所が「た」で始まると白に戻る書式も入れます\n\n"
+    + "・授業名の行は灰色。担当者・場所が「た」で始まるか、授業名が "
+    + TANPOPO_OWN.join("・") + " で始まると白に戻る書式も入れます\n\n"
     + "いまのシートは<消しません>。名前を変えて残します。\n\nつづけますか？");
   if(!yes) return;
   $("tpShapeOut").innerHTML = "<div class='box ok'>作っています…</div>";

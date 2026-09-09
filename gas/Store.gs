@@ -818,7 +818,12 @@ const Store = (function(){
     for(const c of even)
       nw.getRange(1, c, rows.length, 1).setBackground(F.evenBody);
 
-    /* 授業名の行は灰色。担当者・場所が「た」で始まる列だけ、条件付き書式で白に戻す */
+    /* 授業名の行は灰色。**たんぽぽの中で受けるコマだけ、条件付き書式で白に戻す。**
+       白にするのは次のどちらか。
+         ・すぐ下の担当者・場所が「た」で始まる（担当が自分で直したコマ）
+         ・授業名そのものが 国語・算数・自立 で始まる（Sheets.TANPOPO_OWN）
+       2つめは、担当者・場所を直す前でも自分の持ちコマが白く出るようにするため。
+       **前方一致にする。** 「含むか」で見ると「外国語」が「国語」を含む。 */
     const titleOff = [1, 3, 6, 8, 12, 14];
     const rules = [];
     for(let d = 0; d < 5; d++){
@@ -828,8 +833,11 @@ const Store = (function(){
         const rng = nw.getRange(r, 2, 1, width - 1);
         rng.setBackground(F.imported);
         for(const c of even) nw.getRange(r, c).setBackground(F.evenImported);
+        const own = Sheets.TANPOPO_OWN.map(function(w){
+          return 'LEFT(B' + r + ',' + w.length + ')="' + w + '"';
+        }).join(",");
         rules.push(SpreadsheetApp.newConditionalFormatRule()
-          .whenFormulaSatisfied('=LEFT(B' + (r + 1) + ',1)="た"')
+          .whenFormulaSatisfied('=OR(LEFT(B' + (r + 1) + ',1)="た",' + own + ')')
           .setBackground(F.own).setRanges([rng]).build());
       }
       nw.getRange(top, 1, 1, width).setFontWeight("bold");
