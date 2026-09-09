@@ -351,6 +351,22 @@ ok("書いた詳細は入っている",
 ok("教科コードも引き継ぐ（時数の数え方が変わらない）",
    await p.evaluate(() => cellFor(0, "p6").subject) === "gyoji",
    await p.evaluate(() => cellFor(0, "p6").subject));
+/* **全体が入れた「体育」に担任が詳細を足す**、そのままの形で見る */
+ok("全体の「体育」に詳細を足しても、体育と教科コードが残る", await p.evaluate(() => {
+     openView({kind:"school"});
+     writeCell(2, "p5", {title:"体育", subject:"taiiku"});
+     openView({kind:"class", cls:"3-1"});
+     writeCell(2, "p5", {note:"運動場・雨なら体育館"});
+     const c = cellFor(2, "p5");
+     const got = [plain(c.title), c.subject, plain(c.note), c.layer];
+     delete (week().home["3-1"] || {})["2|p5"];
+     delete week().school["2|p5"];
+     save(); paintSheet();
+     /* 上書きの知らせが出ていたら閉じる（あとの検査の邪魔をしない） */
+     for(const d of document.querySelectorAll("dialog[open]")) d.close();
+     return JSON.stringify(got);
+   }) === JSON.stringify(["体育", "taiiku", "運動場・雨なら体育館", "home"]),
+   await p.evaluate(() => cellFor(2, "p5")));
 ok("紙の上でも題名が消えていない",
    (await p.locator("#sheet .cell[data-d='0'][data-s='p6'] .t").innerText())
      .indexOf("全校朝会") >= 0,
@@ -551,6 +567,57 @@ ok("畳んだ説明は開ける", await (async () => {
 ok("出す先のシート名を面にも出す",
    /\d+月\d+週/.test(await p.locator("#tpCount").innerText()),
    await p.locator("#tpCount").innerText());
+
+console.log("\n■ A週・B週の「ー」は、片方だけの授業なし");
+/* **つないだマスの空欄と、人が書いた「ー」を分ける。**
+   同じ扱いにすると、A＝国語／B＝「ー」を「B週も国語」に埋めてしまい、
+   授業の無い校時に授業が入る（落ちないので気づかない）。 */
+ok("A=国／B=ー は、A週だけ国語", await p.evaluate(() => {
+     const g = [["", "", "月", "", "", ""],
+                ["", "", "1", "", "2", ""],
+                ["", "", "A", "B", "A", "B"],
+                ["3-1", "", "国", "ー", "算", "体"]];
+     const r = parseFixed(g), c = r.classes["3-1"];
+     return [ (c.A["0|p1"] || {}).title || "", (c.B["0|p1"] || {}).title || "" ];
+   }).then(v => JSON.stringify(v)) === '["国語",""]',
+   await p.evaluate(() => {
+     const g = [["", "", "月", "", "", ""], ["", "", "1", "", "2", ""],
+                ["", "", "A", "B", "A", "B"], ["3-1", "", "国", "ー", "算", "体"]];
+     const c = parseFixed(g).classes["3-1"];
+     return [(c.A["0|p1"]||{}).title, (c.B["0|p1"]||{}).title];
+   }));
+ok("A=国／B=空欄 は、今までどおり両方とも国語", await p.evaluate(() => {
+     const g = [["", "", "月", "", "", ""], ["", "", "1", "", "2", ""],
+                ["", "", "A", "B", "A", "B"], ["3-1", "", "国", "", "算", "体"]];
+     const c = parseFixed(g).classes["3-1"];
+     return [(c.A["0|p1"]||{}).title || "", (c.B["0|p1"]||{}).title || ""];
+   }).then(v => JSON.stringify(v)) === '["国語","国語"]');
+ok("A=ー／B=国 は、B週だけ国語（逆向きも同じ）", await p.evaluate(() => {
+     const g = [["", "", "月", "", "", ""], ["", "", "1", "", "2", ""],
+                ["", "", "A", "B", "A", "B"], ["3-1", "", "ー", "国", "算", "体"]];
+     const c = parseFixed(g).classes["3-1"];
+     return [(c.A["0|p1"]||{}).title || "", (c.B["0|p1"]||{}).title || ""];
+   }).then(v => JSON.stringify(v)) === '["","国語"]');
+ok("A=ー／B=ー は、どちらにも入れない", await p.evaluate(() => {
+     const g = [["", "", "月", "", "", ""], ["", "", "1", "", "2", ""],
+                ["", "", "A", "B", "A", "B"], ["3-1", "", "ー", "ー", "算", "体"]];
+     const c = parseFixed(g).classes["3-1"];
+     return !c.A["0|p1"] && !c.B["0|p1"];
+   }) === true);
+ok("全角のダッシュ（−・ｰ・〜）も「授業なし」として読む", await p.evaluate(() => {
+     return ["−", "ｰ", "〜", "—", "-"].every(mark => {
+       const g = [["", "", "月", "", "", ""], ["", "", "1", "", "2", ""],
+                  ["", "", "A", "B", "A", "B"], ["3-1", "", "国", mark, "算", "体"]];
+       const c = parseFixed(g).classes["3-1"];
+       return !c.B["0|p1"];
+     });
+   }) === true);
+ok("「ー」は読めない字として知らせない（授業なしと分かっている）",
+   await p.evaluate(() => {
+     const g = [["", "", "月", "", "", ""], ["", "", "1", "", "2", ""],
+                ["", "", "A", "B", "A", "B"], ["3-1", "", "国", "ー", "算", "体"]];
+     return parseFixed(g).unknown.join("");
+   }) === "");
 
 console.log("\n■ 固定時間割の取り込み");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);

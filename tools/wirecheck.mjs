@@ -718,6 +718,20 @@ const rev = await p.evaluate(() =>
 ok("戻したことがシートへ届く（消す指示になる）",
    rev.length > 0 && rev.some(q => q.slot === "p3" && q.layer === "home"
                                  && (q.remove || (!q.title && !q.note))), rev);
+ok("シートの側からも消えている", await p.evaluate(() => {
+     const st = window.__sheet();
+     const bank = st[["2026","home","5-3"].join("\u0001")] || {};
+     return Object.keys(bank).some(k => k.indexOf("|p3") > 0);
+   }) === false, await p.evaluate(() => window.__sheet()));
+/* **開き直しても戻ったまま。** 前はシートに行が残っていたので戻ってきた */
+await p.reload(); await p.waitForTimeout(1400);
+await p.locator(".tile[data-c='5-3']").click(); await p.waitForTimeout(500);
+ok("開き直しても、担任のコマは戻ってこない",
+   await p.evaluate(() => !((week().home["5-3"] || {})["4|p3"])) === true,
+   await p.evaluate(() => (week().home["5-3"] || {})["4|p3"]));
+ok("上位に戻したので、上位か基本時間割のものが出る",
+   await p.evaluate(() => cellFor(4, "p3").layer) !== "home",
+   await p.evaluate(() => cellFor(4, "p3").layer));
 
 console.log("\n■ 古い週の返事が、いま見ている週を消さない");
 /* **返事の順序は入れ替わる。** 今週ぶんの返事が来る前に来週へ動くと、

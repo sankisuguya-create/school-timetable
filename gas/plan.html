@@ -1163,7 +1163,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.5.0";
+let APP_VERSION = "1.5.1";
 let BUILD_DATE  = "2026-09-09";
 
 /* 時程。行を固定しない（学校ごとに違う）。
@@ -2275,10 +2275,21 @@ function fixCls(v){
 const isClsName = s => /^[1-9]-[1-9]$/.test(s);
 
 /* 1マスの値を、基本時間割の中身にする。
-   知らない字は**捨てずに題名として残し、あとで知らせる**。 */
+   知らない字は**捨てずに題名として残し、あとで知らせる**。
+
+   **空欄と「ー」を分ける。** 元の表では、A週とB週で同じ授業のところを
+   2列つないで1つのマスに見せているので、**つないだ側は空欄**になる。
+   一方「ー」は「その校時は授業が無い」と人が書いたもの。
+   同じ null で返すと、A＝国語／B＝「ー」を「B週も国語」に埋めてしまい、
+   **授業の無い校時に授業が入る**（落ちないので気づかない）。
+
+     戻り値  {title, subject}  授業
+             null              空欄（つないだマスかもしれない）
+             false             「ー」。**授業が無いと書いてある** */
 function fixCell(v, unknown){
   const s = fixNorm(v);
-  if(!s || DASHES.test(s)) return null;
+  if(!s) return null;
+  if(DASHES.test(s)) return false;
   const code = FIXED_MARK[s]
             || (SUB_BY_NAME[s] && SUB_BY_NAME[s].code)
             || (SUB_BY_CODE[s] && s);
@@ -2382,11 +2393,14 @@ function parseFixed(grid){
     else order.push(cls);
     const A = {}, B = {};
     for(const col of cols){
-      let a = fixCell(cell(r, col.a), unknown);
-      let b = fixCell(cell(r, col.b), unknown);
-      /* つないだマスは片方だけに字がある。**空いている側は同じ授業** */
-      if(a && !b) b = clone(a);
-      else if(b && !a) a = clone(b);
+      const a0 = fixCell(cell(r, col.a), unknown);
+      const b0 = fixCell(cell(r, col.b), unknown);
+      let a = a0 || null, b = b0 || null;          /* 「ー」は入れない */
+      /* つないだマスは片方だけに字がある。**空いている側は同じ授業。**
+         埋めるのは**空欄のときだけ**で、「ー」には埋めない
+         （「ー」は、その校時は授業が無いと人が書いたもの） */
+      if(a0 && b0 === null) b = clone(a0);
+      else if(b0 && a0 === null) a = clone(b0);
       const k = ck(col.d, col.slot);
       if(a) A[k] = a;
       if(b) B[k] = b;
