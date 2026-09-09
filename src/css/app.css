@@ -38,6 +38,12 @@ button,select,input,textarea{font:inherit;color:inherit}
 .nav[aria-current=true] svg{opacity:1}
 .side hr{border:0;border-top:1px solid var(--line-soft);margin:10px 6px}
 .side .wk{display:flex;flex-direction:column;gap:7px;padding:0 4px}
+/* 「自動に戻す」。**手で変えた週にだけ出る。** 出しっぱなしにすると、
+   押す必要のないものが毎週目に入る */
+.abauto{border:1px solid var(--line);border-radius:9px;background:var(--card);
+  color:var(--ink-link);font-size:11.5px;padding:3px 8px;cursor:pointer;
+  font-family:inherit;align-self:flex-start}
+.abauto:hover{border-color:var(--ink-link)}
 .side .pill{justify-content:space-between}
 .side .pill .date{font-size:14px;padding:4px 6px}
 .side .wkrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -99,8 +105,16 @@ button,select,input,textarea{font:inherit;color:inherit}
 /* たんぽぽの面。週案の紙ではないので、紙と入れ替えて出す */
 .tpview{grid-area:1/1/2/2;overflow:auto;padding:22px 26px;display:flex;
   flex-direction:column;gap:18px;min-height:0}
-.tphead h2{margin:0 0 6px;font-size:19px}
-.tphead p{margin:0;font-size:12.5px;color:var(--tx-sub);line-height:1.85;max-width:70ch}
+/* **説明は畳んでおく。** 5行の説明を開いたまま置くと、毎回それを越えないと
+   組にも交流級にも手が届かない。読むのは最初の1回だけ。 */
+.tphead h2{margin:0;font-size:19px}
+.tphead details{margin:4px 0 0}
+.tphead summary{font-size:12.5px;color:var(--ink-link);cursor:pointer;
+  list-style:none;display:inline-flex;align-items:center;gap:5px;padding:2px 0}
+.tphead summary::-webkit-details-marker{display:none}
+.tphead summary::before{content:"▸";font-size:11px}
+.tphead details[open] summary::before{content:"▾"}
+.tphead p{margin:6px 0 0;font-size:12.5px;color:var(--tx-sub);line-height:1.85;max-width:70ch}
 .tphead p b{color:var(--tx)}
 .tpsel{display:flex;flex-direction:column;gap:8px}
 .tprow{display:grid;grid-template-columns:56px 1fr;gap:10px;align-items:center}
@@ -120,7 +134,11 @@ button,select,input,textarea{font:inherit;color:inherit}
 .tpchip b{font-weight:700;font-size:11.5px;color:var(--ink-link)}
 
 /* 引っぱって入れる面。左＝交流級／右＝たんぽぽの組 */
-.tpplace{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,340px);gap:18px;
+/* **左＝たんぽぽの組（出す先）／右＝交流級（入れるもの）。**
+   前は逆だった。左が6行の縦長、右が中ほどにだけ中身がある形になり、
+   目が左右を行き来するたびに高さが合わなかった。
+   出す先を先に読ませて、そこへ落とす向きにそろえる。 */
+.tpplace{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:18px;
   align-items:start}
 .tpfrom{display:flex;flex-direction:column;gap:8px}
 .tpto{display:flex;flex-direction:column;gap:8px}
@@ -152,11 +170,6 @@ button,select,input,textarea{font:inherit;color:inherit}
 .tpwarn .box b{color:var(--tx)}
 .tpwarn .box.ok{border-left-color:var(--ok,#2F6E4E);color:var(--tx-sub)}
 .tpact{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-.tpfix{border-top:1px solid var(--line);padding-top:16px;display:flex;
-  flex-direction:column;gap:10px}
-.tpfix h3{margin:0;font-size:12px;letter-spacing:.08em;color:var(--tx-sub)}
-.tpfix p{margin:0;font-size:12.5px;color:var(--tx-sub);line-height:1.85;max-width:70ch}
-.tpfix p b{color:var(--tx)}
 .tpshape{font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;
   white-space:pre-wrap;word-break:break-all}
 .hint{font-size:11.5px;color:var(--tx-sub);line-height:1.75;margin:0}
@@ -186,7 +199,7 @@ button,select,input,textarea{font:inherit;color:inherit}
   border-left:4px solid var(--cat-clash)}
 .lockmsg b{color:var(--tx)}
 /* ロック中は、紙の上でも触れないことが見て分かる */
-.sheet.locked .cell .t,.sheet.locked .cell .n,.sheet.locked .wk .t,.sheet.locked .foot .t{
+.sheet.locked .cell .t,.sheet.locked .cell .n,.sheet.locked .foot .t{
   cursor:default;background:transparent}
 .sheet.locked .cell.sel{box-shadow:inset 0 0 0 1.6px var(--cat-clash)}
 .save{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:13px;
@@ -290,7 +303,17 @@ dialog{border:1px solid var(--line);border-radius:14px;padding:0;
   max-width:min(96vw,920px);background:var(--card);color:var(--tx);
   box-shadow:0 24px 64px var(--shade-2)}
 dialog::backdrop{background:rgba(20,28,38,.42)}
-.dlg{padding:20px 22px;max-height:84vh;overflow:auto}
+/* 窓を閉じるところ。**窓枠の右上に置く。**
+   下の隅に「閉じる」を置くと、そこまで読み進めないと閉じ方が見つからない。
+   窓は上から読むので、閉じ方も上に無いと探すことになる。 */
+.dlg{padding:20px 22px;max-height:84vh;overflow:auto;position:relative}
+.dlgx{position:absolute;top:10px;right:10px;width:30px;height:30px;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);border-radius:8px;background:var(--card);
+  color:var(--tx-sub);font-size:17px;line-height:1;cursor:pointer;font-family:inherit}
+.dlgx:hover{border-color:var(--cat-clash);color:var(--cat-clash);background:var(--tint)}
+.dlgx:focus-visible{outline:2px solid var(--ink-link);outline-offset:2px}
+.dlg h2{padding-right:38px}
 .dlg h2{margin:0 0 6px;font-size:17px}
 .dlg h3{margin:16px 0 6px;font-size:13px}
 .dlg p{margin:0 0 13px;font-size:12.5px;color:var(--tx-sub);line-height:1.8}

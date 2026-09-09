@@ -18,6 +18,8 @@ const blankDb = () => ({
   v: 3,
   settings: {
     paper:"B5", margin:8, k:1, vz:100, fit:true,
+    /* A週の起点の月曜。**この週がA週で、以後1週ごとに入れ替わる**（config.js） */
+    abAnchor: AB_ANCHOR,
     tally:{ anchor:"C2", classes:"3-1,3-2,3-3", block:10,
             cols:{am2:0, p1:2, p2:4, br:6, p3:7, p4:9, lun:11, p5:12, p6:14} }
   },
@@ -237,13 +239,28 @@ function gradeOf(c){
 
 const ck = (d, s) => d + "|" + s;
 
+/* ── A週・B週 ────────────────────────────────
+   **起点の月曜から1週ごとに入れ替える。** 手で選ばせない。
+   手で選ばせていたころは、この端末だけの持ちものだったので、
+   同じ週を教員Aは A週、教員Bは B週の基本時間割で見ていた。
+   日付から決めれば、誰の画面でも同じになる（シートに持たなくてよい）。 */
+function autoVariant(mondayISO){
+  const a = parseISO(db.settings.abAnchor || AB_ANCHOR);
+  const m = parseISO(mondayISO);
+  if(!a || !m) return "A";
+  const n = Math.round((mondayOf(m) - mondayOf(a)) / (7 * 86400000));
+  return (((n % 2) + 2) % 2) === 0 ? "A" : "B";
+}
 function week(){
   const ws = Y().weeks, k = wkKey();
   let w = ws[k];
-  if(!w) w = ws[k] = {school:{}, grade:{}, special:{}, home:{}, acked:[], variant:"A"};
+  if(!w) w = ws[k] = {school:{}, grade:{}, special:{}, home:{}, acked:[]};
   for(const f of ["school","grade","special","home"]) if(!w[f]) w[f] = {};
   if(!Array.isArray(w.acked)) w.acked = [];
-  if(!w.variant) w.variant = "A";
+  /* **手で変えていない週は、そのつど日付から決め直す。**
+     控えに残った古い値を使うと、起点を直しても直らない週が残る */
+  if(!w.vset) w.variant = autoVariant(k);
+  else if(!w.variant) w.variant = autoVariant(k);
   return w;
 }
 function weekNo(){

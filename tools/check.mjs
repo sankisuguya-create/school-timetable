@@ -59,9 +59,14 @@ ok("入口からでも週を動かせる", await (async () => {
 ok("入口からでもA週B週を変えられる", await (async () => {
   await p.locator("#abB").click(); await p.waitForTimeout(200);
   const v = await p.evaluate(() => week().variant);
-  await p.locator("#abA").click(); await p.waitForTimeout(200);
+  /* **日付から決まる週へ戻しておく。** 手で変えたままにすると、
+     あとの検査が「手で変えた週」を見ることになる */
+  await p.locator("#abAuto").click(); await p.waitForTimeout(200);
   return v === "B";
 })() === true);
+ok("戻すと、日付から決まる週になる",
+   await p.evaluate(() => !week().vset && week().variant === autoVariant(wkKey())) === true,
+   await p.evaluate(() => [week().variant, autoVariant(wkKey()), !!week().vset]));
 
 console.log("\n■ 手の届くところ");
 ok("「週案」の右にグリッドメニューのボタンがある",
@@ -91,7 +96,7 @@ console.log("\n■ 週案をひらく");
 await p.locator(".tile[data-c='3-3']").click();
 await p.waitForTimeout(400);
 ok("入口が閉じる", await p.locator("#gate").isHidden());
-ok("紙が出る（11行×5日）", await p.locator("#sheet .cell").count() === 55,
+ok("紙が出る（11行×6日）", await p.locator("#sheet .cell").count() === 66,
    await p.locator("#sheet .cell").count());
 ok("放課後のほうが週メモより縦に広い（余りは放課後に回す）",
    await p.evaluate(() => {
@@ -112,7 +117,7 @@ ok("放課後を選ぶと、右も備考だけになる", await (async () => {
   return t && n;
 })() === true);
 ok("放課後は備考だけ（題名の欄を作らない）",
-   await p.locator("#sheet .cell[data-s='after'] .n").count() === 5
+   await p.locator("#sheet .cell[data-s='after'] .n").count() === 6
    && await p.locator("#sheet .cell[data-s='after'] .t").count() === 0,
    [await p.locator("#sheet .cell[data-s='after'] .n").count(),
     await p.locator("#sheet .cell[data-s='after'] .t").count()]);
@@ -250,7 +255,7 @@ await p.waitForTimeout(300);
 ok("学年ごとのクラス数を表から変えられる",
    await p.evaluate(() => classesOfGrade("4").length) === 4,
    await p.evaluate(() => classesOfGrade("4")));
-await p.locator("#rsClose").click(); await p.waitForTimeout(250);
+await p.locator("#rosterDlg .dlgx").click(); await p.waitForTimeout(250);
 
 console.log("\n■ 上書きの警告（書く側）");
 /* 学年マスターで 3年 の木3校時に「学年体育」を入れる。
@@ -322,6 +327,40 @@ await p.locator("#swNo").click(); await p.waitForTimeout(300);
 ok("«変更しない»なら、打った字ごと戻す",
    (await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText()).trim() === beforeCancel,
    await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText());
+
+console.log("\n■ 上位から降りてきたコマに、詳細だけ書いても題名は消えない");
+/* **前はここで題名が消えていた。** 全校が入れた「全校朝会」のコマに
+   担任が詳細を1字書くと、題名が空のまま「担任」として入り、
+   紙から全校朝会が消えた。書いた本人には、消したつもりが無い。 */
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".master.all").click(); await p.waitForTimeout(400);
+await p.evaluate(() => { writeCell(0, "p6", {title:"全校朝会", subject:"gyoji"}); paintSheet(); });
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(400);
+ok("全校のコマが担任の紙に出ている",
+   await p.evaluate(() => plain(cellFor(0, "p6").title)) === "全校朝会",
+   await p.evaluate(() => cellFor(0, "p6")));
+await p.evaluate(() => { writeCell(0, "p6", {note:"体育館に8:20"}); paintSheet(); });
+await p.waitForTimeout(200);
+ok("詳細だけ書いても、題名は残る",
+   await p.evaluate(() => plain(cellFor(0, "p6").title)) === "全校朝会",
+   await p.evaluate(() => cellFor(0, "p6")));
+ok("書いた詳細は入っている",
+   await p.evaluate(() => plain(cellFor(0, "p6").note)) === "体育館に8:20",
+   await p.evaluate(() => cellFor(0, "p6").note));
+ok("教科コードも引き継ぐ（時数の数え方が変わらない）",
+   await p.evaluate(() => cellFor(0, "p6").subject) === "gyoji",
+   await p.evaluate(() => cellFor(0, "p6").subject));
+ok("紙の上でも題名が消えていない",
+   (await p.locator("#sheet .cell[data-d='0'][data-s='p6'] .t").innerText())
+     .indexOf("全校朝会") >= 0,
+   await p.locator("#sheet .cell[data-d='0'][data-s='p6'] .t").innerText());
+/* 片づける。あとの検査に響かせない */
+await p.evaluate(() => {
+  delete (week().home["3-1"] || {})["0|p6"];
+  delete week().school["0|p6"];
+  save(); paintSheet();
+});
 
 console.log("\n■ 上書きされた側への知らせ");
 /* 3-3 の担任が入れた「国語」は、学年の「体育」に上書きされている */
@@ -447,62 +486,70 @@ ok("組を足せる", await (async () => {
 await p.locator("#tpSel .tpghead[data-g='1']").click(); await p.waitForTimeout(150);
 await p.locator("#tpSel .tpin[data-g='2'][data-i='0']").click(); await p.waitForTimeout(200);
 
-/* 出す。**たんぽぽ側の直しが消えること**を先に言ってから開く。 */
-let tpAsked = null;
-const onTpDialog = async d => { tpAsked = d.message(); await d.accept(); };
+/* 出す。**専用の窓で聞く。既定は「出さない」。**
+   ブラウザの confirm は Enter で「はい」に落ちるので、この面でいちばん大きく
+   動く操作には使わない（1コマの上書きと同じ作りにそろえてある）。 */
+let usedNativeConfirm = false;
+const onTpDialog = async d => { usedNativeConfirm = true; await d.dismiss(); };
 p.on("dialog", onTpDialog);
-await p.locator("#tpGo").click(); await p.waitForTimeout(500);
+await p.locator("#tpGo").click(); await p.waitForTimeout(400);
 p.off("dialog", onTpDialog);
-ok("出す前に聞く", typeof tpAsked === "string" && tpAsked.length > 0, tpAsked);
-ok("どの交流級を出すかを言う", !!tpAsked && tpAsked.indexOf("3-3") >= 0, tpAsked);
-ok("基本時間割のままのクラスも言う", !!tpAsked && tpAsked.indexOf("1-1") >= 0, tpAsked);
-ok("たんぽぽ側の直しが消えることを言う",
-   !!tpAsked && tpAsked.indexOf("消えます") >= 0, tpAsked);
+ok("ブラウザの confirm を使わない", usedNativeConfirm === false);
+ok("出す前に窓で聞く", await p.locator("#tpDlg").evaluate(d => d.open) === true);
+ok("既定は「出さない」（開いた瞬間そこに焦点がある）",
+   await p.evaluate(() => document.activeElement && document.activeElement.id) === "tpNo",
+   await p.evaluate(() => document.activeElement && document.activeElement.id));
+const tpAsked = await p.locator("#tpDlg .dlg").innerText();
+ok("出す先のシート名を言う（◯月◯週）", /\d+月\d+週/.test(tpAsked), tpAsked.slice(0, 200));
+ok("どの交流級を何人出すかを言う", tpAsked.indexOf("3-3") >= 0, tpAsked.slice(0, 300));
+ok("同じ名前のシートは残すことを言う",
+   tpAsked.indexOf("名前を変えて残す") >= 0, tpAsked.slice(0, 400));
+ok("基本時間割のままのクラスも言う",
+   (await p.locator("#tpDlgWarn").innerText()).indexOf("基本時間割") >= 0,
+   await p.locator("#tpDlgWarn").innerText());
+ok("担当者・場所の行には書かないことを言う",
+   tpAsked.indexOf("授業名の行だけ") >= 0, tpAsked.slice(0, 600));
+/* Esc で閉じても「出さない」に落ちる */
+await p.keyboard.press("Escape"); await p.waitForTimeout(200);
+ok("Esc で閉じても出さない", await p.locator("#tpDlg").evaluate(d => d.open) === false);
 
-ok("プレビューが開く", await p.locator("#tpDlg").evaluate(d => d.open) === true);
-ok("実物の列構成で出る（34列＋見出し）",
-   await p.locator("#tpGrid table tr").count() === 35,
-   await p.locator("#tpGrid table tr").count());
-const tpText = await p.locator("#tpGrid").innerText();
-const sum = await p.locator("#tpSum").innerText();
-ok("1コマがタイトルと担当者・場所の2つで出る",
-   await p.locator("#tpGrid td b, #tpGrid td i").count() > 0
-   && await p.locator("#tpGrid td u").count() > 0);
-ok("入れたコマは灰色（#DCDCDC）",
-   await p.evaluate(() => {
-     const e = document.querySelector("#tpGrid td.f-imported");
-     return e ? getComputedStyle(e).backgroundColor : "";
-   }) === "rgb(220, 220, 220)",
-   await p.evaluate(() => {
-     const e = document.querySelector("#tpGrid td.f-imported");
-     return e ? getComputedStyle(e).backgroundColor : "無し";
-   }));
-ok("担当者・場所が「た」で始まるコマは白",
-   await p.evaluate(() => {
-     const e = document.querySelector("#tpGrid td.f-own");
-     return e ? getComputedStyle(e).backgroundColor : "";
-   }) === "rgb(255, 255, 255)");
-ok("選んだ交流級の列は、空のコマも含めて全部入れる",
-   await p.evaluate(() => {
-     const cols = TANPOPO_COLS.map((c, i) => [i, c])
-       .filter(([, c]) => !c.staff && c.cls === "3-3");
-     return cols.length > 0 && cols.every(([i, c]) =>
-       tpSlots().every(s => tanpopoCell(i, c, s).fill !== "none"));
+/* 「いまの形をみる」「この形で作りなおす」は無くした。
+   出す先の形をこちらが毎週作るので、形を読み違える余地そのものが無い */
+ok("「いまの形をみる」は置かない", await p.locator("#tpShape").count() === 0);
+ok("「この形で作りなおす」も置かない", await p.locator("#tpBuild").count() === 0);
+ok("たんぽぽの面に押すものは「出す」だけ",
+   await p.locator("#tpView .tpact .btn").count() === 1,
+   await p.locator("#tpView .tpact .btn").count());
+
+/* 手元では書き込まない。**書かないことを画面に出す** */
+await p.locator("#tpGo").click(); await p.waitForTimeout(300);
+await p.locator("#tpYes").click(); await p.waitForTimeout(400);
+ok("手元では書き込まないと言う",
+   (await p.locator("#tpWarn").innerText()).indexOf("書き込まない") >= 0,
+   await p.locator("#tpWarn").innerText());
+
+console.log("\n■ たんぽぽの面は、組が左・交流級が右");
+ok("左が たんぽぽの組", await p.evaluate(() => {
+     const to = document.querySelector(".tpto").getBoundingClientRect();
+     const from = document.querySelector(".tpfrom").getBoundingClientRect();
+     return to.left < from.left;
    }) === true);
-ok("選んでいない交流級の列には書かない", tpText.indexOf("選んでいない交流級") >= 0);
-ok("支援員の列には書かない", tpText.indexOf("支援員の列") >= 0);
-ok("支援員の列そのものは8列",
-   (await p.locator("#tpGrid tr.staff").count()) === 8,
-   await p.locator("#tpGrid tr.staff").count());
-/* 編成に 4-4 を足したあとなので、4-4 の列も「編成に無い」ではなくなっている */
-ok("編成に足したクラスの列は「編成に無い」と出なくなる",
-   tpText.indexOf("編成に無いクラス") < 0, tpText.slice(0, 200));
-ok("入れる（灰）・入れる（白）・書かない の数を出す",
-   /入れる（灰）\s*\d+/.test(sum) && /白）\s*\d+/.test(sum) && /書かない\s*\d+/.test(sum), sum);
-await p.locator("#tpDays button").nth(2).click(); await p.waitForTimeout(250);
-ok("曜日を変えると中身が変わる",
-   (await p.locator("#tpGrid").innerText()) !== tpText);
-await p.locator("[data-close='tpDlg']").click(); await p.waitForTimeout(200);
+ok("組と交流級の上端がそろっている", await p.evaluate(() => {
+     const to = document.querySelector(".tpto").getBoundingClientRect();
+     const from = document.querySelector(".tpfrom").getBoundingClientRect();
+     return Math.abs(to.top - from.top) < 2;
+   }) === true);
+ok("説明は畳んである（開かないと出ない）",
+   await p.locator(".tphead details").evaluate(d => d.open) === false);
+ok("畳んだ説明は開ける", await (async () => {
+     await p.locator(".tphead summary").click(); await p.waitForTimeout(150);
+     const open = await p.locator(".tphead details").evaluate(d => d.open);
+     await p.locator(".tphead summary").click(); await p.waitForTimeout(150);
+     return open;
+   })() === true);
+ok("出す先のシート名を面にも出す",
+   /\d+月\d+週/.test(await p.locator("#tpCount").innerText()),
+   await p.locator("#tpCount").innerText());
 
 console.log("\n■ 固定時間割の取り込み");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
@@ -614,7 +661,7 @@ ok("入れると基本時間割になる",
    await p.evaluate(() => (Y().base["3-1"].B["3|p3"] || {}).title) === "音楽",
    await p.evaluate(() => Y().base["3-1"].B["3|p3"]));
 ok("入れたら窓は閉じる", await p.locator("#impDlg").evaluate(d => d.open) === false);
-await p.locator("#baseClose").click(); await p.waitForTimeout(250);
+await p.locator("#baseDlg .dlgx").click(); await p.waitForTimeout(250);
 
 console.log("\n■ 学年・全学年には「リセット」を出す");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
@@ -743,7 +790,145 @@ ok("刷るとき、選んでいる印も消える",
      return !e || getComputedStyle(e).boxShadow === "none";
    }));
 
+ok("刷るときも 月〜土の6列", await p.locator("#sheet .hd").count() === 6,
+   await p.locator("#sheet .hd").count());
+ok("刷るときも放課後の欄が6日ぶん出る",
+   await p.locator("#sheet .cell.note .n").count() === 6,
+   await p.locator("#sheet .cell.note .n").count());
+ok("刷るとき、放課後は週メモより広い（余りは放課後に回る）",
+   await p.evaluate(() => {
+     const a = document.querySelector("#sheet .cell[data-s='after']").getBoundingClientRect();
+     const f = document.querySelector("#sheet .foot").getBoundingClientRect();
+     return a.height > f.height * 2;
+   }) === true,
+   await p.evaluate(() => {
+     const a = document.querySelector("#sheet .cell[data-s='after']").getBoundingClientRect();
+     const f = document.querySelector("#sheet .foot").getBoundingClientRect();
+     return [Math.round(a.height), Math.round(f.height)];
+   }));
+/* **紙は1枚に収める。** 版面が page の高さを超えると2ページ目が出る。
+   `@page{size:B5}` は ISO B5（176×250mm）で、この設計の JIS B5（182×257mm）
+   より小さい。キーワードで書くと下がはみ出す（実際に出た）ので mm で書いている */
+ok("紙の縦が B5（JIS・257mm）の中に収まる", await p.evaluate(() => {
+     const mm = px => px / (96 / 25.4);
+     return mm(document.querySelector("#sheet").getBoundingClientRect().height) <= 257 - 16;
+   }) === true,
+   await p.evaluate(() => Math.round(
+     document.querySelector("#sheet").getBoundingClientRect().height / (96/25.4))));
+ok("@page に B5 とは書かない（CSS の B5 は ISO の 176×250mm）",
+   await p.evaluate(() => {
+     const t = (document.getElementById("pagecss") || {}).textContent || "";
+     return t.indexOf("182mm") >= 0 && t.indexOf("257mm") >= 0 && !/size:\s*B5/.test(t);
+   }) === true,
+   await p.evaluate(() => (document.getElementById("pagecss") || {}).textContent));
+ok("紙の外に置いたものは、body の高さを押し広げない（白紙の2枚目が出ない）",
+   await p.evaluate(() => {
+     const mm = px => px / (96 / 25.4);
+     return mm(document.body.getBoundingClientRect().height) <= 257 - 16 + 1;
+   }) === true,
+   await p.evaluate(() => Math.round(
+     document.body.getBoundingClientRect().height / (96/25.4))));
+
 await p.emulateMedia({media:"screen"});      /* 刷るときの見え方から画面へ戻す */
+
+console.log("\n■ 月〜土の6列。日曜は置かない");
+ok("曜日の見出しは 月・火・水・木・金・土",
+   (await p.locator("#sheet .hd").allInnerTexts()).map(t => t.slice(-1)).join("")
+     === "月火水木金土",
+   await p.locator("#sheet .hd").allInnerTexts());
+ok("日曜の欄は無い",
+   (await p.locator("#sheet").innerText()).indexOf("日曜") < 0
+   && await p.locator("#sheet .wk").count() === 0);
+ok("土の列は月〜金より狭い（月〜金の幅を痩せさせない）", await p.evaluate(() => {
+     const h = [...document.querySelectorAll("#sheet .hd")].map(e => e.getBoundingClientRect().width);
+     return h[5] < h[0] && h[0] === h[4];
+   }) === true,
+   await p.evaluate(() => [...document.querySelectorAll("#sheet .hd")]
+     .map(e => Math.round(e.getBoundingClientRect().width))));
+ok("土にも書ける（行事とオープンスクール）", await (async () => {
+     await p.evaluate(() => { writeCell(5, "p2", {title:"オープンスクール", subject:null});
+                              paintSheet(); });
+     await p.waitForTimeout(200);
+     return (await p.locator("#sheet .cell[data-d='5'][data-s='p2'] .t").innerText())
+              .indexOf("オープンスクール") >= 0;
+   })() === true);
+ok("土は基本時間割から何も降りてこない",
+   await p.evaluate(() => compose("3-3", 5, "p1").layer) === "base"
+   && await p.evaluate(() => plain(compose("3-3", 5, "p1").title)) === "",
+   await p.evaluate(() => compose("3-3", 5, "p1")));
+
+console.log("\n■ 備考の字は、題名より少し小さい程度");
+const fsT = await p.evaluate(() => parseFloat(getComputedStyle(
+  document.querySelector("#sheet .cell[data-d='0'][data-s='p1'] .t")).fontSize));
+const fsN = await p.evaluate(() => parseFloat(getComputedStyle(
+  document.querySelector("#sheet .cell[data-d='0'][data-s='p1'] .n")).fontSize));
+ok("備考は題名の 0.6 〜 0.9 倍", fsN > fsT * 0.6 && fsN < fsT * 0.95, [fsT, fsN]);
+ok("前（7pt）より大きい", fsN >= 14, fsN);
+
+console.log("\n■ 週メモは、学級ごとに持つ");
+await p.evaluate(() => { const w = week(); w.memos = {}; w.memos["3-3"] = "3-3のメモ"; buildSheet(); });
+await p.waitForTimeout(200);
+ok("3-3 で書いたメモが 3-3 に出る",
+   (await p.locator("#sheet .foot .t").innerText()).indexOf("3-3のメモ") >= 0);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(400);
+ok("ほかの学級の紙には出ない",
+   (await p.locator("#sheet .foot .t").innerText()).indexOf("3-3のメモ") < 0,
+   await p.locator("#sheet .foot .t").innerText());
+
+console.log("\n■ A週・B週は日付から決まる（交互）");
+ok("9/7 の週は A週",
+   await p.evaluate(() => autoVariant("2026-09-07")) === "A");
+ok("次の週は B週", await p.evaluate(() => autoVariant("2026-09-14")) === "B");
+ok("その次はまた A週", await p.evaluate(() => autoVariant("2026-09-21")) === "A");
+ok("前の週も B週（起点より前でも交互）",
+   await p.evaluate(() => autoVariant("2026-08-31")) === "B");
+ok("年をまたいでも交互のまま",
+   await p.evaluate(() => autoVariant("2027-03-08")) === "A"
+     || await p.evaluate(() => autoVariant("2027-03-08")) === "B");
+ok("起点は設定から動かせる", await p.evaluate(() => {
+     const keep = db.settings.abAnchor;
+     db.settings.abAnchor = "2026-09-14";
+     const v = autoVariant("2026-09-07");
+     db.settings.abAnchor = keep;
+     return v;
+   }) === "B");
+ok("ふだんは「自動に戻す」を出さない",
+   await p.locator("#abAuto").isHidden());
+ok("手で変えると、その週だけ変わる", await (async () => {
+     const before = await p.evaluate(() => week().variant);
+     await p.locator("#ab" + (before === "A" ? "B" : "A")).click();
+     await p.waitForTimeout(250);
+     return await p.evaluate(() => week().variant) !== before;
+   })() === true);
+ok("手で変えた週にだけ「自動に戻す」が出る",
+   await p.locator("#abAuto").isVisible());
+ok("「自動に戻す」で日付どおりに戻る", await (async () => {
+     await p.locator("#abAuto").click(); await p.waitForTimeout(250);
+     return await p.evaluate(() => week().variant === autoVariant(wkKey()))
+         && await p.locator("#abAuto").isHidden();
+   })() === true);
+
+console.log("\n■ 窓を閉じるところは、窓枠の右上");
+for(const [act, dlg] of [["base","baseDlg"], ["roster","rosterDlg"],
+                         ["paper","setDlg"], ["admin","adminDlg"]]){
+  await p.locator("[data-act='" + act + "']").click(); await p.waitForTimeout(250);
+  const x = p.locator("#" + dlg + " .dlgx");
+  ok(dlg + " に ✕ がある", await x.count() === 1);
+  ok(dlg + " の ✕ は窓の右上にある", await (async () => {
+       const box = await p.locator("#" + dlg + " .dlg").boundingBox();
+       const bx  = await x.boundingBox();
+       if(!box || !bx) return false;
+       return bx.y < box.y + 60 && (bx.x + bx.width) > (box.x + box.width - 60);
+     })() === true);
+  await x.click(); await p.waitForTimeout(250);
+  ok(dlg + " は ✕ で閉じる", await p.locator("#" + dlg).evaluate(d => d.open) === false);
+}
+ok("窓の下の隅に「閉じる」だけのボタンは置かない",
+   await p.evaluate(() => [...document.querySelectorAll("dialog .end .btn")]
+     .filter(b => b.textContent.trim() === "閉じる").length) === 0,
+   await p.evaluate(() => [...document.querySelectorAll("dialog .end .btn")]
+     .map(b => b.textContent.trim())));
 
 console.log("\n■ 管理・システム（版が分かる）");
 ok("版が dev のまま配られていない",
@@ -787,7 +972,7 @@ ok("手元では検査できないと言い、押せなくする",
    await p.locator("#ckGo").isDisabled() === true
    && (await p.locator("#ckStat").innerText()).indexOf("手元") >= 0,
    await p.locator("#ckStat").innerText());
-await p.locator("#adminDlg [data-close]").click();
+await p.locator("#adminDlg .dlgx").click();
 await p.waitForTimeout(200);
 
 console.log("\n■ 手元だけで使っているときは、古い週を捨てない");

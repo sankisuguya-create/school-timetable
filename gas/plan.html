@@ -98,6 +98,12 @@ button,select,input,textarea{font:inherit;color:inherit}
 .nav[aria-current=true] svg{opacity:1}
 .side hr{border:0;border-top:1px solid var(--line-soft);margin:10px 6px}
 .side .wk{display:flex;flex-direction:column;gap:7px;padding:0 4px}
+/* 「自動に戻す」。**手で変えた週にだけ出る。** 出しっぱなしにすると、
+   押す必要のないものが毎週目に入る */
+.abauto{border:1px solid var(--line);border-radius:9px;background:var(--card);
+  color:var(--ink-link);font-size:11.5px;padding:3px 8px;cursor:pointer;
+  font-family:inherit;align-self:flex-start}
+.abauto:hover{border-color:var(--ink-link)}
 .side .pill{justify-content:space-between}
 .side .pill .date{font-size:14px;padding:4px 6px}
 .side .wkrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -159,8 +165,16 @@ button,select,input,textarea{font:inherit;color:inherit}
 /* たんぽぽの面。週案の紙ではないので、紙と入れ替えて出す */
 .tpview{grid-area:1/1/2/2;overflow:auto;padding:22px 26px;display:flex;
   flex-direction:column;gap:18px;min-height:0}
-.tphead h2{margin:0 0 6px;font-size:19px}
-.tphead p{margin:0;font-size:12.5px;color:var(--tx-sub);line-height:1.85;max-width:70ch}
+/* **説明は畳んでおく。** 5行の説明を開いたまま置くと、毎回それを越えないと
+   組にも交流級にも手が届かない。読むのは最初の1回だけ。 */
+.tphead h2{margin:0;font-size:19px}
+.tphead details{margin:4px 0 0}
+.tphead summary{font-size:12.5px;color:var(--ink-link);cursor:pointer;
+  list-style:none;display:inline-flex;align-items:center;gap:5px;padding:2px 0}
+.tphead summary::-webkit-details-marker{display:none}
+.tphead summary::before{content:"▸";font-size:11px}
+.tphead details[open] summary::before{content:"▾"}
+.tphead p{margin:6px 0 0;font-size:12.5px;color:var(--tx-sub);line-height:1.85;max-width:70ch}
 .tphead p b{color:var(--tx)}
 .tpsel{display:flex;flex-direction:column;gap:8px}
 .tprow{display:grid;grid-template-columns:56px 1fr;gap:10px;align-items:center}
@@ -180,7 +194,11 @@ button,select,input,textarea{font:inherit;color:inherit}
 .tpchip b{font-weight:700;font-size:11.5px;color:var(--ink-link)}
 
 /* 引っぱって入れる面。左＝交流級／右＝たんぽぽの組 */
-.tpplace{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,340px);gap:18px;
+/* **左＝たんぽぽの組（出す先）／右＝交流級（入れるもの）。**
+   前は逆だった。左が6行の縦長、右が中ほどにだけ中身がある形になり、
+   目が左右を行き来するたびに高さが合わなかった。
+   出す先を先に読ませて、そこへ落とす向きにそろえる。 */
+.tpplace{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:18px;
   align-items:start}
 .tpfrom{display:flex;flex-direction:column;gap:8px}
 .tpto{display:flex;flex-direction:column;gap:8px}
@@ -212,11 +230,6 @@ button,select,input,textarea{font:inherit;color:inherit}
 .tpwarn .box b{color:var(--tx)}
 .tpwarn .box.ok{border-left-color:var(--ok,#2F6E4E);color:var(--tx-sub)}
 .tpact{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-.tpfix{border-top:1px solid var(--line);padding-top:16px;display:flex;
-  flex-direction:column;gap:10px}
-.tpfix h3{margin:0;font-size:12px;letter-spacing:.08em;color:var(--tx-sub)}
-.tpfix p{margin:0;font-size:12.5px;color:var(--tx-sub);line-height:1.85;max-width:70ch}
-.tpfix p b{color:var(--tx)}
 .tpshape{font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace;
   white-space:pre-wrap;word-break:break-all}
 .hint{font-size:11.5px;color:var(--tx-sub);line-height:1.75;margin:0}
@@ -246,7 +259,7 @@ button,select,input,textarea{font:inherit;color:inherit}
   border-left:4px solid var(--cat-clash)}
 .lockmsg b{color:var(--tx)}
 /* ロック中は、紙の上でも触れないことが見て分かる */
-.sheet.locked .cell .t,.sheet.locked .cell .n,.sheet.locked .wk .t,.sheet.locked .foot .t{
+.sheet.locked .cell .t,.sheet.locked .cell .n,.sheet.locked .foot .t{
   cursor:default;background:transparent}
 .sheet.locked .cell.sel{box-shadow:inset 0 0 0 1.6px var(--cat-clash)}
 .save{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:13px;
@@ -350,7 +363,17 @@ dialog{border:1px solid var(--line);border-radius:14px;padding:0;
   max-width:min(96vw,920px);background:var(--card);color:var(--tx);
   box-shadow:0 24px 64px var(--shade-2)}
 dialog::backdrop{background:rgba(20,28,38,.42)}
-.dlg{padding:20px 22px;max-height:84vh;overflow:auto}
+/* 窓を閉じるところ。**窓枠の右上に置く。**
+   下の隅に「閉じる」を置くと、そこまで読み進めないと閉じ方が見つからない。
+   窓は上から読むので、閉じ方も上に無いと探すことになる。 */
+.dlg{padding:20px 22px;max-height:84vh;overflow:auto;position:relative}
+.dlgx{position:absolute;top:10px;right:10px;width:30px;height:30px;padding:0;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);border-radius:8px;background:var(--card);
+  color:var(--tx-sub);font-size:17px;line-height:1;cursor:pointer;font-family:inherit}
+.dlgx:hover{border-color:var(--cat-clash);color:var(--cat-clash);background:var(--tint)}
+.dlgx:focus-visible{outline:2px solid var(--ink-link);outline-offset:2px}
+.dlg h2{padding-right:38px}
 .dlg h2{margin:0 0 6px;font-size:17px}
 .dlg h3{margin:16px 0 6px;font-size:13px}
 .dlg p{margin:0 0 13px;font-size:12.5px;color:var(--tx-sub);line-height:1.8}
@@ -497,12 +520,14 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   --pw:182mm; --ph:257mm; --pm:8mm;      /* B5・余白。設定から動く */
   --labw:15mm;                            /* 時程の列（校時と時刻） */
   --labw-print:9mm;                       /* 刷るときは時刻を出さないので狭い */
-  --wkw:20mm;                             /* 土日の列 */
+  --satw:20mm;                            /* 土の列。**月〜金より狭い。**
+                                             土は行事しか入らないので、ここを
+                                             広げると月〜金の詳細欄がそのぶん痩せる */
   --h-head:8mm;
   --h-break:6mm;
   --h-title:8mm;
   --h-note:21mm;
-  --h-foot:10mm;   /* 週のメモ。前の半分。減らしたぶんは放課後に回した */
+  --h-foot:5mm;    /* 週のメモ。**さらに半分にした。** 減らしたぶんは放課後へ回る */
   --h-after:14mm;  /* 放課後。週メモから回したぶん、ここが縦に伸びる */
   --fs:8.5pt;
   --fs-s:6pt;
@@ -512,14 +537,18 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
      字の上下がぎりぎり枠に触れるので 5.6mm（16pt）を上限にした。 */
   --fs-t:16pt;
   --fs-b:9.5pt;    /* 朝学習・業間などの休み行。行の高さは 6mm */
-  --fs-n:7pt;      /* 詳細・備考。21mm に 6行入る大きさ */
-  --fs-a:8pt;      /* 放課後の備考。罫線 4.2mm に合わせた */
+  /* 詳細・備考。**題名（16pt）より少し小さい程度。**
+     7pt にしていたころは 21mm に 8行入ったが、職員室の明るさで読めなかった。
+     12pt なら 21mm に 4行。週案に書く詳細は「分数のたし算 ①」の1〜2行が大半で、
+     **行数より読めることのほうが効く。** */
+  --fs-n:12pt;
+  --fs-a:11pt;     /* 放課後の備考。罫線 5.2mm に合わせた */
 
   background:var(--sheet); color:var(--ink);
   width:calc(var(--pw) - var(--pm)*2);
   min-height:calc(var(--ph) - var(--pm)*2);
   display:grid;
-  grid-template-columns:calc(var(--labw)*var(--k)) repeat(5,1fr) calc(var(--wkw)*var(--k));
+  grid-template-columns:calc(var(--labw)*var(--k)) repeat(5,1fr) calc(var(--satw)*var(--k));
   border:1.2px solid var(--rule-week);
   border-radius:2px;
   box-shadow:0 1px 3px var(--shade),0 10px 28px var(--shade);
@@ -585,16 +614,13 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .cell.clash .tag{background:var(--cat-clash)}
 
 /* リンクは文字に付く。1つのコマにいくつでも */
-.cell a,.wk a,.foot a{color:var(--ink-link);text-decoration:underline;
+.cell a,.foot a{color:var(--ink-link);text-decoration:underline;
   text-decoration-color:var(--ink-link);text-underline-offset:1.5px;cursor:pointer}
 
-/* 土日の列 */
-.wk{display:flex;flex-direction:column}
-.wk .cap{font-size:calc(var(--fs-s)*var(--k));color:var(--ink-sub);text-align:center;
-  border-bottom:.6px dashed var(--rule-soft);padding:1px 0}
-.wk .t{flex:1;padding:1px calc(1.2mm*var(--k));outline:none;
-  font-size:calc(var(--fs-s)*var(--k));overflow:hidden;word-break:break-word}
-.wk .t:focus{background:#FFFBEA;box-shadow:inset 0 0 0 1.6px var(--ink-link)}
+/* 土の列。**授業は入らない。行事とオープンスクールだけ。**
+   列が狭いので、題名も詳細も小さめの字で置く（ここだけ枠に合わせて縮めない） */
+.cell.sat .t{font-size:calc(var(--fs-b)*var(--k)*var(--fit,1))}
+.cell.sat .n{font-size:calc(var(--fs-s)*var(--k))}
 
 /* 放課後。**備考だけの行。** 教科を入れるところではないので題名を作らない */
 /* 放課後。**備考だけの行。** 週メモから縦幅を回してあるので、ここが広い。
@@ -603,16 +629,14 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .cell.note{background:var(--sheet);min-height:calc(var(--h-after)*var(--k))}
 .cell.note .n{height:100%;font-size:calc(var(--fs-a)*var(--k));color:var(--ink);
   background:repeating-linear-gradient(to bottom,transparent 0,transparent
-    calc(4.2mm*var(--k) - .6px),var(--rule-soft) calc(4.2mm*var(--k)))}
+    calc(5.2mm*var(--k) - .6px),var(--rule-soft) calc(5.2mm*var(--k)))}
 
 /* 下の帯 */
 .foot{grid-column:1/8;min-height:calc(var(--h-foot)*var(--k));display:grid;
   grid-template-columns:calc(var(--labw)*var(--k)) 1fr;border-right:none}
 .foot .lab{border-right:.6px solid var(--rule)}
-.foot .t{padding:calc(1mm*var(--k)) calc(1.6mm*var(--k));outline:none;
-  font-size:calc(var(--fs-s)*var(--k));line-height:1.6;
-  background:repeating-linear-gradient(to bottom,transparent 0,transparent
-    calc(4.8mm*var(--k) - .6px),var(--rule-soft) calc(4.8mm*var(--k)))}
+.foot .t{padding:calc(.6mm*var(--k)) calc(1.6mm*var(--k));outline:none;
+  font-size:calc(8pt*var(--k));line-height:1.4}
 
 /* ── 刷るとき ─────────────────────────────────────
    画面のものは何も刷らない。層の色も印も刷らない。
@@ -626,17 +650,25 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   .lab .tm{display:none}
   /* 選んでいる印・打ち込み中の色も刷らない */
   .cell.sel{box-shadow:none}
-  .cell .t:focus,.cell .n:focus,.wk .t:focus{background:transparent;box-shadow:none}
+  .cell .t:focus,.cell .n:focus{background:transparent;box-shadow:none}
+  /* **紙の外の入れ物に、高さを持たせない。** html,body が height:100% なので、
+     そのままだと本文の高さが画面の高さになり、紙が1枚に収まっていても
+     2ページ目が出る（白紙が必ず1枚ついてくる） */
+  html,body{height:auto!important;margin:0!important;padding:0!important}
   .app,.work,.center{display:block!important;height:auto!important;overflow:visible!important}
   .stage{display:block!important;padding:0!important;overflow:visible!important;background:#fff}
   .paper{zoom:1!important}
   body{background:#fff}
-  .sheet{box-shadow:none;border-radius:0;width:auto;min-height:0;border-color:#000}
+  /* **紙の高さは page のぶんだけ取る。** 0 にすると、余りが放課後に渡らず
+     版面が下 15mm ほど空いたまま刷られる（画面では 1fr が吸っているので気づかない）。
+     枠線ぶんの 1.5mm を引いてあるのは、ぴったりだと2ページ目が出るため。 */
+  .sheet{box-shadow:none;border-radius:0;width:auto;border-color:#000;
+    min-height:calc(var(--ph) - var(--pm)*2 - 1.5mm)}
   .cell.upper,.cell.clash,.cell.drop{background:transparent;outline:none}
   .row-break,.row-break .lab{background:#EFEFEF}
   .cell.upper::before,.cell.clash::before,.tag{display:none}
   .cell.from-base .t{color:#1A1A1A;font-weight:600}
-  .cell a,.wk a,.foot a{color:#1A1A1A;text-decoration-color:#1A1A1A}
+  .cell a,.foot a{color:#1A1A1A;text-decoration-color:#1A1A1A}
 }
 /* ▲ src/css/sheet.css ▲ */
 </style>
@@ -711,9 +743,12 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
         </div>
         <div class="wkrow">
           <span class="wkno" id="weekNo"></span>
+          <!-- A週・B週は**日付から決まる**（起点の月曜から1週ごとに入れ替わる）。
+               押せば、その週だけ手で変えられる。変えたときだけ「自動に戻す」が出る -->
           <div class="seg" role="group" aria-label="基本時間割のA週・B週">
             <button id="abA" aria-pressed="true">A週</button><button id="abB">B週</button>
           </div>
+          <button class="abauto" id="abAuto" hidden title="日付から決まる週に戻す">自動に戻す</button>
         </div>
         <select class="target" id="target" aria-label="開いているもの"></select>
       </div>
@@ -775,35 +810,25 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
       <!-- たんぽぽの面。週案の紙ではないので、紙の代わりにここを出す -->
       <div class="tpview" id="tpView" hidden>
         <div class="tphead">
-          <h2>たんぽぽ</h2>
-          <p>左の<b>交流級</b>を、右の<b>たんぽぽの組</b >へ引っぱって入れる。
+        <h2>たんぽぽ</h2>
+        <details>
+          <summary>この面ですること</summary>
+          <p>右の<b>交流級</b>を、左の<b>たんぽぽの組</b>へ引っぱって入れる。
              <b>1回入れると児童1人＝出す先の1列。</b>同じ組へ2回入れれば2人。<br>
              出す先の列は<b>たんぽぽ1組・2組…の順</b>に並び、組の中はクラス順になる。
              偶数の組は地の色と太い縦線で区切る。<br>
-             <b>出したものはたんぽぽ時間割へ全部入る。</b>そのあとは、たんぽぽ担当が
-             たんぽぽ時間割の側を直していく。<br>
+             <b>出すと、たんぽぽ時間割に「9月1週」という名前のシートが1枚できる。</b>
+             同じ名前のシートがあれば、消さずに名前を変えて残す。<br>
              入れた組は<b>クラス表の「たんぽぽ交流級」欄</b>に組の番号として残る
              （<code>1</code>／<code>1,2</code>）。表から直してもよい。</p>
-        </div>
-        <div class="tpsel" id="tpSel"></div>
-        <div class="tpwarn" id="tpWarn"></div>
-        <div class="tpact">
-          <button class="btn go" id="tpGo">たんぽぽ時間割へ出す</button>
-          <span class="hint" id="tpCount"></span>
-        </div>
-
-        <!-- 出せないときは、たいてい**出す先の形**が合っていない。
-             手で整えるのをやめて、こちらで作れるようにする -->
-        <div class="tpfix">
-          <h3>出す先の形</h3>
-          <p>たんぽぽ時間割は<b>1日16行・児童ごとに1列</b>の形をしている必要がある。
-             合っていないと、日ブロックの場所も列も決められず、1コマも入らない。</p>
-          <div class="tpact">
-            <button class="btn" id="tpShape">いまの形をみる</button>
-            <button class="btn" id="tpBuild">この形で作りなおす</button>
-          </div>
-          <div class="tpwarn" id="tpShapeOut"></div>
-        </div>
+        </details>
+      </div>
+      <div class="tpsel" id="tpSel"></div>
+      <div class="tpwarn" id="tpWarn"></div>
+      <div class="tpact">
+        <button class="btn go" id="tpGo">たんぽぽ時間割へ出す</button>
+        <span class="hint" id="tpCount"></span>
+      </div>
       </div>
     </main>
 
@@ -888,7 +913,6 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
     <button class="btn" id="basePrev">前年度から写す</button>
     <button class="btn" id="baseImp">表から取り込む</button></div>
   <div id="baseGrid"></div>
-  <div class="end"><button class="btn go" id="baseClose">閉じる</button></div>
 </div></dialog>
 
 <dialog id="impDlg"><div class="dlg">
@@ -915,7 +939,6 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   <div id="impGrid" class="tpwrap"></div>
   <div class="end">
     <span class="hint" id="impCount"></span>
-    <button class="btn" id="impClose">閉じる</button>
     <button class="btn go" id="impGo" disabled>基本時間割に入れる</button></div>
 </div></dialog>
 
@@ -934,7 +957,6 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   <div class="row"><span>第1週の月曜</span>
     <input type="text" id="rsW1" size="12">
     <span style="color:var(--tx-sub);font-size:12px">時数集計表のシート名（週番号）の起点</span></div>
-  <div class="end"><button class="btn go" id="rsClose">閉じる</button></div>
 </div></dialog>
 
 <dialog id="setDlg"><div class="dlg">
@@ -952,7 +974,6 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
     <label style="display:flex;align-items:center;gap:7px;font-size:13px">
       <input type="checkbox" id="fitChk"> 画面に合わせる</label>
     <input type="range" id="vz" min="30" max="160" step="5"><span id="vzV"></span>%</div>
-  <div class="end"><button class="btn go" data-close="setDlg">閉じる</button></div>
 </div></dialog>
 
 <dialog id="tallyDlg"><div class="dlg">
@@ -967,78 +988,26 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
     <span style="color:var(--tx-sub);font-size:12px">次の曜日が始まるまでの行数</span></div>
   <div class="row" id="tyCols"></div>
   <pre class="mono" id="tyPrev"></pre>
-  <div class="end"><button class="btn" data-close="tallyDlg">閉じる</button>
-    <button class="btn go" id="tyCopy">クリップボードにコピー</button></div>
+  <div class="end"><button class="btn go" id="tyCopy">クリップボードにコピー</button></div>
 </div></dialog>
 
+<!-- たんぽぽへ出す前の確認。**既定は「出さない」。**
+     ブラウザの confirm は Enter で「はい」に落ちる。いちばん大きく動く操作を、
+     いちばん弱い止め方にしない（1コマの上書きと同じ作りにそろえる） -->
 <dialog id="tpDlg"><div class="dlg">
-  <h2>たんぽぽ時間割へ反映</h2>
-  <p>「たんぽぽ時間割」の <b>週案シート</b>に、選んだ交流級の授業名を書き込む。
-     木曜に各担任から週案を集めて金曜に打ち替える作業を、この1操作に置き換える。<br>
-     <b>出したものは全部入る。</b>そのあとは、たんぽぽ担当がたんぽぽ時間割の側を直していく。
-     <span style="color:var(--ink-alert)">もう一度出すと、たんぽぽ側で直した内容は消える。</span></p>
-
-  <h3>入るところ・入らないところ</h3>
-  <div class="row"><span>曜日</span><div class="seg" id="tpDays"></div>
-    <span id="tpSum"></span></div>
-  <div id="tpGrid" class="tpwrap"></div>
-  <p style="margin-top:10px">上が<b>タイトル（授業）</b>、下が<b>担当者・場所</b>。1コマはこの2つで1組。<br>
-     <b>灰色＝このサイトから入れたコマ。白＝たんぽぽの中で受ける授業</b>（担当者・場所の左端が「た」）。<br>
-     <b>この塗り分けはこちらが塗らない。</b>たんぽぽ時間割の側の条件付き書式が、
-     すぐ下の担当者・場所を見て決める。こちらが塗ると、たんぽぽ担当が直したあとに
-     色と中身が食い違う。<br>
-     <b>モノクロで刷ったときに一目で分かるための塗り分け</b>なので、色相は使わない。<br>
-     実物の列構成（B〜AA が児童ごとの列、AB 以降が支援員・ボランティア）。
-     <span style="color:var(--ink-alert)">担当者・場所は見本の仮置き。</span>実物ではシートのその行を読む。</p>
-
-  <hr>
-  <h3>シートの形（1日16行に揃える）</h3>
-  <pre class="mono">日ブロック            ブロックの先頭からの相対行
-  行  1   見出し        +0   日付／その日の交流学級
-  行  2〜17  月         +1   1校時 授業名   +2   担当
-  行 18〜33  火         +3   2校時 授業名   +4   担当
-  行 34〜49  水         +5   中休み
-  行 50〜65  木         +6   3校時 授業名   +7   担当
-  行 66〜81  金         +8   4校時 授業名   +9   担当
-                        +10  給食
-  いま86行 → 81行       +11  昼休み
-  5行短くなるので       +12  5校時 授業名   +13  担当
-  B4 1枚に入れやすい    +14  6校時 授業名   +15  担当</pre>
-
-  <h3>書く前に形を確かめる</h3>
-  <ul>
-    <li>A列の日付を探して起点にする。<b>先頭行は決め打ちしない</b>（誰かが行を入れることがある）</li>
-    <li><b>+5 が「中休み」／+10 が「給食」／+11 が「昼休み」</b>かを見る。合わない日は<b>その日だけ書かない</b></li>
-    <li>形が合わない日に書くと、<b>別の校時の行に授業名が入る</b>。落ちないので気づかない</li>
-  </ul>
-
-  <h3>書くところ・書かないところ</h3>
-  <ul>
-    <li><b>選んだ交流級の列は全部書く。</b>担当者・場所が「た」でも「交」でも書く。
-        たんぽぽ側はそのあと直していく</li>
-    <li><b>支援員・ボランティアの列には書かない</b>（交流学級ではないので、引く元が無い）</li>
-    <li><b>編成に無いクラスの列には書かない。</b>出るなら「クラス」シートかたんぽぽの
-        列見出しが古いという合図</li>
-    <li><b>選んでいない交流級の列にも書かない。</b>たんぽぽ児童がいない列を触らない</li>
-    <li>塗りは<b>こちらが決めない</b>。シート側の条件付き書式が担当者・場所を見て決める</li>
-  </ul>
-
-  <h3>書く範囲</h3>
-  <ul>
-    <li>列見出しは<b>日ブロックごとに読み直す</b>。曜日で交流学級が変わる</li>
-    <li>正規化して「学年-組」になる列だけ。<b>支援員・ボランティアの列には書かない</b></li>
-    <li><b>クラス名が日付に化けていても戻して読む</b>（1-1 は1月1日、6-3 は6月3日として取り込まれる）</li>
-    <li><b>タイトル（授業）の行だけ書く。</b>担当者・場所の行には触れない</li>
-    <li>塗りはシート側の条件付き書式。<b>担当者・場所が「た」で始まれば白、それ以外は灰色</b>。
-        灰色は #DCDCDC。#F2F2F2 まで薄くすると白地との差が 1.1 倍しかなく、
-        トナーを節約する設定のプリンタや白黒コピーで消える（実測して決めた）</li>
-    <li>確認は「何日ぶん・何セル書き換えるか」の数だけ出して<b>1回で確定</b></li>
-  </ul>
-  <hr>
-  <p>いまは<b>書き込まない</b>。実物のたんぽぽ時間割につないでいないため、
-     入るところをプレビューで見せている（docs/spec.md 7節）。<br>
-     先に<b>日ブロックを16行に揃える</b>ところまでをシート側でやる。</p>
-  <div class="end"><button class="btn go" data-close="tpDlg">閉じる</button></div>
+  <h2>たんぽぽ時間割へ出す</h2>
+  <p>たんぽぽ時間割のファイルに、<b id="tpDlgName">この週</b>という名前のシートを
+     <b>1枚あたらしく作って</b>、この週ぶんを書き込む。<br>
+     <b>同じ名前のシートがあれば、消さずに名前を変えて残す。</b>
+     たんぽぽ担当が担当者・場所に書き足したものを、こちらが消さないため。</p>
+  <table class="sys" id="tpDlgTbl"></table>
+  <div id="tpDlgWarn" class="tpwarn"></div>
+  <p>書くのは<b>授業名の行だけ</b>。担当者・場所の行は空のまま置く（たんぽぽ担当が書くところ）。<br>
+     塗り分け（灰＝このサイトから入れたコマ／白＝担当者・場所が「た」で始まる）は
+     <b>シート側の条件付き書式</b>が決める。こちらは値だけ入れる。</p>
+  <div class="end">
+    <button class="btn go" id="tpNo">出さない</button>
+    <button class="btn danger" id="tpYes">出す</button></div>
 </div></dialog>
 
 <dialog id="adminDlg"><div class="dlg">
@@ -1089,7 +1058,6 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
       <input type="text" id="arTyped" style="width:7em" placeholder="2026">
       <button class="btn danger" id="arGo" disabled>本体から消す</button></div>
   </div>
-  <div class="end"><button class="btn go" data-close="adminDlg">閉じる</button></div>
 </div></dialog>
 
 <!-- 上書きの窓。**既定は「変更しない」。**
@@ -1132,7 +1100,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.3.0";
+let APP_VERSION = "1.4.0";
 let BUILD_DATE  = "2026-09-09";
 
 /* 時程。行を固定しない（学校ごとに違う）。
@@ -1203,6 +1171,8 @@ function applyConfig(cfg){
   put("時数_貼る先",     v => t.anchor  = String(v).trim());
   put("時数_クラスの順", v => t.classes = String(v));
   put("時数_1日の行数",  v => t.block   = +v || 10);
+  /* A週の起点。**ここを動かすと、以後の週のA/Bが全部入れ替わる。** */
+  put("A週の起点の月曜", v => db.settings.abAnchor = String(v).trim());
   put("時数_列のずれ",   v => {
     const cols = {};
     for(const part of String(v).split(/[,、\s]+/)){
@@ -1238,7 +1208,18 @@ const LAYER_FULL = {base:"基本時間割", school:"学校全体", grade:"学年
                     special:"専科", home:"担任"};
 const RANK = {base:0, home:1, special:2, grade:3, school:4};
 
-const DOW = ["月","火","水","木","金"];
+/* 曜日。**月〜土の6日。** 土曜はほとんど空くが、行事とオープンスクールが入る。
+   土の列は 20mm のまま（前の「土日」1列と同じ幅）なので、
+   **月〜金の列は1mmも痩せない**。日曜は置かない。 */
+const DOW = ["月","火","水","木","金","土"];
+const DAYS = 6;            /* 紙に出す日数（月〜土） */
+/* 月〜金だけを見るもの。基本時間割・たんぽぽ・時数集計表は5日で組んである */
+const WEEKDAYS = 5;
+
+/* A週・B週の起点。**この月曜がA週で、あとは1週ごとに入れ替わる。**
+   手で切り替えさせない——切り替え忘れた人だけ別の基本時間割を見ることになる。
+   学校の年間行事計画表に合わせて「設定」シートから動かせる。 */
+const AB_ANCHOR = "2026-09-07";
 /* ▲ src/js/config.js ▲ */
 /* ▼ src/js/util.js ▼ */
 /* 文字・リンク・日付の道具。ここは状態を持たない。 */
@@ -1364,6 +1345,8 @@ const blankDb = () => ({
   v: 3,
   settings: {
     paper:"B5", margin:8, k:1, vz:100, fit:true,
+    /* A週の起点の月曜。**この週がA週で、以後1週ごとに入れ替わる**（config.js） */
+    abAnchor: AB_ANCHOR,
     tally:{ anchor:"C2", classes:"3-1,3-2,3-3", block:10,
             cols:{am2:0, p1:2, p2:4, br:6, p3:7, p4:9, lun:11, p5:12, p6:14} }
   },
@@ -1583,13 +1566,28 @@ function gradeOf(c){
 
 const ck = (d, s) => d + "|" + s;
 
+/* ── A週・B週 ────────────────────────────────
+   **起点の月曜から1週ごとに入れ替える。** 手で選ばせない。
+   手で選ばせていたころは、この端末だけの持ちものだったので、
+   同じ週を教員Aは A週、教員Bは B週の基本時間割で見ていた。
+   日付から決めれば、誰の画面でも同じになる（シートに持たなくてよい）。 */
+function autoVariant(mondayISO){
+  const a = parseISO(db.settings.abAnchor || AB_ANCHOR);
+  const m = parseISO(mondayISO);
+  if(!a || !m) return "A";
+  const n = Math.round((mondayOf(m) - mondayOf(a)) / (7 * 86400000));
+  return (((n % 2) + 2) % 2) === 0 ? "A" : "B";
+}
 function week(){
   const ws = Y().weeks, k = wkKey();
   let w = ws[k];
-  if(!w) w = ws[k] = {school:{}, grade:{}, special:{}, home:{}, acked:[], variant:"A"};
+  if(!w) w = ws[k] = {school:{}, grade:{}, special:{}, home:{}, acked:[]};
   for(const f of ["school","grade","special","home"]) if(!w[f]) w[f] = {};
   if(!Array.isArray(w.acked)) w.acked = [];
-  if(!w.variant) w.variant = "A";
+  /* **手で変えていない週は、そのつど日付から決め直す。**
+     控えに残った古い値を使うと、起点を直しても直らない週が残る */
+  if(!w.vset) w.variant = autoVariant(k);
+  else if(!w.variant) w.variant = autoVariant(k);
   return w;
 }
 function weekNo(){
@@ -1750,15 +1748,45 @@ const Backend = (function(){
       (byYear[fyOf] || (byYear[fyOf] = [])).push(q);
     }
     let left = Object.keys(byYear).length;
-    const done = () => { if(!--left){ try{ localStorage.removeItem(PEND); }catch(e){} after(); } };
+    /* **送れなかったぶんは捨てない。** 前はここで控えを消していた。
+       消したあとに週を読み直すので、閉じる直前に書いたコマが、
+       翌朝の通信1回のつまずきで**永久に消えていた**。控えが要るのは
+       まさにこの事故のためなので、送れたものだけを控えから外す。 */
+    const leftOver = [];
+    const done = () => {
+      if(--left) return;
+      try{
+        if(leftOver.length) localStorage.setItem(PEND, JSON.stringify(leftOver));
+        else localStorage.removeItem(PEND);
+      }catch(e){}
+      after();
+    };
     for(const y in byYear)
-      google.script.run
-        .withSuccessHandler(done)
-        .withFailureHandler(() => {
-          notify("前に閉じたときのぶんを送れなかった。もう一度「保存」を押す");
-          done();
-        })
-        .apiWriteCells(+y, byYear[y]);
+      (function(y, list){
+        google.script.run
+          .withSuccessHandler(done)
+          .withFailureHandler(() => {
+            /* 控えに残すだけでなく、いまの送り待ちにも積む。
+               次に「保存」を押したときに、これも一緒に出ていく */
+            for(const q of list){
+              leftOver.push(q);
+              const d = String(q.date).split("-");
+              const mon = iso(mondayOf(new Date(+d[0], +d[1] - 1, +d[2])));
+              const dd = Math.round((parseISO(q.date) - parseISO(mon)) / 86400000);
+              const k = [q.layer, q.target || "", y, mon, dd, q.slot].join("|");
+              if(!dirty[k]){
+                dirty[k] = {layer:q.layer, target:q.target || "", year:+y,
+                            monday:mon, d:dd, slot:q.slot};
+                dirtyN++;
+              }
+            }
+            onDirty(dirtyN, lastErr);
+            notify("<b>前に閉じたときのぶんを送れなかった</b>（" + list.length
+                 + " コマ）。もう一度「保存」を押す");
+            done();
+          })
+          .apiWriteCells(+y, list);
+      })(y, byYear[y]);
   }
 
   const unsaved = () => dirtyN;
@@ -2061,32 +2089,16 @@ const Backend = (function(){
       .apiReadPaste();
   }
 
-  /* たんぽぽ時間割へ出す。**中身はこちらで組んで渡す。**
+  /* たんぽぽ時間割へ、**1週ぶんを1枚のシートとして出す**。
      どのクラスのどの校時が何かを決めるのは画面（層の重ね方を知っている）。
-     どの行・どの列に置くかを決めるのはシート側（実物の形を知っている）。 */
-  /* たんぽぽ時間割の形をみる／作りなおす */
-  function shapeTanpopo(ok, ng){
-    if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
-    google.script.run
-      .withSuccessHandler(r => ok(r))
-      .withFailureHandler(e => ng(String((e && e.message) || "見られなかった")))
-      .apiShapeTanpopo(wkKey());
-  }
-  /* cols = [{cls, group}] の並び。**並びと組をこちらで決めて渡す。** */
-  function buildTanpopo(cols, slots, ok, ng){
-    if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
-    google.script.run
-      .withSuccessHandler(r => ok(r))
-      .withFailureHandler(e => ng(String((e && e.message) || "作れなかった")))
-      .apiBuildTanpopo(fy(), wkKey(), cols, slots);
-  }
-
-  function exportTanpopo(titles, classes, slots, ok, ng){
+     どんな形のシートを作るかを決めるのはシート側（実物の形を知っている）。
+     cols = [{cls, group}] の並び。**並びと組をこちらで決めて渡す。** */
+  function exportWeek(titles, cols, slots, name, ok, ng){
     if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
     google.script.run
       .withSuccessHandler(r => ok(r))
       .withFailureHandler(e => ng(String((e && e.message) || "書き込めなかった")))
-      .apiExportTanpopo(fy(), wkKey(), titles, classes, slots);
+      .apiExportWeek(fy(), wkKey(), titles, cols, slots, name);
   }
 
   /* 画面を閉じる前に、貯めたぶんを出し切る。
@@ -2103,8 +2115,7 @@ const Backend = (function(){
   return {isGas, info, setNotifier, setDirtyWatcher, unsaved, prefetchWeek,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
-          archiveCount, archiveVerify, archivePurge,
-          exportTanpopo, shapeTanpopo, buildTanpopo};
+          archiveCount, archiveVerify, archivePurge, exportWeek};
 })();
 /* ▲ src/js/backend.js ▲ */
 /* ▼ src/js/fixed.js ▼ */
@@ -2533,7 +2544,7 @@ function targetsForView(){
 function planState(cls){
   const w = week(), g = gradeOf(cls);
   let upper = false, own = false;
-  for(let d = 0; d < 5; d++) for(const sl of SLOTS){
+  for(let d = 0; d < WEEKDAYS; d++) for(const sl of SLOTS){
     const key = ck(d, sl.id);
     if(w.school[key] || (w.grade[g] || {})[key]) upper = true;
     if((w.home[cls] || {})[key] || (w.special[cls] || {})[key]) own = true;
@@ -2598,7 +2609,7 @@ function sameTarget(layer, cls, target){
    開いたときに知らせる。開いている面の持ちぶんだけを見る。 */
 function overwrittenHere(){
   const out = [], mine = layerOfStore(), w = week();
-  for(let d = 0; d < 5; d++) for(const sl of SLOTS){
+  for(let d = 0; d < DAYS; d++) for(const sl of SLOTS){
     const key = ck(d, sl.id);
     if(view.kind === "class"){
       const cur = compose(view.cls, d, sl.id);
@@ -2668,10 +2679,14 @@ function writeCell(d, s, patch){
 
   const st  = targetStore();
   const cur = cellFor(d, s);
+  /* **いま紙に出ているものを引き継いでから直す。**
+     前は基本時間割から来たときだけ引き継いでいたので、全校や学年から
+     降りてきたコマに詳細を1字書くと、題名が空のまま「担任」として入り、
+     **紙から「全校朝会」が消えた**。書いた本人には、消したつもりが無い。 */
   const e   = st[key] || {
-    title:   cur.layer === "base" ? cur.title   : "",
-    note:    "",
-    subject: cur.layer === "base" ? cur.subject : null
+    title:   cur.title || "",
+    note:    cur.note  || "",
+    subject: cur.subject || null
   };
   if("title"   in patch) e.title   = clean(patch.title);
   if("note"    in patch) e.note    = clean(patch.note);
@@ -2704,6 +2719,8 @@ let selCell = null;   /* いま選んでいるコマ {d, s} */
    字が変わらず、入れた本人には反映されていないように見える。 */
 let typing = null;
 
+const memoOf = () => ((week().memos || {})[viewName()] || "");
+
 function buildSheet(){
   const sh = $("sheet");
   sh.textContent = "";
@@ -2717,52 +2734,46 @@ function buildSheet(){
 
   const add = (node) => { sh.appendChild(node); return node; };
   add(el("div", "lab"));                                  /* 左上の角 */
-  for(let d = 0; d < 5; d++){
+  /* **月〜土の6列。** 土曜はほとんど空くが、行事とオープンスクールが入る。
+     前は土日を1列に畳んでいた。畳んだ理由は「6日ぶんの授業行を刷ると
+     1列あたりが痩せる」ことだったので、**土の列は前の土日と同じ 20mm のまま**
+     にしてある。月〜金の幅は1mmも変わらない。日曜は置かない。 */
+  for(let d = 0; d < DAYS; d++){
     const dt = addDays(monday, d);
-    add(el("div", "hd", "<span>" + md(dt) + "</span><span class='dow'>" + DOW[d] + "</span>"));
+    add(el("div", "hd" + (d === 5 ? " sat lastcol" : ""),
+      "<span>" + md(dt) + "</span><span class='dow'>" + DOW[d] + "</span>"));
   }
-  add(el("div", "hd sat lastcol", "<span class='dow'>土日</span>"));
 
-  SLOTS.forEach((s, i) => {
+  SLOTS.forEach((s) => {
     const lab = add(el("div", "lab" + (s.kind === "brk" ? " row-break" : ""),
       (s.kind === "lesson" ? "<span class='no'>" + s.name + "</span>"
                            : "<span>" + s.name + "</span>")
       + (s.time ? "<span class='tm'>" + s.time + "</span>" : "")));
     if(s.kind === "brk") lab.classList.add("row-break");
-    for(let d = 0; d < 5; d++) add(cellEl(d, s));
-    /* 土は上7行ぶん、日は下3行ぶん。日曜より土曜のほうが書くことが多い */
-    if(i === 0) add(weekendEl("土", 2, 8));
-    if(i === 7) add(weekendEl("日", 9, 11));
+    for(let d = 0; d < DAYS; d++){
+      const c = add(cellEl(d, s));
+      if(d === 5) c.classList.add("sat", "lastcol");
+    }
   });
 
   const foot = add(el("div", "foot lastcol",
     "<div class='lab'><span>週の</span><span>メモ</span></div>"
     + "<div class='t' contenteditable></div>"));
   const ft = foot.querySelector(".t");
-  ft.innerHTML = week().memo || "";
+  /* **週メモは画面（学級）ごとに持つ。** 前は週にひとつだったので、
+     3-1 で書いたメモが 3-2 の紙にも出ていた（刷る紙は学級ごとなのに）。
+     いまはこの端末の中だけに残る。シートには持っていない */
+  ft.innerHTML = memoOf() || "";
   ft.addEventListener("input", () => {
     if(typeof isLocked === "function" && isLocked()) return;
-    week().memo = clean(ft.innerHTML); save();
+    const w = week();
+    if(!w.memos || typeof w.memos !== "object") w.memos = {};
+    w.memos[viewName()] = clean(ft.innerHTML);
+    save();
   });
 
   paintSheet();
   if(typeof applyLock === "function") applyLock();
-}
-
-function weekendEl(cap, r1, r2){
-  const e = el("div", "wk lastcol",
-    "<div class='cap'>" + cap + "</div><div class='t' contenteditable></div>");
-  e.style.gridColumn = "7";
-  e.style.gridRow = r1 + " / " + (r2 + 1);
-  const t = e.querySelector(".t");
-  t.innerHTML = (week().weekend || {})[cap] || "";
-  t.addEventListener("input", () => {
-    if(typeof isLocked === "function" && isLocked()) return;
-    const w = week();
-    (w.weekend || (w.weekend = {}))[cap] = clean(t.innerHTML);
-    save();
-  });
-  return e;
 }
 
 function cellEl(d, s){
@@ -3158,68 +3169,46 @@ function addLinkToSelection(){
 /* ▼ src/js/tanpopo.js ▼ */
 /* たんぽぽ時間割へ出すところ。
 
-   **出したものはたんぽぽ時間割へ全部入る。** そのあとは、たんぽぽ担当が
-   たんぽぽ時間割の側を直していく。こちらは下書きを配る役。
+   **1週ぶんを、1枚の新しいシートとして出す。** シート名は「9月1週」。
+
+   前は「向こうのシートの形を読んで、合う行を探して書き込む」やり方だった。
+   そのために「いまの形をみる」「この形で作りなおす」という操作が2つ要り、
+   形が合わない日は黙って飛ばされた。**出す先の形を、こちらが毎週作れば、
+   読み違える余地そのものが消える。** 操作も1つに減る。
+
+   同じ名前のシートがあれば、**消さずに名前を変えて残す**。
+   たんぽぽ担当が担当者・場所に書き足したものを、こちらが消さないため。
 
    塗り分け（灰＝このサイトから入れたコマ／白＝たんぽぽの中で受ける授業）は、
-   **こちらが塗らない。** たんぽぽ時間割の側の条件付き書式が、
-   すぐ下の「担当者・場所」を見て決める。
-   こちらが塗ると、たんぽぽ担当が直したあとに色と中身が食い違う。 */
+   **こちらが塗らない。** シート側の条件付き書式が、すぐ下の「担当者・場所」を
+   見て決める。こちらが塗ると、たんぽぽ担当が直したあとに色と中身が食い違う。 */
 
-/* 実物（たんぽぽ時間割 週案シート）の列構成。
-   B〜AA が児童ごとの列（見出しはその日の交流学級）、AB 以降は支援員・ボランティア。 */
-const TANPOPO_COLS = [
-  {col:"B", cls:"1-3"}, {col:"C", cls:"2-3"}, {col:"D", cls:"3-2"}, {col:"E", cls:"4-1"},
-  {col:"F", cls:"4-4"}, {col:"G", cls:"5-4"}, {col:"H", cls:"1-1"}, {col:"I", cls:"1-3"},
-  {col:"J", cls:"1-2"}, {col:"K", cls:"1-2"}, {col:"L", cls:"4-2"}, {col:"M", cls:"4-3"},
-  {col:"N", cls:"4-4"}, {col:"O", cls:"5-2"}, {col:"P", cls:"5-3"}, {col:"Q", cls:"5-3"},
-  {col:"R", cls:"5-4"}, {col:"S", cls:"6-3"}, {col:"T", cls:"6-3"}, {col:"U", cls:"2-1"},
-  {col:"V", cls:"2-2"}, {col:"W", cls:"3-1"}, {col:"X", cls:"3-1"}, {col:"Y", cls:"3-3"},
-  {col:"Z", cls:"3-3"}, {col:"AA", cls:"6-1"},
-  {col:"AB", cls:"大屋", staff:true},   {col:"AC", cls:"丸山", staff:true},
-  {col:"AD", cls:"日外", staff:true},   {col:"AE", cls:"喜田", staff:true},
-  {col:"AF", cls:"星川", staff:true},   {col:"AG", cls:"秋山", staff:true},
-  {col:"AH", cls:"内田", staff:true},   {col:"AI", cls:"ボランティア", staff:true}
-];
-/* 担当者・場所の見本。**実物ではシートのその行を読む。**
-   ここは、塗りがどう決まるかを見せるための仮置き。 */
-const TANPOPO_DUTY = ["交：丸山", "た：桝村", "交：星川", "た：西本",
-                      "", "交：朝倉", "支：大屋", "た：安部"];
 /* たんぽぽ時間割は1日6校時ぶんの行を持っている。
    **どの校時かは時程シートが決める**ので、授業の行の上から6つを使う
    （時程のIDを学校が変えていても合う）。 */
 const tpSlots = () => SLOTS.filter(s => s.kind === "lesson").slice(0, 6).map(s => s.id);
-let tpDay = 0;
 
-const tpHasCls  = c => tpCount(c) > 0;
+/* シート名。**「9月1週」。** その月の何番目の月曜かで数える。
+   日付をそのまま名前にすると、たんぽぽ担当が「何週目のぶんか」を毎回数えることになる。
+   **サーバ側（Store.weekSheetName）と同じ数え方**にしてある。 */
+function tpSheetName(mon){
+  const d = mon || monday;
+  return (d.getMonth() + 1) + "月" + (Math.floor((d.getDate() - 1) / 7) + 1) + "週";
+}
 
 /* ── たんぽぽの面 ────────────────────────────
    **たんぽぽの組へ、交流級を引っぱって入れる。**
    1回入れると児童1人＝出す先の1列。同じ組へ2回入れれば2人。
    引っぱれない端末のために、押しても入るようにしてある
-   （左のクラスを押すと、いま選んでいる組へ入る）。 */
+   （右のクラスを押すと、いま選んでいる組へ入る）。 */
 let tpPick = "1";              /* いま選んでいる組。押して入れるときの行き先 */
 
 function drawTanpopoView(){
   const groups = tpGroups();
   if(groups.indexOf(tpPick) < 0) tpPick = groups[0];
 
-  /* 左：交流級。**どの組に入れてあるかを字で添える**（色だけに頼らない） */
-  const left = grades().map(g =>
-    "<div class='tprow'><span>" + escText(g) + "年</span><div class='tpchips'>"
-    + classesOfGrade(g).map(c => {
-        const gs = tpGroupsOf(c), n = tpCount(c), st = planState(c);
-        return "<button class='tpchip" + (n ? " on" : "") + (n && st !== "ok" ? " warn" : "")
-             + "' draggable='true' aria-pressed='" + (n > 0) + "'"
-             + " title='引っぱって組へ入れる。押すと " + escText(tpPick) + "組へ入る'"
-             + " data-c='" + escText(c) + "'><i></i>" + escText(c)
-             + (gs.length ? "<b>" + gs.map(x => x + "組").join("・") + "</b>" : "")
-             + "</button>";
-      }).join("")
-    + "</div></div>").join("");
-
-  /* 右：たんぽぽの組。**出す列の並びがそのまま見えている。** */
-  const right = groups.map(g =>
+  /* 左：たんぽぽの組。**出す列の並びがそのまま見えている。** */
+  const left = groups.map(g =>
     "<div class='tpgrp" + (g === tpPick ? " pick" : "") + (+g % 2 === 0 ? " even" : "")
     + "' data-g='" + escText(g) + "'>"
     + "<button class='tpghead' data-g='" + escText(g) + "'>"
@@ -3232,10 +3221,24 @@ function drawTanpopoView(){
        : "<i>ここへ引っぱって入れる</i>")
     + "</div></div>").join("");
 
+  /* 右：交流級。**どの組に入れてあるかを字で添える**（色だけに頼らない） */
+  const right = grades().map(g =>
+    "<div class='tprow'><span>" + escText(g) + "年</span><div class='tpchips'>"
+    + classesOfGrade(g).map(c => {
+        const gs = tpGroupsOf(c), n = tpCount(c), st = planState(c);
+        return "<button class='tpchip" + (n ? " on" : "") + (n && st !== "ok" ? " warn" : "")
+             + "' draggable='true' aria-pressed='" + (n > 0) + "'"
+             + " title='引っぱって組へ入れる。押すと " + escText(tpPick) + "組へ入る'"
+             + " data-c='" + escText(c) + "'><i></i>" + escText(c)
+             + (gs.length ? "<b>" + gs.map(x => x + "組").join("・") + "</b>" : "")
+             + "</button>";
+      }).join("")
+    + "</div></div>").join("");
+
   $("tpSel").innerHTML =
-    "<div class='tpplace'><div class='tpfrom'>" + left + "</div>"
-    + "<div class='tpto'>" + right
-    + "<button class='btn tpaddg' id='tpAddG'>組を足す</button></div></div>";
+    "<div class='tpplace'><div class='tpto'>" + left
+    + "<button class='btn tpaddg' id='tpAddG'>組を足す</button></div>"
+    + "<div class='tpfrom'>" + right + "</div></div>";
 
   /* 入れる／外す。**押しても引っぱっても同じことが起きる。** */
   const redraw = () => { save(); Backend.saveRoster(); drawTanpopoView(); };
@@ -3267,9 +3270,23 @@ function drawTanpopoView(){
   const add = $("tpAddG");
   if(add) add.onclick = () => { tpAddGroup(); save(); drawTanpopoView(); };
 
-  /* **基本時間割から動いていないクラスを知らせる。**
-     動いていない週をそのまま出すと、担任がまだ書いていない予定を本物のように配る。 */
-  const chosen = tpChosen().filter(c => allClasses().indexOf(c) >= 0);
+  $("tpWarn").innerHTML = tpWarnBoxes().join("");
+  $("tpGo").disabled = !tpTotal();
+  $("tpCount").innerHTML = tpTotal()
+    ? "出すのは <b>" + tpTotal() + " 人</b>（" + tpTotal() + " 列）・"
+      + "<b>" + tpChosenHere().length + " クラス</b>　シート名 <b>"
+      + escText(tpSheetName()) + "</b>"
+    : "";
+}
+
+const tpChosenHere = () => tpChosen().filter(c => allClasses().indexOf(c) >= 0);
+
+/* **基本時間割から動いていないクラスを知らせる。**
+   動いていない週をそのまま出すと、担任がまだ書いていない予定を本物のように配る。
+   たんぽぽ担当はそれを見て支援員の配置を決めるので、あとから変わるとやり直しになる。
+   止めはしない（金曜までに全担任が書き終わらない週はある）。 */
+function tpWarnBoxes(){
+  const chosen = tpChosenHere();
   const base  = chosen.filter(c => planState(c) === "base");
   const upper = chosen.filter(c => planState(c) === "upper");
   const gone  = tpChosen().filter(c => allClasses().indexOf(c) < 0);
@@ -3286,74 +3303,20 @@ function drawTanpopoView(){
       + "</b> は<b>いまの学級編成にありません</b>。組から外してください。</div>");
   if(!chosen.length)
     boxes.push("<div class='box ok'>まだ誰も入れていません。"
-      + "左のクラスを、右のたんぽぽの組へ引っぱってください。</div>");
+      + "右のクラスを、左のたんぽぽの組へ引っぱってください。</div>");
   else if(!boxes.length)
     boxes.push("<div class='box ok'>入れている " + chosen.length
       + " クラスは、いずれも今週の予定が入っています。</div>");
-  $("tpWarn").innerHTML = boxes.join("");
-
-  $("tpGo").disabled = !tpTotal();
-  $("tpCount").innerHTML = tpTotal()
-    ? "出すのは <b>" + tpTotal() + " 人</b>（" + tpTotal() + " 列）・"
-      + "<b>" + chosen.length + " クラス</b>"
-    : "";
-}
-
-/* ── 出す前のプレビュー ────────────────────────
-   1コマは2行で1組。上がタイトル（授業）、下が担当者・場所。 */
-
-function tanpopoCell(colIdx, col, slotId){
-  if(col.staff) return {fill:"none", why:"支援員の列"};
-  const duty = TANPOPO_DUTY[(colIdx * 3 + tpSlots().indexOf(slotId) * 5) % TANPOPO_DUTY.length];
-  if(allClasses().indexOf(col.cls) < 0) return {fill:"none", duty, why:"編成に無いクラス"};
-  if(!tpHasCls(col.cls))                return {fill:"none", duty, why:"選んでいない交流級"};
-  const t = plain(compose(col.cls, tpDay, slotId).title).trim();
-  /* **全部入れる。** 塗りはシート側の条件付き書式が担当者・場所を見て決める */
-  return {fill: duty.charAt(0) === "た" ? "own" : "imported",
-          title: t, empty: !t, duty};
-}
-
-function openTanpopoDlg(){
-  drawTanpopo();
-  $("tpDlg").showModal();
-}
-function drawTanpopo(){
-  $("tpDays").innerHTML = DOW.map((d, i) =>
-    "<button" + (i === tpDay ? " aria-pressed='true'" : "") + " data-d='" + i + "'>"
-    + d + "</button>").join("");
-  for(const b of $("tpDays").querySelectorAll("button"))
-    b.onclick = () => { tpDay = +b.dataset.d; drawTanpopo(); };
-
-  let imported = 0, own = 0, none = 0;
-  const head = "<tr><th>列</th><th>交流学級</th>"
-    + tpSlots().map(s => "<th>" + escText(SLOT_BY_ID[s].name) + "</th>").join("") + "</tr>";
-  const body = TANPOPO_COLS.map((col, i) => {
-    const cells = tpSlots().map(s => {
-      const r = tanpopoCell(i, col, s);
-      if(r.fill === "imported") imported++; else if(r.fill === "own") own++; else none++;
-      const top = r.fill === "none" ? "<i>" + escText(r.why) + "</i>"
-                : r.empty          ? "<i>（空）</i>"
-                                   : "<b>" + escText(r.title) + "</b>";
-      const bot = r.duty ? "<u>" + escText(r.duty) + "</u>" : "<u>&nbsp;</u>";
-      return "<td class='f-" + r.fill + "'>" + top + bot + "</td>";
-    }).join("");
-    return "<tr" + (col.staff ? " class='staff'" : "") + "><th>" + col.col + "</th>"
-         + "<th>" + escText(col.cls) + "</th>" + cells + "</tr>";
-  }).join("");
-  $("tpGrid").innerHTML = "<table class='tp'>" + head + body + "</table>";
-  $("tpSum").innerHTML =
-      "<span class='k f-imported'></span>入れる（灰） <b>" + imported + "</b>　"
-    + "<span class='k f-own'></span>入れる（担当が「た」なので白） <b>" + own + "</b>　"
-    + "<span class='k f-none'></span>書かない <b>" + none + "</b>";
+  return boxes;
 }
 
 /* 出す中身を組む。**層を重ねたあとの、紙に出ているとおりの授業名。**
-   {クラス: {"0":{p1:"国語", …}, …}}（0〜4 は月〜金） */
+   {クラス: {"0":{p1:"国語", …}, …}}（0〜4 は月〜金。たんぽぽ時間割は土曜を持たない） */
 function tanpopoTitles(list){
   const out = {};
   for(const cls of list){
     const per = {};
-    for(let d = 0; d < 5; d++){
+    for(let d = 0; d < WEEKDAYS; d++){
       const one = {};
       for(const s of tpSlots()) one[s] = plain(compose(cls, d, s).title).trim();
       per[String(d)] = one;
@@ -3363,40 +3326,53 @@ function tanpopoTitles(list){
   return out;
 }
 
-/* 出す。**たんぽぽ側の直しは消える**ので、そこを先に言う。 *//* 出す。**たんぽぽ側の直しは消える**ので、そこを先に言う。 */
+/* ── 出す ──────────────────────────────────────
+   **確認は専用の窓で、既定は「出さない」。**
+   ブラウザの confirm は Enter で「はい」に落ちる。この面でいちばん大きく動く
+   操作を、いちばん弱い止め方にしない（1コマの上書きと同じ作りにそろえる）。 */
 function reflectTanpopo(){
-  const chosen = tpChosen().filter(c => allClasses().indexOf(c) >= 0);
+  const chosen = tpChosenHere();
   if(!chosen.length) return toast("先に交流級を選ぶ");
-  const bad = chosen.filter(c => planState(c) !== "ok");
-  const yes = confirm(
-    md(monday) + " → " + md(addDays(monday, 4)) + " の週を、たんぽぽ時間割へ出します。\n\n"
-    + "・出す児童：" + tpTotal() + "人（" + chosen.map(c => c + "×" + tpCount(c)).join("、") + "）\n"
-    + (bad.length ? "・まだ基本時間割のまま：" + bad.join("、") + "\n" : "")
-    + "\nたんぽぽ時間割の授業名は、この週のぶんが全部入れ替わります。\n"
-    + "たんぽぽ側で直した内容は消えます。\n\nつづけますか？");
-  if(!yes) return;
+  const name = tpSheetName();
+  $("tpDlgName").textContent = name;
+  $("tpDlgTbl").innerHTML =
+      "<tr><th>週</th><td>" + md(monday) + " → " + md(addDays(monday, 4)) + "</td></tr>"
+    + "<tr><th>シート名</th><td><b>" + escText(name) + "</b></td></tr>"
+    + "<tr><th>出す児童</th><td>" + tpTotal() + " 人（" + tpTotal() + " 列）</td></tr>"
+    + "<tr><th>交流級</th><td>"
+      + chosen.map(c => escText(c) + "×" + tpCount(c)).join("、") + "</td></tr>";
+  $("tpDlgWarn").innerHTML = tpWarnBoxes().filter(b => b.indexOf("box ok") < 0).join("");
+  $("tpDlg").showModal();
+  $("tpNo").focus();                    /* **既定は「出さない」。** */
+}
 
+function doExportTanpopo(){
+  const chosen = tpChosenHere();
+  if(!chosen.length) return;
+  const cols = tpColumns().filter(x => allClasses().indexOf(x.cls) >= 0);
+  const name = tpSheetName();
   if(!Backend.isGas()){
-    openTanpopoDlg();
-    toast("いまは<b>書き込まない</b>。実物のたんぽぽ時間割につないでいないため、"
-        + "入るところをプレビューで見せている");
+    $("tpWarn").innerHTML =
+      "<div class='box'><b>いまは書き込まない。</b>実物のたんぽぽ時間割に"
+      + "つないでいない（手元で開いている）。<br>本番では「" + escText(name)
+      + "」というシートが1枚できて、" + cols.length + " 列ぶんが入る。</div>"
+      + $("tpWarn").innerHTML;
     return;
   }
   /* 先に、書いたぶんをシートへ送る。送る前に出すと、出した紙と週案が食い違う */
   $("tpGo").disabled = true;
   $("tpCount").innerHTML = "たんぽぽ時間割へ書いている…";
+  setBusy(true, "たんぽぽ時間割へ出しています");
   Backend.flush(() => {
-    /* **人数のまま渡す。** たんぽぽ側の列の数と合っているかを、あちらで見る
-       （どの組かは列の並びの話で、中身は交流級だけで決まる） */
-    const nums = {};
-    for(const c of chosen) nums[c] = tpCount(c);
-    Backend.exportTanpopo(tanpopoTitles(chosen), nums, tpSlots(),
+    Backend.exportWeek(tanpopoTitles(chosen), cols, tpSlots(), name,
       r => {
+        setBusy(false);
         $("tpGo").disabled = false;
         drawTanpopoView();
         showTanpopoResult(r);
       },
       why => {
+        setBusy(false);
         $("tpGo").disabled = false;
         drawTanpopoView();
         $("tpWarn").innerHTML =
@@ -3406,94 +3382,19 @@ function reflectTanpopo(){
   });
 }
 
-/* ── 出す先の形 ────────────────────────────────
-   出せないときは、たいてい**出す先の形**が合っていない。
-   何がどう違うのかを見せる。推し量って直すより、そのまま出したほうが早い。 */
-function showShape(){
-  $("tpShapeOut").innerHTML = "<div class='box ok'>見ています…</div>";
-  Backend.shapeTanpopo(
-    r => {
-      const b = [];
-      b.push("<div class='box " + (r.note.length ? "" : "ok") + "'>"
-        + "<b>" + escText(r.file) + "／シート「" + escText(r.sheet) + "」</b>"
-        + "<div class='tpshape'>"
-        + r.rows + "行 × " + r.cols + "列\n"
-        + "日付の行：" + (r.days.length ? r.days.map(x => x.date + "(" + x.row + "行目)").join("　") : "無し") + "\n"
-        + "骨（中休み・給食・昼休み）：" + (r.marks.length ? r.marks.length + "つ" : "無し") + "\n"
-        + "交流学級の見出し：" + (r.classCols || 0) + "列"
-        + (r.head ? "\n" + r.headRow + "行目：" + r.head.slice(0, 14).join(" | ") : "")
-        + "</div></div>");
-      for(const n of r.note)
-        b.push("<div class='box'><b>" + escText(n) + "</b></div>");
-      if(r.sheets && r.sheets.length > 1)
-        b.push("<div class='box'>このファイルのシート：<b>" + r.sheets.map(escText).join("・")
-          + "</b>　ちがうシートを見ているなら、設定の「たんぽぽシート名」を直す</div>");
-      $("tpShapeOut").innerHTML = b.join("");
-    },
-    why => { $("tpShapeOut").innerHTML =
-      "<div class='box'><b>見られませんでした。</b><br>" + escText(why) + "</div>"; });
-}
-
-/* **形を作りなおす。** いまのシートは名前を変えて残す（消さない）。 */
-function buildShape(){
-  /* **組ごとの並びをそのまま渡す。** 出す先も 1組の全員 → 2組の全員 … と並ぶ */
-  const cols = tpColumns().filter(x => allClasses().indexOf(x.cls) >= 0);
-  if(!cols.length) return toast("先に、たんぽぽの組へ交流級を入れる");
-  const n = cols.length;
-  const byG = {};
-  for(const x of cols) (byG[x.group] || (byG[x.group] = [])).push(x.cls);
-  const yes = confirm(
-    "たんぽぽ時間割のシートを、この形で作りなおします。\n\n"
-    + "・左から たんぽぽ1組・2組… の順、組の中はクラス順\n"
-    + Object.keys(byG).sort((a, b) => a - b)
-        .map(g => "　" + g + "組：" + byG[g].join("、")).join("\n") + "\n"
-    + "（合わせて " + n + " 列）\n"
-    + "・偶数の組の列には地の色を敷き、組の境目に太い縦線を引きます\n"
-    + "・1日16行 × 5日。各コマは 授業名 と 担当者・場所 の2行\n"
-    + "・授業名の行は灰色。担当者・場所が「た」で始まると白に戻る書式も入れます\n\n"
-    + "いまのシートは<消しません>。名前を変えて残します。\n\nつづけますか？");
-  if(!yes) return;
-  $("tpShapeOut").innerHTML = "<div class='box ok'>作っています…</div>";
-  Backend.buildTanpopo(cols, tpSlots(),
-    r => {
-      $("tpShapeOut").innerHTML =
-        "<div class='box ok'><b>作りなおした。</b>"
-        + escText(r.file) + "／シート「" + escText(r.sheet) + "」<br>"
-        + "児童 " + r.cols + " 列"
-        + (r.staff ? "＋支援員 " + r.staff + " 列" : "")
-        + "・" + r.rows + " 行"
-        + (r.backup ? "<br>前の形は「" + escText(r.backup) + "」に残した" : "")
-        + "<br>列の幅は、B4 1枚に収まるようたんぽぽ担当が調える</div>";
-      toast("たんぽぽ時間割の形を作りなおした");
-    },
-    why => { $("tpShapeOut").innerHTML =
-      "<div class='box'><b>作れませんでした。</b><br>" + escText(why) + "</div>"; });
-}
-
-/* 出したあとに、何がどうなったかを出す。**数と、飛ばした日を必ず見せる。**
-   「出しました」だけだと、形が合わずに飛ばした日に気づけない。 */
+/* 出したあとに、何がどうなったかを出す。**数と、退けた前のシートを必ず見せる。**
+   「出しました」だけだと、前のシートがどこへ行ったのか分からない。 */
 function showTanpopoResult(r){
   const box = [];
   box.push("<div class='box ok'><b>たんぽぽ時間割に出した。</b>"
-    + escText(r.file || "") + "／" + (r.days || 0) + "日ぶん・"
-    + (r.wrote || 0) + "コマ</div>");
-  if(r.short && r.short.length)
-    box.push("<div class='box'><b>人数と、たんぽぽ時間割の列の数が合っていない。</b><br>"
-      + r.short.slice(0, 8).map(escText).join("<br>")
-      + (r.short.length > 8 ? "<br>ほか " + (r.short.length - 8) + "件" : "")
-      + "<br>たんぽぽ時間割は<b>児童ごとに1列</b>。2人いる交流級は2列いる。"
-      + "列を足すか、こちらの人数を直す</div>");
-  if(r.redated)
-    box.push("<div class='box ok'>この週の日付が入っていなかったので、"
-      + "<b>日付を入れ直して</b>書いた（同じシートを毎週使い回せる）</div>");
-  if(r.skipped && r.skipped.length)
-    box.push("<div class='box'><b>書かなかった日がある。</b><br>"
-      + r.skipped.map(escText).join("<br>")
-      + "<br>たんぽぽ時間割の日ブロックの形（+5 中休み・+10 給食・+11 昼休み）を"
-      + "確かめる（docs/setup.md Step 8）</div>");
-  if(r.unknown && r.unknown.length)
-    box.push("<div class='box'>たんぽぽ時間割の列見出しにあるが、こちらで選んでいない"
-      + "クラス：<b>" + r.unknown.map(escText).join("・") + "</b></div>");
+    + escText(r.file || "") + "／シート「" + escText(r.sheet || "") + "」<br>"
+    + "児童 " + (r.cols || 0) + " 列"
+    + (r.staff ? "＋支援員 " + r.staff + " 列" : "")
+    + "・" + (r.days || 0) + "日ぶん・授業名 " + (r.wrote || 0) + " コマ"
+    + (r.empty ? "（空のコマ " + r.empty + "）" : "")
+    + (r.backup ? "<br>同じ名前のシートがあったので、前のぶんは「"
+                + escText(r.backup) + "」に名前を変えて残した" : "")
+    + "<br>列の幅は、B4 1枚に収まるようたんぽぽ担当が調える</div>");
   $("tpWarn").innerHTML = box.join("") + $("tpWarn").innerHTML;
   toast("たんぽぽ時間割に <b>" + (r.wrote || 0) + " コマ</b>入れた");
 }
@@ -3681,10 +3582,10 @@ function drawBaseGrid(){
   const bank = B[c][baseVar];
 
   const rows = ["<table class='grid2'><tr><th></th>"
-    + DOW.map(d => "<th>" + d + "</th>").join("") + "</tr>"];
+    + DOW.slice(0, WEEKDAYS).map(d => "<th>" + d + "</th>").join("") + "</tr>"];
   for(const s of SLOTS){
     rows.push("<tr><th>" + s.name + "</th>");
-    for(let d = 0; d < 5; d++){
+    for(let d = 0; d < WEEKDAYS; d++){
       const v = bank[ck(d, s.id)] || {};
       rows.push("<td>" + (s.kind === "lesson"
         ? "<select data-k='" + ck(d, s.id) + "'><option value=''>—</option>"
@@ -3811,7 +3712,7 @@ function drawImpGrid(cls){
   const head = "<tr><th></th><th></th>"
     + slots.map(s => "<th>" + escText(s.name) + "</th>").join("") + "</tr>";
   const body = [];
-  for(let d = 0; d < 5; d++)
+  for(let d = 0; d < WEEKDAYS; d++)
     for(const v of ["A", "B"]){
       const bank = got[v] || {};
       body.push("<tr" + (v === "B" ? " class='b'" : "") + ">"
@@ -3923,7 +3824,11 @@ function applyPaper(){
   sh.style.setProperty("--k", s.k);
   let st = $("pagecss");
   if(!st){ st = el("style"); st.id = "pagecss"; document.head.appendChild(st); }
-  st.textContent = "@page{size:" + s.paper + " portrait;margin:" + s.margin + "mm}";
+  /* **`size:B5` と書かない。** CSS の B5 は ISO B5（176×250mm）で、
+     日本の B5（JIS・182×257mm）より 6×7mm 小さい。キーワードで書くと、
+     紙は 182×257 のつもりで組んだ版面が 176×250 の枠に入らず、
+     **下がはみ出して2ページ目が出る**（実際に出た）。mm で直に書く。 */
+  st.textContent = "@page{size:" + w + " " + h + ";margin:" + s.margin + "mm}";
   $("stPaper").value = s.paper;
   $("stMg").value = s.margin;  $("stMgV").textContent = s.margin;
   $("stK").value  = s.k;       $("stKV").textContent  = (+s.k).toFixed(2);
@@ -3942,7 +3847,7 @@ function tallyGrid(){
   const list = tallyClasses(), block = Math.max(1, +t.block || 10);
   const width = Math.max.apply(null, Object.keys(t.cols).map(k => t.cols[k])) + 1;
   const rows = [];
-  for(let d = 0; d < 5; d++) for(let r = 0; r < block; r++){
+  for(let d = 0; d < WEEKDAYS; d++) for(let r = 0; r < block; r++){
     const line = new Array(width).fill("");
     if(r < list.length){
       for(const s of SLOTS){
@@ -4249,9 +4154,16 @@ addEventListener("resize", () => { clearTimeout(fitT); fitT = setTimeout(autoFit
 
 /* ── 週 ──────────────────────────────────────── */
 function syncVariant(){
-  const v = week().variant;
+  const w = week(), v = w.variant, auto = autoVariant(wkKey());
   for(const [id, k] of [["abA","A"],["abB","B"]])
     $(id).setAttribute("aria-pressed", String(v === k));
+  /* **ふだんは日付から決まる。** 手で変えた週だけ、戻す道を出す。
+     出しっぱなしにすると、押す必要のないものが毎週目に入る */
+  const b = $("abAuto");
+  if(b){
+    b.hidden = !w.vset;
+    b.textContent = "自動に戻す（" + auto + "週）";
+  }
 }
 function refreshWeek(){
   $("weekLabel").textContent = md(monday) + " → " + md(addDays(monday, 4));
@@ -4356,8 +4268,16 @@ function markOpening(el){
   for(const x of document.querySelectorAll(".opening")) x.classList.remove("opening");
   if(el) el.classList.add("opening");
 }
-function setVariant(v){ week().variant = v; save();
-  if(view.kind === "gate") drawGate(); else refreshWeek(); }
+/* A週・B週。**ふだんは日付から決まる**（store.js の autoVariant）。
+   ここで押したときだけ、その週にかぎって手で決めた印を付ける。
+   印を付けないと、次に描き直したときに日付から決め直されて元へ戻る。 */
+function setVariant(v){
+  const w = week();
+  if(v === null){ delete w.vset; w.variant = autoVariant(wkKey()); }
+  else { w.vset = true; w.variant = v; }
+  save();
+  if(view.kind === "gate") drawGate(); else refreshWeek();
+}
 
 /* ── 画面ぜんぶに効くもの ─────────────────────── */
 
@@ -4399,6 +4319,7 @@ function wire(){
 
   on("abA","click", () => setVariant("A"));
   on("abB","click", () => setVariant("B"));
+  on("abAuto","click", () => { setVariant(null); toast("日付から決まる週に戻した"); });
   on("toGate","click", showGate);
   on("target","change", e => onTargetChange(e.target.value));
   on("tpGo","click", reflectTanpopo);
@@ -4434,6 +4355,22 @@ function wire(){
   for(const b of document.querySelectorAll("[data-close]"))
     b.addEventListener("click", () => $(b.dataset.close).close());
 
+  /* ── 窓を閉じるところ ──────────────────────
+     **窓枠の右上に ✕ を1つ置く。** 下の隅に「閉じる」を置いていたころは、
+     そこまで読み進めないと閉じ方が見つからなかった。窓は上から読むので、
+     閉じ方も上に無いと探すことになる。
+     ここで1回だけ差し込む（窓ごとに HTML へ書くと、足した窓で付け忘れる）。 */
+  for(const d of document.querySelectorAll("dialog")){
+    const box = d.querySelector(".dlg");
+    if(!box || box.querySelector(".dlgx")) continue;
+    const x = el("button", "dlgx", "✕");
+    x.type = "button";
+    x.setAttribute("aria-label", "閉じる");
+    x.title = "閉じる（Esc）";
+    x.addEventListener("click", () => d.close());
+    box.insertBefore(x, box.firstChild);
+  }
+
   /* 用紙 */
   on("stPaper","change", e => { db.settings.paper = e.target.value; save(); applyPaper(); });
   on("stMg","input",  e => { db.settings.margin = +e.target.value; save(); applyPaper(); });
@@ -4461,15 +4398,17 @@ function wire(){
     save(); Backend.saveBase(c, "A"); Backend.saveBase(c, "B"); drawBaseGrid();
     toast("前年度の " + escText(c) + " を写した");
   });
-  on("baseClose","click", () => { $("baseDlg").close(); if(view.kind !== "gate") buildSheet(); });
+  /* 窓を閉じたら紙を組み直す。**ボタンではなく窓の close に付ける。**
+     ✕ で閉じても、Esc で閉じても、同じことが起きないと直したものが紙に出ない */
+  on("baseDlg","close", () => { if(view.kind !== "gate") buildSheet(); });
 
   /* 保存。**打つたびには送らない。** ここで1コマ1件にまとめて送る */
   on("saveBtn","click", () => doSave(true));
   on("lockBtn","click", () => setLock(!isLocked()));
 
-  /* たんぽぽ時間割の形 */
-  on("tpShape","click", showShape);
-  on("tpBuild","click", buildShape);
+  /* たんぽぽ。**確認の窓は既定「出さない」。** 閉じ方が何であれ出さない側に落ちる */
+  on("tpNo","click",  () => $("tpDlg").close());
+  on("tpYes","click", () => { $("tpDlg").close(); doExportTanpopo(); });
   on("baseImp","click", openImpDlg);
 
   /* 固定時間割の取り込み */
@@ -4478,7 +4417,6 @@ function wire(){
   on("impRead","click", readImp);
   on("impCls","change", () => drawImpGrid($("impCls").value));
   on("impGo","click", goImp);
-  on("impClose","click", () => $("impDlg").close());
   on("impText","paste", () => setTimeout(readImp, 0));   /* 貼ったらすぐ読む */
 
   /* 学級編成 */
@@ -4515,7 +4453,6 @@ function wire(){
     save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
     toast("前年度の編成を写した");
   });
-  on("rsClose","click", () => $("rosterDlg").close());
 
   /* 時数 */
   on("tyAnchor","change", e => { db.settings.tally.anchor = e.target.value.trim(); save(); });
@@ -4537,7 +4474,11 @@ function wire(){
   });
   on("pRevert","click", () => {
     if(!selCell || view.kind !== "class") return;
+    if(isLocked()) return toast("この画面はロック中");
     delete (week().home[view.cls] || {})[ck(selCell.d, selCell.s)];
+    /* **シートにも伝える。** 前はここで手元から消すだけだったので、
+       戻したように見えて、次に開くと戻ってきた。行はシートに残っていた */
+    Backend.cellChanged("home", view.cls, selCell.d, selCell.s);
     save(); paintSheet(); fillPanel();
   });
   /* 5日ぶんを1日ずつ聞くと、窓が最大5回出る。**まとめて1回だけ聞く。** */

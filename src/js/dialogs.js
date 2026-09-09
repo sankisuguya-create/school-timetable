@@ -21,10 +21,10 @@ function drawBaseGrid(){
   const bank = B[c][baseVar];
 
   const rows = ["<table class='grid2'><tr><th></th>"
-    + DOW.map(d => "<th>" + d + "</th>").join("") + "</tr>"];
+    + DOW.slice(0, WEEKDAYS).map(d => "<th>" + d + "</th>").join("") + "</tr>"];
   for(const s of SLOTS){
     rows.push("<tr><th>" + s.name + "</th>");
-    for(let d = 0; d < 5; d++){
+    for(let d = 0; d < WEEKDAYS; d++){
       const v = bank[ck(d, s.id)] || {};
       rows.push("<td>" + (s.kind === "lesson"
         ? "<select data-k='" + ck(d, s.id) + "'><option value=''>—</option>"
@@ -151,7 +151,7 @@ function drawImpGrid(cls){
   const head = "<tr><th></th><th></th>"
     + slots.map(s => "<th>" + escText(s.name) + "</th>").join("") + "</tr>";
   const body = [];
-  for(let d = 0; d < 5; d++)
+  for(let d = 0; d < WEEKDAYS; d++)
     for(const v of ["A", "B"]){
       const bank = got[v] || {};
       body.push("<tr" + (v === "B" ? " class='b'" : "") + ">"
@@ -263,7 +263,11 @@ function applyPaper(){
   sh.style.setProperty("--k", s.k);
   let st = $("pagecss");
   if(!st){ st = el("style"); st.id = "pagecss"; document.head.appendChild(st); }
-  st.textContent = "@page{size:" + s.paper + " portrait;margin:" + s.margin + "mm}";
+  /* **`size:B5` と書かない。** CSS の B5 は ISO B5（176×250mm）で、
+     日本の B5（JIS・182×257mm）より 6×7mm 小さい。キーワードで書くと、
+     紙は 182×257 のつもりで組んだ版面が 176×250 の枠に入らず、
+     **下がはみ出して2ページ目が出る**（実際に出た）。mm で直に書く。 */
+  st.textContent = "@page{size:" + w + " " + h + ";margin:" + s.margin + "mm}";
   $("stPaper").value = s.paper;
   $("stMg").value = s.margin;  $("stMgV").textContent = s.margin;
   $("stK").value  = s.k;       $("stKV").textContent  = (+s.k).toFixed(2);
@@ -282,7 +286,7 @@ function tallyGrid(){
   const list = tallyClasses(), block = Math.max(1, +t.block || 10);
   const width = Math.max.apply(null, Object.keys(t.cols).map(k => t.cols[k])) + 1;
   const rows = [];
-  for(let d = 0; d < 5; d++) for(let r = 0; r < block; r++){
+  for(let d = 0; d < WEEKDAYS; d++) for(let r = 0; r < block; r++){
     const line = new Array(width).fill("");
     if(r < list.length){
       for(const s of SLOTS){

@@ -259,11 +259,13 @@ const Store = (function(){
     /* 4. 時程 */
     const slots = readSlots();
     const lessons = slots.filter(s => s.kind === "lesson");
-    const noTally = lessons.filter(s => !s.tally).map(s => s.name);
+    /* **放課後（種別＝備考）の行。** setup は無いシートを作るだけなので、
+       先にシートを作った学校にはこの行が入らず、画面に放課後の欄が出ない */
+    const after = slots.filter(s => s.kind === "note");
     if(!lessons.length) say("ng", "時程", "授業の行が1つも無い", "「時程」シートの種別を「授業」にする");
-    else if(noTally.length) say("warn", "時程", "時数表の列が空：" + noTally.join("・"),
-                                "時数のコピーで、その校時が抜ける");
-    else say("ok", "時程", lessons.length + "校時（" + slots.length + "行）", "");
+    else if(!after.length) say("warn", "時程", "放課後（種別＝備考）の行が無い",
+                               "エディタから setupSheets を1回走らせると足される");
+    else say("ok", "時程", lessons.length + "校時＋放課後（" + slots.length + "行）", "");
 
     /* 5. 基本時間割。**A週が無いクラスは、開いても空のまま出る。** */
     const warn = [];
@@ -288,7 +290,7 @@ const Store = (function(){
       say("warn", "たんぽぽ", "出し先のファイルが未設定", "「設定」シートの たんぽぽファイルID にURLを貼る");
     else if(!tpN) say("warn", "たんぽぽ", "交流級が1つも選ばれていない", "「クラス」シートの たんぽぽ交流級 に人数を入れる");
     else say("ok", "たんぽぽ", tpN + "組・" +
-             Object.keys(r.tanpopo).reduce((a, c) => a + r.tanpopo[c], 0) + "人", "");
+             Object.keys(r.tanpopo).reduce((a, c) => a + r.tanpopo[c].length, 0) + "人", "");
 
     /* 8. 週案シート。**担任が開く前に揃えておく。** */
     const have = Sheets.planNames();
@@ -547,8 +549,16 @@ const Store = (function(){
   }
 
   /* ── たんぽぽ時間割へ出す ──────────────────────
-     実物の形（docs/spec.md 7節）。1日ぶんが縦のブロックで、各校時は2行。
-     上が授業名、下が担当者・場所。列は児童ごとで、見出しはその日の交流学級。
+     **1週ぶんを、1枚の新しいシートとして出す。** シート名は「9月1週」。
+
+     前は「向こうのシートの形を読んで、合う行を探して書き込む」やり方だった。
+     そのために「いまの形をみる」「この形で作りなおす」という操作が2つ要り、
+     形が合わない日は黙って飛ばされ、飛ばされたことに気づくには
+     結果の文を読むしかなかった。**出す先の形を、こちらが毎週作れば、
+     読み違える余地そのものが消える。**
+
+     形（docs/spec.md 7節）。1日ぶんが縦16行のブロックで、各校時は2行。
+     上が授業名、下が担当者・場所。列は児童ごと。
 
        +0  日付 ／ その日の交流学級
        +1  1校時 授業名   +2  担当者・場所
@@ -561,43 +571,8 @@ const Store = (function(){
        +12 5校時 授業名   +13 担当者・場所
        +14 6校時 授業名   +15 担当者・場所
 
-     **書く前に形を確かめる。** 形が合わない日はその日だけ書かない。
-     合わない日に書くと、別の校時の行に授業名が入る。落ちないので気づかない。 */
-  /* 1日ぶんのブロックの中で、授業名の行がどこかを決める。
-     **行数を決め打ちしない。** 実物は日によって 16・18・15・18・18 行と
-     まちまちで、空行の入り方も揃っていない。決め打ちすると、
-     揃えてもらうまで1日も書けない。揃えたあとに誰かが行を足しても壊れる。
-
-     代わりに「中休み」「給食」「昼休み」の行を探して、そこから数える。
-     この3つは日ブロックの骨で、動かすことはない。
-
-       1校時 = 中休み − 4      2校時 = 中休み − 2
-       3校時 = 中休み + 1      4校時 = 中休み + 3
-       5校時 = 昼休み + 1      6校時 = 昼休み + 3     （いずれも授業名の行）
-
-     見つからない日は、その日だけ書かない。 */
-  const TP_MARKS = ["中休み", "給食", "昼休み"];
-  function tpRows(grid, len){
-    const at = {};
-    for(let r = 1; r < len; r++){
-      const a = tpNorm(grid[r][0]);
-      for(const m of TP_MARKS)
-        if(at[m] === undefined && a.indexOf(tpNorm(m)) >= 0) at[m] = r;
-    }
-    for(const m of TP_MARKS) if(at[m] === undefined) return {bad:"「" + m + "」の行が無い"};
-    const br = at["中休み"], lu = at["昼休み"];
-    if(!(br >= 5)) return {bad:"「中休み」が上すぎる（1・2校時の行が足りない）"};
-    if(!(lu > br)) return {bad:"「昼休み」が「中休み」より上にある"};
-    if(!(at["給食"] > br + 3)) return {bad:"「給食」が4校時より上にある"};
-    const rows = [br - 4, br - 2, br + 1, br + 3, lu + 1, lu + 3];
-    /* **短い日は、ある校時だけ書く。** 水曜は6校時が無いので2行短い。
-       日ごと丸ごと飛ばすと、1〜5校時まで書けるのに書かないことになる。 */
-    const miss = [];
-    for(let i = 0; i < rows.length; i++)
-      if(rows[i] < 1 || rows[i] >= len){ miss.push(i + 1); rows[i] = -1; }
-    if(rows.every(function(r){ return r < 0; })) return {bad:"授業名の行が1つも無い"};
-    return {rows, miss};
-  }
+     **同じ名前のシートがあったら、消さずに名前を変えて残す**（Sheets.stash）。
+     たんぽぽ担当が担当者・場所に書き足したものを、こちらが消さないため。 */
 
   /* ファイルの指定。**URL をそのまま貼っても通す。**
      ID だけを抜いて貼るのは、知っていないとできない操作。
@@ -622,25 +597,11 @@ const Store = (function(){
   /* 交流級の見出しを読む。**Date で返ってくることがある。**
      スプレッドシートは 1-2 を「1月2日」として取り込む。画面には 1-2 と
      出ているのに getValues() は Date を返すので、字として比べると
-     交流級の列が1つも見つからず、1コマも書けない。
-     Sheets.asClass が月-日から元の字へ戻す。 */
+     交流級の列が1つも見つからない。Sheets.asClass が月-日から元の字へ戻す。 */
   function tpCls(v){ return tpNorm(Sheets.asClass(v)); }
-  /* A列の値を日付にする。Date でも「11/16」でも「11月16日」でも読む */
-  function tpDate(v, year){
-    if(Sheets.isDate(v)) return ymd(v);
-    const t = tpNorm(v);
-    let m = t.match(/^(\d{1,2})[\/-](\d{1,2})$/);
-    if(m) return ymd(new Date(+year, +m[1] - 1, +m[2]));
-    m = t.match(/^(\d{1,2})月(\d{1,2})日?$/);
-    if(m) return ymd(new Date(+year, +m[1] - 1, +m[2]));
-    m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-    if(m) return ymd(new Date(+m[1], +m[2] - 1, +m[3]));
-    return "";
-  }
 
-  /* titles = {クラス: {"0": {p1:"国語", …}, …}}（0〜4 は月〜金）
-     classes = 出す交流級。**選んだ交流級の列だけに書く。** */
-  /* たんぽぽ時間割のファイルとシートを開く。3つの入口（見る・作る・出す）で使う */
+  /* たんぽぽ時間割のファイルを開く。**シートは名前で作る**ので、
+     「たんぽぽシート名」の設定はもう見ない（週ごとに名前が変わるため）。 */
   function tpOpen(){
     const cfg = readConfig();
     const id = fileId(cfg["たんぽぽファイルID"], "たんぽぽファイルID");
@@ -650,50 +611,9 @@ const Store = (function(){
       throw new Error("たんぽぽ時間割のファイルを開けません（ID " + id + "）。"
         + "URLが正しいか、このスクリプトを置いたアカウントに共有されているかを見てください");
     }
-    const want = String(cfg["たんぽぽシート名"] || "").trim();
-    const sh = want ? ss.getSheetByName(want) : ss.getSheets()[0];
-    if(!sh) throw new Error("たんぽぽ時間割に「" + want + "」というシートがありません。"
-      + "あるのは「" + ss.getSheets().map(function(x){ return x.getName(); }).join("」「")
-      + "」");
-    return {ss, sh, cfg, want};
+    return {ss, cfg};
   }
 
-  /* ── 形をみる ──────────────────────────────────
-     「出せない」ときに、**何がどう違うのか**を見せる。
-     推し量って直すより、いまの形をそのまま出したほうが早い。 */
-  function shapeTanpopo(mondayISO){
-    const {ss, sh} = tpOpen();
-    const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
-    const out = {file:ss.getName(), sheet:sh.getName(),
-                 sheets:ss.getSheets().map(function(x){ return x.getName(); }),
-                 rows:lastRow, cols:lastCol, days:[], marks:[], note:[]};
-    if(lastRow < 2 || lastCol < 2){ out.note.push("シートが空です"); return out; }
-    const colA = sh.getRange(1, 1, lastRow, 1).getValues();
-    const year = +String(mondayISO).slice(0, 4);
-    for(let r = 0; r < lastRow; r++){
-      const a = tpNorm(colA[r][0]);
-      const d = tpDate(colA[r][0], year);
-      if(d) out.days.push({row:r + 1, date:d});
-      for(const m of TP_MARKS) if(a.indexOf(tpNorm(m)) >= 0) out.marks.push({row:r + 1, mark:m});
-    }
-    /* いちばん上の日ブロックの見出しを、そのまま見せる */
-    const first = out.days.length ? out.days[0].row
-                : (out.marks.length ? Math.max(1, out.marks[0].row - 5) : 0);
-    if(first){
-      const head = sh.getRange(first, 1, 1, lastCol).getValues()[0];
-      out.headRow = first;
-      out.head = head.slice(0, 30).map(function(v){ return Sheets.asClass(v); });
-      out.classCols = out.head.filter(function(v){ return /^[1-9]-[1-9]$/.test(tpCls(v)); }).length;
-    }
-    if(!out.days.length) out.note.push("A列に日付が見つかりません");
-    if(!out.marks.length) out.note.push("A列に「中休み」「給食」「昼休み」が見つかりません");
-    if(out.classCols === 0) out.note.push("交流学級（1-1 のような字）の見出しが1つもありません");
-    return out;
-  }
-
-  /* ── 形を作る ──────────────────────────────────
-     **手で整えるのをやめる。** 1日16行・児童ごとに1列の形をこちらで作る。
-     いまのシートは名前を変えて残す（消さない）。 */
   /* 列の並び。**たんぽぽ1組の全員 → 2組の全員 → …**
      組の中はクラスの順（1-1〜6-4）。たんぽぽ担当は組ごとに見るので、
      クラス順に混ぜて並べると、自分の組の児童を目で拾えない。
@@ -721,39 +641,72 @@ const Store = (function(){
   }
 
   const TP_BUILD_ROWS = 16;
-  function buildTanpopo(year, mondayISO, counts, slots){
-    const {ss, sh, cfg, want} = tpOpen();
-    const name = sh.getName();
+  /* 日ブロックの先頭からの相対行。授業名の行だけを持つ（担当者・場所は書かない） */
+  const TP_TITLE_OFF = [1, 3, 6, 8, 12, 14];
 
-    /* 列を決める。**児童ごとに1列。** 同じ交流級に2人いれば2列 */
-    const plan = tpColumns_(counts);
-    const cols = plan.map(function(x){ return x.cls; });
-    if(!cols.length) throw new Error("交流級を1つも選んでいません");
+  /* シート名。**「9月1週」。** その月の何番目の月曜かで数える。
+     日付をそのまま名前にすると、たんぽぽ担当が「何週目のぶんか」を
+     毎回数えることになる。 */
+  function weekSheetName(mondayISO){
+    const p = String(mondayISO).split("-");
+    return (+p[1]) + "月" + (Math.floor((+p[2] - 1) / 7) + 1) + "週";
+  }
+
+  /* titles = {クラス: {"0": {p1:"国語", …}, …}}（0〜4 は月〜金）
+     cols   = [{cls, group}] の並び。**児童ごとに1列。** */
+  function exportWeek(year, mondayISO, titles, cols, slots, name){
+    const {ss, cfg} = tpOpen();
+    const plan = tpColumns_(cols);
+    if(!plan.length) throw new Error("交流級を1つも選んでいません");
+    const list = plan.map(function(x){ return x.cls; });
+    const sheetName = String(name || "").trim() || weekSheetName(mondayISO);
     const staff = String(cfg["たんぽぽ支援員"] || "").split(/[,、\s]+/)
       .map(function(x){ return x.trim(); }).filter(Boolean);
 
-    const width = 1 + cols.length + staff.length;
+    const width = 1 + list.length + staff.length;
     const ids = (slots && slots.length === 6) ? slots : ["p1","p2","p3","p4","p5","p6"];
+
+    /* 中身を組む。**先に全部の値を作ってから1回で書く。**
+       1コマずつ書くと、26列×5日で百回以上の往復になる。 */
     const rows = [];
-    rows.push(["たんぽぽ 週案"].concat(new Array(width - 1).fill("")));
+    rows.push([sheetName].concat(new Array(width - 1).fill("")));
+    let wrote = 0, empty = 0;
     for(let d = 0; d < 5; d++){
       /* **日付として置く。** 字で置くと、シートの側で日付になったりならなかったり
          して、次に読むときに見つけられないことがある */
-      const head = [addDays_(mondayISO, d)].concat(cols, staff);
-      rows.push(head);
+      rows.push([addDays_(mondayISO, d)].concat(list, staff));
       const lab = ["1", "", "2", "", "中休み", "3", "", "4", "", "給食", "昼休み",
                    "5", "", "6", ""];
-      for(const t of lab) rows.push([t].concat(new Array(width - 1).fill("")));
+      const body = lab.map(function(t){
+        return [t].concat(new Array(width - 1).fill(""));
+      });
+      /* 授業名の行に、その日のコマを入れる。担当者・場所の行は空のまま
+         （たんぽぽ担当が書くところ。こちらは触らない） */
+      for(let i = 0; i < TP_TITLE_OFF.length; i++){
+        const r = body[TP_TITLE_OFF[i] - 1];          /* body は +1 から始まる */
+        for(let c = 0; c < list.length; c++){
+          const v = ((titles[list[c]] || {})[String(d)] || {})[ids[i]];
+          const t = (v === undefined || v === null) ? "" : String(v);
+          r[1 + c] = t;
+          if(t) wrote++; else empty++;
+        }
+      }
+      for(const b of body) rows.push(b);
     }
 
-    /* いまのシートは残す。**消さない。**（退避のやり方は Sheets.stash に1本化） */
-    const backup = Sheets.stash(sh, "前の形");
-    if(!backup) ss.deleteSheet(sh);          /* 空のシートだけは消す。残す値が無い */
-    const nw = ss.insertSheet(name, 0);
+    /* **同じ名前のシートがあれば、消さずに名前を変えて残す。**
+       たんぽぽ担当が担当者・場所に書き足したものを、こちらが消さない */
+    const old = ss.getSheetByName(sheetName);
+    let backup = "";
+    if(old){
+      backup = Sheets.stash(old, "前の");
+      if(!backup) ss.deleteSheet(old);       /* 空のシートだけは消す。残す値が無い */
+    }
+    const nw = ss.insertSheet(sheetName, 0);
+    Sheets.grow(nw, rows.length, width);     /* 26列を超えると落ちる。先に伸ばす */
     /* **値を入れる前に、B列から右を「書式なしテキスト」にする。**
        交流級の見出し 1-2 は、そのままだと 1月2日 として取り込まれる。
-       画面には 1-2 と出るのに getValues() では Date が返り、
-       「交流級の列が1つも無い」と判定されて1コマも書けない。
+       画面には 1-2 と出るのに getValues() では Date が返る。
        A列は日付を入れるところなので、ここには掛けない。 */
     if(width > 1)
       nw.getRange(1, 2, nw.getMaxRows(), width - 1).setNumberFormat("@");
@@ -774,11 +727,10 @@ const Store = (function(){
       nw.getRange(1, c, rows.length, 1).setBackground(F.evenBody);
 
     /* 授業名の行は灰色。担当者・場所が「た」で始まる列だけ、条件付き書式で白に戻す */
-    const titleOff = [1, 3, 6, 8, 12, 14];
     const rules = [];
     for(let d = 0; d < 5; d++){
       const top = 2 + d * TP_BUILD_ROWS;
-      for(const off of titleOff){
+      for(const off of TP_TITLE_OFF){
         const r = top + off;
         const rng = nw.getRange(r, 2, 1, width - 1);
         rng.setBackground(F.imported);
@@ -805,128 +757,11 @@ const Store = (function(){
 
     nw.setConditionalFormatRules(rules);
     SpreadsheetApp.flush();
-    return {file:ss.getName(), sheet:name, cols:cols.length, staff:staff.length,
-            rows:rows.length, backup:backup, list:cols,
-            groups:plan.map(function(x){ return x.group; })};
+    return {file: ss.getName(), sheet: sheetName, cols: list.length,
+            staff: staff.length, rows: rows.length, backup: backup,
+            wrote: wrote, empty: empty, days: 5, list: list,
+            groups: plan.map(function(x){ return x.group; })};
   }
-
-  function exportTanpopo(year, mondayISO, titles, classes, slots){
-    const {ss, sh} = tpOpen();
-
-    /* classes は {クラス:人数} でも、クラス名の並びでも受ける */
-    const pick = {};
-    if(Array.isArray(classes)) for(const c of classes) pick[tpNorm(c)] = 1;
-    else for(const c in (classes || {})) if(+classes[c] > 0) pick[tpNorm(c)] = +classes[c];
-    const dayOf = {};                       /* 日付 → 月〜金の何日目か */
-    for(let i = 0; i < 5; i++) dayOf[ymd(addDays_(mondayISO, i))] = i;
-
-    /* **書く前に形を確かめる。分からないときは1マスも書かない。**
-       何が足りないかを必ず言う（「エラーが発生しました」だけを出さない）。 */
-    const lastRow = sh.getLastRow(), lastCol = sh.getLastColumn();
-    const where = "たんぽぽ時間割（" + ss.getName() + " の「" + sh.getName() + "」）";
-    const shape = Sheets.shapeOk(where, [
-      {ok: lastRow >= 2, why: "行が " + lastRow + " しかありません（日ブロックが1つも入らない）"},
-      {ok: lastCol >= 2, why: "列が " + lastCol + " しかありません（交流級の列がない）"}
-    ]);
-    if(!shape.ok) throw Sheets.shapeError(shape);
-    const colA = sh.getRange(1, 1, lastRow, 1).getValues();
-
-    /* 日ブロックを探す。まず日付で。**行が足された表もあるので先頭行は決め打ちしない。** */
-    const blocks = [];
-    for(let r = 0; r < lastRow; r++){
-      const d = tpDate(colA[r][0], year);
-      if(d && dayOf[d] !== undefined) blocks.push({row: r + 1, day: dayOf[d], date: d});
-    }
-
-    /* この週の日付が入っていないとき。**日付だけを入れ直して使う。**
-       たんぽぽ時間割は毎週おなじシートを使い回す。週が変わるたびに人が
-       日付を打ち替えるのでは、打ち替え忘れた週に何も入らない。
-       「中休み」の行を骨にして日ブロックを見つけ、その先頭に日付を書く。 */
-    let redated = 0;
-    if(blocks.length < 5){
-      const starts = [];
-      for(let r = 0; r < lastRow; r++)
-        if(tpNorm(colA[r][0]).indexOf(tpNorm("中休み")) >= 0 && r - 5 >= 0)
-          starts.push(r - 5 + 1);                 /* +5 が中休み → その5つ上 */
-      if(starts.length === 5){
-        blocks.length = 0;
-        for(let i = 0; i < 5; i++){
-          const d = ymd(addDays_(mondayISO, i));
-          sh.getRange(starts[i], 1).setValue(new Date(d + "T00:00:00"));
-          blocks.push({row: starts[i], day: i, date: d});
-          redated++;
-        }
-        SpreadsheetApp.flush();
-      }
-    }
-
-    /* 校時のIDは画面から受け取る。時程シートを直した学校でも合う */
-    const slotIds = (slots && slots.length === 6)
-      ? slots : ["p1", "p2", "p3", "p4", "p5", "p6"];
-    const report = {wrote:0, days:0, skipped:[], short:[], unknown:{},
-                    redated:redated, file:ss.getName()};
-
-    /* 次の日の日付までが、その日のブロック */
-    for(let bi = 0; bi < blocks.length; bi++){
-      const b = blocks[bi];
-      const end = (bi + 1 < blocks.length) ? blocks[bi + 1].row : lastRow + 1;
-      const len = Math.min(end - b.row, lastRow - b.row + 1);
-      if(len < 6){ report.skipped.push(b.date + "（行が足りない）"); continue; }
-      const grid = sh.getRange(b.row, 1, len, lastCol).getValues();
-      const found = tpRows(grid, len);
-      if(found.bad){ report.skipped.push(b.date + "（" + found.bad + "）"); continue; }
-      const TITLE = found.rows;
-      if(found.miss.length)
-        report.skipped.push(b.date + "（" + found.miss.join("・") + "校時の行が無い）");
-
-      /* その日の見出しを読んで、書く列を決める */
-      const cols = [], seen = {};
-      for(let c = 1; c < lastCol; c++){
-        const cls = tpCls(grid[0][c]);
-        if(!/^[1-9]-[1-9]$/.test(cls)) continue;      /* 支援員などの列は飛ばす */
-        if(!pick[cls]){ continue; }
-        if(!titles[cls]){ report.unknown[cls] = true; continue; }
-        seen[cls] = (seen[cls] || 0) + 1;
-        cols.push({c, cls});
-      }
-      /* **人数と列の数が合っているか。** 合わないと、誰かのぶんが入らないか、
-         もう居ない児童の列に入る。落ちないので気づかない */
-      for(const cls in pick){
-        const got = seen[cls] || 0;
-        if(got !== pick[cls])
-          report.short.push(b.date + " " + cls + "：" + pick[cls] + "人だが列は" + got + "つ");
-      }
-      if(!cols.length){ report.skipped.push(b.date + "（出す交流級の列が無い）"); continue; }
-
-      /* **選んだ列だけを書く。** 続きになっている列はまとめて1回で書く。
-         触らない列を巻き込むと、そこに式が入っていたときに値へ潰れる。 */
-      cols.sort(function(p, q){ return p.c - q.c; });
-      const runs = [];
-      for(const x of cols){
-        const last = runs[runs.length - 1];
-        if(last && x.c === last[last.length - 1].c + 1) last.push(x);
-        else runs.push([x]);
-      }
-      for(let i = 0; i < TITLE.length; i++){
-        if(TITLE[i] < 0) continue;                 /* その校時の行が無い日 */
-        for(const run of runs){
-          const line = run.map(function(x){
-            const v = ((titles[x.cls] || {})[String(b.day)] || {})[slotIds[i]];
-            report.wrote++;
-            return (v === undefined || v === null) ? "" : String(v);
-          });
-          sh.getRange(b.row + TITLE[i], run[0].c + 1, 1, line.length).setValues([line]);
-        }
-      }
-      report.days++;
-    }
-    SpreadsheetApp.flush();
-    report.unknown = Object.keys(report.unknown);
-    if(!report.days && !report.skipped.length)
-      report.skipped.push("この週の日付が、たんぽぽ時間割のA列に見つかりません");
-    return report;
-  }
-
   /* 旧・週案（1枚に全クラス）を、クラスごとのシートへ移す。
      **何度走らせても同じ。** すでに移してあるコマは上書きするだけ。
      旧シートは消さない（移し損ねたときに元を見られるように）。 */
@@ -1130,7 +965,7 @@ const Store = (function(){
 
   return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects,
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste,
-          exportTanpopo, shapeTanpopo, buildTanpopo, migratePlan, checkYear,
+          exportWeek, weekSheetName, migratePlan, checkYear,
           archiveCount, archiveVerify, archivePurge, archivedAll, ymd,
           /* 検査から呼ぶ。**画面からは呼ばない**（形を読むための道具） */
           __tpCls: tpCls, __tpColumns: tpColumns_};
@@ -1240,15 +1075,10 @@ function apiReadPaste(){
   Gate.check();
   return Store.readPaste();
 }
-function apiShapeTanpopo(mondayISO){
+/* たんぽぽ時間割へ、**1週ぶんを1枚のシートとして出す**。シート名は「9月1週」。
+   同じ名前のシートがあれば、消さずに名前を変えて残す。
+   出す先の形をこちらが毎週作るので、「形をみる」「形を作りなおす」は要らない。 */
+function apiExportWeek(year, mondayISO, titles, cols, slots, name){
   Gate.check();
-  return Store.shapeTanpopo(mondayISO);
-}
-function apiBuildTanpopo(year, mondayISO, counts, slots){
-  Gate.check();
-  return Store.buildTanpopo(year, mondayISO, counts, slots);
-}
-function apiExportTanpopo(year, mondayISO, titles, classes, slots){
-  Gate.check();
-  return Store.exportTanpopo(year, mondayISO, titles, classes, slots);
+  return Store.exportWeek(year, mondayISO, titles, cols, slots, name);
 }

@@ -6,6 +6,8 @@ let selCell = null;   /* いま選んでいるコマ {d, s} */
    字が変わらず、入れた本人には反映されていないように見える。 */
 let typing = null;
 
+const memoOf = () => ((week().memos || {})[viewName()] || "");
+
 function buildSheet(){
   const sh = $("sheet");
   sh.textContent = "";
@@ -19,52 +21,46 @@ function buildSheet(){
 
   const add = (node) => { sh.appendChild(node); return node; };
   add(el("div", "lab"));                                  /* 左上の角 */
-  for(let d = 0; d < 5; d++){
+  /* **月〜土の6列。** 土曜はほとんど空くが、行事とオープンスクールが入る。
+     前は土日を1列に畳んでいた。畳んだ理由は「6日ぶんの授業行を刷ると
+     1列あたりが痩せる」ことだったので、**土の列は前の土日と同じ 20mm のまま**
+     にしてある。月〜金の幅は1mmも変わらない。日曜は置かない。 */
+  for(let d = 0; d < DAYS; d++){
     const dt = addDays(monday, d);
-    add(el("div", "hd", "<span>" + md(dt) + "</span><span class='dow'>" + DOW[d] + "</span>"));
+    add(el("div", "hd" + (d === 5 ? " sat lastcol" : ""),
+      "<span>" + md(dt) + "</span><span class='dow'>" + DOW[d] + "</span>"));
   }
-  add(el("div", "hd sat lastcol", "<span class='dow'>土日</span>"));
 
-  SLOTS.forEach((s, i) => {
+  SLOTS.forEach((s) => {
     const lab = add(el("div", "lab" + (s.kind === "brk" ? " row-break" : ""),
       (s.kind === "lesson" ? "<span class='no'>" + s.name + "</span>"
                            : "<span>" + s.name + "</span>")
       + (s.time ? "<span class='tm'>" + s.time + "</span>" : "")));
     if(s.kind === "brk") lab.classList.add("row-break");
-    for(let d = 0; d < 5; d++) add(cellEl(d, s));
-    /* 土は上7行ぶん、日は下3行ぶん。日曜より土曜のほうが書くことが多い */
-    if(i === 0) add(weekendEl("土", 2, 8));
-    if(i === 7) add(weekendEl("日", 9, 11));
+    for(let d = 0; d < DAYS; d++){
+      const c = add(cellEl(d, s));
+      if(d === 5) c.classList.add("sat", "lastcol");
+    }
   });
 
   const foot = add(el("div", "foot lastcol",
     "<div class='lab'><span>週の</span><span>メモ</span></div>"
     + "<div class='t' contenteditable></div>"));
   const ft = foot.querySelector(".t");
-  ft.innerHTML = week().memo || "";
+  /* **週メモは画面（学級）ごとに持つ。** 前は週にひとつだったので、
+     3-1 で書いたメモが 3-2 の紙にも出ていた（刷る紙は学級ごとなのに）。
+     いまはこの端末の中だけに残る。シートには持っていない */
+  ft.innerHTML = memoOf() || "";
   ft.addEventListener("input", () => {
     if(typeof isLocked === "function" && isLocked()) return;
-    week().memo = clean(ft.innerHTML); save();
+    const w = week();
+    if(!w.memos || typeof w.memos !== "object") w.memos = {};
+    w.memos[viewName()] = clean(ft.innerHTML);
+    save();
   });
 
   paintSheet();
   if(typeof applyLock === "function") applyLock();
-}
-
-function weekendEl(cap, r1, r2){
-  const e = el("div", "wk lastcol",
-    "<div class='cap'>" + cap + "</div><div class='t' contenteditable></div>");
-  e.style.gridColumn = "7";
-  e.style.gridRow = r1 + " / " + (r2 + 1);
-  const t = e.querySelector(".t");
-  t.innerHTML = (week().weekend || {})[cap] || "";
-  t.addEventListener("input", () => {
-    if(typeof isLocked === "function" && isLocked()) return;
-    const w = week();
-    (w.weekend || (w.weekend = {}))[cap] = clean(t.innerHTML);
-    save();
-  });
-  return e;
 }
 
 function cellEl(d, s){

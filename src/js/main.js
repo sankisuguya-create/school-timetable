@@ -65,9 +65,16 @@ addEventListener("resize", () => { clearTimeout(fitT); fitT = setTimeout(autoFit
 
 /* ── 週 ──────────────────────────────────────── */
 function syncVariant(){
-  const v = week().variant;
+  const w = week(), v = w.variant, auto = autoVariant(wkKey());
   for(const [id, k] of [["abA","A"],["abB","B"]])
     $(id).setAttribute("aria-pressed", String(v === k));
+  /* **ふだんは日付から決まる。** 手で変えた週だけ、戻す道を出す。
+     出しっぱなしにすると、押す必要のないものが毎週目に入る */
+  const b = $("abAuto");
+  if(b){
+    b.hidden = !w.vset;
+    b.textContent = "自動に戻す（" + auto + "週）";
+  }
 }
 function refreshWeek(){
   $("weekLabel").textContent = md(monday) + " → " + md(addDays(monday, 4));
@@ -172,8 +179,16 @@ function markOpening(el){
   for(const x of document.querySelectorAll(".opening")) x.classList.remove("opening");
   if(el) el.classList.add("opening");
 }
-function setVariant(v){ week().variant = v; save();
-  if(view.kind === "gate") drawGate(); else refreshWeek(); }
+/* A週・B週。**ふだんは日付から決まる**（store.js の autoVariant）。
+   ここで押したときだけ、その週にかぎって手で決めた印を付ける。
+   印を付けないと、次に描き直したときに日付から決め直されて元へ戻る。 */
+function setVariant(v){
+  const w = week();
+  if(v === null){ delete w.vset; w.variant = autoVariant(wkKey()); }
+  else { w.vset = true; w.variant = v; }
+  save();
+  if(view.kind === "gate") drawGate(); else refreshWeek();
+}
 
 /* ── 画面ぜんぶに効くもの ─────────────────────── */
 
@@ -215,6 +230,7 @@ function wire(){
 
   on("abA","click", () => setVariant("A"));
   on("abB","click", () => setVariant("B"));
+  on("abAuto","click", () => { setVariant(null); toast("日付から決まる週に戻した"); });
   on("toGate","click", showGate);
   on("target","change", e => onTargetChange(e.target.value));
   on("tpGo","click", reflectTanpopo);
@@ -250,6 +266,22 @@ function wire(){
   for(const b of document.querySelectorAll("[data-close]"))
     b.addEventListener("click", () => $(b.dataset.close).close());
 
+  /* ── 窓を閉じるところ ──────────────────────
+     **窓枠の右上に ✕ を1つ置く。** 下の隅に「閉じる」を置いていたころは、
+     そこまで読み進めないと閉じ方が見つからなかった。窓は上から読むので、
+     閉じ方も上に無いと探すことになる。
+     ここで1回だけ差し込む（窓ごとに HTML へ書くと、足した窓で付け忘れる）。 */
+  for(const d of document.querySelectorAll("dialog")){
+    const box = d.querySelector(".dlg");
+    if(!box || box.querySelector(".dlgx")) continue;
+    const x = el("button", "dlgx", "✕");
+    x.type = "button";
+    x.setAttribute("aria-label", "閉じる");
+    x.title = "閉じる（Esc）";
+    x.addEventListener("click", () => d.close());
+    box.insertBefore(x, box.firstChild);
+  }
+
   /* 用紙 */
   on("stPaper","change", e => { db.settings.paper = e.target.value; save(); applyPaper(); });
   on("stMg","input",  e => { db.settings.margin = +e.target.value; save(); applyPaper(); });
@@ -277,15 +309,17 @@ function wire(){
     save(); Backend.saveBase(c, "A"); Backend.saveBase(c, "B"); drawBaseGrid();
     toast("前年度の " + escText(c) + " を写した");
   });
-  on("baseClose","click", () => { $("baseDlg").close(); if(view.kind !== "gate") buildSheet(); });
+  /* 窓を閉じたら紙を組み直す。**ボタンではなく窓の close に付ける。**
+     ✕ で閉じても、Esc で閉じても、同じことが起きないと直したものが紙に出ない */
+  on("baseDlg","close", () => { if(view.kind !== "gate") buildSheet(); });
 
   /* 保存。**打つたびには送らない。** ここで1コマ1件にまとめて送る */
   on("saveBtn","click", () => doSave(true));
   on("lockBtn","click", () => setLock(!isLocked()));
 
-  /* たんぽぽ時間割の形 */
-  on("tpShape","click", showShape);
-  on("tpBuild","click", buildShape);
+  /* たんぽぽ。**確認の窓は既定「出さない」。** 閉じ方が何であれ出さない側に落ちる */
+  on("tpNo","click",  () => $("tpDlg").close());
+  on("tpYes","click", () => { $("tpDlg").close(); doExportTanpopo(); });
   on("baseImp","click", openImpDlg);
 
   /* 固定時間割の取り込み */
@@ -294,7 +328,6 @@ function wire(){
   on("impRead","click", readImp);
   on("impCls","change", () => drawImpGrid($("impCls").value));
   on("impGo","click", goImp);
-  on("impClose","click", () => $("impDlg").close());
   on("impText","paste", () => setTimeout(readImp, 0));   /* 貼ったらすぐ読む */
 
   /* 学級編成 */
@@ -331,7 +364,6 @@ function wire(){
     save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
     toast("前年度の編成を写した");
   });
-  on("rsClose","click", () => $("rosterDlg").close());
 
   /* 時数 */
   on("tyAnchor","change", e => { db.settings.tally.anchor = e.target.value.trim(); save(); });
@@ -353,7 +385,11 @@ function wire(){
   });
   on("pRevert","click", () => {
     if(!selCell || view.kind !== "class") return;
+    if(isLocked()) return toast("この画面はロック中");
     delete (week().home[view.cls] || {})[ck(selCell.d, selCell.s)];
+    /* **シートにも伝える。** 前はここで手元から消すだけだったので、
+       戻したように見えて、次に開くと戻ってきた。行はシートに残っていた */
+    Backend.cellChanged("home", view.cls, selCell.d, selCell.s);
     save(); paintSheet(); fillPanel();
   });
   /* 5日ぶんを1日ずつ聞くと、窓が最大5回出る。**まとめて1回だけ聞く。** */

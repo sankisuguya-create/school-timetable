@@ -174,7 +174,7 @@ function targetsForView(){
 function planState(cls){
   const w = week(), g = gradeOf(cls);
   let upper = false, own = false;
-  for(let d = 0; d < 5; d++) for(const sl of SLOTS){
+  for(let d = 0; d < WEEKDAYS; d++) for(const sl of SLOTS){
     const key = ck(d, sl.id);
     if(w.school[key] || (w.grade[g] || {})[key]) upper = true;
     if((w.home[cls] || {})[key] || (w.special[cls] || {})[key]) own = true;
@@ -239,7 +239,7 @@ function sameTarget(layer, cls, target){
    開いたときに知らせる。開いている面の持ちぶんだけを見る。 */
 function overwrittenHere(){
   const out = [], mine = layerOfStore(), w = week();
-  for(let d = 0; d < 5; d++) for(const sl of SLOTS){
+  for(let d = 0; d < DAYS; d++) for(const sl of SLOTS){
     const key = ck(d, sl.id);
     if(view.kind === "class"){
       const cur = compose(view.cls, d, sl.id);
@@ -309,10 +309,14 @@ function writeCell(d, s, patch){
 
   const st  = targetStore();
   const cur = cellFor(d, s);
+  /* **いま紙に出ているものを引き継いでから直す。**
+     前は基本時間割から来たときだけ引き継いでいたので、全校や学年から
+     降りてきたコマに詳細を1字書くと、題名が空のまま「担任」として入り、
+     **紙から「全校朝会」が消えた**。書いた本人には、消したつもりが無い。 */
   const e   = st[key] || {
-    title:   cur.layer === "base" ? cur.title   : "",
-    note:    "",
-    subject: cur.layer === "base" ? cur.subject : null
+    title:   cur.title || "",
+    note:    cur.note  || "",
+    subject: cur.subject || null
   };
   if("title"   in patch) e.title   = clean(patch.title);
   if("note"    in patch) e.note    = clean(patch.note);

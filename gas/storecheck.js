@@ -15,13 +15,39 @@ const SHEETS = {};                       /* 名前 → 二次元配列 */
 const FORMATS = {};                      /* 名前/列 → 表示形式 */
 const WIDE = 20;                         /* 偽物の最大列数 */
 
+/* **偽物を本物より寛容にしない。**
+   前はここで、要求された行と列を勝手に足していた。だから
+   「1000行を超えると setValues が範囲外で落ちる」という本物の壁が
+   検査に一度も出ず、230件が全部通ったまま本番で落ちる形になっていた。
+   いまは新しいシートと同じ 1000行 × 26列から始め、
+   insertRowsAfter / insertColumnsAfter で伸ばしたぶんだけ広がる。 */
+const NEW_ROWS = 1000, NEW_COLS = 26;
 function ensure(grid, r, c){
+  /* 検査のほうが直に押し込んだ行は、シートの側にもあることにする
+     （put(...) で1行ずつ足す書き方をしている検査があるため） */
+  if(grid.length > grid.max.rows) grid.max.rows = grid.length;
+  if(r > grid.max.rows)
+    throw new Error("範囲外：" + r + " 行目は、このシート（" + grid.max.rows
+                  + " 行）にはありません");
+  if(c > grid.max.cols)
+    throw new Error("範囲外：" + c + " 列目は、このシート（" + grid.max.cols
+                  + " 列）にはありません");
   while(grid.length < r) grid.push(new Array(WIDE).fill(""));
   for(const row of grid) while(row.length < c) row.push("");
 }
+/* 偽シートの中身に、行数・列数の上限を持たせる */
+function limited(grid){
+  if(!grid.max) grid.max = {rows: NEW_ROWS, cols: NEW_COLS};
+  return grid;
+}
 function fakeSheet(name){
-  const grid = SHEETS[name];
+  const grid = limited(SHEETS[name]);
   return {
+    /* 本物と同じ。**足りない行・列は勝手に増えない。** insertRows/Columns で増やす */
+    getMaxRows(){ return grid.max.rows; },
+    getMaxColumns(){ return grid.max.cols; },
+    insertRowsAfter(after, n){ grid.max.rows += n; return this; },
+    insertColumnsAfter(after, n){ grid.max.cols += n; return this; },
     getName: () => name,
     getLastRow(){
       let last = 0;
@@ -64,7 +90,6 @@ function fakeSheet(name){
         }
       };
     },
-    getMaxRows(){ return Math.max(1000, grid.length); },
     setFrozenRows(){},
     getDataRange(){
       const r = this.getLastRow(), c = this.getLastColumn();
@@ -80,8 +105,13 @@ function tpSheet(name){
   const base = fakeSheetOn(grid, name);
   return base;
 }
-function fakeSheetOn(grid, name){
+function fakeSheetOn(grid0, name){
+  const grid = limited(grid0);
   const s0 = {
+    getMaxRows(){ return grid.max.rows; },
+    getMaxColumns(){ return grid.max.cols; },
+    insertRowsAfter(after, n){ grid.max.rows += n; return s0; },
+    insertColumnsAfter(after, n){ grid.max.cols += n; return s0; },
     getName: () => name,
     getLastRow(){ let last = 0;
       grid.forEach((row, i) => { if(row.some(v => v !== "" && v != null)) last = i + 1; });
@@ -114,7 +144,6 @@ function fakeSheetOn(grid, name){
       };
     },
     setConditionalFormatRules(){},
-    getMaxRows(){ return Math.max(200, grid.length); },
     setFrozenRows(){}, setFrozenColumns(){},
     setName(n){ TPFILE.sheets[n] = grid; delete TPFILE.sheets[name]; name = n; return s0; },
     getDataRange(){
@@ -172,7 +201,7 @@ const sandbox = {
         getName: () => TPFILE.name,
         getSheets: () => Object.keys(TPFILE.sheets).map(tpSheet),
         getSheetByName: n => (n in TPFILE.sheets) ? tpSheet(n) : null,
-        insertSheet(n){ TPFILE.sheets[n] = []; return tpSheet(n); },
+        insertSheet(n, at){ TPFILE.sheets[n] = []; return tpSheet(n); },
         deleteSheet(x){ delete TPFILE.sheets[x.getName()]; }
       };
     },
@@ -594,32 +623,9 @@ ok("ほかの年度も触らない",
 ok("B週を空で渡せばB週は消える", !base["3-3"].B || !Object.keys(base["3-3"].B).length,
    base["3-3"].B);
 
-console.log("\n■ たんぽぽ時間割へ出す");
+console.log("\n■ たんぽぽ時間割へ出す（1週1シート）");
 (function(){
-  /* 実物と同じ形の1週ぶん。1日16行・各校時は2行（上が授業名、下が担当者・場所） */
-  const W = 12;
-  const blank = () => new Array(W).fill("");
-  const g = [];
-  g.push(blank());                                     /* 1行目：取り扱い注意など */
-  const days = [[2026,10,16], [2026,10,17], [2026,10,18], [2026,10,19], [2026,10,20]];
-  for(const d of days){
-    const head = blank();
-    head[0] = new Date(d[0], d[1], d[2]);
-    head[1] = "3-3"; head[2] = "３－３"; head[3] = "5-1"; head[4] = "大屋";
-    g.push(head);
-    for(let i = 1; i <= 15; i++){
-      const row = blank();
-      if(i === 5)  row[0] = "中休み";
-      if(i === 10) row[0] = "給食";
-      if(i === 11) row[0] = "昼休み";
-      /* 担当者・場所の行。**ここは触らせない** */
-      if([2,4,7,9,13,15].indexOf(i) >= 0){ row[1] = "交：丸山"; row[2] = "た：桝村"; row[3] = "交：星川"; }
-      if([1,3,6,8,12,14].indexOf(i) >= 0){ row[3] = "のこす"; }   /* 選ばない列の授業名 */
-      g.push(row);
-    }
-  }
-  TPFILE.sheets["週案"] = g;
-  /* 設定にファイルIDを入れる */
+  /* 設定にファイルIDを入れる。**URL のまま貼っても通ること**もあとで見る */
   const at = ev('Sheets.head("設定").at');
   for(const row of SHEETS["設定"])
     if(String(row[at["キー"]]) === "たんぽぽファイルID") row[at["値"]] = TPID;
@@ -627,285 +633,174 @@ console.log("\n■ たんぽぽ時間割へ出す");
 const titles = {"3-3":{}, "5-1":{}};
 for(let d = 0; d < 5; d++){
   titles["3-3"][String(d)] = {p1:"国語" + d, p2:"算数", p3:"", p4:"体育", p5:"理科", p6:"総合"};
-  titles["5-1"][String(d)] = {p1:"だめ", p2:"だめ", p3:"だめ", p4:"だめ", p5:"だめ", p6:"だめ"};
+  titles["5-1"][String(d)] = {p1:"5年", p2:"5年", p3:"5年", p4:"5年", p5:"5年", p6:"5年"};
 }
-const rep = ev(`Store.exportTanpopo(2026, "2026-11-16", ${JSON.stringify(titles)}, ["3-3"])`);
-ok("5日ぶん書く", rep.days === 5, rep);
-ok("書いたコマ数を返す", rep.wrote === 5 * 6 * 2, rep.wrote);   /* 3-3 の列が2つ */
-const G = TPFILE.sheets["週案"];
-ok("1校時の授業名の行に入る", G[2][1] === "国語0", G[2].slice(0,5));
-ok("同じ交流学級の列が2つあれば両方に入る", G[2][2] === "国語0", G[2].slice(0,5));
-ok("6校時は +14 の行", G[15][1] === "総合", G[15].slice(0,5));
-ok("空の校時は空で入る（先週の授業名を残さない）", G[7][1] === "", G[7].slice(0,5));
-ok("担当者・場所の行は触らない", G[3][1] === "交：丸山" && G[3][2] === "た：桝村",
-   G[3].slice(0,5));
-ok("選んでいない交流級の列は触らない", G[2][3] === "のこす", G[2].slice(0,5));
-ok("中休み・給食・昼休みの行は触らない",
-   G[6][0] === "中休み" && G[11][0] === "給食" && G[12][0] === "昼休み",
-   [G[6][0], G[11][0], G[12][0]]);
-ok("見出しの日付は触らない",
-   !!G[1][0] && typeof G[1][0] === "object" && typeof G[1][0].getMonth === "function",
-   String(G[1][0]));
+const SLOT6 = ["p1","p2","p3","p4","p5","p6"];
+const cols2 = [{cls:"3-3", group:1}, {cls:"5-1", group:2}];
+const ex = ev("Store.exportWeek(2026, '2026-11-16', " + JSON.stringify(titles)
+            + ", " + JSON.stringify(cols2) + ", " + JSON.stringify(SLOT6) + ")");
+const SH = () => TPFILE.sheets[ex.sheet];
 
-/* 形が合わない日は、その日だけ書かない */
-TPFILE.sheets["週案"][6][0] = "こわれた";     /* 月曜の +5 を「中休み」でなくする */
-const rep2 = ev(`Store.exportTanpopo(2026, "2026-11-16", ${JSON.stringify(titles)}, ["3-3"])`);
-ok("形が合わない日は書かない", rep2.days === 4, rep2);
-ok("どの日をなぜ飛ばしたかを言う",
-   rep2.skipped.length === 1 && rep2.skipped[0].indexOf("中休み") >= 0, rep2.skipped);
-TPFILE.sheets["週案"][6][0] = "中休み";
+ok("シート名は「◯月◯週」", ex.sheet === "11月3週", ex.sheet);
+ok("その月の何番目の月曜かで数える",
+   ev("Store.weekSheetName('2026-09-07')") === "9月1週"
+   && ev("Store.weekSheetName('2026-09-14')") === "9月2週"
+   && ev("Store.weekSheetName('2026-11-16')") === "11月3週",
+   [ev("Store.weekSheetName('2026-09-07')"), ev("Store.weekSheetName('2026-11-16')")]);
+ok("シートが1枚できる", !!SH(), Object.keys(TPFILE.sheets));
+ok("5日ぶん・1日16行（見出し1行を足して81行）", ex.rows === 81, ex.rows);
+ok("列は 1 + 児童の数", ex.cols === 2, ex);
+ok("日ブロックの先頭は 2・18・34・50・66", [0,1,2,3,4].every(function(d){
+     const r = SH()[1 + d * 16];
+     return r && r[0] && typeof r[0].getMonth === "function";
+   }), [2,18,34,50,66].map(function(r){ return String(SH()[r-1][0]); }));
+ok("見出しの行に交流級が並ぶ", SH()[1][1] === "3-3" && SH()[1][2] === "5-1", SH()[1].slice(0,4));
+ok("1校時の授業名は +1 行目", SH()[2][1] === "国語0", SH()[2].slice(0,3));
+ok("2校時は +3 行目", SH()[4][1] === "算数", SH()[4].slice(0,3));
+ok("3校時は +6 行目（中休みの1つ下）", SH()[7][1] === "", SH()[7].slice(0,3));
+ok("4校時は +8 行目", SH()[9][1] === "体育", SH()[9].slice(0,3));
+ok("5校時は +12 行目（昼休みの1つ下）", SH()[13][1] === "理科", SH()[13].slice(0,3));
+ok("6校時は +14 行目", SH()[15][1] === "総合", SH()[15].slice(0,3));
+ok("骨は +5 中休み・+10 給食・+11 昼休み",
+   SH()[6][0] === "中休み" && SH()[11][0] === "給食" && SH()[12][0] === "昼休み",
+   [SH()[6][0], SH()[11][0], SH()[12][0]]);
+ok("担当者・場所の行には書かない（空のまま）",
+   SH()[3][1] === "" && SH()[5][1] === "" && SH()[16][1] === "",
+   [SH()[3][1], SH()[5][1], SH()[16][1]]);
+ok("日ごとに授業名が変わる", SH()[18][1] === "国語1" && SH()[34][1] === "国語2",
+   [SH()[18][1], SH()[34][1]]);
+ok("選んだクラスは全部入る", SH()[2][2] === "5年", SH()[2].slice(0,3));
+ok("空のコマは空で入る（先週のぶんが残らない）", SH()[7][2] === "5年" && SH()[7][1] === "");
+ok("何コマ書いたかを返す", ex.wrote > 0 && ex.days === 5, ex);
+ok("B列から右は書式なしテキスト（1-2 が1月2日に化けない）",
+   Object.keys(FORMATS).some(function(k){
+     return k.indexOf(ex.sheet + "/") === 0 && FORMATS[k] === "@"; }),
+   Object.keys(FORMATS).filter(function(k){ return k.indexOf(ex.sheet) === 0; }).slice(0, 3));
 
-/* **人数と列の数が合っているか。** 2人いるのに1列しかなければ、片方が入らない */
-const rn = ev(`Store.exportTanpopo(2026, "2026-11-16", ${JSON.stringify(titles)}, {"3-3":2})`);
-ok("2人ぶん2列あれば、食い違いは出ない",
-   (rn.short || []).length === 0, rn.short);
-const rn1 = ev(`Store.exportTanpopo(2026, "2026-11-16", ${JSON.stringify(titles)}, {"3-3":1})`);
-ok("1人と書いてあるのに2列あれば知らせる",
-   (rn1.short || []).length === 5 && rn1.short[0].indexOf("1人だが列は2つ") >= 0,
-   rn1.short && rn1.short[0]);
-const rn3 = ev(`Store.exportTanpopo(2026, "2026-11-16", ${JSON.stringify(titles)}, {"3-3":3})`);
-ok("3人と書いてあるのに2列でも知らせる",
-   (rn3.short || []).length === 5 && rn3.short[0].indexOf("3人だが列は2つ") >= 0,
-   rn3.short && rn3.short[0]);
-ok("食い違っても、ある列には書く", rn3.days === 5, rn3);
-
-/* 実物は日によって行数が違う（16・18・15・18・18）。**揃っていなくても書く。**
-   骨（中休み・給食・昼休み）を探して、そこから校時の行を数える */
+console.log("\n■ 同じ名前のシートは、消さずに名前を変えて残す");
 (function(){
-  const W = 12, blank = () => new Array(W).fill("");
-  const g = [];
-  g.push(blank());
-  const days = [[2026,10,16], [2026,10,17]];
-  days.forEach((d, di) => {
-    const head = blank();
-    head[0] = new Date(d[0], d[1], d[2]);
-    head[1] = "3-3";
-    g.push(head);
-    /* 1日目は上に空行が1つ多い（＝骨の位置が下にずれる） */
-    if(di === 0) g.push(blank());
-    for(let i = 1; i <= 15; i++){
-      const row = blank();
-      if(i === 5)  row[0] = "中休み";
-      if(i === 10) row[0] = "給食";
-      if(i === 11) row[0] = "昼休み";
-      g.push(row);
-      /* 2日目は5校時のあとに空行を2つ足す（＝下がふくらむ） */
-      if(di === 1 && i === 13){ g.push(blank()); g.push(blank()); }
+  const before = TPFILE.sheets[ex.sheet];
+  before[3][1] = "たんぽぽ担当が書いた";              /* 残っていてほしい値 */
+  const again = ev("Store.exportWeek(2026, '2026-11-16', " + JSON.stringify(titles)
+               + ", " + JSON.stringify(cols2) + ", " + JSON.stringify(SLOT6) + ")");
+  ok("前のシートは名前を変えて残る", !!again.backup && again.backup.indexOf("前の") >= 0, again);
+  ok("残したシートに、前の中身がある",
+     !!TPFILE.sheets[again.backup]
+     && TPFILE.sheets[again.backup][3][1] === "たんぽぽ担当が書いた",
+     again.backup);
+  ok("新しいシートは同じ名前で作り直される",
+     !!TPFILE.sheets[again.sheet] && again.sheet === ex.sheet, Object.keys(TPFILE.sheets));
+})();
+
+console.log("\n■ 出す先の列は、組ごとに並べる");
+(function(){
+  const cols = [{cls:"6-4", group:2}, {cls:"1-1", group:1},
+                {cls:"3-3", group:1}, {cls:"1-1", group:1}];
+  const t = {};
+  for(const c of ["6-4","1-1","3-3"]){
+    t[c] = {};
+    for(let d = 0; d < 5; d++) t[c][String(d)] = {p1:c, p2:"", p3:"", p4:"", p5:"", p6:""};
+  }
+  const r = ev("Store.exportWeek(2026, '2026-12-07', " + JSON.stringify(t)
+             + ", " + JSON.stringify(cols) + ", " + JSON.stringify(SLOT6) + ")");
+  const g = TPFILE.sheets[r.sheet];
+  ok("1組の全員 → 2組の全員 の順", JSON.stringify(r.list) === '["1-1","1-1","3-3","6-4"]', r.list);
+  ok("組の中はクラス順（字の順で 10 を 2 の前に置かない）",
+     r.list[2] === "3-3" && r.list[3] === "6-4", r.list);
+  ok("同じ交流級を2つ入れれば2列になる",
+     r.list.filter(function(x){ return x === "1-1"; }).length === 2, r.list);
+  ok("見出しの行も同じ並び", g[1][1] === "1-1" && g[1][4] === "6-4", g[1].slice(0,6));
+  ok("6-4（6月4日に化けるクラス名）の列に 6-4 の授業が入る",
+     g[2][4] === "6-4", g[2].slice(0,6));
+})();
+
+console.log("\n■ 26列を超えても作れる（新しいシートは26列しかない）");
+(function(){
+  const cols = [], t = {};
+  for(let i = 1; i <= 4; i++) for(let j = 1; j <= 8; j++){
+    const c = ((i % 6) + 1) + "-" + ((j % 4) + 1);
+    cols.push({cls:c, group:i});
+    if(!t[c]){ t[c] = {}; for(let d = 0; d < 5; d++)
+      t[c][String(d)] = {p1:"国語", p2:"", p3:"", p4:"", p5:"", p6:""}; }
+  }
+  let why = "";
+  let r = null;
+  try{
+    r = ev("Store.exportWeek(2026, '2027-01-11', " + JSON.stringify(t)
+         + ", " + JSON.stringify(cols) + ", " + JSON.stringify(SLOT6) + ")");
+  }catch(e){ why = String(e && e.message); }
+  ok("32列ぶんでも落ちない（先に列を伸ばしている）", !!r && r.cols === 32, why || r);
+  ok("いちばん右の列にも授業名が入る",
+     !!r && TPFILE.sheets[r.sheet][2][32] === "国語",
+     r && TPFILE.sheets[r.sheet][2].slice(28, 34));
+})();
+
+console.log("\n■ 交流級を1つも選ばずに出そうとしたら止まる");
+(function(){
+  let why = "";
+  try{ ev("Store.exportWeek(2026, '2026-11-16', {}, [], " + JSON.stringify(SLOT6) + ")"); }
+  catch(e){ why = String(e && e.message); }
+  ok("何も選んでいなければ出さない", why.indexOf("交流級") >= 0, why);
+})();
+
+console.log("\n■ たんぽぽファイルの指定は URL のまま貼れる");
+(function(){
+  const at = ev('Sheets.head("設定").at');
+  const put = v => { for(const row of SHEETS["設定"])
+    if(String(row[at["キー"]]) === "たんぽぽファイルID") row[at["値"]] = v; };
+  put("https://docs.google.com/spreadsheets/d/" + TPID + "/edit#gid=0");
+  let ok1 = false;
+  try{ ev("Store.exportWeek(2026, '2026-11-16', " + JSON.stringify(titles)
+        + ", " + JSON.stringify(cols2) + ", " + JSON.stringify(SLOT6) + ")"); ok1 = true; }
+  catch(e){ ok1 = String(e && e.message); }
+  ok("URL をそのまま貼っても開ける", ok1 === true, ok1);
+  put("これはURLではない");
+  let why = "";
+  try{ ev("Store.exportWeek(2026, '2026-11-16', " + JSON.stringify(titles)
+        + ", " + JSON.stringify(cols2) + ", " + JSON.stringify(SLOT6) + ")"); }
+  catch(e){ why = String(e && e.message); }
+  ok("読めないときは、何が読めないかを言う",
+     why.indexOf("たんぽぽファイルID") >= 0 && why.indexOf("読めません") >= 0, why);
+  put(TPID);
+})();
+
+console.log("\n■ シートの行・列は、足りなければ先に伸ばす（本番で落ちていたところ）");
+(function(){
+  /* 20クラス × A週B週 × 5日 × 6校時 = 1,200行。**新しいシートは1000行しかない。**
+     前は伸ばしていなかったので、1回目の固定時間割取り込みで落ちていた。 */
+  const table = {};
+  const g = ["1","2","3","4","5","6"];
+  for(const gr of g){
+    const n = (gr === "5" || gr === "6") ? 4 : 3;
+    for(let i = 1; i <= n; i++){
+      const cls = gr + "-" + i, bank = {};
+      for(let d = 0; d < 5; d++) for(const s of ["p1","p2","p3","p4","p5","p6"])
+        bank[d + "|" + s] = {title:"国語", subject:"kokugo"};
+      table[cls] = {A:bank, B:bank};
     }
-  });
-  TPFILE.sheets["ずれ"] = g;
-  const at = ev('Sheets.head("設定").at');
-  for(const row of SHEETS["設定"]){
-    if(String(row[at["キー"]]) === "たんぽぽファイルID") row[at["値"]] = TPID;
-    if(String(row[at["キー"]]) === "たんぽぽシート名")  row[at["値"]] = "ずれ";
   }
-})();
-const rz = ev(`Store.exportTanpopo(2026, "2026-11-16", ${JSON.stringify(titles)}, ["3-3"])`);
-ok("行数が日によって違っても書く", rz.days === 2, rz);
-const Z = TPFILE.sheets["ずれ"];
-ok("空行が1つ多い日でも、正しい行に入る", Z[3][1] === "国語0", Z.slice(1,5).map(r => r[1]));
-ok("下がふくらんだ日でも、正しい行に入る", Z[19][1] === "国語1",
-   Z.slice(17,22).map(r => r[1]));
-
-/* 6校時の行が無い日（実物の水曜）。**その日を丸ごと飛ばさない** */
-(function(){
-  const g = TPFILE.sheets["ずれ"];
-  g.length = 0;
-  g.push(new Array(12).fill(""));
-  const head = new Array(12).fill(""); head[0] = new Date(2026, 10, 18); head[1] = "3-3";
-  g.push(head);
-  for(let i = 1; i <= 13; i++){          /* 6校時の2行が無い（+14 +15 が無い） */
-    const row = new Array(12).fill("");
-    if(i === 5)  row[0] = "中休み";
-    if(i === 10) row[0] = "給食";
-    if(i === 11) row[0] = "昼休み";
-    g.push(row);
+  let why = "", r = null;
+  try{ r = ev("Store.writeBaseAll(2027, " + JSON.stringify(table) + ")"); }
+  catch(e){ why = String(e && e.message); }
+  ok("20クラス×A週B週（1,200行）を1回で入れても落ちない", !!r && r.rows === 1200, why || r);
+  ok("入れたぶんが読み直せる",
+     Object.keys(ev("Store.readBase(2027, [])")).length === 20,
+     Object.keys(ev("Store.readBase(2027, [])")).length);
+  /* 週案シートも同じ。1クラス年1,200行を超えて保存できること */
+  const patches = [];
+  for(let i = 0; i < 1100; i++){
+    const d = new Date(2027, 3, 5 + Math.floor(i / 6));
+    patches.push({date: d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0")
+                      + "-" + String(d.getDate()).padStart(2,"0"),
+                  slot: ["p1","p2","p3","p4","p5","p6"][i % 6],
+                  layer:"home", target:"3-3", title:"国語", note:"", subject:"kokugo"});
   }
-})();
-const rs = ev(`Store.exportTanpopo(2026, "2026-11-16", ${JSON.stringify(titles)}, ["3-3"])`);
-ok("6校時の行が無い日でも、1〜5校時は書く",
-   rs.days === 1 && TPFILE.sheets["ずれ"][2][1] === "国語2",
-   [rs, TPFILE.sheets["ずれ"][2][1]]);
-ok("書けなかった校時があることは言う",
-   rs.skipped.length === 1 && rs.skipped[0].indexOf("6校時") >= 0, rs.skipped);
-(function(){
-  const at = ev('Sheets.head("設定").at');
-  for(const row of SHEETS["設定"])
-    if(String(row[at["キー"]]) === "たんぽぽシート名") row[at["値"]] = "";
-})();
-
-/* この週の日付が入っていなくても、**日付を入れ直して使う**。
-   たんぽぽ時間割は毎週おなじシートを使い回すため。 */
-const rep3 = ev(`Store.exportTanpopo(2026, "2026-12-07", ${JSON.stringify(titles)}, {"3-3":2})`);
-ok("この週の日付が無ければ、日付を入れ直して書く",
-   rep3.days === 5 && rep3.redated === 5, rep3);
-ok("入れ直した日付はその週の月〜金", (function(){
-     const g = TPFILE.sheets["週案"];
-     const d = g[1][0];
-     return !!d && typeof d === "object" && d.getMonth() === 11 && d.getDate() === 7;
-   })() === true, String(TPFILE.sheets["週案"][1][0]));
-/* 骨が1つも無ければ、日付も入れ直せない */
-(function(){
-  for(const row of TPFILE.sheets["週案"]) if(String(row[0]) === "中休み") row[0] = "";
-})();
-const rep4 = ev(`Store.exportTanpopo(2026, "2027-05-10", ${JSON.stringify(titles)}, {"3-3":2})`);
-ok("骨も日付も無ければ、書かずに理由を返す",
-   rep4.days === 0 && rep4.skipped.length >= 1, rep4);
-(function(){                      /* 骨を戻す */
-  const g = TPFILE.sheets["週案"];
-  for(let i = 0; i < g.length; i++) if((i - 1) % 16 === 5) g[i][0] = "中休み";
-})();
-
-/* **URL をそのまま貼っても通す。** ID だけ抜くのは知らないとできない操作 */
-const setId = v => {
-  const at = ev('Sheets.head("設定").at');
-  for(const row of SHEETS["設定"])
-    if(String(row[at["キー"]]) === "たんぽぽファイルID") row[at["値"]] = v;
-};
-setId("https://docs.google.com/spreadsheets/d/" + TPID + "/edit?pli=1&gid=0#gid=0");
-ok("URLをそのまま貼っても開ける",
-   ev(`Store.exportTanpopo(2026, "2026-11-16", ${JSON.stringify(titles)}, ["3-3"])`).days === 5);
-setId("  " + TPID + "  ");
-ok("IDだけでも開ける（前後の空白ごと）",
-   ev(`Store.exportTanpopo(2026, "2026-11-16", ${JSON.stringify(titles)}, ["3-3"])`).days === 5);
-setId("これはURLではない");
-let badId = "";
-try{ ev(`Store.exportTanpopo(2026, "2026-11-16", {}, ["3-3"])`); }
-catch(e){ badId = String(e.message || e); }
-ok("URLでもIDでもなければ、何が悪いかを言う",
-   badId.indexOf("たんぽぽファイルID") >= 0 && badId.indexOf("URL") >= 0, badId);
-setId(TPID);
-
-/* ファイルIDが空なら止める */
-(function(){
-  const at = ev('Sheets.head("設定").at');
-  for(const row of SHEETS["設定"])
-    if(String(row[at["キー"]]) === "たんぽぽファイルID") row[at["値"]] = "";
-})();
-let noId = false;
-try{ ev(`Store.exportTanpopo(2026, "2026-11-16", {}, ["3-3"])`); }catch(e){ noId = true; }
-ok("ファイルIDが空なら、何もせず知らせる", noId === true);
-
-console.log("\n■ たんぽぽ時間割の形を作る");
-/* 偽のファイルに、形の合っていないシートを置く */
-TPFILE.sheets["ばらばら"] = (function(){
-  const g = [];
-  for(let i = 0; i < 30; i++) g.push(new Array(12).fill(""));
-  g[0][0] = "たんぽぽ"; g[3][1] = "なにか";
-  return g;
-})();
-(function(){
-  const at = ev('Sheets.head("設定").at');
-  for(const row of SHEETS["設定"]){
-    if(String(row[at["キー"]]) === "たんぽぽシート名")  row[at["値"]] = "ばらばら";
-    if(String(row[at["キー"]]) === "たんぽぽファイルID") row[at["値"]] = TPID;
-  }
-})();
-const sp0 = ev(`Store.shapeTanpopo("2026-11-16")`);
-ok("形が合っていないと、何が無いかを言う",
-   sp0.note.length >= 2 && sp0.note.join("").indexOf("日付") >= 0, sp0.note);
-
-const bt = ev(`Store.buildTanpopo(2026, "2026-11-16", {"3-3":2, "1-1":1}, ["p1","p2","p3","p4","p5","p6"])`);
-ok("児童の数だけ列を作る（2人いる交流級は2列）", bt.cols === 3, bt);
-ok("列は学年・組の順に並ぶ",
-   JSON.stringify(bt.list) === JSON.stringify(["1-1", "3-3", "3-3"]), bt.list);
-ok("1日16行・5日ぶんと見出しの行", bt.rows === 1 + 16 * 5, bt.rows);
-ok("前の形は消さずに名前を変えて残す", !!bt.backup && !!TPFILE.sheets[bt.backup], bt.backup);
-const G2 = TPFILE.sheets["ばらばら"];
-ok("A列に骨（中休み・給食・昼休み）が入る",
-   String(G2[1 + 5][0]) === "中休み" && String(G2[1 + 10][0]) === "給食"
-   && String(G2[1 + 11][0]) === "昼休み",
-   [G2[6][0], G2[11][0], G2[12][0]]);
-ok("日ブロックの先頭に日付が入る",
-   !!G2[1][0] && typeof G2[1][0] === "object", String(G2[1][0]));
-ok("見出しの行に交流学級が並ぶ",
-   String(G2[1][1]) === "1-1" && String(G2[1][2]) === "3-3" && String(G2[1][3]) === "3-3",
-   G2[1].slice(0, 5));
-/* 作った形にそのまま出せる */
-const bt2 = ev(`Store.exportTanpopo(2026, "2026-11-16",
-  ${JSON.stringify({"3-3":{"0":{p1:"国語",p2:"算数",p3:"",p4:"体育",p5:"理科",p6:"総合"},
-                          "1":{},"2":{},"3":{},"4":{}},
-                    "1-1":{"0":{p1:"生活"},"1":{},"2":{},"3":{},"4":{}}})},
-  {"3-3":2, "1-1":1})`);
-ok("作った形にはそのまま出せる", bt2.days === 5 && (bt2.short || []).length === 0, bt2);
-ok("2人ぶんの列に同じ授業が入る",
-   String(G2[2][2]) === "国語" && String(G2[2][3]) === "国語", G2[2].slice(0, 5));
-ok("担当者・場所の行は空のまま（たんぽぽ担当が書く）",
-   String(G2[3][2]) === "", G2[3].slice(0, 5));
-(function(){
-  const at = ev('Sheets.head("設定").at');
-  for(const row of SHEETS["設定"])
-    if(String(row[at["キー"]]) === "たんぽぽシート名") row[at["値"]] = "";
-})();
-
-/* **消さずに退避する**のと、**形が分からないときは書かない**のは、
-   外へ出すところ全部で同じにする。1本に寄せてある（Sheets.stash / shapeOk）。 */
-/* **年度末に、人がドライブでファイルを丸ごと複製する。**
-   こちらは数える・照合する・消すだけ。複製をコードで書かないので、
-   コピー漏れが原理的に起きない。本体のURLは変わらない。 */
-/* **交流級の見出しは Date に化ける。** 1-2 は「1月2日」として取り込まれる。
-   画面には 1-2 と出るのに getValues() は Date を返すので、字として比べると
-   交流級が1つも見つからず、1コマも書けない。落ちないので気づかない。 */
-console.log("\n■ 交流級の見出しが日付に化けても読む");
-ok("Date の 1-2 を交流級として読む",
-   ev('Store.__tpCls(new Date(2026, 0, 2))') === "1-2",
-   ev('Store.__tpCls(new Date(2026, 0, 2))'));
-ok("Date の 6-4 も読む（6月4日）",
-   ev('Store.__tpCls(new Date(2026, 5, 4))') === "6-4",
-   ev('Store.__tpCls(new Date(2026, 5, 4))'));
-ok("字のままの見出しはそのまま", ev('Store.__tpCls("3-3")') === "3-3");
-ok("全角や長音の混じった見出しも直す",
-   ev('Store.__tpCls("１ー１")') === "1-1", ev('Store.__tpCls("１ー１")'));
-
-/* 作った形の見出しが、次に読むとき字として残っているか */
-console.log("\n■ たんぽぽの列は、組ごとに並べて作る");
-(function(){
-  const at = ev('Sheets.head("設定").at');
-  for(const row of SHEETS["設定"]){
-    if(String(row[at["キー"]]) === "たんぽぽシート名")   row[at["値"]] = "組ならび";
-    if(String(row[at["キー"]]) === "たんぽぽファイルID") row[at["値"]] = TPID;
-  }
-})();
-TPFILE.sheets["組ならび"] = [["たんぽぽ"], ["x"]];
-const bg = ev(`Store.buildTanpopo(2026, "2026-11-16", [
-  {cls:"6-4", group:1}, {cls:"1-2", group:2}, {cls:"3-3", group:1},
-  {cls:"1-1", group:2}, {cls:"3-3", group:2}
-], ["p1","p2","p3","p4","p5","p6"])`);
-ok("たんぽぽ1組から順に、組の中はクラス順",
-   JSON.stringify(bg.list) === JSON.stringify(["3-3","6-4","1-1","1-2","3-3"]), bg.list);
-ok("どの列が何組かも返す",
-   JSON.stringify(bg.groups) === JSON.stringify([1,1,2,2,2]), bg.groups);
-const GB = TPFILE.sheets["組ならび"];
-ok("見出しは字として残る（Date にならない）",
-   typeof GB[1][1] === "string" && GB[1][1] === "3-3", GB[1].slice(0, 6));
-ok("B列から右を書式なしテキストにしている",
-   FORMATS["組ならび/1,2"] === "@" && FORMATS["組ならび/1,6"] === "@",
-   [FORMATS["組ならび/1,2"], FORMATS["組ならび/1,6"]]);
-ok("A列（日付）は書式なしテキストにしない",
-   FORMATS["組ならび/1,1"] !== "@", FORMATS["組ならび/1,1"]);
-ok("日ブロックの先頭は日付のまま",
-   !!GB[1][0] && typeof GB[1][0] === "object", String(GB[1][0]));
-
-/* **6-4 は「6月4日」に化けやすい。** 往復して残ることを見る */
-ok("6-4 の列がそのまま残る", GB[1].indexOf("6-4") > 0, GB[1].slice(0, 6));
-const bg2 = ev(`Store.shapeTanpopo("2026-11-16")`);
-ok("作った形を読み直すと、交流級の列が数えられる", bg2.classCols === 5, bg2.classCols);
-ok("見出しを読み返しても 6-4 のまま",
-   bg2.head.indexOf("6-4") >= 0, bg2.head.slice(0, 8));
-/* 出す側も、化けた見出しを読めること */
-const ex = ev(`Store.exportTanpopo(2026, "2026-11-16",
-  {"3-3":{"0":{p1:"国語"},"1":{},"2":{},"3":{},"4":{}},
-   "6-4":{"0":{p1:"算数"},"1":{},"2":{},"3":{},"4":{}},
-   "1-1":{"0":{p1:"生活"},"1":{},"2":{},"3":{},"4":{}},
-   "1-2":{"0":{p1:"体育"},"1":{},"2":{},"3":{},"4":{}}},
-  {"3-3":2, "6-4":1, "1-1":1, "1-2":1})`);
-ok("組ごとの並びのまま書き込める", ex.days === 5 && (ex.short || []).length === 0, ex);
-ok("6-4 の列に 6-4 の授業が入る",
-   String(GB[2][GB[1].indexOf("6-4")]) === "算数", GB[2].slice(0, 6));
-(function(){
-  const at = ev('Sheets.head("設定").at');
-  for(const row of SHEETS["設定"])
-    if(String(row[at["キー"]]) === "たんぽぽシート名") row[at["値"]] = "";
+  let why2 = "", w = null;
+  try{ w = ev("Store.writeCells(2027, " + JSON.stringify(patches) + ")"); }
+  catch(e){ why2 = String(e && e.message); }
+  ok("1クラスの週案が1,000行を超えても保存できる", !!w && w.count === 1100, why2 || w);
+  ok("超えたぶんも読み直せる",
+     rowsOf("週案 3-3").length > 1000, rowsOf("週案 3-3").length);
 })();
 
 /* **たんぽぽの設定が保存できないという報告があった。**
@@ -1051,26 +946,8 @@ const se = ev(`Sheets.shapeError(Sheets.shapeOk("たんぽぽ時間割（見本�
   [{ok:false, why:"行が 1 しかありません"}]))`);
 ok("どのファイルの話かを言う", se.message.indexOf("たんぽぽ時間割（見本）") >= 0, se.message);
 ok("何が足りないかを言う", se.message.indexOf("行が 1 しかありません") >= 0, se.message);
-ok("次に何をすればよいかも言う", se.message.indexOf("いまの形をみる") >= 0, se.message);
-
-/* 空のシートへは1マスも書かない。**書くと別の行に授業名が入る** */
-TPFILE.sheets["からっぽ"] = [[""]];
-(function(){
-  const at = ev('Sheets.head("設定").at');
-  for(const row of SHEETS["設定"])
-    if(String(row[at["キー"]]) === "たんぽぽシート名") row[at["値"]] = "からっぽ";
-})();
-threw = "";
-try{ ev(`Store.exportTanpopo(2026, "2026-11-16", {}, {"3-3":1})`); }
-catch(e){ threw = e.message; }
-ok("形が分からないシートへは書かない", threw.indexOf("形が読めません") >= 0, threw);
-ok("そのときも「エラーが発生しました」で終わらせない",
-   threw.indexOf("からっぽ") >= 0 && threw.indexOf("行が") >= 0, threw);
-(function(){
-  const at = ev('Sheets.head("設定").at');
-  for(const row of SHEETS["設定"])
-    if(String(row[at["キー"]]) === "たんぽぽシート名") row[at["値"]] = "";
-})();
+ok("次に何をすればよいかも言う", se.message.indexOf("形を直してから") >= 0, se.message);
+ok("行と列の数を見ろと言う", se.message.indexOf("何行×何列") >= 0, se.message);
 
 console.log("\n■ 保存にかかった時間を返す");
 const tm = ev(`Store.writeCells(2026, [{date:"2026-11-16", slot:"p1", layer:"home",

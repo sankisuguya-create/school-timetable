@@ -122,6 +122,11 @@ await p.addInitScript(() => {
         call("apiWriteCells", [y, patches]);
         /* __hang のあいだは返事をしない（送れないまま閉じた形を作る） */
         if(window.__hang) return;
+        /* __failWrite のあいだは必ず失敗する（回線が落ちている形を作る） */
+        if(window.__failWrite){
+          setTimeout(() => ngFn(new Error("通信できない")), 0);
+          return;
+        }
         /* シートに入ったことにして覚える */
         const st = window.__sheet();
         for(const q of patches){
@@ -182,20 +187,13 @@ await p.addInitScript(() => {
           {level:"warn", what:"たんぽぽ",   detail:"交流級が1つも選ばれていない", fix:"人数を入れる"}
         ]}), 0);
       },
-      apiShapeTanpopo(m){
-        call("apiShapeTanpopo", [m]);
-        setTimeout(() => okFn({file:"たんぽぽ時間割", sheet:"週案", sheets:["週案"],
-          rows:86, cols:34, days:[], marks:[], classCols:0,
-          note:["A列に日付が見つかりません"]}), 0);
-      },
-      apiBuildTanpopo(y, m, counts, slots){
-        call("apiBuildTanpopo", [y, m, counts, slots]);
-        setTimeout(() => okFn({file:"たんぽぽ時間割", sheet:"週案", cols:3, staff:0,
-          rows:81, backup:"週案（前の形 1116-0900）", list:["5-1","5-2","5-2"]}), 0);
-      },
-      apiExportTanpopo(y, m, titles, classes, slots){
-        call("apiExportTanpopo", [y, m, titles, classes, slots]);
-        setTimeout(() => okFn({wrote:60, days:5, skipped:[], unknown:[], file:"たんぽぽ時間割"}), 0);
+      /* たんぽぽへは**1週1シート**で出す。名前は「◯月◯週」。
+         同じ名前のシートがあれば、消さずに名前を変えて残す */
+      apiExportWeek(y, m, titles, cols, slots, name){
+        call("apiExportWeek", [y, m, titles, cols, slots, name]);
+        setTimeout(() => okFn({file:"たんぽぽ時間割", sheet:name, cols:3, staff:0,
+          rows:81, days:5, wrote:60, empty:30,
+          backup:name + "（前の 1116-0900）", list:["5-1","5-2","5-2"]}), 0);
       },
       apiReadPaste(){
         const g = call("apiReadPaste", [], [
@@ -315,7 +313,7 @@ await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(400);
 
 console.log("\n■ 書いても、押すまで送らない");
-ok("紙は5行ぶんになる", await p.locator("#sheet .cell").count() === 25,
+ok("紙は5行ぶん × 月〜土の6列", await p.locator("#sheet .cell").count() === 30,
    await p.locator("#sheet .cell").count());
 await p.evaluate(() => { window.__calls.length = 0; });
 await p.locator("#sheet .cell[data-d='1'][data-s='p2'] .t").click();
@@ -417,7 +415,7 @@ const rq = await lastCall("apiWriteRoster");
 ok("apiWriteRoster が呼ばれる", !!rq);
 ok("直した編成が届く", rq && rq.args[1]["1"].length === 3, rq && rq.args[1]);
 
-await p.locator("#rsClose").click(); await p.waitForTimeout(200);
+await p.locator("#rosterDlg .dlgx").click(); await p.waitForTimeout(200);
 
 console.log("\n■ 固定時間割の取り込み");
 await p.evaluate(() => { window.__calls.length = 0; });
@@ -439,7 +437,7 @@ ok("入れるときは1回でまとめて送る（クラスごとに送らない
      window.__calls.filter(c => c.name === "apiWriteBase").length)) === 0, ba);
 ok("A週とB週の両方が届く",
    !!ba && !!ba.args[1]["5-1"].A && !!ba.args[1]["5-1"].B, ba && Object.keys(ba.args[1]));
-await p.locator("#baseClose").click(); await p.waitForTimeout(250);
+await p.locator("#baseDlg .dlgx").click(); await p.waitForTimeout(250);
 
 console.log("\n■ たんぽぽの組もシートで持つ");
 ok("シートの組がそのまま画面の組になる",
@@ -477,61 +475,57 @@ ok("シートには組の番号が届く",
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(300);
 
-console.log("\n■ たんぽぽ時間割へ出す");
+console.log("\n■ たんぽぽ時間割へ出す（1週1シート）");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
 await p.locator(".master.tp").click(); await p.waitForTimeout(400);
 await p.evaluate(() => { window.__calls.length = 0; });
-p.once("dialog", d => d.accept());
-await p.locator("#tpGo").click(); await p.waitForTimeout(900);
-const tp = await lastCall("apiExportTanpopo");
-ok("apiExportTanpopo を呼ぶ", !!tp, await calls());
+let nativeConfirm = false;
+const onDlg = async d => { nativeConfirm = true; await d.dismiss(); };
+p.on("dialog", onDlg);
+await p.locator("#tpGo").click(); await p.waitForTimeout(400);
+p.off("dialog", onDlg);
+ok("ブラウザの confirm ではなく、専用の窓で聞く",
+   nativeConfirm === false && await p.locator("#tpDlg").evaluate(d => d.open) === true);
+ok("既定は「出さない」", await p.evaluate(() =>
+   document.activeElement && document.activeElement.id) === "tpNo");
+ok("「出さない」を押したら1回も呼ばない", await (async () => {
+     await p.locator("#tpNo").click(); await p.waitForTimeout(400);
+     return (await calls()).indexOf("apiExportWeek") < 0;
+   })() === true, await calls());
+
+await p.locator("#tpGo").click(); await p.waitForTimeout(300);
+await p.locator("#tpYes").click(); await p.waitForTimeout(900);
+const tp = await lastCall("apiExportWeek");
+ok("apiExportWeek を呼ぶ", !!tp, await calls());
 ok("出す前に、書いたぶんを先に送る",
    (await calls()).indexOf("apiWriteCells") <
-   (await calls()).indexOf("apiExportTanpopo")
+   (await calls()).indexOf("apiExportWeek")
    || (await calls()).indexOf("apiWriteCells") < 0, await calls());
-/* 出す中身は交流級だけで決まる（どの組かは列の並びの話）。
-   **人数はそのまま渡す。** あちらの列の数と合っているかを見るため */
-ok("交流級ごとの人数を渡す（2人いれば2列いる）",
-   !!tp && JSON.stringify(tp.args[3]) === JSON.stringify({"5-1":1, "5-2":2}),
-   tp && tp.args[3]);
 ok("紙に出ているとおりの授業名を渡す（月〜金ぶん）",
    !!tp && Object.keys(tp.args[2]["5-1"]).length === 5, tp && tp.args[2]["5-1"]);
+/* **組ごとの並びをそのまま渡す。** 出す先の列も 1組の全員 → 2組の全員 … の順になる */
+ok("組ごとの並びで渡す",
+   !!tp && JSON.stringify(tp.args[3])
+     === JSON.stringify([{cls:"5-1",group:1},{cls:"5-2",group:1},{cls:"5-2",group:2}]),
+   tp && tp.args[3]);
 /* この学校の時程は授業が3コマしかない。**時程シートの授業の行に合わせる** */
 ok("校時のIDは時程シートから決める",
    !!tp && JSON.stringify(tp.args[4]) === JSON.stringify(["p1", "p2", "p3"]),
    tp && tp.args[4]);
-ok("出したあと、何コマ入ったかを出す",
-   (await p.locator("#tpWarn").innerText()).indexOf("60") >= 0,
-   await p.locator("#tpWarn").innerText());
-await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
-await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(300);
+ok("シート名「◯月◯週」も渡す", !!tp && /^\d+月\d+週$/.test(String(tp.args[5])),
+   tp && tp.args[5]);
+const tpOut = await p.locator("#tpWarn").innerText();
+ok("出したあと、どのシートに入ったかを出す", tpOut.indexOf("シート「") >= 0, tpOut);
+ok("何コマ入ったかも出す", /授業名 \d+ コマ/.test(tpOut), tpOut);
+ok("同じ名前のシートを残したことも出す",
+   tpOut.indexOf("名前を変えて残した") >= 0, tpOut);
 
-console.log("\n■ たんぽぽ時間割の形を、みる・作りなおす");
-await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
-await p.locator(".master.tp").click(); await p.waitForTimeout(400);
-await p.evaluate(() => { window.__calls.length = 0; });
-await p.locator("#tpShape").click(); await p.waitForTimeout(400);
-ok("「いまの形をみる」で apiShapeTanpopo を呼ぶ",
-   (await calls()).indexOf("apiShapeTanpopo") >= 0, await calls());
-const shOut = await p.locator("#tpShapeOut").innerText();
-ok("何行×何列か・骨や見出しがあるかを、そのまま出す",
-   shOut.indexOf("86行") >= 0 && shOut.indexOf("交流学級の見出し：0列") >= 0, shOut);
-ok("足りないものを名指しする",
-   shOut.indexOf("日付が見つかりません") >= 0, shOut);
-
-p.once("dialog", d => d.accept());
-await p.locator("#tpBuild").click(); await p.waitForTimeout(500);
-const bd = await lastCall("apiBuildTanpopo");
-ok("「この形で作りなおす」で apiBuildTanpopo を呼ぶ", !!bd, await calls());
-/* **形を作るときは、組ごとの並びをそのまま渡す。**
-   出す先の列も 1組の全員 → 2組の全員 … の順になる */
-ok("組ごとの並びで渡す",
-   !!bd && JSON.stringify(bd.args[2])
-     === JSON.stringify([{cls:"5-1",group:1},{cls:"5-2",group:1},{cls:"5-2",group:2}]),
-   bd && bd.args[2]);
-const bdOut = await p.locator("#tpShapeOut").innerText();
-ok("作りなおしたことと、前の形を残したことを出す",
-   bdOut.indexOf("作りなおした") >= 0 && bdOut.indexOf("前の形") >= 0, bdOut);
+console.log("\n■ 「いまの形をみる」「作りなおす」は無くした");
+ok("画面に「いまの形をみる」が無い", await p.locator("#tpShape").count() === 0);
+ok("画面に「この形で作りなおす」が無い", await p.locator("#tpBuild").count() === 0);
+ok("apiShapeTanpopo / apiBuildTanpopo は呼ばない",
+   (await calls()).indexOf("apiShapeTanpopo") < 0
+   && (await calls()).indexOf("apiBuildTanpopo") < 0, await calls());
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(300);
 
@@ -580,6 +574,107 @@ ok("週を読み直すより先に送る", await p.evaluate(() => {
 ok("送れたら控えは消す",
    await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")) === null,
    await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")));
+
+console.log("\n■ 送り直しに失敗しても、控えは捨てない");
+/* **ここが前は捨てていた。** 送れなかったのに控えを消していたので、
+   そのあと週を読み直した時点で、閉じる直前に書いたコマが永久に消えていた。
+   控えが要るのは、まさにこの事故のためのもの。 */
+await p.evaluate(() => { window.__slow = 0; window.__hang = false; });
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(400);
+await p.evaluate(() => { window.__hang = true; });
+await p.locator("#sheet .cell[data-d='2'][data-s='p2'] .t").click();
+await p.waitForTimeout(120);
+await p.locator(".pal[data-v='sansu']").click();
+await p.waitForTimeout(1300);
+ok("送れないまま控えができている", await p.evaluate(() =>
+     (JSON.parse(localStorage.getItem("school-timetable/v3/pending") || "[]") || []).length) === 1,
+   await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")));
+
+/* **開き直したときの送り直しが失敗する形。** ここが前は控えを消していた。
+   立ち上がりの1回で送り直し、失敗しても消していたので、そのあと週を
+   読み直した時点で、閉じる直前に書いたコマが永久に消えていた。 */
+/* **この1回の立ち上がりだけ失敗させる。** addInitScript は外せないので、
+   印を localStorage に置いて、読んだ側がその場で消す */
+await p.addInitScript(() => {
+  if(localStorage.getItem("wirecheck/failBoot") === "1"){
+    window.__failWrite = true;
+    localStorage.removeItem("wirecheck/failBoot");
+  }
+});
+await p.evaluate(() => localStorage.setItem("wirecheck/failBoot", "1"));
+await p.reload();
+await p.waitForTimeout(1500);
+const kept = await p.evaluate(() =>
+  JSON.parse(localStorage.getItem("school-timetable/v3/pending") || "null"));
+ok("送り直しに失敗しても、控えを捨てない",
+   Array.isArray(kept) && kept.length === 1 && kept[0].title === "算数", kept);
+ok("控えていたぶんは、送り待ちにも積み直す",
+   await p.evaluate(() => Backend.unsaved()) > 0,
+   await p.evaluate(() => Backend.unsaved()));
+ok("送れていないことを画面に出す",
+   (await p.locator("#saveTxt").innerText()).indexOf("保存できていない") >= 0
+   || (await p.locator("#saveTxt").innerText()).indexOf("保存（") >= 0,
+   await p.locator("#saveTxt").innerText());
+
+/* 回線が戻れば、控えていたぶんもそのまま出ていく */
+await p.evaluate(() => { window.__failWrite = false; });
+await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(400);
+await p.locator("#saveBtn").click(); await p.waitForTimeout(900);
+ok("回線が戻れば、控えていたぶんも送れる",
+   await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")) === null
+   && await p.evaluate(() => Backend.unsaved()) === 0,
+   [await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")),
+    await p.evaluate(() => Backend.unsaved())]);
+await p.evaluate(() => { window.__failWrite = true; });
+/* いま手元にあるぶんを、失敗する回線へ送ってみる */
+await p.locator("#sheet .cell[data-d='3'][data-s='p1'] .t").click();
+await p.waitForTimeout(120);
+await p.locator(".pal[data-v='gyoji']").click();
+await p.waitForTimeout(200);
+await p.locator("#saveBtn").click();
+await p.waitForTimeout(900);
+ok("送れなかったら「保存できていない」と出す",
+   (await p.locator("#saveTxt").innerText()).indexOf("保存できていない") >= 0,
+   await p.locator("#saveTxt").innerText());
+ok("送れなかったぶんは、送り待ちに戻る",
+   await p.evaluate(() => Backend.unsaved()) > 0,
+   await p.evaluate(() => Backend.unsaved()));
+ok("送れなかったぶんは、控えにも残る",
+   await p.evaluate(() =>
+     (JSON.parse(localStorage.getItem("school-timetable/v3/pending") || "[]") || []).length) > 0,
+   await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")));
+await p.evaluate(() => { window.__failWrite = false; });
+await p.locator("#saveBtn").click();
+await p.waitForTimeout(900);
+ok("押し直せば、そのまま送れる",
+   await p.evaluate(() => Backend.unsaved()) === 0
+   && await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")) === null,
+   [await p.evaluate(() => Backend.unsaved()),
+    await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending"))]);
+
+console.log("\n■ 「上位に戻す」はシートにも届く");
+/* **前はここが手元だけで消えていた。** 戻したように見えて、次に開くと戻ってきた。
+   ほかの検査が見ているコマを触らないよう、5-3 の使っていないコマでやる */
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='5-3']").click(); await p.waitForTimeout(400);
+await p.locator("#sheet .cell[data-d='4'][data-s='p3'] .t").click();
+await p.waitForTimeout(120);
+await p.locator(".pal[data-v='kokugo']").click();
+await p.waitForTimeout(200);
+await p.locator("#saveBtn").click(); await p.waitForTimeout(700);
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator("#sheet .cell[data-d='4'][data-s='p3'] .t").click();
+await p.waitForTimeout(150);
+ok("担任が入れたコマには「上位に戻す」が出る",
+   await p.locator("#pRevert").isVisible());
+await p.locator("#pRevert").click(); await p.waitForTimeout(200);
+await p.locator("#saveBtn").click(); await p.waitForTimeout(800);
+const rev = await p.evaluate(() =>
+  window.__calls.filter(c => c.name === "apiWriteCells").map(c => c.args[1]).flat());
+ok("戻したことがシートへ届く（消す指示になる）",
+   rev.length > 0 && rev.some(q => q.slot === "p3" && q.layer === "home"
+                                 && (q.remove || (!q.title && !q.note))), rev);
 
 console.log("\n■ 古い週の返事が、いま見ている週を消さない");
 /* **返事の順序は入れ替わる。** 今週ぶんの返事が来る前に来週へ動くと、
@@ -696,7 +791,7 @@ ok("つないでいるファイルの名前が出る",
 ok("開いている人のメールが出る",
    (await p.locator("#sysTbl").innerText()).indexOf("tanaka@edu.nishi.or.jp") >= 0,
    await p.locator("#sysTbl").innerText());
-await p.locator("#adminDlg [data-close]").click();
+await p.locator("#adminDlg .dlgx").click();
 await p.waitForTimeout(200);
 
 console.log("\n■ 新年度の検査（足りないものだけ名指しする）");
@@ -722,7 +817,7 @@ ok("よい項目は落として出す（読むところを減らす）", await p
      const b = getComputedStyle(document.querySelector("#ckOut tr.ng th")).color;
      return a !== b;
    }) === true);
-await p.locator("#adminDlg [data-close]").click(); await p.waitForTimeout(200);
+await p.locator("#adminDlg .dlgx").click(); await p.waitForTimeout(200);
 
 /* **速くする改造は、必ず正しさを削る方向に働く。**
    数字が基準（2秒）に届く前に手を入れないための目盛り。 */
@@ -746,7 +841,7 @@ ok("いちばん遅かったぶんを出す（平均は、たまに出る遅さ�
 ok("何コマ・何シートだったかも出す",
    (await p.locator("#sysTbl").innerText()).indexOf("シート") >= 0,
    await p.locator("#sysTbl").innerText());
-await p.locator("#adminDlg [data-close]").click(); await p.waitForTimeout(200);
+await p.locator("#adminDlg .dlgx").click(); await p.waitForTimeout(200);
 
 /* **年度末に、人がドライブで丸ごと複製する。**
    画面は数える・照合する・消すだけ。本体のURLは変わらない。 */
@@ -813,7 +908,7 @@ ok("消したあとは ④ を引っこめる",
 ok("退避先のURLをそのまま渡す",
    (await lastCall("apiArchivePurge")).args[1].indexOf("COPY") >= 0,
    await lastCall("apiArchivePurge"));
-await p.locator("#adminDlg [data-close]").click(); await p.waitForTimeout(200);
+await p.locator("#adminDlg .dlgx").click(); await p.waitForTimeout(200);
 
 /* **退避した年度を開いたら、黙って紙を出さない。**
    週案の行はもう無いので、基本時間割だけの紙が出る。それを黙って出すと

@@ -33,7 +33,7 @@ const Sheets = (function(){
         ["例外で通すメール", "",   "8桁の数字が本名のアドレスになっている職員だけ。"
                                  + "教職員ドメインの中でしか効かない"],
         ["たんぽぽファイルID", "", "たんぽぽ時間割のURL（そのまま貼ってよい）"],
-        ["たんぽぽシート名",   "", "空なら1枚目のシート"],
+        ["A週の起点の月曜", "2026-09-07", "この週がA週。あとは1週ごとに入れ替わる"],
         ["たんぽぽ支援員",     "", "たんぽぽ時間割に列を作る支援員。カンマ区切り"],
         ["行事ファイルID",   "",   "年間行事計画表（取り込み用）のURL（そのまま貼ってよい）"]
       ]
@@ -203,6 +203,7 @@ const Sheets = (function(){
     const sh = ensurePlan(name);
     const w = PLAN_COLS.length;
     const body = rows.map(o => PLAN_COLS.map(c => (c in o && o[c] != null) ? o[c] : ""));
+    grow(sh, body.length + 1, w);           /* 足りない行を先に作る（無いと落ちる） */
     if(body.length) sh.getRange(2, 1, body.length, w).setValues(body);
     const last = sh.getLastRow();
     if(last > body.length + 1)
@@ -240,7 +241,7 @@ const Sheets = (function(){
   function shapeError(r){
     return new Error(r.where + "の形が読めません。\n・" + r.why.join("\n・")
                    + "\n\n形を直してからもう一度。"
-                   + "画面の「いまの形をみる」で、いま何が見えているかを確かめられます。");
+                   + "何行×何列あるか、見出しの行がどこかを見てください。");
   }
 
   /* いまある週案シートの名前。**移行や書き出しで、全部を見たいときに使う。** */
@@ -302,6 +303,33 @@ const Sheets = (function(){
     return ss.getSheetByName(name);
   }
 
+  /* ── 足りない行・列を先に作る ──────────────────
+     **Apps Script は getRange で足りない行を自動では作らない。**
+     新しいシートの既定は 1000行 × 26列で、そこを1行でも超えた瞬間、
+     setValues が「範囲外」で落ちる。落ちるのは
+
+       基本時間割  20クラス × A/B × 5日 × 6校時 = 1,200行
+                   → **1回目の固定時間割取り込みで落ちる**
+       週案 ◯-◯   1クラス 週30コマ × 年40週 = 1,200行
+                   → **1年目の11〜12月ごろ、そのクラスだけ保存が止まる**
+       たんぽぽ    1 + 児童26列 + 支援員8列 = 35列
+                   → **26列を超えた時点で、形を作るところで落ちる**
+
+     どれも「そのうち必ず来る」ので、書く前にここで伸ばす。
+     まとめて余分に伸ばすのは、1行ずつ足すたびに API を1往復するのを避けるため。 */
+  const GROW_SLACK = 200;
+  function grow(sh, rows, cols){
+    if(rows){
+      const have = sh.getMaxRows();
+      if(rows > have) sh.insertRowsAfter(have, rows - have + GROW_SLACK);
+    }
+    if(cols){
+      const have = sh.getMaxColumns();
+      if(cols > have) sh.insertColumnsAfter(have, cols - have + 8);
+    }
+    return sh;
+  }
+
   /* シートを作る。**あるものは触らない。** 何度走らせても同じ結果になる。 */
   function setup(){
     const ss = book();
@@ -331,6 +359,29 @@ const Sheets = (function(){
       made.push(PASTE);
     }
     return {made, kept};
+  }
+
+  /* ── 放課後の行を足す ────────────────────────
+     `setup()` は**無いシートを作るだけ**で、あるシートには触らない。
+     だから「時程」シートを先に作った学校には、あとから足した
+     **放課後（種別＝備考）の行が永久に入らない**。画面には放課後の欄が
+     出ず、シートを見ても何が足りないのか分からない。
+
+     足すのはこの1行だけ。ほかの行は触らない（学校が消した行を勝手に戻さない）。
+     戻り値は足したかどうか。**足したことは必ず画面に出す。** */
+  function fillAfterRow(){
+    const sh = sheet("時程");
+    if(!sh) return "";
+    const {at} = head("時程");
+    const last = sh.getLastRow();
+    if(last < 2) return "";
+    const v = sh.getRange(2, 1, last - 1, Math.max(1, sh.getLastColumn())).getValues();
+    for(const row of v)
+      if(String(row[at["種別"]] || "").indexOf("備考") >= 0) return "";   /* もうある */
+    const seed = SPEC["時程"].seed.filter(r => String(r[2]).indexOf("備考") >= 0);
+    if(!seed.length) return "";
+    appendRows("時程", seed.map(r => r.slice()));
+    return String(seed[0][1]);                   /* 「放課後」 */
   }
 
   /* 見出しの行を読んで、列名 → 位置 の対応を作る。 */
@@ -378,13 +429,16 @@ const Sheets = (function(){
   const appendRows = (name, arrays) => {
     if(!arrays.length) return;
     const {sh} = head(name);
-    sh.getRange(sh.getLastRow() + 1, 1, arrays.length, arrays[0].length).setValues(arrays);
+    const at = sh.getLastRow() + 1;
+    grow(sh, at + arrays.length - 1, arrays[0].length);
+    sh.getRange(at, 1, arrays.length, arrays[0].length).setValues(arrays);
   };
   function toArray(name, obj){
     return SPEC[name].cols.map(c => (c in obj && obj[c] != null) ? obj[c] : "");
   }
   function setRow(name, rowNo, obj){
     const {sh} = head(name);
+    grow(sh, rowNo, SPEC[name].cols.length);
     sh.getRange(rowNo, 1, 1, SPEC[name].cols.length).setValues([toArray(name, obj)]);
   }
   /* 行は消さずに空にする。**消すと、その下の行番号がすべてずれる。**
@@ -406,7 +460,7 @@ const Sheets = (function(){
   }
 
   return {SPEC, NAMES, PASTE, CLASS_COLS, TANPOPO_FILL, asClass, isDate, readGrid,
-          book, bookName, stash, shapeOk, shapeError, readAllSoft,
+          book, bookName, stash, shapeOk, shapeError, readAllSoft, grow, fillAfterRow,
           PLAN_PREFIX, PLAN_ALL, PLAN_COLS, planName, ensurePlan, readPlan, writePlan,
           planNames, planMap,
           setup, head, readAll, appendRows, toArray, setRow, blankRow, sheet};
@@ -416,8 +470,12 @@ const Sheets = (function(){
 function setupSheets(){
   Gate.check();                 /* URL を開ける人は直接叩ける。ここも関門を通す */
   const r = Sheets.setup();
+  /* **あとから足した行は、setup では入らない。** ここで1行だけ面倒を見る。
+     放課後の行が無いと、画面に放課後の欄そのものが出ない */
+  r.added = Sheets.fillAfterRow();
   const msg = "作った: " + (r.made.join("、") || "なし")
-            + "\nもうあった: " + (r.kept.join("、") || "なし");
+            + "\nもうあった: " + (r.kept.join("、") || "なし")
+            + (r.added ? "\n「時程」シートに「" + r.added + "」の行を足した" : "");
   try{ SpreadsheetApp.getUi().alert(msg); }catch(e){ Logger.log(msg); }
   return r;
 }

@@ -148,15 +148,45 @@ const Backend = (function(){
       (byYear[fyOf] || (byYear[fyOf] = [])).push(q);
     }
     let left = Object.keys(byYear).length;
-    const done = () => { if(!--left){ try{ localStorage.removeItem(PEND); }catch(e){} after(); } };
+    /* **送れなかったぶんは捨てない。** 前はここで控えを消していた。
+       消したあとに週を読み直すので、閉じる直前に書いたコマが、
+       翌朝の通信1回のつまずきで**永久に消えていた**。控えが要るのは
+       まさにこの事故のためなので、送れたものだけを控えから外す。 */
+    const leftOver = [];
+    const done = () => {
+      if(--left) return;
+      try{
+        if(leftOver.length) localStorage.setItem(PEND, JSON.stringify(leftOver));
+        else localStorage.removeItem(PEND);
+      }catch(e){}
+      after();
+    };
     for(const y in byYear)
-      google.script.run
-        .withSuccessHandler(done)
-        .withFailureHandler(() => {
-          notify("前に閉じたときのぶんを送れなかった。もう一度「保存」を押す");
-          done();
-        })
-        .apiWriteCells(+y, byYear[y]);
+      (function(y, list){
+        google.script.run
+          .withSuccessHandler(done)
+          .withFailureHandler(() => {
+            /* 控えに残すだけでなく、いまの送り待ちにも積む。
+               次に「保存」を押したときに、これも一緒に出ていく */
+            for(const q of list){
+              leftOver.push(q);
+              const d = String(q.date).split("-");
+              const mon = iso(mondayOf(new Date(+d[0], +d[1] - 1, +d[2])));
+              const dd = Math.round((parseISO(q.date) - parseISO(mon)) / 86400000);
+              const k = [q.layer, q.target || "", y, mon, dd, q.slot].join("|");
+              if(!dirty[k]){
+                dirty[k] = {layer:q.layer, target:q.target || "", year:+y,
+                            monday:mon, d:dd, slot:q.slot};
+                dirtyN++;
+              }
+            }
+            onDirty(dirtyN, lastErr);
+            notify("<b>前に閉じたときのぶんを送れなかった</b>（" + list.length
+                 + " コマ）。もう一度「保存」を押す");
+            done();
+          })
+          .apiWriteCells(+y, list);
+      })(y, byYear[y]);
   }
 
   const unsaved = () => dirtyN;
@@ -459,32 +489,16 @@ const Backend = (function(){
       .apiReadPaste();
   }
 
-  /* たんぽぽ時間割へ出す。**中身はこちらで組んで渡す。**
+  /* たんぽぽ時間割へ、**1週ぶんを1枚のシートとして出す**。
      どのクラスのどの校時が何かを決めるのは画面（層の重ね方を知っている）。
-     どの行・どの列に置くかを決めるのはシート側（実物の形を知っている）。 */
-  /* たんぽぽ時間割の形をみる／作りなおす */
-  function shapeTanpopo(ok, ng){
-    if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
-    google.script.run
-      .withSuccessHandler(r => ok(r))
-      .withFailureHandler(e => ng(String((e && e.message) || "見られなかった")))
-      .apiShapeTanpopo(wkKey());
-  }
-  /* cols = [{cls, group}] の並び。**並びと組をこちらで決めて渡す。** */
-  function buildTanpopo(cols, slots, ok, ng){
-    if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
-    google.script.run
-      .withSuccessHandler(r => ok(r))
-      .withFailureHandler(e => ng(String((e && e.message) || "作れなかった")))
-      .apiBuildTanpopo(fy(), wkKey(), cols, slots);
-  }
-
-  function exportTanpopo(titles, classes, slots, ok, ng){
+     どんな形のシートを作るかを決めるのはシート側（実物の形を知っている）。
+     cols = [{cls, group}] の並び。**並びと組をこちらで決めて渡す。** */
+  function exportWeek(titles, cols, slots, name, ok, ng){
     if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
     google.script.run
       .withSuccessHandler(r => ok(r))
       .withFailureHandler(e => ng(String((e && e.message) || "書き込めなかった")))
-      .apiExportTanpopo(fy(), wkKey(), titles, classes, slots);
+      .apiExportWeek(fy(), wkKey(), titles, cols, slots, name);
   }
 
   /* 画面を閉じる前に、貯めたぶんを出し切る。
@@ -501,6 +515,5 @@ const Backend = (function(){
   return {isGas, info, setNotifier, setDirtyWatcher, unsaved, prefetchWeek,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
-          archiveCount, archiveVerify, archivePurge,
-          exportTanpopo, shapeTanpopo, buildTanpopo};
+          archiveCount, archiveVerify, archivePurge, exportWeek};
 })();

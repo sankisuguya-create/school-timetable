@@ -75,6 +75,8 @@ function applyConfig(cfg){
   put("時数_貼る先",     v => t.anchor  = String(v).trim());
   put("時数_クラスの順", v => t.classes = String(v));
   put("時数_1日の行数",  v => t.block   = +v || 10);
+  /* A週の起点。**ここを動かすと、以後の週のA/Bが全部入れ替わる。** */
+  put("A週の起点の月曜", v => db.settings.abAnchor = String(v).trim());
   put("時数_列のずれ",   v => {
     const cols = {};
     for(const part of String(v).split(/[,、\s]+/)){
@@ -110,4 +112,15 @@ const LAYER_FULL = {base:"基本時間割", school:"学校全体", grade:"学年
                     special:"専科", home:"担任"};
 const RANK = {base:0, home:1, special:2, grade:3, school:4};
 
-const DOW = ["月","火","水","木","金"];
+/* 曜日。**月〜土の6日。** 土曜はほとんど空くが、行事とオープンスクールが入る。
+   土の列は 20mm のまま（前の「土日」1列と同じ幅）なので、
+   **月〜金の列は1mmも痩せない**。日曜は置かない。 */
+const DOW = ["月","火","水","木","金","土"];
+const DAYS = 6;            /* 紙に出す日数（月〜土） */
+/* 月〜金だけを見るもの。基本時間割・たんぽぽ・時数集計表は5日で組んである */
+const WEEKDAYS = 5;
+
+/* A週・B週の起点。**この月曜がA週で、あとは1週ごとに入れ替わる。**
+   手で切り替えさせない——切り替え忘れた人だけ別の基本時間割を見ることになる。
+   学校の年間行事計画表に合わせて「設定」シートから動かせる。 */
+const AB_ANCHOR = "2026-09-07";
