@@ -83,6 +83,11 @@ function owAnswer(yes){
   (yes ? a.yes : a.no)();
 }
 
+/* 一度「上書きする」と答えたコマを、**もう一度聞く状態に戻す。**
+   競合で週を読み直したあとに要る。読み直すと中身が入れ替わっているので、
+   前の答えは別のものについての答えになっている。 */
+function forgetAsked(d, sid){ delete askedCells[viewName() + "|" + ck(d, sid)]; }
+
 /* 聞かずに済むときは、その場で yes を呼んで true を返す。
    聞くときは false を返し、返事が出たあとで yes / no のどちらかを呼ぶ。 */
 function okToOverwrite(d, sid, to, yes, no){

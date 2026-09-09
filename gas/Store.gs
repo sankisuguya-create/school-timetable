@@ -63,6 +63,17 @@ const Store = (function(){
           note:    String(r["詳細"] || ""),
           subject: String(r["教科コード"] || "") || null,
           at:      Sheets.isDate(r["更新時刻"]) ? r["更新時刻"].getTime() : 0,
+          /* **競合を見るための物差し。** at とは別に持つ。
+             at は層の重ね順（「最後に書かれたものが勝つ」）にも使うので、
+             更新時刻の無い行を負の値にすると、その行が基本時間割より
+             下に沈んで画面から消える。だから at は 0 のままにする。
+
+             sat の 0 は「その行がまだ無い」の意味に使う。
+             行はあるのに更新時刻が無い（1.3.0 より前に書かれた行、
+             人が手で足した行）を 0 と同じ扱いにすると、
+             画面が「新しいコマだ」と思って送ってくる 0 と一致してしまい、
+             見えないまま上書きできてしまう。だから -1 で区別する。 */
+          sat:     Sheets.isDate(r["更新時刻"]) ? r["更新時刻"].getTime() : -1,
           by:      String(r["更新者"] || "")
         };
         const off = dayOffset_(date, mondayISO);
@@ -526,9 +537,12 @@ const Store = (function(){
              expectedAt が無いのは古い版の画面。**そこは今までどおり書く**
              （止めると、貼り替えの途中で全員が保存できなくなる）。 */
           if(p.expectedAt !== undefined && p.expectedAt !== null){
+            /* 0 は「行がまだ無い」。**行はあるが更新時刻が無い**ときは -1。
+               どちらも 0 にすると、新しいコマのつもりで 0 を送ってきた画面と
+               一致してしまい、1.3.0 より前に書かれた行を見ないまま消せる。 */
             const cur = (i !== undefined) ? rows[i] : null;
-            const curAt = (cur && Sheets.isDate(cur["更新時刻"]))
-                        ? cur["更新時刻"].getTime() : 0;
+            const curAt = !cur ? 0
+                        : Sheets.isDate(cur["更新時刻"]) ? cur["更新時刻"].getTime() : -1;
             if(curAt !== (+p.expectedAt || 0)){
               conflicts.push({
                 date: date, slot: p.slot, layer: p.layer, target: target,

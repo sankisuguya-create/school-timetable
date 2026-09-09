@@ -24,6 +24,12 @@ const Backend = (function(){
   let onDirty = () => {};   /* 未保存の数が変わったら画面に知らせる */
   let lastErr = "";
 
+  /* **競合して書けなかったぶん。捨てない。**
+     dirty へ戻すと、同じ expectedAt でいつまでも競合し続ける。
+     窓の返事が出るまで、送ろうとした中身ごとここに置く。 */
+  let held = [];
+  let onConflict = () => {};
+
   /* ── 共通 ────────────────────────────────────── */
 
   const isGas = () => !!onGas;
@@ -38,11 +44,16 @@ const Backend = (function(){
 
      いちど覚えたら、同じコマを続けて直しても**上書きしない**。
      打鍵のたびに更新すると、物差しが自分の打鍵に追従して、競合を見逃す。 */
-  function cellChanged(layer, target, d, slotId, baseAt){
+  /* where ＝ そのコマがある年度と週。**渡さなければ、いま開いている週。**
+     競合したぶんを入れ直すときは、別の週のコマかもしれない。
+     いまの週として覚えると、別の週のコマを書き替えてしまう。 */
+  function cellChanged(layer, target, d, slotId, baseAt, where){
     if(!onGas) return;
-    const k = [layer, target || "", fy(), wkKey(), d, slotId].join("|");
-    if(!dirty[k]){ dirty[k] = {layer, target:target || "", year:fy(),
-                               monday:wkKey(), d, slot:slotId,
+    const yr = where ? String(where.year) : fy();
+    const mo = where ? where.monday : wkKey();
+    const k = [layer, target || "", yr, mo, d, slotId].join("|");
+    if(!dirty[k]){ dirty[k] = {layer, target:target || "", year:yr,
+                               monday:mo, d, slot:slotId,
                                baseAt: +baseAt || 0}; dirtyN++; }
     onDirty(dirtyN, lastErr);
     persistSoon();
@@ -55,6 +66,47 @@ const Backend = (function(){
   function retry(ms){
     clearTimeout(timer);
     timer = setTimeout(() => flush(), ms);
+  }
+
+  /* ── 競合したぶん ───────────────────────────
+     サーバは、古い状態からの保存をコマ単位で止めて conflicts で返す
+     （→ gas/Store.gs writeCells）。**止まったことを画面に伝えないと、
+     教師は書けたつもりで書けていないまま週を進める。** */
+  const cfKey = q => [q.date, q.slot, q.layer, q.target || ""].join("|");
+
+  /* その日付が、どの年度・どの週・週の何日目かを出す。
+     競合は、いま開いている週のものとはかぎらない（週を移るときに送るため）。 */
+  function locOf(dateISO){
+    const dt = parseISO(dateISO);
+    if(!dt) return null;
+    const off = (dt.getDay() + 6) % 7;            /* 月曜を 0 にする */
+    const mo = +String(dateISO).slice(5, 7);
+    return {year: (mo <= 3 ? +String(dateISO).slice(0, 4) - 1
+                           : +String(dateISO).slice(0, 4)),
+            monday: iso(addDays(dt, -off)), d: off};
+  }
+
+  function takeConflicts(list, sent){
+    if(!list || !list.length) return;
+    for(const c of list){
+      const loc = locOf(c.date);
+      if(!loc) continue;                          /* 日付が読めない。捨てずに飛ばす */
+      held.push({c, q: (sent || {})[cfKey(c)] || null, loc});
+    }
+    onConflict(held.slice());
+  }
+  const heldCells = () => held.slice();
+  const dropHeld  = () => { held = []; };
+
+  /* **競合したあとは、その週を必ず読み直す。**
+     読み直さずに送り直すと、見ていない変更をもう一度潰しにいくことになる。 */
+  function reloadWeek(list, after){
+    if(!onGas) return after();
+    for(const h of (list || []))
+      for(const t of allTargets())
+        delete loadedWeek[weekTag(t, String(h.loc.year), h.loc.monday)];
+    for(const t of allTargets()) delete loadedWeek[weekTag(t)];
+    ready(after);
   }
 
   /* 送る直前に、いま画面が持っている中身を読んで1コマ1件にする。 */
@@ -92,10 +144,15 @@ const Backend = (function(){
     const batch = dirty;
     dirty = {}; dirtyN = 0; sending = true;
     onDirty(0, lastErr);
-    const byYear = {};
+    /* **どのコマを、どの中身で送ったかを覚えておく。**
+       競合が返ってきたとき、返ってくるのは「いまシートに入っているもの」だけ。
+       自分が入れようとした中身は、こちらで持っていないと出せない。 */
+    const byYear = {}, sent = {};
     for(const k in batch){
       const m = batch[k];
-      (byYear[m.year] || (byYear[m.year] = [])).push(patchOf(m));
+      const q = patchOf(m);
+      sent[cfKey(q)] = q;
+      (byYear[m.year] || (byYear[m.year] = [])).push(q);
     }
     /* ふつうは1年度ぶん。年度をまたいで直したときだけ2回に分かれる */
     const years = Object.keys(byYear);
@@ -106,6 +163,7 @@ const Backend = (function(){
         .withSuccessHandler(res => {
           noteTime(res, Date.now() - t0);
           applyServerTimes(res && res.at);
+          takeConflicts(res && res.conflicts, sent);
           if(!--left){ sending = false; lastErr = bad ? lastErr : "";
                        onDirty(dirtyN, lastErr); persistPending(); after && after(!bad); }
         })
@@ -167,7 +225,14 @@ const Backend = (function(){
     const done = () => { if(!--left){ try{ localStorage.removeItem(PEND); }catch(e){} after(); } };
     for(const y in byYear)
       google.script.run
-        .withSuccessHandler(done)
+        /* 持ち越しも競合しうる（閉じているあいだに誰かが直した）。
+           **ここで黙って捨てると、閉じる前に書いたぶんが消える。** */
+        .withSuccessHandler(res => {
+          const sent = {};
+          for(const q of byYear[y]) sent[cfKey(q)] = q;
+          takeConflicts(res && res.conflicts, sent);
+          done();
+        })
         .withFailureHandler(() => {
           notify("前に閉じたときのぶんを送れなかった。もう一度「保存」を押す");
           done();
@@ -177,6 +242,7 @@ const Backend = (function(){
 
   const unsaved = () => dirtyN;
   const setDirtyWatcher = fn => { onDirty = fn; fn(dirtyN, lastErr); };
+  const setConflictWatcher = fn => { onConflict = fn; };
 
   /* サーバが打った時刻で手元の控えを直す。
      教師それぞれの PC の時計で勝ち負けを決めると、時計が進んでいる人が always 勝つ。 */
@@ -383,9 +449,12 @@ const Backend = (function(){
     const cur = Yr.weeks[m] || (Yr.weeks[m] =
       {school:{}, grade:{}, special:{}, home:{}, acked:[], variant:"A"});
     /* サーバから来たコマには、**その時刻を「知っていた時刻」として控える**。
-       次にこのコマを直すとき、これを expectedAt として送る。 */
+       次にこのコマを直すとき、これを expectedAt として送る。
+       サーバは sat（更新時刻が無い行は -1）を付けて返す。付いていないのは
+       古い版のサーバなので、そのときだけ at で代える。 */
     const stamp = bank => {
-      for(const k in (bank || {})) bank[k].sat = bank[k].at || 0;
+      for(const k in (bank || {}))
+        if(bank[k].sat === undefined) bank[k].sat = bank[k].at || 0;
       return bank || {};
     };
     for(const t of want){
@@ -513,7 +582,7 @@ const Backend = (function(){
   /* 画面を閉じる前に、貯めたぶんを出し切る。
      出し切れないうちに閉じられそうなときは、引き止める。 */
   addEventListener("beforeunload", ev => {
-    if(onGas && (dirtyN || sending)){
+    if(onGas && (dirtyN || sending || held.length)){
       persistPending();          /* 先に控える。送り切れなくても次に開いたときに送る */
       flush();
       ev.preventDefault();
@@ -521,7 +590,8 @@ const Backend = (function(){
     }
   });
 
-  return {isGas, info, setNotifier, setDirtyWatcher, unsaved, prefetchWeek,
+  return {isGas, info, setNotifier, setDirtyWatcher, setConflictWatcher,
+          unsaved, prefetchWeek, heldCells, dropHeld, reloadWeek,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge,

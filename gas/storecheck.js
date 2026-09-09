@@ -1146,6 +1146,47 @@ cw = CW([one({title:"古い版から", slot:"p6"})]);
 ok("expectedAt を送らない画面は今までどおり書ける",
    cw.count === 1 && cw.conflicts.length === 0, cw);
 
+/* サーバは、競合を見るための物差し（sat）を読み取りにも付けて返す。
+   画面はこれを控えて、次に直すとき expectedAt として送る。 */
+ok("読み取りは sat（競合を見る物差し）も返す",
+   (function(){ const c = ev(`Store.readWeek(2026, "2026-06-15",
+                  [{layer:"home",target:"3-3"}])`).home["3-3"]["0|p5"];
+                return c.sat === c.at && c.sat > 0; })() === true,
+   ev(`Store.readWeek(2026, "2026-06-15", [{layer:"home",target:"3-3"}])`).home["3-3"]["0|p5"]);
+
+/* **更新時刻が入っていない行。**
+   1.3.0 より前に書かれた行や、人がシートに手で足した行がこれになる。
+   0（＝その行がまだ無い）と同じ扱いにすると、新しいコマのつもりで 0 を
+   送ってきた画面と一致してしまい、見ないまま上書きできてしまう。 */
+console.log("\n■ 更新時刻が入っていない行も、見ないまま上書きさせない");
+const OLD = (extra) => Object.assign({date:"2026-06-16", slot:"p1", layer:"home",
+  target:"3-3", note:"", subject:null}, extra);
+CW([OLD({title:"むかし書いた行", expectedAt:0})]);
+(function(){                       /* その行の更新時刻を消す（古い行を作る） */
+  const name = ev('Sheets.planName("home","3-3")');
+  const cols = ev("Sheets.PLAN_COLS");
+  const ti = cols.indexOf("題名"), ui = cols.indexOf("更新時刻");
+  for(const row of SHEETS[name])
+    if(String(row[ti]) === "むかし書いた行") row[ui] = "";
+})();
+const oldCell = () => ev(`Store.readWeek(2026, "2026-06-15",
+  [{layer:"home",target:"3-3"}])`).home["3-3"]["1|p1"];
+ok("更新時刻が無い行は sat を -1 で返す", oldCell().sat === -1, oldCell());
+ok("**重ね順に使う at は 0 のまま。** 負にすると基本時間割より下に沈んで画面から消える",
+   oldCell().at === 0, oldCell());
+
+cw = CW([OLD({title:"新しいコマのつもりで書く", expectedAt:0})]);
+ok("新しいコマのつもりの 0 では書けない",
+   cw.conflicts.length === 1 && cw.count === 0, cw);
+ok("いまの時刻は -1（＝行はあるが時刻が分からない）と返す",
+   cw.conflicts[0].currentAt === -1, cw.conflicts[0]);
+ok("むかしの行は残っている", oldCell().title === "むかし書いた行", oldCell());
+
+cw = CW([OLD({title:"見たうえで上書き", expectedAt:-1})]);
+ok("-1 を送り返せば書ける", cw.count === 1 && cw.conflicts.length === 0, cw);
+ok("書いたので更新時刻が入り、次からは時刻で見られる",
+   oldCell().title === "見たうえで上書き" && oldCell().sat > 0, oldCell());
+
 console.log("\n■ 保存にかかった時間を返す");
 const tm = ev(`Store.writeCells(2026, [{date:"2026-11-16", slot:"p1", layer:"home",
   target:"3-3", title:"国語", note:"", subject:"kokugo"}])`);

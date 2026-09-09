@@ -229,6 +229,12 @@ function wire(){
 
   /* 上書きの窓。**閉じ方が何であれ「変更しない」に落ちる。**
      Esc も、外側を押したときも、返事をしないまま消えたときも同じ */
+  /* 保存の競合。**閉じ方が何であれ「最新の内容を見る」に落ちる。**
+     上書きは、そう答えたときだけ */
+  on("cfSee","click",  () => { $("cfDlg").close(); });
+  on("cfMine","click", () => { cfAnswer(true); $("cfDlg").close(); });
+  on("cfDlg","close",  () => cfAnswer(false));
+
   on("swNo","click",  () => { $("swDlg").close(); });
   on("swYes","click", () => { owAnswer(true); $("swDlg").close(); });
   on("swDlg","close", () => owAnswer(false));
@@ -407,6 +413,9 @@ function start(){
   Backend.setDirtyWatcher((n, err) => {
     saveState.n = n; saveState.err = err; paintSave();
   });
+  /* **競合したことを黙って飲み込まない。** 出さないと、教師は書けたつもりで
+     書けていないまま週を進める（→ dialogs.js showConflicts） */
+  Backend.setConflictWatcher(list => showConflicts(list));
   wire();
   if(storeBroken) toast("<b>" + escText(storeBroken) + "</b>");
 
