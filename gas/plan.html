@@ -170,14 +170,42 @@ button,select,input,textarea{font:inherit;color:inherit}
   border:1px solid var(--line);border-radius:15px;background:var(--card);cursor:pointer;
   font-variant-numeric:tabular-nums}
 .tpchip:hover{background:var(--hover)}
-.tpchip[aria-pressed=true]{background:var(--tint);border-color:var(--ink-link);
+.tpchip.on{background:var(--tint);border-color:var(--ink-link);
   color:var(--ink-link);font-weight:600}
+.tpchip.drag{opacity:.5}
 .tpchip i{width:9px;height:9px;border-radius:50%;background:var(--line);flex:none}
-.tpchip[aria-pressed=true] i{background:var(--ink-link)}
+.tpchip.on i{background:var(--ink-link)}
 .tpchip.warn i{background:var(--cat-clash)}
-/* 人数。**1人と2人が並んでいて見分けられること**が要る（印の数ではなく字で出す） */
+/* **どの組に入れてあるかは字で出す。** 色や印の数だけでは数えられない */
 .tpchip b{font-weight:700;font-size:11.5px;color:var(--ink-link)}
-.tpchip.n2 i{box-shadow:0 0 0 3px var(--tint)}
+
+/* 引っぱって入れる面。左＝交流級／右＝たんぽぽの組 */
+.tpplace{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,340px);gap:18px;
+  align-items:start}
+.tpfrom{display:flex;flex-direction:column;gap:8px}
+.tpto{display:flex;flex-direction:column;gap:8px}
+.tpgrp{border:1px solid var(--line);border-radius:var(--r);background:var(--card);
+  overflow:hidden}
+/* 偶数の組。**出す先のシートでも地を敷くので、画面でも同じ見分け方にする。**
+   色だけに頼らないよう、左端に太い縦線を足す */
+.tpgrp.even{background:var(--tint)}
+.tpgrp.even .tpghead{border-left:5px solid var(--cat-special)}
+.tpgrp.pick{border-color:var(--ink-link);box-shadow:0 0 0 2px var(--tint)}
+.tpgrp.over{border-color:var(--ink-link);background:var(--tint)}
+.tpghead{display:flex;justify-content:space-between;align-items:center;width:100%;
+  padding:8px 11px;font-size:13px;font-weight:600;background:none;border:0;
+  border-bottom:1px solid var(--line);cursor:pointer;font-family:inherit;text-align:left}
+.tpgrp.pick .tpghead{color:var(--ink-link)}
+.tpghead span{font-size:11.5px;color:var(--tx-sub);font-weight:400}
+.tpgbody{display:flex;flex-wrap:wrap;gap:6px;padding:9px 11px;min-height:38px}
+.tpgbody i{font-size:11.5px;color:var(--tx-sub);font-style:normal}
+.tpin{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;font-size:12.5px;
+  border:1px solid var(--line);border-radius:13px;background:var(--card);cursor:pointer;
+  font-variant-numeric:tabular-nums;font-family:inherit}
+.tpin:hover{border-color:var(--cat-clash);color:var(--cat-clash)}
+.tpin u{text-decoration:none;font-size:11px;color:var(--tx-sub)}
+.tpin:hover u{color:var(--cat-clash)}
+.tpaddg{align-self:flex-start;font-size:12px;padding:5px 10px}
 .tpwarn{display:flex;flex-direction:column;gap:8px}
 .tpwarn .box{border:1px solid var(--line);border-left:4px solid var(--cat-clash);
   border-radius:var(--r-sm);padding:11px 13px;font-size:13px;line-height:1.75}
@@ -748,11 +776,14 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
       <div class="tpview" id="tpView" hidden>
         <div class="tphead">
           <h2>たんぽぽ</h2>
-          <p>たんぽぽ児童がいる<b>交流級</b>を選ぶ。ここで選んだクラスだけを、
-             たんぽぽ時間割へ出す。<br>
+          <p>左の<b>交流級</b>を、右の<b>たんぽぽの組</b >へ引っぱって入れる。
+             <b>1回入れると児童1人＝出す先の1列。</b>同じ組へ2回入れれば2人。<br>
+             出す先の列は<b>たんぽぽ1組・2組…の順</b>に並び、組の中はクラス順になる。
+             偶数の組は地の色と太い縦線で区切る。<br>
              <b>出したものはたんぽぽ時間割へ全部入る。</b>そのあとは、たんぽぽ担当が
              たんぽぽ時間割の側を直していく。<br>
-             選んだ交流級は<b>クラス表の「たんぽぽ交流級」欄</b>に残る。表から直してもよい。</p>
+             入れた組は<b>クラス表の「たんぽぽ交流級」欄</b>に組の番号として残る
+             （<code>1</code>／<code>1,2</code>）。表から直してもよい。</p>
         </div>
         <div class="tpsel" id="tpSel"></div>
         <div class="tpwarn" id="tpWarn"></div>
@@ -1101,8 +1132,8 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.2.0";
-let BUILD_DATE  = "2026-09-08";
+let APP_VERSION = "1.3.0";
+let BUILD_DATE  = "2026-09-09";
 
 /* 時程。行を固定しない（学校ごとに違う）。
    tally = 時数集計表のどの列に当たるか。chips = 教科を選べるか。
@@ -1434,9 +1465,10 @@ function newYear(y){
     classes:  prev ? clone(prev.classes)  : clone(DEFAULT_CLASSES),
     specials: prev ? clone(prev.specials) : clone(DEFAULT_SPECIALS),
     base:{}, weeks:{}, week1: firstMonday(y),
-    /* たんぽぽ児童がいる交流級。ここで選んだクラスだけを たんぽぽ時間割へ出す */
-    /* たんぽぽ児童がいる交流級と、その**人数**。{"3-3":2} のように持つ。
-       たんぽぽ時間割は児童ごとに1列なので、2人いれば2列に書く */
+    /* たんぽぽ児童を、**たんぽぽの組ごとに**持つ。{"1":["1-3","3-2"], "2":["4-1"]}。
+       たんぽぽ時間割は児童ごとに1列で、たんぽぽ担当は組ごとに見るので、
+       出す列も 1組の全員 → 2組の全員 … の順に並べる。
+       同じ交流級を同じ組へ2つ入れれば2人（＝2列）。 */
     tanpopo: prev ? clone(prev.tanpopo || {}) : {}
   };
 }
@@ -1451,24 +1483,85 @@ function Y(){
   if(!Yr.base)  Yr.base  = {};
   if(!Yr.weeks) Yr.weeks = {};
   if(!Yr.week1) Yr.week1 = firstMonday(+y);
-  /* **毎回作り直さない。** 作り直すと、直した中身が次の呼び出しで捨てられる */
-  if(!Yr.tanpopo || typeof Yr.tanpopo !== "object" || Array.isArray(Yr.tanpopo))
+  /* **毎回作り直さない。** 作り直すと、直した中身が次の呼び出しで捨てられる。
+     組ごとの並び（値が配列）になっていなければ、そのときだけ直す。 */
+  if(!Yr.tanpopo || typeof Yr.tanpopo !== "object" || Array.isArray(Yr.tanpopo)
+     || Object.keys(Yr.tanpopo).some(k => !Array.isArray(Yr.tanpopo[k])))
     Yr.tanpopo = tpNorm_(Yr.tanpopo);
   return Yr;
 }
-/* 前は「クラス名の並び」で持っていた。人数を持つ形に直す。
-   **古い控えを捨てない。** 捨てると、選び直しからやることになる。 */
+/* たんぽぽの組。**既定は4組。** 学校によって数が違うので増やせる。 */
+const TP_GROUPS = 4;
+
+/* 持ち方を「組ごとの並び」へそろえる。**古い控えを捨てない。**
+   捨てると、選び直しからやることになる。
+
+     ["3-3","1-1"]          いちばん古い形（並びだけ）→ 全員を1組へ
+     {"3-3":2, "1-1":1}     人数で持っていた形        → 全員を1組へ
+     {"1":["3-3"], "2":[…]} いまの形                  → そのまま */
 function tpNorm_(v){
   const out = {};
-  if(Array.isArray(v)){ for(const c of v) out[c] = 1; return out; }
-  if(v && typeof v === "object")
-    for(const c in v){ const n = +v[c] || 0; if(n > 0) out[c] = Math.min(9, n); }
+  const put = (g, c) => { const k = String(g); (out[k] || (out[k] = [])).push(String(c)); };
+  if(Array.isArray(v)){ for(const c of v) put(1, c); }
+  else if(v && typeof v === "object"){
+    for(const k in v){
+      const val = v[k];
+      if(Array.isArray(val)){ for(const c of val) put(k, c); }        /* いまの形 */
+      else { const n = +val || 0; for(let i = 0; i < Math.min(9, n); i++) put(1, k); }
+    }
+  }
+  for(const k in out) out[k].sort(clsRank_);
   return out;
 }
-/* そのクラスに何人いるか。0 なら出さない */
-const tpCount  = c => (Y().tanpopo || {})[c] || 0;
-const tpChosen = () => Object.keys(Y().tanpopo || {}).filter(c => tpCount(c) > 0);
-const tpTotal  = () => tpChosen().reduce((a, c) => a + tpCount(c), 0);
+/* クラスの並び順。**1-1 〜 6-4。** 名前を割って数で見る（字の順では 10 が 2 の前に来る） */
+function clsRank_(a, b){
+  const r = c => { const m = String(c).match(/^(\d+)-(\d+)$/);
+                   return m ? (+m[1]) * 100 + (+m[2]) : 9999; };
+  return r(a) - r(b);
+}
+/* たんぽぽの組の番号。**空の組も出す**（引っぱって落とす先が要る） */
+function tpGroups(){
+  const t = Y().tanpopo || {};
+  let n = TP_GROUPS;
+  /* **空の組も数に入れる。** 足したばかりの組が消えると、落とす先が無くなる */
+  for(const k in t) n = Math.max(n, +k || 0);
+  const out = [];
+  for(let i = 1; i <= n; i++) out.push(String(i));
+  return out;
+}
+const tpIn = g => (Y().tanpopo || {})[String(g)] || [];
+/* 1人足す／1人減らす。**同じ交流級を2つ入れれば2人（＝2列）。** */
+function tpAdd(g, cls){
+  const t = Y().tanpopo, k = String(g);
+  (t[k] || (t[k] = [])).push(String(cls));
+  t[k].sort(clsRank_);
+}
+/* **空になっても組は残す。** 消すと、いま見ている受け皿が画面から無くなる */
+function tpDrop(g, cls){
+  const a = (Y().tanpopo || {})[String(g)] || [];
+  const i = a.indexOf(String(cls));
+  if(i >= 0) a.splice(i, 1);
+}
+/* 組を1つ足す。空の組を増やしても、出すときは飛ばされる */
+function tpAddGroup(){ Y().tanpopo[String(tpGroups().length + 1)] = []; }
+
+/* 出す列の並び。**1組の全員 → 2組の全員 → …**、組の中はクラス順。 */
+function tpColumns(){
+  const out = [];
+  for(const g of tpGroups())
+    for(const c of tpIn(g)) out.push({cls:c, group:+g});
+  return out;
+}
+/* そのクラスに何人いるか（組をまたいだ合計）。0 なら出さない */
+const tpCount  = c => tpColumns().filter(x => x.cls === c).length;
+const tpChosen = () => {
+  const seen = {}, out = [];
+  for(const x of tpColumns()) if(!seen[x.cls]){ seen[x.cls] = 1; out.push(x.cls); }
+  return out.sort(clsRank_);
+};
+const tpTotal  = () => tpColumns().length;
+/* そのクラスがどの組に入っているか（画面の印に使う） */
+const tpGroupsOf = c => tpGroups().filter(g => tpIn(g).indexOf(c) >= 0);
 
 const knownYears = () => Object.keys(db.years).sort();
 
@@ -1979,12 +2072,13 @@ const Backend = (function(){
       .withFailureHandler(e => ng(String((e && e.message) || "見られなかった")))
       .apiShapeTanpopo(wkKey());
   }
-  function buildTanpopo(counts, slots, ok, ng){
+  /* cols = [{cls, group}] の並び。**並びと組をこちらで決めて渡す。** */
+  function buildTanpopo(cols, slots, ok, ng){
     if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
     google.script.run
       .withSuccessHandler(r => ok(r))
       .withFailureHandler(e => ng(String((e && e.message) || "作れなかった")))
-      .apiBuildTanpopo(fy(), wkKey(), counts, slots);
+      .apiBuildTanpopo(fy(), wkKey(), cols, slots);
   }
 
   function exportTanpopo(titles, classes, slots, ok, ng){
@@ -3099,37 +3193,86 @@ let tpDay = 0;
 
 const tpHasCls  = c => tpCount(c) > 0;
 
-/* ── たんぽぽの面 ────────────────────────────── */
-
-/* 押すたびに 0人 → 1人 → 2人 → 0人。
-   **たんぽぽ時間割は児童ごとに1列。** 同じ交流級に2人いれば2列いる。
-   人数をここで持っておくと、たんぽぽ側の列数と食い違ったときに気づける。 */
-const TP_MAX = 2;
+/* ── たんぽぽの面 ────────────────────────────
+   **たんぽぽの組へ、交流級を引っぱって入れる。**
+   1回入れると児童1人＝出す先の1列。同じ組へ2回入れれば2人。
+   引っぱれない端末のために、押しても入るようにしてある
+   （左のクラスを押すと、いま選んでいる組へ入る）。 */
+let tpPick = "1";              /* いま選んでいる組。押して入れるときの行き先 */
 
 function drawTanpopoView(){
-  $("tpSel").innerHTML = grades().map(g =>
+  const groups = tpGroups();
+  if(groups.indexOf(tpPick) < 0) tpPick = groups[0];
+
+  /* 左：交流級。**どの組に入れてあるかを字で添える**（色だけに頼らない） */
+  const left = grades().map(g =>
     "<div class='tprow'><span>" + escText(g) + "年</span><div class='tpchips'>"
     + classesOfGrade(g).map(c => {
-        const st = planState(c), n = tpCount(c);
-        return "<button class='tpchip n" + n + (n && st !== "ok" ? " warn" : "") + "'"
-             + " aria-pressed='" + (n > 0) + "'"
-             + " title='押すたびに 0人→1人→2人→0人'"
-             + " data-c='" + escText(c) + "'><i></i>"
-             + escText(c) + (n ? "<b>" + n + "人</b>" : "") + "</button>";
+        const gs = tpGroupsOf(c), n = tpCount(c), st = planState(c);
+        return "<button class='tpchip" + (n ? " on" : "") + (n && st !== "ok" ? " warn" : "")
+             + "' draggable='true' aria-pressed='" + (n > 0) + "'"
+             + " title='引っぱって組へ入れる。押すと " + escText(tpPick) + "組へ入る'"
+             + " data-c='" + escText(c) + "'><i></i>" + escText(c)
+             + (gs.length ? "<b>" + gs.map(x => x + "組").join("・") + "</b>" : "")
+             + "</button>";
       }).join("")
     + "</div></div>").join("");
-  for(const b of $("tpSel").querySelectorAll(".tpchip")) b.onclick = () => {
-    const c = b.dataset.c, t = Y().tanpopo;
-    const n = (tpCount(c) + 1) % (TP_MAX + 1);
-    if(n) t[c] = n; else delete t[c];
-    save(); Backend.saveRoster(); drawTanpopoView();
-  };
+
+  /* 右：たんぽぽの組。**出す列の並びがそのまま見えている。** */
+  const right = groups.map(g =>
+    "<div class='tpgrp" + (g === tpPick ? " pick" : "") + (+g % 2 === 0 ? " even" : "")
+    + "' data-g='" + escText(g) + "'>"
+    + "<button class='tpghead' data-g='" + escText(g) + "'>"
+    + "たんぽぽ" + escText(g) + "組<span>" + tpIn(g).length + "人</span></button>"
+    + "<div class='tpgbody'>"
+    + (tpIn(g).length
+       ? tpIn(g).map((c, i) =>
+           "<button class='tpin' data-g='" + escText(g) + "' data-i='" + i + "'"
+           + " title='押すと、この1人を外す'>" + escText(c) + "<u>×</u></button>").join("")
+       : "<i>ここへ引っぱって入れる</i>")
+    + "</div></div>").join("");
+
+  $("tpSel").innerHTML =
+    "<div class='tpplace'><div class='tpfrom'>" + left + "</div>"
+    + "<div class='tpto'>" + right
+    + "<button class='btn tpaddg' id='tpAddG'>組を足す</button></div></div>";
+
+  /* 入れる／外す。**押しても引っぱっても同じことが起きる。** */
+  const redraw = () => { save(); Backend.saveRoster(); drawTanpopoView(); };
+  for(const b of $("tpSel").querySelectorAll(".tpchip")){
+    b.addEventListener("dragstart", ev => {
+      ev.dataTransfer.setData("text/x-tanpopo", b.dataset.c);
+      ev.dataTransfer.effectAllowed = "copy";
+      b.classList.add("drag");
+    });
+    b.addEventListener("dragend", () => b.classList.remove("drag"));
+    b.onclick = () => { tpAdd(tpPick, b.dataset.c); redraw(); };
+  }
+  for(const h of $("tpSel").querySelectorAll(".tpghead"))
+    h.onclick = () => { tpPick = h.dataset.g; drawTanpopoView(); };
+  for(const x of $("tpSel").querySelectorAll(".tpin"))
+    x.onclick = () => { tpDrop(x.dataset.g, tpIn(x.dataset.g)[+x.dataset.i]); redraw(); };
+  for(const box of $("tpSel").querySelectorAll(".tpgrp")){
+    box.addEventListener("dragover", ev => {
+      if(ev.dataTransfer.types.indexOf("text/x-tanpopo") < 0) return;
+      ev.preventDefault(); box.classList.add("over");
+    });
+    box.addEventListener("dragleave", () => box.classList.remove("over"));
+    box.addEventListener("drop", ev => {
+      ev.preventDefault(); box.classList.remove("over");
+      const c = ev.dataTransfer.getData("text/x-tanpopo");
+      if(c){ tpPick = box.dataset.g; tpAdd(box.dataset.g, c); redraw(); }
+    });
+  }
+  const add = $("tpAddG");
+  if(add) add.onclick = () => { tpAddGroup(); save(); drawTanpopoView(); };
 
   /* **基本時間割から動いていないクラスを知らせる。**
      動いていない週をそのまま出すと、担任がまだ書いていない予定を本物のように配る。 */
   const chosen = tpChosen().filter(c => allClasses().indexOf(c) >= 0);
   const base  = chosen.filter(c => planState(c) === "base");
   const upper = chosen.filter(c => planState(c) === "upper");
+  const gone  = tpChosen().filter(c => allClasses().indexOf(c) < 0);
   const boxes = [];
   if(base.length)
     boxes.push("<div class='box'><b>" + base.map(escText).join("・")
@@ -3138,17 +3281,21 @@ function drawTanpopoView(){
   if(upper.length)
     boxes.push("<div class='box'><b>" + upper.map(escText).join("・")
       + "</b> は<b>上位（全校・学年）の予定しか入っていません</b>。担任は未着手です。</div>");
+  if(gone.length)
+    boxes.push("<div class='box'><b>" + gone.map(escText).join("・")
+      + "</b> は<b>いまの学級編成にありません</b>。組から外してください。</div>");
   if(!chosen.length)
-    boxes.push("<div class='box ok'>交流級をまだ選んでいません。上から選んでください。</div>");
+    boxes.push("<div class='box ok'>まだ誰も入れていません。"
+      + "左のクラスを、右のたんぽぽの組へ引っぱってください。</div>");
   else if(!boxes.length)
-    boxes.push("<div class='box ok'>選んだ " + chosen.length
+    boxes.push("<div class='box ok'>入れている " + chosen.length
       + " クラスは、いずれも今週の予定が入っています。</div>");
   $("tpWarn").innerHTML = boxes.join("");
 
-  $("tpGo").disabled = !chosen.length;
-  $("tpCount").innerHTML = chosen.length
-    ? "選んでいるのは <b>" + chosen.length + " クラス</b>・<b>"
-      + chosen.reduce((a, c) => a + tpCount(c), 0) + " 人</b>"
+  $("tpGo").disabled = !tpTotal();
+  $("tpCount").innerHTML = tpTotal()
+    ? "出すのは <b>" + tpTotal() + " 人</b>（" + tpTotal() + " 列）・"
+      + "<b>" + chosen.length + " クラス</b>"
     : "";
 }
 
@@ -3223,7 +3370,7 @@ function reflectTanpopo(){
   const bad = chosen.filter(c => planState(c) !== "ok");
   const yes = confirm(
     md(monday) + " → " + md(addDays(monday, 4)) + " の週を、たんぽぽ時間割へ出します。\n\n"
-    + "・選んだ交流級：" + chosen.map(c => c + "（" + tpCount(c) + "人）").join("、") + "\n"
+    + "・出す児童：" + tpTotal() + "人（" + chosen.map(c => c + "×" + tpCount(c)).join("、") + "）\n"
     + (bad.length ? "・まだ基本時間割のまま：" + bad.join("、") + "\n" : "")
     + "\nたんぽぽ時間割の授業名は、この週のぶんが全部入れ替わります。\n"
     + "たんぽぽ側で直した内容は消えます。\n\nつづけますか？");
@@ -3239,7 +3386,8 @@ function reflectTanpopo(){
   $("tpGo").disabled = true;
   $("tpCount").innerHTML = "たんぽぽ時間割へ書いている…";
   Backend.flush(() => {
-    /* **人数のまま渡す。** たんぽぽ側の列の数と合っているかを、あちらで見る */
+    /* **人数のまま渡す。** たんぽぽ側の列の数と合っているかを、あちらで見る
+       （どの組かは列の並びの話で、中身は交流級だけで決まる） */
     const nums = {};
     for(const c of chosen) nums[c] = tpCount(c);
     Backend.exportTanpopo(tanpopoTitles(chosen), nums, tpSlots(),
@@ -3288,21 +3436,25 @@ function showShape(){
 
 /* **形を作りなおす。** いまのシートは名前を変えて残す（消さない）。 */
 function buildShape(){
-  const chosen = tpChosen().filter(c => allClasses().indexOf(c) >= 0);
-  if(!chosen.length) return toast("先に交流級を選ぶ");
-  const nums = {};
-  for(const c of chosen) nums[c] = tpCount(c);
-  const n = chosen.reduce((a, c) => a + nums[c], 0);
+  /* **組ごとの並びをそのまま渡す。** 出す先も 1組の全員 → 2組の全員 … と並ぶ */
+  const cols = tpColumns().filter(x => allClasses().indexOf(x.cls) >= 0);
+  if(!cols.length) return toast("先に、たんぽぽの組へ交流級を入れる");
+  const n = cols.length;
+  const byG = {};
+  for(const x of cols) (byG[x.group] || (byG[x.group] = [])).push(x.cls);
   const yes = confirm(
     "たんぽぽ時間割のシートを、この形で作りなおします。\n\n"
-    + "・児童ごとに1列：" + chosen.map(c => c + "×" + nums[c]).join("、")
+    + "・左から たんぽぽ1組・2組… の順、組の中はクラス順\n"
+    + Object.keys(byG).sort((a, b) => a - b)
+        .map(g => "　" + g + "組：" + byG[g].join("、")).join("\n") + "\n"
     + "（合わせて " + n + " 列）\n"
+    + "・偶数の組の列には地の色を敷き、組の境目に太い縦線を引きます\n"
     + "・1日16行 × 5日。各コマは 授業名 と 担当者・場所 の2行\n"
     + "・授業名の行は灰色。担当者・場所が「た」で始まると白に戻る書式も入れます\n\n"
     + "いまのシートは<消しません>。名前を変えて残します。\n\nつづけますか？");
   if(!yes) return;
   $("tpShapeOut").innerHTML = "<div class='box ok'>作っています…</div>";
-  Backend.buildTanpopo(nums, tpSlots(),
+  Backend.buildTanpopo(cols, tpSlots(),
     r => {
       $("tpShapeOut").innerHTML =
         "<div class='box ok'><b>作りなおした。</b>"

@@ -110,14 +110,42 @@ button,select,input,textarea{font:inherit;color:inherit}
   border:1px solid var(--line);border-radius:15px;background:var(--card);cursor:pointer;
   font-variant-numeric:tabular-nums}
 .tpchip:hover{background:var(--hover)}
-.tpchip[aria-pressed=true]{background:var(--tint);border-color:var(--ink-link);
+.tpchip.on{background:var(--tint);border-color:var(--ink-link);
   color:var(--ink-link);font-weight:600}
+.tpchip.drag{opacity:.5}
 .tpchip i{width:9px;height:9px;border-radius:50%;background:var(--line);flex:none}
-.tpchip[aria-pressed=true] i{background:var(--ink-link)}
+.tpchip.on i{background:var(--ink-link)}
 .tpchip.warn i{background:var(--cat-clash)}
-/* 人数。**1人と2人が並んでいて見分けられること**が要る（印の数ではなく字で出す） */
+/* **どの組に入れてあるかは字で出す。** 色や印の数だけでは数えられない */
 .tpchip b{font-weight:700;font-size:11.5px;color:var(--ink-link)}
-.tpchip.n2 i{box-shadow:0 0 0 3px var(--tint)}
+
+/* 引っぱって入れる面。左＝交流級／右＝たんぽぽの組 */
+.tpplace{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,340px);gap:18px;
+  align-items:start}
+.tpfrom{display:flex;flex-direction:column;gap:8px}
+.tpto{display:flex;flex-direction:column;gap:8px}
+.tpgrp{border:1px solid var(--line);border-radius:var(--r);background:var(--card);
+  overflow:hidden}
+/* 偶数の組。**出す先のシートでも地を敷くので、画面でも同じ見分け方にする。**
+   色だけに頼らないよう、左端に太い縦線を足す */
+.tpgrp.even{background:var(--tint)}
+.tpgrp.even .tpghead{border-left:5px solid var(--cat-special)}
+.tpgrp.pick{border-color:var(--ink-link);box-shadow:0 0 0 2px var(--tint)}
+.tpgrp.over{border-color:var(--ink-link);background:var(--tint)}
+.tpghead{display:flex;justify-content:space-between;align-items:center;width:100%;
+  padding:8px 11px;font-size:13px;font-weight:600;background:none;border:0;
+  border-bottom:1px solid var(--line);cursor:pointer;font-family:inherit;text-align:left}
+.tpgrp.pick .tpghead{color:var(--ink-link)}
+.tpghead span{font-size:11.5px;color:var(--tx-sub);font-weight:400}
+.tpgbody{display:flex;flex-wrap:wrap;gap:6px;padding:9px 11px;min-height:38px}
+.tpgbody i{font-size:11.5px;color:var(--tx-sub);font-style:normal}
+.tpin{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;font-size:12.5px;
+  border:1px solid var(--line);border-radius:13px;background:var(--card);cursor:pointer;
+  font-variant-numeric:tabular-nums;font-family:inherit}
+.tpin:hover{border-color:var(--cat-clash);color:var(--cat-clash)}
+.tpin u{text-decoration:none;font-size:11px;color:var(--tx-sub)}
+.tpin:hover u{color:var(--cat-clash)}
+.tpaddg{align-self:flex-start;font-size:12px;padding:5px 10px}
 .tpwarn{display:flex;flex-direction:column;gap:8px}
 .tpwarn .box{border:1px solid var(--line);border-left:4px solid var(--cat-clash);
   border-radius:var(--r-sm);padding:11px 13px;font-size:13px;line-height:1.75}

@@ -470,12 +470,13 @@ const Backend = (function(){
       .withFailureHandler(e => ng(String((e && e.message) || "見られなかった")))
       .apiShapeTanpopo(wkKey());
   }
-  function buildTanpopo(counts, slots, ok, ng){
+  /* cols = [{cls, group}] の並び。**並びと組をこちらで決めて渡す。** */
+  function buildTanpopo(cols, slots, ok, ng){
     if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
     google.script.run
       .withSuccessHandler(r => ok(r))
       .withFailureHandler(e => ng(String((e && e.message) || "作れなかった")))
-      .apiBuildTanpopo(fy(), wkKey(), counts, slots);
+      .apiBuildTanpopo(fy(), wkKey(), cols, slots);
   }
 
   function exportTanpopo(titles, classes, slots, ok, ng){

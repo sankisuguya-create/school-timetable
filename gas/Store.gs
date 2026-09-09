@@ -127,30 +127,47 @@ const Store = (function(){
     return out;
   }
 
-  /* たんぽぽ児童がいる交流級と、その**人数**。
-     たんぽぽ時間割は児童ごとに1列なので、2人いれば2列に書く。
-     数で書くのが本筋だが、○ や「あり」と書いてあれば1人として読む
-     （前は○で持っていた。書き直させない）。 */
-  function tpNum(v){
+  /* そのクラスのたんぽぽ児童が、**どのたんぽぽ組にいるか**。
+     たんぽぽ時間割は児童ごとに1列で、たんぽぽ担当は組ごとに見るので、
+     出す列も 1組の全員 → 2組の全員 … の順に並べる。
+
+       ""        いない
+       "1"       たんぽぽ1組に1人
+       "1,2"     1組に1人・2組に1人（合わせて2人＝2列）
+       "1,1"     1組に2人
+       "○"       組が分からない。1組として読む（前は○で持っていた）
+
+     **前の版では、この欄は「人数」だった。** 「2」は2人の意味だったが、
+     いまは「2組に1人」として読む。版を上げたあと、たんぽぽの画面で
+     並べ直す（→ docs/setup.md Step 8）。 */
+  function tpGroupsOf_(v){
     const t = String(v == null ? "" : v).trim().toLowerCase();
-    if(t === "" || t === "false" || t === "0" || t === "×" || t === "x" || t === "-") return 0;
-    const m = t.match(/^(\d+)/);
-    if(m) return Math.min(9, +m[1]);
-    return 1;
+    if(t === "" || t === "false" || t === "0" || t === "×" || t === "x" || t === "-") return [];
+    const out = [];
+    for(const part of t.split(/[,、\s]+/)){
+      const m = part.match(/^(\d+)/);
+      if(m && +m[1] > 0) out.push(Math.min(99, +m[1]));
+      else if(part) out.push(1);        /* ○ や「あり」。組が分からないので1組 */
+    }
+    return out.length ? out : [1];
   }
 
   /* 年度の欄が空の行は「どの年度でも使う既定」。年度を書いた行があれば、そちらが勝つ。 */
   function readRoster(year){
-    const tanpopo = {};
+    const tanpopo = {};                 /* たんぽぽ組の番号 → 交流級の並び */
     const classes = pickYear_("クラス", year).reduce((a, r) => {
       const g = Sheets.asClass(r["学年"]), c = Sheets.asClass(r["クラス"]);
       if(g && c){
         (a[g] || (a[g] = [])).push(c);
-        const n = tpNum(r["たんぽぽ交流級"]);
-        if(n > 0) tanpopo[c] = n;
+        for(const n of tpGroupsOf_(r["たんぽぽ交流級"]))
+          (tanpopo[String(n)] || (tanpopo[String(n)] = [])).push(c);
       }
       return a;
     }, {});
+    /* 組の中はクラス順（1-1〜6-4）。**字の順で並べない**（10 が 2 の前に来る） */
+    const rank = c => { const m = String(c).match(/^(\d+)-(\d+)$/);
+                        return m ? (+m[1]) * 100 + (+m[2]) : 9999; };
+    for(const k in tanpopo) tanpopo[k].sort(function(x, y){ return rank(x) - rank(y); });
     const specials = pickYear_("専科", year)
       .map(r => ({code: String(r["教科コード"] || "").trim(),
                   label: String(r["表示名"] || "").trim()}))
@@ -602,6 +619,12 @@ const Store = (function(){
     let t = String(v == null ? "" : v).normalize("NFKC").trim().replace(/[　\s]+/g, "");
     return t.replace(/[‐‑–—―ー−ｰ－]/g, "-");
   }
+  /* 交流級の見出しを読む。**Date で返ってくることがある。**
+     スプレッドシートは 1-2 を「1月2日」として取り込む。画面には 1-2 と
+     出ているのに getValues() は Date を返すので、字として比べると
+     交流級の列が1つも見つからず、1コマも書けない。
+     Sheets.asClass が月-日から元の字へ戻す。 */
+  function tpCls(v){ return tpNorm(Sheets.asClass(v)); }
   /* A列の値を日付にする。Date でも「11/16」でも「11月16日」でも読む */
   function tpDate(v, year){
     if(Sheets.isDate(v)) return ymd(v);
@@ -659,8 +682,8 @@ const Store = (function(){
     if(first){
       const head = sh.getRange(first, 1, 1, lastCol).getValues()[0];
       out.headRow = first;
-      out.head = head.slice(0, 30).map(function(v){ return String(v == null ? "" : v); });
-      out.classCols = out.head.filter(function(v){ return /^[1-9]-[1-9]$/.test(tpNorm(v)); }).length;
+      out.head = head.slice(0, 30).map(function(v){ return Sheets.asClass(v); });
+      out.classCols = out.head.filter(function(v){ return /^[1-9]-[1-9]$/.test(tpCls(v)); }).length;
     }
     if(!out.days.length) out.note.push("A列に日付が見つかりません");
     if(!out.marks.length) out.note.push("A列に「中休み」「給食」「昼休み」が見つかりません");
@@ -671,19 +694,40 @@ const Store = (function(){
   /* ── 形を作る ──────────────────────────────────
      **手で整えるのをやめる。** 1日16行・児童ごとに1列の形をこちらで作る。
      いまのシートは名前を変えて残す（消さない）。 */
+  /* 列の並び。**たんぽぽ1組の全員 → 2組の全員 → …**
+     組の中はクラスの順（1-1〜6-4）。たんぽぽ担当は組ごとに見るので、
+     クラス順に混ぜて並べると、自分の組の児童を目で拾えない。
+
+     受けるのは2つの形。
+       [{cls:"3-3", group:1}, …]   新しい形。並びも組もこちらが決める
+       {"3-3":2, "1-1":1}          古い形（人数だけ）。全員を1組として扱う */
+  function tpColumns_(cols){
+    const clsRank = c => {
+      const m = String(c).match(/^(\d+)-(\d+)$/);
+      return m ? (+m[1]) * 100 + (+m[2]) : 9999;
+    };
+    const out = [];
+    if(Array.isArray(cols)){
+      for(const x of cols){
+        const cls = tpNorm(x && x.cls != null ? x.cls : x);
+        if(cls) out.push({cls, group: Math.max(1, +((x && x.group) || 1))});
+      }
+    }else{
+      for(const c in (cols || {}))
+        for(let i = 0; i < (+cols[c] || 0); i++) out.push({cls: tpNorm(c), group: 1});
+    }
+    out.sort(function(a, b){ return (a.group - b.group) || (clsRank(a.cls) - clsRank(b.cls)); });
+    return out;
+  }
+
   const TP_BUILD_ROWS = 16;
   function buildTanpopo(year, mondayISO, counts, slots){
     const {ss, sh, cfg, want} = tpOpen();
     const name = sh.getName();
 
-    /* 列を決める。**児童ごとに1列。** 2人いる交流級は2列 */
-    const cols = [];
-    const cs = Object.keys(counts || {}).sort(function(a, b){
-      const pa = String(a).split("-"), pb = String(b).split("-");
-      return (+pa[0] - +pb[0]) || (+pa[1] - +pb[1]);
-    });
-    for(const c of cs)
-      for(let i = 0; i < (+counts[c] || 0); i++) cols.push(tpNorm(c));
+    /* 列を決める。**児童ごとに1列。** 同じ交流級に2人いれば2列 */
+    const plan = tpColumns_(counts);
+    const cols = plan.map(function(x){ return x.cls; });
     if(!cols.length) throw new Error("交流級を1つも選んでいません");
     const staff = String(cfg["たんぽぽ支援員"] || "").split(/[,、\s]+/)
       .map(function(x){ return x.trim(); }).filter(Boolean);
@@ -706,11 +750,28 @@ const Store = (function(){
     const backup = Sheets.stash(sh, "前の形");
     if(!backup) ss.deleteSheet(sh);          /* 空のシートだけは消す。残す値が無い */
     const nw = ss.insertSheet(name, 0);
+    /* **値を入れる前に、B列から右を「書式なしテキスト」にする。**
+       交流級の見出し 1-2 は、そのままだと 1月2日 として取り込まれる。
+       画面には 1-2 と出るのに getValues() では Date が返り、
+       「交流級の列が1つも無い」と判定されて1コマも書けない。
+       A列は日付を入れるところなので、ここには掛けない。 */
+    if(width > 1)
+      nw.getRange(1, 2, nw.getMaxRows(), width - 1).setNumberFormat("@");
     nw.getRange(1, 1, rows.length, width).setValues(rows);
     nw.setFrozenColumns(1);
     nw.setFrozenRows(1);
     for(let d = 0; d < 5; d++)
       nw.getRange(2 + d * TP_BUILD_ROWS, 1).setNumberFormat("m/d（ddd）");
+
+    /* **偶数組の列に地を敷く。** 奇数組は白のまま。
+       たんぽぽ担当は組ごとに見るので、どこからどこまでが自分の組かが
+       ひと目で要る。色だけに頼らないよう、組の境目には太い縦罫線も引く。 */
+    const F = Sheets.TANPOPO_FILL;
+    const even = [];                    /* 偶数組の列（1始まり・シートの列番号） */
+    for(let i = 0; i < plan.length; i++)
+      if(plan[i].group % 2 === 0) even.push(2 + i);
+    for(const c of even)
+      nw.getRange(1, c, rows.length, 1).setBackground(F.evenBody);
 
     /* 授業名の行は灰色。担当者・場所が「た」で始まる列だけ、条件付き書式で白に戻す */
     const titleOff = [1, 3, 6, 8, 12, 14];
@@ -720,19 +781,33 @@ const Store = (function(){
       for(const off of titleOff){
         const r = top + off;
         const rng = nw.getRange(r, 2, 1, width - 1);
-        rng.setBackground(Sheets.TANPOPO_FILL.imported);
+        rng.setBackground(F.imported);
+        for(const c of even) nw.getRange(r, c).setBackground(F.evenImported);
         rules.push(SpreadsheetApp.newConditionalFormatRule()
           .whenFormulaSatisfied('=LEFT(B' + (r + 1) + ',1)="た"')
-          .setBackground(Sheets.TANPOPO_FILL.own).setRanges([rng]).build());
+          .setBackground(F.own).setRanges([rng]).build());
       }
       nw.getRange(top, 1, 1, width).setFontWeight("bold");
       for(const off of [5, 10, 11])
         nw.getRange(top + off, 1, 1, width).setBackground("#EFEFEF");
     }
+
+    /* 組の境目に太い縦罫線。**色に頼らない手がかり。**
+       支援員の列との境にも引く（別のまとまりなので） */
+    const edges = [];
+    for(let i = 1; i < plan.length; i++)
+      if(plan[i].group !== plan[i - 1].group) edges.push(2 + i);
+    if(staff.length) edges.push(2 + plan.length);
+    for(const c of edges)
+      nw.getRange(1, c, rows.length, 1)
+        .setBorder(null, true, null, null, null, null, "#5A6773",
+                   SpreadsheetApp.BorderStyle.SOLID_THICK);
+
     nw.setConditionalFormatRules(rules);
     SpreadsheetApp.flush();
     return {file:ss.getName(), sheet:name, cols:cols.length, staff:staff.length,
-            rows:rows.length, backup:backup, list:cols};
+            rows:rows.length, backup:backup, list:cols,
+            groups:plan.map(function(x){ return x.group; })};
   }
 
   function exportTanpopo(year, mondayISO, titles, classes, slots){
@@ -807,7 +882,7 @@ const Store = (function(){
       /* その日の見出しを読んで、書く列を決める */
       const cols = [], seen = {};
       for(let c = 1; c < lastCol; c++){
-        const cls = tpNorm(grid[0][c]);
+        const cls = tpCls(grid[0][c]);
         if(!/^[1-9]-[1-9]$/.test(cls)) continue;      /* 支援員などの列は飛ばす */
         if(!pick[cls]){ continue; }
         if(!titles[cls]){ report.unknown[cls] = true; continue; }
@@ -943,11 +1018,26 @@ const Store = (function(){
     }
   }
   /* 前は「クラス名の並び」で来ていた。人数の形に直す */
+  /* 画面から来た「組ごとの並び」を、クラスごとの欄の字に直す。
+     {"1":["1-3","3-2"], "2":["3-2"]} → {"1-3":"1", "3-2":"1,2"}
+     古い形（並びだけ・人数だけ）も受ける。**書き直させない。** */
   function tpNormObj_(v){
+    const per = {};                     /* クラス → 組番号の並び */
+    const put = (g, c) => {
+      const k = Sheets.asClass(c);
+      if(k) (per[k] || (per[k] = [])).push(+g || 1);
+    };
+    if(Array.isArray(v)){ for(const c of v) put(1, c); }
+    else if(v && typeof v === "object"){
+      for(const k in v){
+        const val = v[k];
+        if(Array.isArray(val)){ for(const c of val) put(k, c); }      /* いまの形 */
+        else { const n = +val || 0;                                   /* 人数だった形 */
+               for(let i = 0; i < Math.min(9, n); i++) put(1, k); }
+      }
+    }
     const out = {};
-    if(Array.isArray(v)){ for(const c of v) out[Sheets.asClass(c)] = 1; return out; }
-    if(v && typeof v === "object")
-      for(const c in v){ const n = +v[c] || 0; if(n > 0) out[Sheets.asClass(c)] = Math.min(9, n); }
+    for(const c in per) out[c] = per[c].sort(function(a, b){ return a - b; }).join(",");
     return out;
   }
 
@@ -1041,7 +1131,9 @@ const Store = (function(){
   return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects,
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste,
           exportTanpopo, shapeTanpopo, buildTanpopo, migratePlan, checkYear,
-          archiveCount, archiveVerify, archivePurge, archivedAll, ymd};
+          archiveCount, archiveVerify, archivePurge, archivedAll, ymd,
+          /* 検査から呼ぶ。**画面からは呼ばない**（形を読むための道具） */
+          __tpCls: tpCls, __tpColumns: tpColumns_};
 })();
 
 /* ── 画面から呼ぶ口。**すべて1行目で Gate.check()。** ───────── */
