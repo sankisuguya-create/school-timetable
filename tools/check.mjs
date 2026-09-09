@@ -504,6 +504,7 @@ ok("出す先のシート名を言う（◯月◯週）", /\d+月\d+週/.test(tp
 ok("どの交流級を何人出すかを言う", tpAsked.indexOf("3-3") >= 0, tpAsked.slice(0, 300));
 ok("同じ名前のシートは残すことを言う",
    tpAsked.indexOf("名前を変えて残す") >= 0, tpAsked.slice(0, 400));
+ok("シートが週の順に並ぶことを言う", tpAsked.indexOf("週の順") >= 0, tpAsked.slice(0, 400));
 ok("基本時間割のままのクラスも言う",
    (await p.locator("#tpDlgWarn").innerText()).indexOf("基本時間割") >= 0,
    await p.locator("#tpDlgWarn").innerText());

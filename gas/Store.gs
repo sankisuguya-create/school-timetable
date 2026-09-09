@@ -641,6 +641,8 @@ const Store = (function(){
   }
 
   const TP_BUILD_ROWS = 16;
+  /* 列の幅（px）。児童の列は狭く、時程の列（A）は日付が入るので広いまま */
+  const TP_COL_W = 50, TP_LABEL_W = 92;
   /* 日ブロックの先頭からの相対行。授業名の行だけを持つ（担当者・場所は書かない） */
   const TP_TITLE_OFF = [1, 3, 6, 8, 12, 14];
 
@@ -650,6 +652,34 @@ const Store = (function(){
   function weekSheetName(mondayISO){
     const p = String(mondayISO).split("-");
     return (+p[1]) + "月" + (Math.floor((+p[2] - 1) / 7) + 1) + "週";
+  }
+  /* 週シートの並び順。**年度の順（4月 → 翌3月）。**
+     名前は月と週しか持っていないので、4月を先頭に置き替えて数える。
+     週シートでない名前（退避したもの・ほかの用途のシート）は -1 を返す。 */
+  const WEEK_NAME = /^([1-9]|1[0-2])月([1-5])週$/;
+  function weekOrder(name){
+    const m = String(name).match(WEEK_NAME);
+    if(!m) return -1;
+    return (((+m[1]) + 8) % 12) * 10 + (+m[2]);     /* 4月=0 … 3月=110 */
+  }
+  /* 新しい週シートを、**週の順に右へ**入れる位置。
+     いちばん左（0）に入れ続けると、タブが 10月 → 9月 → … と逆順に並び、
+     たんぽぽ担当は毎週いちばん右ではなく左端を探すことになる。
+     いまある週シートのうち、自分より前の週の**いちばん右**の次に入れる。 */
+  function weekIndex_(ss, name){
+    const mine = weekOrder(name);
+    if(mine < 0) return 0;
+    const sheets = ss.getSheets();
+    let after = -1, before = -1;
+    for(let i = 0; i < sheets.length; i++){
+      const o = weekOrder(sheets[i].getName());
+      if(o < 0 || o === mine) continue;
+      if(o < mine) after = i;                       /* 自分より前の週 */
+      else if(before < 0) before = i;               /* 自分より後の週の、いちばん左 */
+    }
+    if(after >= 0) return after + 1;                /* その次へ */
+    if(before >= 0) return before;                  /* いちばん前の週なら、その手前へ */
+    return sheets.length;                           /* 週シートが1枚も無ければ末尾 */
   }
 
   /* titles = {クラス: {"0": {p1:"国語", …}, …}}（0〜4 は月〜金）
@@ -702,7 +732,8 @@ const Store = (function(){
       backup = Sheets.stash(old, "前の");
       if(!backup) ss.deleteSheet(old);       /* 空のシートだけは消す。残す値が無い */
     }
-    const nw = ss.insertSheet(sheetName, 0);
+    /* **週の順に右へ並べる。** いちばん左に入れ続けるとタブが逆順になる */
+    const nw = ss.insertSheet(sheetName, weekIndex_(ss, sheetName));
     Sheets.grow(nw, rows.length, width);     /* 26列を超えると落ちる。先に伸ばす */
     /* **値を入れる前に、B列から右を「書式なしテキスト」にする。**
        交流級の見出し 1-2 は、そのままだと 1月2日 として取り込まれる。
@@ -713,6 +744,22 @@ const Store = (function(){
     nw.getRange(1, 1, rows.length, width).setValues(rows);
     nw.setFrozenColumns(1);
     nw.setFrozenRows(1);
+
+    /* ── 列の幅 ────────────────────────────────
+       **児童の列は 50px（約13mm）。** 既定の 100px のままだと、
+       10人ぶんで B4 の幅を超え、たんぽぽ担当が毎週手で詰めることになる。
+       幅は「設定」シートの `たんぽぽ列幅` で動かせる（正本はシート）。
+
+       A列だけは広いまま置く。ここには日付（11/16（月））と
+       「中休み」「給食」「昼休み」が入り、50px では読めない。
+
+       **B4 1枚に入る列の数**：B4 横は 364mm、余白を引いて約 350mm
+       ＝ 約 1,323px。A列 92px を引いて 1,231px なので、50px なら
+       **24列**まで（児童＋支援員の合計）。これを超える年は、
+       `たんぽぽ列幅` を下げるか、B4 に収めるのをあきらめて縮小印刷にする。 */
+    const colW = Math.max(20, Math.min(200, +cfg["たんぽぽ列幅"] || TP_COL_W));
+    nw.setColumnWidth(1, TP_LABEL_W);
+    if(width > 1) nw.setColumnWidths(2, width - 1, colW);
     for(let d = 0; d < 5; d++)
       nw.getRange(2 + d * TP_BUILD_ROWS, 1).setNumberFormat("m/d（ddd）");
 
@@ -758,7 +805,7 @@ const Store = (function(){
     nw.setConditionalFormatRules(rules);
     SpreadsheetApp.flush();
     return {file: ss.getName(), sheet: sheetName, cols: list.length,
-            staff: staff.length, rows: rows.length, backup: backup,
+            staff: staff.length, rows: rows.length, backup: backup, colW: colW,
             wrote: wrote, empty: empty, days: 5, list: list,
             groups: plan.map(function(x){ return x.group; })};
   }
@@ -965,7 +1012,7 @@ const Store = (function(){
 
   return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects,
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste,
-          exportWeek, weekSheetName, migratePlan, checkYear,
+          exportWeek, weekSheetName, weekOrder, migratePlan, checkYear,
           archiveCount, archiveVerify, archivePurge, archivedAll, ymd,
           /* 検査から呼ぶ。**画面からは呼ばない**（形を読むための道具） */
           __tpCls: tpCls, __tpColumns: tpColumns_};

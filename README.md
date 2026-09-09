@@ -4,6 +4,7 @@
 あわせて、たんぽぽ時間割（特別支援学級）への書き出しと、
 時数集計表（Excel）へのコピーを1操作で出す。
 たんぽぽへは**1週ぶんを1枚のシート**（「9月1週」）として出す。
+シートは**週の順**（4月→翌3月）に増えていく。
 
 西宮市立高木北小学校の運用に合わせてある。
 
@@ -20,9 +21,9 @@
 npm install               検査に playwright が要る（1回だけ）
 python3 build.py          src/ から dist/index.html と gas/plan.html を作る
 python3 build.py --check  生成物が src と一致するか調べる
-node tools/check.mjs      画面を動かして確かめる（221件）
-node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（147件）
-node gas/storecheck.js    シートの読み書きを確かめる（213件）
+node tools/check.mjs      画面を動かして確かめる（222件）
+node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（149件）
+node gas/storecheck.js    シートの読み書きを確かめる（222件）
 node gas/gatecheck.js     関門を確かめる（27件）
 node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明を見る（52件）
 ```

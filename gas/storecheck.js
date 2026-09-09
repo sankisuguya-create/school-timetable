@@ -105,9 +105,17 @@ function tpSheet(name){
   const base = fakeSheetOn(grid, name);
   return base;
 }
+/* 列の幅。**本物と同じで、読み書きできる。**
+   幅を入れているつもりで入っていない形を、検査で見分けられるようにする */
+const WIDTHS = {};
 function fakeSheetOn(grid0, name){
   const grid = limited(grid0);
   const s0 = {
+    setColumnWidth(c, w){ WIDTHS[name + "/" + c] = w; return s0; },
+    setColumnWidths(c, n, w){
+      for(let i = 0; i < n; i++) WIDTHS[name + "/" + (c + i)] = w;
+      return s0;
+    },
     getMaxRows(){ return grid.max.rows; },
     getMaxColumns(){ return grid.max.cols; },
     insertRowsAfter(after, n){ grid.max.rows += n; return s0; },
@@ -145,7 +153,14 @@ function fakeSheetOn(grid0, name){
     },
     setConditionalFormatRules(){},
     setFrozenRows(){}, setFrozenColumns(){},
-    setName(n){ TPFILE.sheets[n] = grid; delete TPFILE.sheets[name]; name = n; return s0; },
+    setName(n){
+      TPFILE.sheets[n] = grid; delete TPFILE.sheets[name];
+      if(TPFILE.order){
+        const i = TPFILE.order.indexOf(name);
+        if(i >= 0) TPFILE.order[i] = n;
+      }
+      name = n; return s0;
+    },
     getDataRange(){
       const r = s0.getLastRow(), c = s0.getLastColumn();
       return s0.getRange(1, 1, Math.max(1, r), Math.max(1, c));
@@ -158,6 +173,15 @@ function fakeSheetOn(grid0, name){
    複製なので、中身は本体のシートの写しになる。 */
 const BOOKID = "1AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";   /* 本体のID */
 const ARCID  = "1BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";   /* 退避先のID */
+/* たんぽぽファイルのシートの並び。insertSheet の位置がそのまま出る */
+function tpNames(){
+  const have = Object.keys(TPFILE.sheets);
+  const ord = (TPFILE.order || []).filter(n => n in TPFILE.sheets);
+  for(const n of have) if(ord.indexOf(n) < 0) ord.push(n);
+  TPFILE.order = ord;
+  return ord;
+}
+
 const ARCFILE = {name:"週案 保存 2026年度", sheets:{}};
 const arcSheet = name => fakeSheetOn(ARCFILE.sheets[name], name);
 /* 人がドライブで「コピーを作成」したのと同じことをする */
@@ -199,9 +223,18 @@ const sandbox = {
       if(id !== TPID) throw new Error("そんなファイルは無い: " + id);
       return {
         getName: () => TPFILE.name,
-        getSheets: () => Object.keys(TPFILE.sheets).map(tpSheet),
+        getSheets: () => tpNames().map(tpSheet),
         getSheetByName: n => (n in TPFILE.sheets) ? tpSheet(n) : null,
-        insertSheet(n, at){ TPFILE.sheets[n] = []; return tpSheet(n); },
+        /* **位置を受ける。** 週の順に並べているかを検査で見る */
+        insertSheet(n, at){
+          TPFILE.sheets[n] = [];
+          TPFILE.order = TPFILE.order || Object.keys(TPFILE.sheets).filter(x => x !== n);
+          const cur = (TPFILE.order || []).filter(x => x in TPFILE.sheets && x !== n);
+          const i = (at === undefined || at === null) ? cur.length : Math.max(0, Math.min(cur.length, at));
+          cur.splice(i, 0, n);
+          TPFILE.order = cur;
+          return tpSheet(n);
+        },
         deleteSheet(x){ delete TPFILE.sheets[x.getName()]; }
       };
     },
@@ -676,6 +709,63 @@ ok("B列から右は書式なしテキスト（1-2 が1月2日に化けない）
    Object.keys(FORMATS).some(function(k){
      return k.indexOf(ex.sheet + "/") === 0 && FORMATS[k] === "@"; }),
    Object.keys(FORMATS).filter(function(k){ return k.indexOf(ex.sheet) === 0; }).slice(0, 3));
+
+ok("児童の列は 50px（既定）", WIDTHS[ex.sheet + "/2"] === 50, WIDTHS[ex.sheet + "/2"]);
+ok("A列は広いまま（日付と「中休み」が入る）",
+   WIDTHS[ex.sheet + "/1"] === 92, WIDTHS[ex.sheet + "/1"]);
+ok("列の幅は設定シートから動かせる", (function(){
+     const at = ev('Sheets.head("設定").at');
+     const put = v => { for(const row of SHEETS["設定"])
+       if(String(row[at["キー"]]) === "たんぽぽ列幅") row[at["値"]] = v; };
+     put(38);
+     const r = ev("Store.exportWeek(2026, '2027-02-01', " + JSON.stringify(titles)
+              + ", " + JSON.stringify(cols2) + ", " + JSON.stringify(SLOT6) + ")");
+     put(50);
+     return WIDTHS[r.sheet + "/2"] === 38 && r.colW === 38;
+   })() === true, WIDTHS);
+
+console.log("\n■ 週シートは、週の順に右へ並べる");
+(function(){
+  /* **いちばん左に入れ続けるとタブが逆順になる。** 4月 → 翌3月の順に並べる */
+  TPFILE.sheets = {}; TPFILE.order = [];
+  const t = {"3-3":{}};
+  for(let d = 0; d < 5; d++)
+    t["3-3"][String(d)] = {p1:"国語", p2:"", p3:"", p4:"", p5:"", p6:""};
+  const c = [{cls:"3-3", group:1}];
+  const put = mon => ev("Store.exportWeek(2026, '" + mon + "', " + JSON.stringify(t)
+                      + ", " + JSON.stringify(c) + ", " + JSON.stringify(SLOT6) + ")");
+  /* わざと順番をばらばらに出す */
+  put("2026-09-14");     /* 9月2週 */
+  put("2026-11-16");     /* 11月3週 */
+  put("2026-09-07");     /* 9月1週 */
+  put("2027-01-11");     /* 1月2週 → 年度では11月より後 */
+  put("2026-04-06");     /* 4月1週 → いちばん前 */
+  ok("出した順ではなく、週の順に並ぶ",
+     JSON.stringify(tpNames()) === JSON.stringify(["4月1週","9月1週","9月2週","11月3週","1月2週"]),
+     tpNames());
+  ok("年度は4月からで、1月は11月より後ろ",
+     tpNames().indexOf("1月2週") > tpNames().indexOf("11月3週"), tpNames());
+  ok("あとから間の週を出しても、間に入る", (function(){
+       put("2026-10-05");                       /* 10月1週 */
+       return tpNames().indexOf("10月1週") > tpNames().indexOf("9月2週")
+           && tpNames().indexOf("10月1週") < tpNames().indexOf("11月3週");
+     })() === true, tpNames());
+  ok("週シートでない名前は数えない",
+     ev("Store.weekOrder('9月1週（前の 0911-1630）')") === -1
+     && ev("Store.weekOrder('週案')") === -1
+     && ev("Store.weekOrder('9月1週')") >= 0,
+     [ev("Store.weekOrder('9月1週（前の 0911-1630）')"), ev("Store.weekOrder('9月1週')")]);
+  ok("並べる順は 4月=いちばん小さい・3月=いちばん大きい",
+     ev("Store.weekOrder('4月1週')") < ev("Store.weekOrder('12月1週')")
+     && ev("Store.weekOrder('12月1週')") < ev("Store.weekOrder('3月1週')"),
+     [ev("Store.weekOrder('4月1週')"), ev("Store.weekOrder('3月1週')")]);
+  /* 出し直しても並びは崩れない（退避したぶんは数えない） */
+  put("2026-09-14");
+  ok("出し直しても、週の順のまま",
+     tpNames().filter(n => /^\d+月\d+週$/.test(n)).join("／")
+       === "4月1週／9月1週／9月2週／10月1週／11月3週／1月2週",
+     tpNames());
+})();
 
 console.log("\n■ 同じ名前のシートは、消さずに名前を変えて残す");
 (function(){

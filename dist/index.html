@@ -997,7 +997,8 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 <dialog id="tpDlg"><div class="dlg">
   <h2>たんぽぽ時間割へ出す</h2>
   <p>たんぽぽ時間割のファイルに、<b id="tpDlgName">この週</b>という名前のシートを
-     <b>1枚あたらしく作って</b>、この週ぶんを書き込む。<br>
+     <b>1枚あたらしく作って</b>、この週ぶんを書き込む。
+     シートは<b>週の順</b>（4月→翌3月）に並ぶので、出した順に散らばらない。<br>
      <b>同じ名前のシートがあれば、消さずに名前を変えて残す。</b>
      たんぽぽ担当が担当者・場所に書き足したものを、こちらが消さないため。</p>
   <table class="sys" id="tpDlgTbl"></table>
@@ -1100,7 +1101,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.4.0";
+let APP_VERSION = "1.4.1";
 let BUILD_DATE  = "2026-09-09";
 
 /* 時程。行を固定しない（学校ごとに違う）。
@@ -3394,7 +3395,9 @@ function showTanpopoResult(r){
     + (r.empty ? "（空のコマ " + r.empty + "）" : "")
     + (r.backup ? "<br>同じ名前のシートがあったので、前のぶんは「"
                 + escText(r.backup) + "」に名前を変えて残した" : "")
-    + "<br>列の幅は、B4 1枚に収まるようたんぽぽ担当が調える</div>");
+    + "<br>シートは<b>週の順</b>（4月→翌3月）に並ぶ。"
+    + "児童の列の幅は <b>" + (r.colW || 50) + "px</b>"
+    + "（設定シートの「たんぽぽ列幅」で変えられる）</div>");
   $("tpWarn").innerHTML = box.join("") + $("tpWarn").innerHTML;
   toast("たんぽぽ時間割に <b>" + (r.wrote || 0) + " コマ</b>入れた");
 }

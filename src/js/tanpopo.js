@@ -225,7 +225,9 @@ function showTanpopoResult(r){
     + (r.empty ? "（空のコマ " + r.empty + "）" : "")
     + (r.backup ? "<br>同じ名前のシートがあったので、前のぶんは「"
                 + escText(r.backup) + "」に名前を変えて残した" : "")
-    + "<br>列の幅は、B4 1枚に収まるようたんぽぽ担当が調える</div>");
+    + "<br>シートは<b>週の順</b>（4月→翌3月）に並ぶ。"
+    + "児童の列の幅は <b>" + (r.colW || 50) + "px</b>"
+    + "（設定シートの「たんぽぽ列幅」で変えられる）</div>");
   $("tpWarn").innerHTML = box.join("") + $("tpWarn").innerHTML;
   toast("たんぽぽ時間割に <b>" + (r.wrote || 0) + " コマ</b>入れた");
 }

@@ -192,7 +192,7 @@ await p.addInitScript(() => {
       apiExportWeek(y, m, titles, cols, slots, name){
         call("apiExportWeek", [y, m, titles, cols, slots, name]);
         setTimeout(() => okFn({file:"たんぽぽ時間割", sheet:name, cols:3, staff:0,
-          rows:81, days:5, wrote:60, empty:30,
+          rows:81, days:5, wrote:60, empty:30, colW:50,
           backup:name + "（前の 1116-0900）", list:["5-1","5-2","5-2"]}), 0);
       },
       apiReadPaste(){
@@ -519,6 +519,9 @@ ok("出したあと、どのシートに入ったかを出す", tpOut.indexOf("�
 ok("何コマ入ったかも出す", /授業名 \d+ コマ/.test(tpOut), tpOut);
 ok("同じ名前のシートを残したことも出す",
    tpOut.indexOf("名前を変えて残した") >= 0, tpOut);
+ok("週の順に並ぶことを出す", tpOut.indexOf("週の順") >= 0, tpOut);
+ok("児童の列の幅も出す（設定から変えられる）",
+   tpOut.indexOf("50px") >= 0 && tpOut.indexOf("たんぽぽ列幅") >= 0, tpOut);
 
 console.log("\n■ 「いまの形をみる」「作りなおす」は無くした");
 ok("画面に「いまの形をみる」が無い", await p.locator("#tpShape").count() === 0);
