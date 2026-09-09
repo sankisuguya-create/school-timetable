@@ -981,11 +981,66 @@ ev(`Store.writeCells(2025, [{date:"2025-06-12", slot:"p3", layer:"home",
   target:"3-3", title:"あとから足した", note:"", subject:null}])`);
 av = ev(`Store.archiveVerify(2025, "${ARCID}")`);
 ok("複製したあとに増えた行があれば止める",
-   av.ok === false && av.why.join("").indexOf("行数が合いません") >= 0, av.why);
+   av.ok === false && av.why.join("").indexOf("中身が合いません") >= 0, av.why);
+ok("どのコマが違うのかを名指しする",
+   av.why.join("").indexOf("2025-06-12") >= 0
+   && av.why.join("").indexOf("退避先にありません") >= 0, av.why);
 let threw = "";
 try{ ev(`Store.archivePurge(2025, "${ARCID}", "2025")`); }catch(e){ threw = e.message; }
 ok("合わないときは1行も消さない", ev("Store.archiveCount(2025)").rows === 3, threw);
-ok("そのとき何が合わないかを言う", threw.indexOf("行数が合いません") >= 0, threw);
+ok("そのとき何が合わないかを言う", threw.indexOf("中身が合いません") >= 0, threw);
+
+/* **行数もコマ数も変えずに中身だけ直した場合。**
+   前はここが素通りしていた。「国語」を「校外学習」に直しても数は変わらない。 */
+console.log("\n■ 複製したあとの書き換えは、数が同じでも見つける");
+copyBook();
+(function(){
+  const before = ev(`Store.archiveVerify(2025, "${ARCID}")`);
+  ok("複製した直後は通る", before.ok === true, before.why);
+})();
+const cnt0 = ev("Store.archiveCount(2025)");
+ev(`Store.writeCells(2025, [{date:"2025-06-12", slot:"p3", layer:"home",
+  target:"3-3", title:"校外学習", note:"", subject:null}])`);
+const cnt1 = ev("Store.archiveCount(2025)");
+ok("行数もコマ数も変わっていない",
+   cnt0.rows === cnt1.rows && cnt0.cells === cnt1.cells, [cnt0.rows, cnt1.rows]);
+av = ev(`Store.archiveVerify(2025, "${ARCID}")`);
+ok("それでも照合は止まる", av.ok === false, av.why);
+ok("「中身が違います」と言う",
+   av.why.join("").indexOf("中身が違います") >= 0, av.why);
+ok("どの日のどの校時かを言う", av.why.join("").indexOf("2025-06-12 p3") >= 0, av.why);
+threw = "";
+try{ ev(`Store.archivePurge(2025, "${ARCID}", "2025")`); }catch(e){ threw = e.message; }
+ok("書き換えたときも1行も消さない", ev("Store.archiveCount(2025)").rows === cnt1.rows, threw);
+ok("本体の書き換えは残っている", (function(){
+     for(const r of ev(`Sheets.readPlan("週案 3-3", Store.ymd)`))
+       if(String(r["日付"]) === "2025-06-12" && String(r["時程"]) === "p3")
+         return String(r["題名"]);
+     return "";
+   })() === "校外学習");
+
+/* **照合してから押すまでのあいだの書き換え**も、数が同じなら前は素通りしていた */
+console.log("\n■ 照合してから押すまでに書き換えても、消さない");
+copyBook();
+av = ev(`Store.archiveVerify(2025, "${ARCID}")`);
+ok("照合は通る", av.ok === true, av.why);
+ev(`Store.writeCells(2025, [{date:"2025-06-12", slot:"p3", layer:"home",
+  target:"3-3", title:"ジャンボ落語", note:"", subject:null}])`);
+threw = "";
+try{ ev(`Store.archivePurge(2025, "${ARCID}", "2025")`); }catch(e){ threw = e.message; }
+/* 消すほうも、押した中でもう一度照合する。だから照合を通したあとに
+   書き換えても、そこで止まる（数が同じでも中身で見つかる） */
+ok("押す直前の見直しで止まる",
+   threw.indexOf("1行も消しません") >= 0 || threw.indexOf("変わりました") >= 0, threw);
+ok("どのシートのどのコマかを言う",
+   threw.indexOf("週案 3-3") >= 0 && threw.indexOf("2025-06-12") >= 0, threw);
+ok("1行も消していない", ev("Store.archiveCount(2025)").rows === cnt1.rows, threw);
+ok("本体の書き換えは残っている", (function(){
+     for(const r of ev(`Sheets.readPlan("週案 3-3", Store.ymd)`))
+       if(String(r["日付"]) === "2025-06-12" && String(r["時程"]) === "p3")
+         return String(r["題名"]);
+     return "";
+   })() === "ジャンボ落語");
 
 /* 複製し直せば通る */
 copyBook();

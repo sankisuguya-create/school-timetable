@@ -21,9 +21,9 @@
 npm install               検査に playwright が要る（1回だけ）
 python3 build.py          src/ から dist/index.html と gas/plan.html を作る
 python3 build.py --check  生成物が src と一致するか調べる
-node tools/check.mjs      画面を動かして確かめる（222件）
-node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（149件）
-node gas/storecheck.js    シートの読み書きを確かめる（222件）
+node tools/check.mjs      画面を動かして確かめる（245件）
+node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（154件）
+node gas/storecheck.js    シートの読み書きを確かめる（235件）
 node gas/gatecheck.js     関門を確かめる（27件）
 node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明を見る（52件）
 ```
@@ -56,6 +56,9 @@ node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明を見
 - **年度は 4/1 起点で日付から決まる。** 前の年度は丸ごと残る
 - **白い紙に出ているものだけが刷られる。** まわりの操作は刷られない。
   紙の上下には何も置かない（置くたびに紙が縮む）
+- **その日の形（ふつう／特別校時／休み）は全学年の面から決める。**
+  特別校時はその日の朝学習が消えて上へ詰まり、休みは1〜6に斜め線が入る。
+  戻せば書いてある予定がそのまま出る（休みにしても中身は消していない）
 - **曜日は月〜土の6列。日曜は置かない。** 土は行事だけで、ほとんど空く。
   土の列は 20mm に留めてあるので、月〜金の幅は変わらない
 - **A週B週は日付から決まる。** 起点の月曜（2026-09-07＝A週）から1週ごとに入れ替わる。

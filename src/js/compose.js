@@ -185,6 +185,32 @@ function planState(cls){
   return "base";                   /* どの層からも1つも入っていない */
 }
 
+/* ── その日の形（ふつう／特別校時／休み） ──────
+   **学校全体で決まるもの**なので、全学年の面からだけ入れられる。
+   持ち方はふつうのコマと同じ（週案 全校 シートの1行・時程は `day`）。
+   専用の入れ物を作らないので、送る・読む・退避する仕組みがそのまま効く。 */
+function dayForm(d){
+  const e = week().school[ck(d, DAY_SLOT)];
+  const t = e ? plain(e.title).trim() : "";
+  return (t === "特別校時") ? "special" : (t === "休み") ? "off" : "";
+}
+const isDayOff     = d => dayForm(d) === "off";
+const isDaySpecial = d => dayForm(d) === "special";
+/* その日に、この校時の欄が紙に出るか。
+   特別校時の日は朝学習の欄が無い（その分だけ下が上へ詰まる） */
+const slotShown = (d, s) => !(isDaySpecial(d) && s.id === "am2");
+
+function setDayForm(d, form){
+  if(typeof isLocked === "function" && isLocked()) return false;
+  const w = week(), key = ck(d, DAY_SLOT);
+  if(!form) delete w.school[key];
+  else w.school[key] = {title: escText(DAY_FORM[form].label), note:"", subject:null,
+                        by: myEmail(), at: Date.now()};
+  /* **学校全体の層として送る。** 全クラスの紙に効く */
+  Backend.cellChanged("school", "", d, DAY_SLOT);
+  return save();
+}
+
 /* ── 書く ────────────────────────────────────── */
 
 /* クラスを開いているときだけ、1コマを学年や全校へ広げられる。
@@ -277,6 +303,10 @@ function writeCell(d, s, patch){
   /* **ロック中は書かない。** ここが書き込みの1本道なので、ここで止めれば
      引っぱって入れても、打っても、パレットを押しても入らない */
   if(typeof isLocked === "function" && isLocked()) return false;
+  /* **休みの日の授業には書かない。** 斜め線を引いた欄に字が入ると、
+     刷った紙で「休みなのか、授業があるのか」が読めなくなる。
+     朝学習と放課後は書ける（休業日でも出勤・部活・行事の準備が入る） */
+  if(isDayOff(d) && (SLOT_BY_ID[s] || {}).kind === "lesson") return false;
   const w = week(), key = ck(d, s);
 
   /* 専科の週では、コマの中身は「どのクラスへ行くか」 */

@@ -252,6 +252,37 @@ function afterRosterChange(){
   else { drawPalette(); if(view.kind !== "gate") paintSheet(); else drawGate(); }
 }
 
+/* ── この日の形（ふつう／特別校時／休み） ──────
+   **全学年の面からだけ開く。** 効く範囲が全クラスなので、
+   担任の画面から押せると、自分の学級を直したついでに全校が動く。 */
+let dayPick = 0;
+
+function openDayDlg(d){
+  dayPick = d;
+  const dt = addDays(monday, d);
+  $("dayWhen").textContent = md(dt) + "（" + DOW[d] + "）";
+  drawDayForms();
+  $("dayDlg").showModal();
+}
+function drawDayForms(){
+  const now = dayForm(dayPick);
+  $("dayForms").innerHTML = ["", "special", "off"].map(f =>
+    "<button class='dayform' data-f='" + f + "' aria-pressed='" + (f === now) + "'>"
+    + "<b>" + escText(DAY_FORM[f].label)
+    + (DAY_FORM[f].mark ? "<i>" + escText(DAY_FORM[f].mark) + "</i>" : "") + "</b>"
+    + "<span>" + escText(DAY_FORM[f].why) + "</span></button>").join("");
+  for(const b of $("dayForms").querySelectorAll(".dayform"))
+    b.onclick = () => {
+      if(isLocked()) return toast("この画面はロック中");
+      setDayForm(dayPick, b.dataset.f);
+      $("dayDlg").close();
+      buildSheet();                 /* **組み直す。** 行の並びが変わる */
+      autoFit();
+      toast(md(addDays(monday, dayPick)) + "（" + DOW[dayPick] + "）を<b>"
+          + escText(DAY_FORM[b.dataset.f].label) + "</b>にした");
+    };
+}
+
 /* ── 用紙 ────────────────────────────────────── */
 
 function applyPaper(){
@@ -288,9 +319,13 @@ function tallyGrid(){
   const rows = [];
   for(let d = 0; d < WEEKDAYS; d++) for(let r = 0; r < block; r++){
     const line = new Array(width).fill("");
-    if(r < list.length){
+    /* **休みの日は数えない。** 斜め線を引いた日の授業を数えると、
+       Excel 側の時数がその週だけ多くなる */
+    if(r < list.length && !isDayOff(d)){
       for(const s of SLOTS){
         if(!(s.id in t.cols)) continue;
+        /* 特別校時の日は朝学習が無い。紙に出ていないものを数えない */
+        if(!slotShown(d, s)) continue;
         const c = compose(list[r], d, s.id);
         const sub = c.subject ? SUB_BY_CODE[c.subject] : SUB_BY_NAME[plain(c.title).trim()];
         line[t.cols[s.id]] = (sub && sub.count) ? sub.short : "";

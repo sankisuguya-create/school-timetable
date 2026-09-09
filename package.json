@@ -1,7 +1,7 @@
 {
   "name": "school-timetable",
   "private": true,
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "週案（時間割共同編集）。検査に playwright が要る。npm install は1回だけ。",
   "scripts": {
     "build": "python3 build.py",

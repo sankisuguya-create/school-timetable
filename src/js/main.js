@@ -317,6 +317,9 @@ function wire(){
   on("saveBtn","click", () => doSave(true));
   on("lockBtn","click", () => setLock(!isLocked()));
 
+  /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */
+  on("dayDlg","close", () => { dayPick = 0; });
+
   /* たんぽぽ。**確認の窓は既定「出さない」。** 閉じ方が何であれ出さない側に落ちる */
   on("tpNo","click",  () => $("tpDlg").close());
   on("tpYes","click", () => { $("tpDlg").close(); doExportTanpopo(); });

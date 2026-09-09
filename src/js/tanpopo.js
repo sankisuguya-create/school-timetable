@@ -149,7 +149,10 @@ function tanpopoTitles(list){
     const per = {};
     for(let d = 0; d < WEEKDAYS; d++){
       const one = {};
-      for(const s of tpSlots()) one[s] = plain(compose(cls, d, s).title).trim();
+      /* **休みの日は空で出す。** 紙に斜め線を引いた日の授業をたんぽぽへ配ると、
+         たんぽぽ担当がその日の支援員を組んでしまう */
+      for(const s of tpSlots())
+        one[s] = isDayOff(d) ? "" : plain(compose(cls, d, s).title).trim();
       per[String(d)] = one;
     }
     out[cls] = per;

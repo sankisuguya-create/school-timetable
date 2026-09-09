@@ -320,6 +320,52 @@ const Store = (function(){
      本体のURLは変わらない。**新年度も教員は今までと同じURLを開く。**
      複製のほうが保管庫になる。 */
 
+  /* ── 中身の指紋 ────────────────────────────────
+     **行数とコマ数だけでは、書き換えを見つけられない。**
+     複製したあとに「国語」を「校外学習」へ直しても、行数もコマ数も変わらない。
+     そのまま消すと、その直しは複製にも本体にも残らない。
+
+     コマの場所（日付・時程・層・対象）を鍵に、中身（題名・詳細・教科コード・
+     担当・更新者・更新時刻）を並べて、1コマ1本の字にする。
+     照合はこの字どうしで行い、違うコマを名指しする。 */
+  const stamp_ = v => Sheets.isDate(v) ? String(v.getTime())
+                    : String(v == null ? "" : v).trim();
+  function planContent_(rows, y){
+    const map = {};
+    let n = 0, c = 0, from = "", to = "";
+    for(const r of rows){
+      if(String(r["年度"]) !== y) continue;
+      n++;
+      const t = String(r["題名"] || "").trim(), d = String(r["詳細"] || "").trim();
+      if(t || d) c++;
+      if(!from || r["日付"] < from) from = r["日付"];
+      if(!to   || r["日付"] > to)   to = r["日付"];
+      const key = [r["日付"], String(r["時程"]).trim(), String(r["層"]).trim(),
+                   Sheets.asClass(r["対象"])].join("|");
+      map[key] = [t, d, String(r["教科コード"] || "").trim(),
+                  String(r["担当"] || "").trim(), String(r["更新者"] || "").trim(),
+                  stamp_(r["更新時刻"])].join("\u0001");
+    }
+    return {n, c, from, to, map};
+  }
+  /* 指紋を短い字にする。**照合のときは中身どうしを比べる**ので、
+     ここは「照合してから消すまでのあいだに変わっていないか」を見るためだけ。
+     暗号の強さは要らない（守るのは事故であって、人ではない）。 */
+  function sig_(map){
+    const keys = Object.keys(map).sort();
+    let h = 5381;
+    for(const k of keys){
+      const s = k + "\u0002" + map[k] + "\u0003";
+      for(let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+    }
+    return keys.length + "-" + h.toString(36);
+  }
+  /* コマの鍵を、人が読める形にする（どのコマが違うのかを言うため） */
+  function keyLabel_(k){
+    const p = String(k).split("|");
+    return p[0] + " " + p[1] + "（" + (p[2] || "") + (p[3] ? "・" + p[3] : "") + "）";
+  }
+
   /* 週案シートを年度で数える。**読むだけ。** */
   function archiveCount(year){
     const y = String(year);
@@ -327,20 +373,25 @@ const Store = (function(){
     const sheets = [];
     let rows = 0, cells = 0, from = "", to = "";
     for(const name in all){
-      let n = 0, c = 0;
-      for(const r of Sheets.readPlan(name, ymd, all)){
-        if(String(r["年度"]) !== y) continue;
-        n++;
-        if(String(r["題名"] || "").trim() || String(r["詳細"] || "").trim()) c++;
-        const d = r["日付"];
-        if(!from || d < from) from = d;
-        if(!to   || d > to)   to = d;
-      }
-      if(n){ sheets.push({name, rows:n, cells:c}); rows += n; cells += c; }
+      const g = planContent_(Sheets.readPlan(name, ymd, all), y);
+      if(!g.n) continue;
+      sheets.push({name, rows:g.n, cells:g.c, sig:sig_(g.map)});
+      rows += g.n; cells += g.c;
+      if(g.from && (!from || g.from < from)) from = g.from;
+      if(g.to   && (!to   || g.to   > to))   to = g.to;
     }
     sheets.sort(function(a, b){ return a.name < b.name ? -1 : 1; });
     return {year: +year, sheets, rows, cells, from, to,
             file: Sheets.bookName(), done: archiveDone(year)};
+  }
+  /* 本体の、その年度ぶんの中身。照合と、消す直前の見直しで使う */
+  function planMaps_(y){
+    const all = Sheets.planMap(), out = {};
+    for(const name in all){
+      const g = planContent_(Sheets.readPlan(name, ymd, all), y);
+      if(g.n) out[name] = g;
+    }
+    return out;
   }
 
   /* 退避ずみか。**この行があれば退避ずみ。** 無いシートも読める（readAllSoft） */
@@ -381,7 +432,8 @@ const Store = (function(){
                            + "複製が管理者に共有されているか確かめてください"], mine};
     }
 
-    /* 退避先の週案シートを、同じやり方で数える */
+    /* 退避先の週案シートを、**同じ形の行にしてから**読む。
+       列の位置は名前で引く（複製でも列を足した人がいるかもしれない） */
     const there = {};
     for(const sh of ss.getSheets()){
       const name = sh.getName();
@@ -391,36 +443,51 @@ const Store = (function(){
       const at = {};
       v[0].forEach(function(h, i){ const k = String(h).trim(); if(k) at[k] = i; });
       if(!("年度" in at) || !("日付" in at) || !("時程" in at)) continue;
-      let n = 0, c = 0;
+      const rows = [];
       for(let i = 1; i < v.length; i++){
-        const row = v[i];
-        if(String(row[at["年度"]]) !== y) continue;
-        if(!ymd(row[at["日付"]]) || !String(row[at["時程"]]).trim()) continue;
-        n++;
-        const t = ("題名" in at) ? String(row[at["題名"]] || "").trim() : "";
-        const d = ("詳細" in at) ? String(row[at["詳細"]] || "").trim() : "";
-        if(t || d) c++;
+        const row = v[i], o = {};
+        for(const k of Sheets.PLAN_COLS) o[k] = (k in at) ? row[at[k]] : "";
+        o["日付"] = ymd(o["日付"]);
+        o["対象"] = Sheets.asClass(o["対象"]);
+        if(!o["日付"] || !String(o["時程"]).trim()) continue;
+        rows.push(o);
       }
-      if(n) there[name] = {rows:n, cells:c};
+      const g = planContent_(rows, y);
+      if(g.n) there[name] = g;
     }
 
-    /* シートごとに突き合わせる。**1枚でも足りなければ止める。** */
-    const why = [];
+    /* シートごとに突き合わせる。**行数とコマ数だけでは足りない。**
+       複製したあとに「国語」を「校外学習」へ直しても、数は変わらない。
+       コマの中身どうしを比べて、違うコマを名指しする。 */
+    const why = [], mineMaps = planMaps_(y);
     for(const s of mine.sheets){
-      const t = there[s.name];
-      if(!t) why.push("退避先に「" + s.name + "」の " + y + "年度の行がありません");
-      else if(t.rows !== s.rows)
-        why.push("「" + s.name + "」の行数が合いません（本体 " + s.rows
-               + " ／ 退避先 " + t.rows + "）");
-      else if(t.cells !== s.cells)
-        why.push("「" + s.name + "」のコマ数が合いません（本体 " + s.cells
-               + " ／ 退避先 " + t.cells + "）");
+      const t = there[s.name], m = mineMaps[s.name];
+      if(!t){ why.push("退避先に「" + s.name + "」の " + y + "年度の行がありません"); continue; }
+      const diff = [];
+      for(const k in m.map){
+        if(!(k in t.map)) diff.push(keyLabel_(k) + " が退避先にありません");
+        else if(t.map[k] !== m.map[k]) diff.push(keyLabel_(k) + " の中身が違います");
+        if(diff.length > 6) break;
+      }
+      if(diff.length <= 6)
+        for(const k in t.map)
+          if(!(k in m.map)){
+            diff.push(keyLabel_(k) + " が本体にありません（退避先にだけある）");
+            if(diff.length > 6) break;
+          }
+      if(diff.length)
+        why.push("「" + s.name + "」の中身が合いません（" + m.n + "コマ中 "
+               + diff.slice(0, 5).join(" ／ ")
+               + (diff.length > 5 ? " ／ ほか" : "") + "）");
     }
     if(!mine.rows) why.push(y + "年度の週案が、本体に1行もありません（退避するものがない）");
+    if(why.length)
+      why.push("**複製をやり直してください。** 照合したあとに本体を直すと、"
+             + "その直しは複製に入っていません。");
 
     return {ok: why.length === 0, why, mine,
             there: {file: ss.getName(), id,
-                    rows: Object.keys(there).reduce(function(a, k){ return a + there[k].rows; }, 0),
+                    rows: Object.keys(there).reduce(function(a, k){ return a + there[k].n; }, 0),
                     sheets: Object.keys(there).length}};
   }
 
@@ -438,13 +505,23 @@ const Store = (function(){
     const lock = LockService.getScriptLock();
     lock.waitLock(30000);
     try{
-      /* **消す直前にもう一度数える。** ここで増えていたら、その増えたぶんは
-         退避先に入っていない。消せば、書いた本人にも見えないまま消える。 */
+      /* **消す直前にもう一度見直す。** ここで変わっていたら、その変わったぶんは
+         退避先に入っていない。消せば、書いた本人にも見えないまま消える。
+
+         数だけでなく**中身の指紋**まで見る。行数もコマ数も変えずに
+         「国語」を「校外学習」へ直すことができるので、数だけでは素通りする。 */
       const now = archiveCount(year);
-      if(now.rows !== v.mine.rows || now.cells !== v.mine.cells)
+      const sigOf = r => { const o = {};
+        for(const s of r.sheets) o[s.name] = s.sig + "/" + s.rows + "/" + s.cells;
+        return o; };
+      const a = sigOf(v.mine), b = sigOf(now), moved = [];
+      for(const n in a) if(a[n] !== b[n]) moved.push(n);
+      for(const n in b) if(!(n in a)) moved.push(n);
+      if(now.rows !== v.mine.rows || now.cells !== v.mine.cells || moved.length)
         throw new Error("確かめてから押すまでのあいだに、" + y + "年度の週案が変わりました"
-                      + "（" + v.mine.rows + " 行 → " + now.rows + " 行）。"
-                      + "複製をやり直してください。1行も消していません。");
+                      + "（" + v.mine.rows + " 行 → " + now.rows + " 行"
+                      + (moved.length ? "／変わったシート：" + moved.slice(0, 5).join("、") : "")
+                      + "）。複製をやり直してください。1行も消していません。");
 
       const all = Sheets.planMap();
       const gone = [];

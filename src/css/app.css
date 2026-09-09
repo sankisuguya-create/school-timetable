@@ -325,6 +325,20 @@ dialog::backdrop{background:rgba(20,28,38,.42)}
 .dlg input[type=range]{accent-color:var(--ink-link);flex:1;min-width:150px}
 .dlg .end{display:flex;gap:9px;justify-content:flex-end;margin-top:18px}
 .dlg hr{border:0;border-top:1px solid var(--line-soft);margin:16px 0}
+
+/* この日の形。**3つを縦に並べる。** 横に並べると、選んでいるものと
+   これから選ぶものの区別が付きにくい */
+.dayforms{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.dayform{display:flex;flex-direction:column;gap:2px;align-items:flex-start;
+  padding:10px 13px;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--card);cursor:pointer;font-family:inherit;text-align:left;width:100%}
+.dayform:hover{border-color:var(--ink-link)}
+.dayform[aria-pressed=true]{border-color:var(--ink-link);box-shadow:0 0 0 2px var(--tint)}
+.dayform b{font-size:14px}
+.dayform b i{font-style:normal;border:1px solid var(--tx);border-radius:2px;
+  font-size:10.5px;padding:0 .3em;margin-left:.4em;vertical-align:1px}
+.dayform span{font-size:12px;color:var(--tx-sub)}
+.dayform[aria-pressed=true] b{color:var(--ink-link)}
 .dlg ul{margin:0;padding-left:1.15em;font-size:12.5px;line-height:1.9;color:var(--tx-sub)}
 .dlg ul b{color:var(--tx)}
 /* ── 待っているあいだの印 ──────────────────────

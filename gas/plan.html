@@ -385,6 +385,20 @@ dialog::backdrop{background:rgba(20,28,38,.42)}
 .dlg input[type=range]{accent-color:var(--ink-link);flex:1;min-width:150px}
 .dlg .end{display:flex;gap:9px;justify-content:flex-end;margin-top:18px}
 .dlg hr{border:0;border-top:1px solid var(--line-soft);margin:16px 0}
+
+/* この日の形。**3つを縦に並べる。** 横に並べると、選んでいるものと
+   これから選ぶものの区別が付きにくい */
+.dayforms{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.dayform{display:flex;flex-direction:column;gap:2px;align-items:flex-start;
+  padding:10px 13px;border:1px solid var(--line);border-radius:var(--r);
+  background:var(--card);cursor:pointer;font-family:inherit;text-align:left;width:100%}
+.dayform:hover{border-color:var(--ink-link)}
+.dayform[aria-pressed=true]{border-color:var(--ink-link);box-shadow:0 0 0 2px var(--tint)}
+.dayform b{font-size:14px}
+.dayform b i{font-style:normal;border:1px solid var(--tx);border-radius:2px;
+  font-size:10.5px;padding:0 .3em;margin-left:.4em;vertical-align:1px}
+.dayform span{font-size:12px;color:var(--tx-sub)}
+.dayform[aria-pressed=true] b{color:var(--ink-link)}
 .dlg ul{margin:0;padding-left:1.15em;font-size:12.5px;line-height:1.9;color:var(--tx-sub)}
 .dlg ul b{color:var(--tx)}
 /* ── 待っているあいだの印 ──────────────────────
@@ -554,9 +568,45 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   box-shadow:0 1px 3px var(--shade),0 10px 28px var(--shade);
   font-size:calc(var(--fs)*var(--k));
 }
-.sheet>*{border-right:.6px solid var(--rule);border-bottom:.6px solid var(--rule);
+/* 罫線は**いちばん内側のもの**が引く。列そのものは引かない
+   （列が引くと、行の切れ目に縦線が二重に乗る） */
+.sheet>.lab,.sheet>.hd,.sheet>.foot,.labcol>*,.daycol>.cell{
+  border-right:.6px solid var(--rule);border-bottom:.6px solid var(--rule);
   min-width:0;position:relative}
 .sheet>.lastcol{border-right:none}
+
+/* ── 列ごとの格子 ────────────────────────────────
+   **外の格子は「見出し／本体／週メモ」の3行だけ。**
+   時程の行は、時程の列と日の列が、それぞれ自分の中に持つ。
+
+   *行をまたぐ形にしない理由*：外に11行を並べて日の列でまたぐと、
+   **またいだ中身の高さが、またいだ先の `1fr`（放課後）の行に全部乗る。**
+   実際に組んだら放課後が 200mm になり、紙が 412mm になった。
+
+   *列ごとに持たせる理由*：特別校時の日は朝学習の行が無い。
+   外の行をずらすと、朝学習の行に授業1コマが落ちてその行が 6mm から
+   29mm に膨らみ、**ほかの5日ぶんも巻き添えで崩れる**
+   （紙が 239.5mm → 295.2mm。B5 に入らない）。 */
+.labcol,.daycol{display:grid;min-width:0;border:none}
+.daycol>.cell{height:auto;min-height:0}
+.daycol.lastcol>.cell{border-right:none}
+
+/* 休みの日。**1〜6 を1本の斜め線で消す。**
+   コマごとに引くと、業間と昼休みの行で線が切れて「1〜4だけ休み」に見える。
+   線は図形で描く（背景の色は、トナーを節約する設定のプリンタで消える）。 */
+.dayoff{position:relative;pointer-events:none;border:none!important;z-index:2}
+.dayoff svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.dayoff line{stroke:var(--ink);stroke-width:.9}
+.cell.off .t,.cell.off .n{visibility:hidden}
+
+/* この日の形の印（特・休）。**刷っても残る**（紙の上の情報なので） */
+.hd .mark{display:inline-block;border:1px solid var(--ink);border-radius:2px;
+  font-size:calc(5.5pt*var(--k));padding:0 .25em;margin-left:.25em;
+  font-weight:700;line-height:1.35}
+/* 全学年の面だけ、日付の見出しを押せる。**押せることは画面でだけ見せる** */
+.hd.pick{cursor:pointer}
+.hd.pick:hover{background:var(--fill-a)}
+.hd.pick:focus-visible{outline:2px solid var(--ink-link);outline-offset:-2px}
 
 /* 見出しの行 */
 .hd{display:flex;align-items:center;justify-content:center;gap:.35em;
@@ -650,6 +700,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   .lab .tm{display:none}
   /* 選んでいる印・打ち込み中の色も刷らない */
   .cell.sel{box-shadow:none}
+  .hd.pick{background:transparent!important;cursor:default}
   .cell .t:focus,.cell .n:focus{background:transparent;box-shadow:none}
   /* **紙の外の入れ物に、高さを持たせない。** html,body が height:100% なので、
      そのままだと本文の高さが画面の高さになり、紙が1枚に収まっていても
@@ -1061,6 +1112,17 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   </div>
 </div></dialog>
 
+<!-- この日の形。**全学年の面からだけ開く。**
+     効く範囲が全クラスなので、担任の画面からは押せない -->
+<dialog id="dayDlg"><div class="dlg">
+  <h2>この日の形</h2>
+  <p><b id="dayWhen"></b> の形を決めます。
+     <b>全クラスの週案に入ります</b>（学校全体が入れたものとして出ます）。<br>
+     いつでも「ふつう」に戻せます。<b>戻すと、書いてある予定はそのまま出てきます</b>
+     ——休みにしても、コマの中身は消していません。</p>
+  <div class="dayforms" id="dayForms"></div>
+</div></dialog>
+
 <!-- 上書きの窓。**既定は「変更しない」。**
      ブラウザの confirm は Enter で「はい」に落ちる。打鍵の勢いのまま
      他人の予定が消える。編集そのものは止めない（誰でもどのコマでも直せる） -->
@@ -1101,7 +1163,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.4.1";
+let APP_VERSION = "1.5.0";
 let BUILD_DATE  = "2026-09-09";
 
 /* 時程。行を固定しない（学校ごとに違う）。
@@ -1221,6 +1283,24 @@ const WEEKDAYS = 5;
    手で切り替えさせない——切り替え忘れた人だけ別の基本時間割を見ることになる。
    学校の年間行事計画表に合わせて「設定」シートから動かせる。 */
 const AB_ANCHOR = "2026-09-07";
+
+/* ── その日の形 ────────────────────────────────
+   **日ごとに「ふつう／特別校時／休み」を持つ。** 学校全体で決まるものなので、
+   全学年の面からだけ入れられ、学校全体の層として全クラスに降りる。
+
+   持ち方は**ふつうのコマと同じ**（週案 全校 シートの1行）。時程のIDに
+   `day` を使う。専用の入れ物を作らないので、書き込み・読み込み・
+   まだ送っていない数え方・年度の退避が、そのまま全部効く。 */
+const DAY_SLOT = "day";
+const DAY_FORM = {
+  "":        {label:"ふつう",   mark:"",   why:"朝学習から放課後まで、いつもどおり"},
+  "special": {label:"特別校時", mark:"特", why:"朝学習が無い。その日の欄が1つ上へ詰まる"},
+  "off":     {label:"休み",     mark:"休", why:"1〜6校時に斜め線を引く。書き込めなくなる"}
+};
+/* 休みの日に引く斜め線。**背景ではなく図形で描く。**
+   背景の色は、トナーを節約する設定のプリンタでは消えることがある。 */
+const SLASH_SVG = '<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">'
+  + '<line x1="0" y1="0" x2="100" y2="100" vector-effect="non-scaling-stroke"/></svg>';
 /* ▲ src/js/config.js ▲ */
 /* ▼ src/js/util.js ▼ */
 /* 文字・リンク・日付の道具。ここは状態を持たない。 */
@@ -1619,6 +1699,12 @@ const Backend = (function(){
      送る直前に、そのとき画面が持っている中身を読んで1件にまとめる。 */
   let dirty = {};        /* "層|対象|曜日|時程" → {layer,target,d,slot} */
   let dirtyN = 0;
+  /* **いま送っている途中のぶん。** 成功が返るまで、ここに中身ごと置いておく。
+     前は送り始めた時点で dirty から外していたので、返事が来る前に画面を
+     閉じられると、そのぶんが控えにも残らないまま消えていた。
+     控えは「まだシートに入っていないもの」を全部持っていなければ意味がない。 */
+  let inflight = {};     /* 送った回ごとの id → [patch, …] */
+  let flightId = 0;
   let timer = 0;
   let sending = false;
   let notify = () => {};
@@ -1638,7 +1724,7 @@ const Backend = (function(){
     const k = [layer, target || "", fy(), wkKey(), d, slotId].join("|");
     if(!dirty[k]){ dirty[k] = {layer, target:target || "", year:fy(),
                                monday:wkKey(), d, slot:slotId}; dirtyN++; }
-    onDirty(dirtyN, lastErr);
+    onDirty(unsaved(), lastErr);
     persistSoon();
     schedule();
   }
@@ -1676,7 +1762,6 @@ const Backend = (function(){
     if(sending){ retry(900); return after && after(false); }
     const batch = dirty;
     dirty = {}; dirtyN = 0; sending = true;
-    onDirty(0, lastErr);
     const byYear = {};
     for(const k in batch){
       const m = batch[k];
@@ -1687,26 +1772,40 @@ const Backend = (function(){
     let left = years.length, bad = false;
     const t0 = Date.now();
     for(const y of years){
+      /* **送るぶんを、成功が返るまで控えの側にも置いておく。**
+         返事が来る前に画面を閉じられても、次に開いたときに送り直せる */
+      const id = ++flightId;
+      inflight[id] = byYear[y];
+      persistPending();
       google.script.run
         .withSuccessHandler(res => {
+          delete inflight[id];            /* シートに入った。控えから外してよい */
           noteTime(res, Date.now() - t0);
           applyServerTimes(res && res.at);
-          if(!--left){ sending = false; lastErr = bad ? lastErr : "";
-                       onDirty(dirtyN, lastErr); persistPending(); after && after(!bad); }
+          if(!--left){ sending = false; lastErr = bad ? lastErr : ""; }
+          onDirty(unsaved(), lastErr);
+          persistPending();
+          if(!left) after && after(!bad);
         })
         .withFailureHandler(err => {
           bad = true;
+          delete inflight[id];
           /* 送れなかったぶんは捨てない。次の保存でもう一度送る */
           for(const k in batch) if(String(batch[k].year) === String(y)){
             if(!dirty[k]){ dirty[k] = batch[k]; dirtyN++; }
           }
           lastErr = err && err.message ? err.message : "通信できない";
           notify("<b>保存できていない</b>（" + escText(lastErr) + "）。もう一度「保存」を押す");
-          if(!--left){ sending = false; onDirty(dirtyN, lastErr); persistPending();
-                       after && after(false); }
+          if(!--left) sending = false;
+          onDirty(unsaved(), lastErr);
+          persistPending();
+          if(!left) after && after(false);
         })
         .apiWriteCells(+y, byYear[y]);
     }
+    /* **送り始めても、入っていない数は減らさない。** 減らすと、押した直後に
+       「保存ずみ」と出て、そこで閉じた人は入ったと思ってしまう */
+    onDirty(unsaved(), lastErr);
   }
   /* ── 送れないまま閉じられたぶんを持ち越す ────────
      送っている途中で画面を閉じられると、シートに入らないまま消える。
@@ -1718,9 +1817,18 @@ const Backend = (function(){
   const PEND = KEY + "/pending";
   let pendT = 0;
 
+  /* 控えに書く中身。**まだ送っていないぶんと、送っている途中のぶんの両方。**
+     同じコマが両方にあれば、いま画面が持っているほう（dirty）が正しい。 */
   function pendingNow(){
-    const out = [];
-    for(const k in dirty) out.push(patchOf(dirty[k]));
+    const seen = {}, out = [];
+    for(const k in dirty){
+      const q = patchOf(dirty[k]);
+      seen[[q.layer, q.target, q.date, q.slot].join("|")] = 1;
+      out.push(q);
+    }
+    for(const id in inflight)
+      for(const q of inflight[id])
+        if(!seen[[q.layer, q.target, q.date, q.slot].join("|")]) out.push(q);
     return out;
   }
   function persistPending(){
@@ -1781,7 +1889,7 @@ const Backend = (function(){
                 dirtyN++;
               }
             }
-            onDirty(dirtyN, lastErr);
+            onDirty(unsaved(), lastErr);
             notify("<b>前に閉じたときのぶんを送れなかった</b>（" + list.length
                  + " コマ）。もう一度「保存」を押す");
             done();
@@ -1790,8 +1898,15 @@ const Backend = (function(){
       })(y, byYear[y]);
   }
 
-  const unsaved = () => dirtyN;
-  const setDirtyWatcher = fn => { onDirty = fn; fn(dirtyN, lastErr); };
+  /* **まだシートに入っていないコマの数。** 送っている途中のぶんも数える。
+     数えないと、押した直後に「保存ずみ」と出てしまい、
+     そこで閉じた人は入ったと思ってしまう。 */
+  const unsaved = () => {
+    let n = dirtyN;
+    for(const id in inflight) n += inflight[id].length;
+    return n;
+  };
+  const setDirtyWatcher = fn => { onDirty = fn; fn(unsaved(), lastErr); };
 
   /* サーバが打った時刻で手元の控えを直す。
      教師それぞれの PC の時計で勝ち負けを決めると、時計が進んでいる人が always 勝つ。 */
@@ -2105,7 +2220,7 @@ const Backend = (function(){
   /* 画面を閉じる前に、貯めたぶんを出し切る。
      出し切れないうちに閉じられそうなときは、引き止める。 */
   addEventListener("beforeunload", ev => {
-    if(onGas && (dirtyN || sending)){
+    if(onGas && (unsaved() || sending)){
       persistPending();          /* 先に控える。送り切れなくても次に開いたときに送る */
       flush();
       ev.preventDefault();
@@ -2556,6 +2671,32 @@ function planState(cls){
   return "base";                   /* どの層からも1つも入っていない */
 }
 
+/* ── その日の形（ふつう／特別校時／休み） ──────
+   **学校全体で決まるもの**なので、全学年の面からだけ入れられる。
+   持ち方はふつうのコマと同じ（週案 全校 シートの1行・時程は `day`）。
+   専用の入れ物を作らないので、送る・読む・退避する仕組みがそのまま効く。 */
+function dayForm(d){
+  const e = week().school[ck(d, DAY_SLOT)];
+  const t = e ? plain(e.title).trim() : "";
+  return (t === "特別校時") ? "special" : (t === "休み") ? "off" : "";
+}
+const isDayOff     = d => dayForm(d) === "off";
+const isDaySpecial = d => dayForm(d) === "special";
+/* その日に、この校時の欄が紙に出るか。
+   特別校時の日は朝学習の欄が無い（その分だけ下が上へ詰まる） */
+const slotShown = (d, s) => !(isDaySpecial(d) && s.id === "am2");
+
+function setDayForm(d, form){
+  if(typeof isLocked === "function" && isLocked()) return false;
+  const w = week(), key = ck(d, DAY_SLOT);
+  if(!form) delete w.school[key];
+  else w.school[key] = {title: escText(DAY_FORM[form].label), note:"", subject:null,
+                        by: myEmail(), at: Date.now()};
+  /* **学校全体の層として送る。** 全クラスの紙に効く */
+  Backend.cellChanged("school", "", d, DAY_SLOT);
+  return save();
+}
+
 /* ── 書く ────────────────────────────────────── */
 
 /* クラスを開いているときだけ、1コマを学年や全校へ広げられる。
@@ -2648,6 +2789,10 @@ function writeCell(d, s, patch){
   /* **ロック中は書かない。** ここが書き込みの1本道なので、ここで止めれば
      引っぱって入れても、打っても、パレットを押しても入らない */
   if(typeof isLocked === "function" && isLocked()) return false;
+  /* **休みの日の授業には書かない。** 斜め線を引いた欄に字が入ると、
+     刷った紙で「休みなのか、授業があるのか」が読めなくなる。
+     朝学習と放課後は書ける（休業日でも出勤・部活・行事の準備が入る） */
+  if(isDayOff(d) && (SLOT_BY_ID[s] || {}).kind === "lesson") return false;
   const w = week(), key = ck(d, s);
 
   /* 専科の週では、コマの中身は「どのクラスへ行くか」 */
@@ -2722,44 +2867,72 @@ let typing = null;
 
 const memoOf = () => ((week().memos || {})[viewName()] || "");
 
+/* 行の高さ。**mm で決め打ちする。**
+   `auto` にしてコマの高さから決めさせると、日ごとに別の格子（下の dayColEl）を
+   敷いたときに、外の格子には高さを決める中身が無くなって行が潰れる。 */
+const rowH = s => s.kind === "note"   ? "1fr"
+                : s.kind === "lesson" ? "calc((var(--h-title) + var(--h-note))*var(--k))"
+                                      : "calc(var(--h-break)*var(--k))";
+
+/* 紙の組み方。**外は「見出し／本体／週メモ」の3行だけ。**
+   本体の中は列ごとに別の格子で、そこで初めて時程の行が並ぶ。
+
+   *行をまたぐ形にしなかった理由*：外の格子に11行を並べ、日の列でそれをまたぐと、
+   **またいだ中身の高さが、またいだ先の `1fr`（放課後）の行に全部乗る。**
+   実際に組んでみたら放課後が 200mm になり、紙が 412mm になった。
+   列を1マスにすれば、またぐものが無くなる。
+
+   *列ごとに格子を持たせる理由*：特別校時の日は朝学習の行が無い。
+   外の行をずらす形にすると、朝学習の行に授業1コマが落ちてその行が
+   6mm から 29mm に膨らみ、**ほかの5日ぶんも巻き添えで崩れる**
+   （紙が 239.5mm → 295.2mm になり B5 に入らない。実測）。 */
 function buildSheet(){
   const sh = $("sheet");
   sh.textContent = "";
-  /* 紙の高さは決まっている。**余りをどの行に渡すかで、どこが広くなるかが決まる。**
-     放課後（備考だけの行）があればそこに渡す。無ければ週のメモに渡す。
-     どこにも渡さないと、紙の下端に隙間が残る。 */
-  const after = SLOTS.filter(s => s.kind === "note").length > 0;
-  sh.style.gridTemplateRows = "auto "
-    + SLOTS.map(s => s.kind === "note" ? "1fr" : "auto").join(" ")
-    + (after ? " auto" : " 1fr");
+  sh.style.gridTemplateRows = "auto 1fr auto";      /* 見出し／本体／週メモ */
 
-  const add = (node) => { sh.appendChild(node); return node; };
-  add(el("div", "lab"));                                  /* 左上の角 */
-  /* **月〜土の6列。** 土曜はほとんど空くが、行事とオープンスクールが入る。
-     前は土日を1列に畳んでいた。畳んだ理由は「6日ぶんの授業行を刷ると
-     1列あたりが痩せる」ことだったので、**土の列は前の土日と同じ 20mm のまま**
-     にしてある。月〜金の幅は1mmも変わらない。日曜は置かない。 */
+  const put = (node, col, row) => {
+    node.style.gridColumn = String(col);
+    node.style.gridRow = String(row);
+    sh.appendChild(node); return node;
+  };
+  put(el("div", "lab corner"), 1, 1);                       /* 左上の角 */
+
   for(let d = 0; d < DAYS; d++){
-    const dt = addDays(monday, d);
-    add(el("div", "hd" + (d === 5 ? " sat lastcol" : ""),
-      "<span>" + md(dt) + "</span><span class='dow'>" + DOW[d] + "</span>"));
+    const dt = addDays(monday, d), f = dayForm(d);
+    /* **この日の形は、日付の見出しに印で出す。** 紙の上の情報なので刷っても残る */
+    const hd = el("div", "hd" + (d === DAYS - 1 ? " sat lastcol" : ""),
+      "<span>" + md(dt) + "</span><span class='dow'>" + DOW[d] + "</span>"
+      + (f ? "<span class='mark'>" + DAY_FORM[f].mark + "</span>" : ""));
+    hd.dataset.d = d;
+    /* **決められるのは全学年の面だけ。** 効く範囲が全クラスなので、
+       担任の画面から押せると、自分の学級を直したついでに全校が動く */
+    if(view.kind === "school"){
+      hd.classList.add("pick");
+      hd.title = "この日の形を決める（全クラスに入る）";
+      hd.addEventListener("click", () => openDayDlg(d));
+    }
+    put(hd, 2 + d, 1);
   }
 
-  SLOTS.forEach((s) => {
-    const lab = add(el("div", "lab" + (s.kind === "brk" ? " row-break" : ""),
+  /* 時程の列。**ここだけは、いつも全部の行を並べる。**
+     特別校時の日はこの見出しと合わなくなるが、合わせて行を抜くと
+     ほかの5日ぶんが読めなくなる（横に読む紙なので、多数派に合わせる） */
+  const labs = put(el("div", "labcol"), 1, 2);
+  labs.style.gridTemplateRows = SLOTS.map(rowH).join(" ");
+  for(const s of SLOTS){
+    const lab = el("div", "lab" + (s.kind === "brk" ? " row-break" : ""),
       (s.kind === "lesson" ? "<span class='no'>" + s.name + "</span>"
                            : "<span>" + s.name + "</span>")
-      + (s.time ? "<span class='tm'>" + s.time + "</span>" : "")));
-    if(s.kind === "brk") lab.classList.add("row-break");
-    for(let d = 0; d < DAYS; d++){
-      const c = add(cellEl(d, s));
-      if(d === 5) c.classList.add("sat", "lastcol");
-    }
-  });
+      + (s.time ? "<span class='tm'>" + s.time + "</span>" : ""));
+    labs.appendChild(lab);
+  }
 
-  const foot = add(el("div", "foot lastcol",
+  for(let d = 0; d < DAYS; d++) put(dayColEl(d), 2 + d, 2);
+
+  const foot = put(el("div", "foot",
     "<div class='lab'><span>週の</span><span>メモ</span></div>"
-    + "<div class='t' contenteditable></div>"));
+    + "<div class='t' contenteditable></div>"), "1 / 8", 3);
   const ft = foot.querySelector(".t");
   /* **週メモは画面（学級）ごとに持つ。** 前は週にひとつだったので、
      3-1 で書いたメモが 3-2 の紙にも出ていた（刷る紙は学級ごとなのに）。
@@ -2777,6 +2950,41 @@ function buildSheet(){
   if(typeof applyLock === "function") applyLock();
 }
 
+/* 1日ぶんの列。**この列だけの行の並びを持つ。**
+   特別校時の日は朝学習を抜く。抜いたぶんの 6mm は、いちばん下の
+   `1fr`（放課後）が受け取るので、紙の高さは変わらない。 */
+function dayColEl(d){
+  const f = dayForm(d);
+  const shown = SLOTS.filter(s => slotShown(d, s));
+  const col = el("div", "daycol" + (d === DAYS - 1 ? " lastcol" : "")
+                      + (f ? " form-" + f : ""));
+  col.dataset.d = d;
+  col.style.gridTemplateRows = shown.map(rowH).join(" ");
+  /* **1つずつ置く場所を書く。** 下の斜め線が場所を先に取るので、
+     自動で並べさせると、そこを避けたぶんだけ行が増える（実際に8行増えた） */
+  shown.forEach((s, i) => {
+    const c = cellEl(d, s);
+    c.style.gridColumn = "1";
+    c.style.gridRow = String(i + 1);
+    col.appendChild(c);
+  });
+
+  /* **休みの日は 1〜6 を1本の斜め線で消す。**
+     コマごとに引くと、業間と昼休みの行で線が切れて「1〜4だけ休み」に見える。
+     線は図形で描く（背景の色は、トナーを節約する設定のプリンタで消える）。 */
+  if(f === "off"){
+    let a = -1, b = -1;
+    shown.forEach((s, i) => { if(s.kind === "lesson"){ if(a < 0) a = i; b = i; } });
+    if(a >= 0){
+      const ov = el("div", "dayoff", SLASH_SVG);
+      ov.style.gridColumn = "1";
+      ov.style.gridRow = (a + 1) + " / " + (b + 2);
+      col.appendChild(ov);
+    }
+  }
+  return col;
+}
+
 function cellEl(d, s){
   /* lesson は題名＋備考、note は**備考だけ**（放課後）、brk は題名だけ */
   const kls = s.kind === "lesson" ? "lesson" : s.kind === "note" ? "note row-break"
@@ -2787,6 +2995,9 @@ function cellEl(d, s){
     + (s.kind === "lesson" || s.kind === "note"
          ? "<div class='n' contenteditable></div>" : ""));
   e.dataset.d = d; e.dataset.s = s.id;
+  /* **休みの日の授業には書かせない。** 斜め線を引いた欄に字が入ると、
+     刷った紙で「休みなのか、授業があるのか」が読めなくなる */
+  if(isDayOff(d) && s.kind === "lesson") e.classList.add("off");
   const t = e.querySelector(".t"), n = e.querySelector(".n");
 
   const focus = () => selectCell(d, s.id, e);
@@ -3319,7 +3530,10 @@ function tanpopoTitles(list){
     const per = {};
     for(let d = 0; d < WEEKDAYS; d++){
       const one = {};
-      for(const s of tpSlots()) one[s] = plain(compose(cls, d, s).title).trim();
+      /* **休みの日は空で出す。** 紙に斜め線を引いた日の授業をたんぽぽへ配ると、
+         たんぽぽ担当がその日の支援員を組んでしまう */
+      for(const s of tpSlots())
+        one[s] = isDayOff(d) ? "" : plain(compose(cls, d, s).title).trim();
       per[String(d)] = one;
     }
     out[cls] = per;
@@ -3816,6 +4030,37 @@ function afterRosterChange(){
   else { drawPalette(); if(view.kind !== "gate") paintSheet(); else drawGate(); }
 }
 
+/* ── この日の形（ふつう／特別校時／休み） ──────
+   **全学年の面からだけ開く。** 効く範囲が全クラスなので、
+   担任の画面から押せると、自分の学級を直したついでに全校が動く。 */
+let dayPick = 0;
+
+function openDayDlg(d){
+  dayPick = d;
+  const dt = addDays(monday, d);
+  $("dayWhen").textContent = md(dt) + "（" + DOW[d] + "）";
+  drawDayForms();
+  $("dayDlg").showModal();
+}
+function drawDayForms(){
+  const now = dayForm(dayPick);
+  $("dayForms").innerHTML = ["", "special", "off"].map(f =>
+    "<button class='dayform' data-f='" + f + "' aria-pressed='" + (f === now) + "'>"
+    + "<b>" + escText(DAY_FORM[f].label)
+    + (DAY_FORM[f].mark ? "<i>" + escText(DAY_FORM[f].mark) + "</i>" : "") + "</b>"
+    + "<span>" + escText(DAY_FORM[f].why) + "</span></button>").join("");
+  for(const b of $("dayForms").querySelectorAll(".dayform"))
+    b.onclick = () => {
+      if(isLocked()) return toast("この画面はロック中");
+      setDayForm(dayPick, b.dataset.f);
+      $("dayDlg").close();
+      buildSheet();                 /* **組み直す。** 行の並びが変わる */
+      autoFit();
+      toast(md(addDays(monday, dayPick)) + "（" + DOW[dayPick] + "）を<b>"
+          + escText(DAY_FORM[b.dataset.f].label) + "</b>にした");
+    };
+}
+
 /* ── 用紙 ────────────────────────────────────── */
 
 function applyPaper(){
@@ -3852,9 +4097,13 @@ function tallyGrid(){
   const rows = [];
   for(let d = 0; d < WEEKDAYS; d++) for(let r = 0; r < block; r++){
     const line = new Array(width).fill("");
-    if(r < list.length){
+    /* **休みの日は数えない。** 斜め線を引いた日の授業を数えると、
+       Excel 側の時数がその週だけ多くなる */
+    if(r < list.length && !isDayOff(d)){
       for(const s of SLOTS){
         if(!(s.id in t.cols)) continue;
+        /* 特別校時の日は朝学習が無い。紙に出ていないものを数えない */
+        if(!slotShown(d, s)) continue;
         const c = compose(list[r], d, s.id);
         const sub = c.subject ? SUB_BY_CODE[c.subject] : SUB_BY_NAME[plain(c.title).trim()];
         line[t.cols[s.id]] = (sub && sub.count) ? sub.short : "";
@@ -4408,6 +4657,9 @@ function wire(){
   /* 保存。**打つたびには送らない。** ここで1コマ1件にまとめて送る */
   on("saveBtn","click", () => doSave(true));
   on("lockBtn","click", () => setLock(!isLocked()));
+
+  /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */
+  on("dayDlg","close", () => { dayPick = 0; });
 
   /* たんぽぽ。**確認の窓は既定「出さない」。** 閉じ方が何であれ出さない側に落ちる */
   on("tpNo","click",  () => $("tpDlg").close());

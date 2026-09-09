@@ -18,6 +18,12 @@ const Backend = (function(){
      送る直前に、そのとき画面が持っている中身を読んで1件にまとめる。 */
   let dirty = {};        /* "層|対象|曜日|時程" → {layer,target,d,slot} */
   let dirtyN = 0;
+  /* **いま送っている途中のぶん。** 成功が返るまで、ここに中身ごと置いておく。
+     前は送り始めた時点で dirty から外していたので、返事が来る前に画面を
+     閉じられると、そのぶんが控えにも残らないまま消えていた。
+     控えは「まだシートに入っていないもの」を全部持っていなければ意味がない。 */
+  let inflight = {};     /* 送った回ごとの id → [patch, …] */
+  let flightId = 0;
   let timer = 0;
   let sending = false;
   let notify = () => {};
@@ -37,7 +43,7 @@ const Backend = (function(){
     const k = [layer, target || "", fy(), wkKey(), d, slotId].join("|");
     if(!dirty[k]){ dirty[k] = {layer, target:target || "", year:fy(),
                                monday:wkKey(), d, slot:slotId}; dirtyN++; }
-    onDirty(dirtyN, lastErr);
+    onDirty(unsaved(), lastErr);
     persistSoon();
     schedule();
   }
@@ -75,7 +81,6 @@ const Backend = (function(){
     if(sending){ retry(900); return after && after(false); }
     const batch = dirty;
     dirty = {}; dirtyN = 0; sending = true;
-    onDirty(0, lastErr);
     const byYear = {};
     for(const k in batch){
       const m = batch[k];
@@ -86,26 +91,40 @@ const Backend = (function(){
     let left = years.length, bad = false;
     const t0 = Date.now();
     for(const y of years){
+      /* **送るぶんを、成功が返るまで控えの側にも置いておく。**
+         返事が来る前に画面を閉じられても、次に開いたときに送り直せる */
+      const id = ++flightId;
+      inflight[id] = byYear[y];
+      persistPending();
       google.script.run
         .withSuccessHandler(res => {
+          delete inflight[id];            /* シートに入った。控えから外してよい */
           noteTime(res, Date.now() - t0);
           applyServerTimes(res && res.at);
-          if(!--left){ sending = false; lastErr = bad ? lastErr : "";
-                       onDirty(dirtyN, lastErr); persistPending(); after && after(!bad); }
+          if(!--left){ sending = false; lastErr = bad ? lastErr : ""; }
+          onDirty(unsaved(), lastErr);
+          persistPending();
+          if(!left) after && after(!bad);
         })
         .withFailureHandler(err => {
           bad = true;
+          delete inflight[id];
           /* 送れなかったぶんは捨てない。次の保存でもう一度送る */
           for(const k in batch) if(String(batch[k].year) === String(y)){
             if(!dirty[k]){ dirty[k] = batch[k]; dirtyN++; }
           }
           lastErr = err && err.message ? err.message : "通信できない";
           notify("<b>保存できていない</b>（" + escText(lastErr) + "）。もう一度「保存」を押す");
-          if(!--left){ sending = false; onDirty(dirtyN, lastErr); persistPending();
-                       after && after(false); }
+          if(!--left) sending = false;
+          onDirty(unsaved(), lastErr);
+          persistPending();
+          if(!left) after && after(false);
         })
         .apiWriteCells(+y, byYear[y]);
     }
+    /* **送り始めても、入っていない数は減らさない。** 減らすと、押した直後に
+       「保存ずみ」と出て、そこで閉じた人は入ったと思ってしまう */
+    onDirty(unsaved(), lastErr);
   }
   /* ── 送れないまま閉じられたぶんを持ち越す ────────
      送っている途中で画面を閉じられると、シートに入らないまま消える。
@@ -117,9 +136,18 @@ const Backend = (function(){
   const PEND = KEY + "/pending";
   let pendT = 0;
 
+  /* 控えに書く中身。**まだ送っていないぶんと、送っている途中のぶんの両方。**
+     同じコマが両方にあれば、いま画面が持っているほう（dirty）が正しい。 */
   function pendingNow(){
-    const out = [];
-    for(const k in dirty) out.push(patchOf(dirty[k]));
+    const seen = {}, out = [];
+    for(const k in dirty){
+      const q = patchOf(dirty[k]);
+      seen[[q.layer, q.target, q.date, q.slot].join("|")] = 1;
+      out.push(q);
+    }
+    for(const id in inflight)
+      for(const q of inflight[id])
+        if(!seen[[q.layer, q.target, q.date, q.slot].join("|")]) out.push(q);
     return out;
   }
   function persistPending(){
@@ -180,7 +208,7 @@ const Backend = (function(){
                 dirtyN++;
               }
             }
-            onDirty(dirtyN, lastErr);
+            onDirty(unsaved(), lastErr);
             notify("<b>前に閉じたときのぶんを送れなかった</b>（" + list.length
                  + " コマ）。もう一度「保存」を押す");
             done();
@@ -189,8 +217,15 @@ const Backend = (function(){
       })(y, byYear[y]);
   }
 
-  const unsaved = () => dirtyN;
-  const setDirtyWatcher = fn => { onDirty = fn; fn(dirtyN, lastErr); };
+  /* **まだシートに入っていないコマの数。** 送っている途中のぶんも数える。
+     数えないと、押した直後に「保存ずみ」と出てしまい、
+     そこで閉じた人は入ったと思ってしまう。 */
+  const unsaved = () => {
+    let n = dirtyN;
+    for(const id in inflight) n += inflight[id].length;
+    return n;
+  };
+  const setDirtyWatcher = fn => { onDirty = fn; fn(unsaved(), lastErr); };
 
   /* サーバが打った時刻で手元の控えを直す。
      教師それぞれの PC の時計で勝ち負けを決めると、時計が進んでいる人が always 勝つ。 */
@@ -504,7 +539,7 @@ const Backend = (function(){
   /* 画面を閉じる前に、貯めたぶんを出し切る。
      出し切れないうちに閉じられそうなときは、引き止める。 */
   addEventListener("beforeunload", ev => {
-    if(onGas && (dirtyN || sending)){
+    if(onGas && (unsaved() || sending)){
       persistPending();          /* 先に控える。送り切れなくても次に開いたときに送る */
       flush();
       ev.preventDefault();

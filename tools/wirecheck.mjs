@@ -656,6 +656,46 @@ ok("押し直せば、そのまま送れる",
    [await p.evaluate(() => Backend.unsaved()),
     await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending"))]);
 
+console.log("\n■ 送っている途中で閉じても、控えに残っている");
+/* **ここが前は消えていた。** 送り始めた時点で控えから外していたので、
+   返事が来る前に画面を閉じられると、そのぶんはシートにも控えにも残らなかった。 */
+await p.evaluate(() => { window.__slow = 0; window.__hang = false; window.__failWrite = false; });
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='5-4']").click(); await p.waitForTimeout(400);
+await p.locator("#sheet .cell[data-d='1'][data-s='p3'] .t").click();
+await p.waitForTimeout(120);
+await p.locator(".pal[data-v='rika']").click();
+await p.waitForTimeout(1200);
+await p.evaluate(() => { window.__hang = true; });   /* 送っても返事が来ない */
+await p.locator("#saveBtn").click();
+await p.waitForTimeout(700);
+ok("送っている途中も、控えに中身が残っている", await p.evaluate(() => {
+     const l = JSON.parse(localStorage.getItem("school-timetable/v3/pending") || "[]") || [];
+     return l.some(q => q.slot === "p3" && q.target === "5-4" && q.title === "理科");
+   }) === true,
+   await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")));
+ok("送っている途中は「保存ずみ」と言わない",
+   await p.evaluate(() => Backend.unsaved()) > 0,
+   await p.evaluate(() => Backend.unsaved()));
+
+/* 送らずに閉じたことにして、開き直す */
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.reload();
+await p.waitForTimeout(1400);
+ok("開き直すと、送っている途中だったぶんを送り直す", await p.evaluate(() =>
+     window.__calls.filter(c => c.name === "apiWriteCells")
+       .map(c => c.args[1]).flat()
+       .some(q => q.slot === "p3" && q.target === "5-4" && q.title === "理科")) === true,
+   await p.evaluate(() => window.__calls.filter(c => c.name === "apiWriteCells").map(c => c.args[1])));
+ok("送れたら控えは消える",
+   await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")) === null);
+ok("シートにも入っている", await p.evaluate(() => {
+     const st = window.__sheet();
+     const bank = st[["2026","home","5-4"].join("\u0001")] || {};
+     return Object.keys(bank).some(k => k.indexOf("|p3") > 0
+       && bank[k] && bank[k].title === "理科");
+   }) === true, await p.evaluate(() => window.__sheet()));
+
 console.log("\n■ 「上位に戻す」はシートにも届く");
 /* **前はここが手元だけで消えていた。** 戻したように見えて、次に開くと戻ってきた。
    ほかの検査が見ているコマを触らないよう、5-3 の使っていないコマでやる */

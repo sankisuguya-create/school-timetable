@@ -832,6 +832,117 @@ ok("紙の外に置いたものは、body の高さを押し広げない（白�
 
 await p.emulateMedia({media:"screen"});      /* 刷るときの見え方から画面へ戻す */
 
+console.log("\n■ この日の形（ふつう／特別校時／休み）");
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(400);
+ok("担任の画面からは決められない（日付の見出しを押せない）",
+   await p.locator("#sheet .hd.pick").count() === 0);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".master.all").click(); await p.waitForTimeout(400);
+ok("全学年の面では、日付の見出しが押せる",
+   await p.locator("#sheet .hd.pick").count() === 6,
+   await p.locator("#sheet .hd.pick").count());
+await p.locator("#sheet .hd[data-d='1']").click(); await p.waitForTimeout(250);
+ok("押すと窓が開く", await p.locator("#dayDlg").evaluate(d => d.open) === true);
+ok("その日の日付を出す",
+   /\d+\/\d+/.test(await p.locator("#dayWhen").innerText()),
+   await p.locator("#dayWhen").innerText());
+ok("3つから選ぶ（ふつう・特別校時・休み）",
+   await p.locator("#dayForms .dayform").count() === 3);
+ok("全クラスに入ることを言う",
+   (await p.locator("#dayDlg .dlg").innerText()).indexOf("全クラス") >= 0);
+ok("戻せば予定がそのまま出ることを言う",
+   (await p.locator("#dayDlg .dlg").innerText()).indexOf("消していません") >= 0);
+await p.locator("#dayForms .dayform[data-f='special']").click(); await p.waitForTimeout(350);
+
+console.log("\n■ 特別校時：朝学習が消え、その分だけ上へ詰まる");
+ok("その日の朝学習の欄が無くなる",
+   await p.locator("#sheet .cell[data-d='1'][data-s='am2']").count() === 0);
+ok("ほかの曜日の朝学習は残る",
+   await p.locator("#sheet .cell[data-d='0'][data-s='am2']").count() === 1);
+ok("見出しに「特」の印が出る",
+   (await p.locator("#sheet .hd[data-d='1'] .mark").innerText()).trim() === "特");
+ok("その日の1時間目が、ほかの曜日より上に来る（本当に詰まっている）",
+   await p.evaluate(() => {
+     const t = s => document.querySelector(s).getBoundingClientRect().top;
+     return t("#sheet .cell[data-d='1'][data-s='p1']") < t("#sheet .cell[data-d='0'][data-s='p1']") - 5;
+   }) === true,
+   await p.evaluate(() => {
+     const t = s => Math.round(document.querySelector(s).getBoundingClientRect().top);
+     return [t("#sheet .cell[data-d='1'][data-s='p1']"), t("#sheet .cell[data-d='0'][data-s='p1']")];
+   }));
+/* **ここが前に壊れたところ。** 外の格子の行をずらすと、朝学習の行に
+   授業1コマが落ちてその行が 6mm → 29mm に膨らみ、紙が B5 に入らなくなる */
+ok("ほかの曜日の行の高さは変わらない（朝学習の行は 6mm のまま）",
+   await p.evaluate(() => {
+     const mm = px => px / (96/25.4);
+     return mm(document.querySelector("#sheet .cell[data-d='0'][data-s='am2']")
+                 .getBoundingClientRect().height) < 8;
+   }) === true,
+   await p.evaluate(() => Math.round(document.querySelector("#sheet .cell[data-d='0'][data-s='am2']")
+     .getBoundingClientRect().height / (96/25.4) * 10) / 10));
+ok("紙の高さは変わらない（B5 に収まる）",
+   await p.evaluate(() => {
+     const mm = px => px / (96/25.4);
+     return mm(document.querySelector("#sheet").getBoundingClientRect().height) <= 257 - 16;
+   }) === true,
+   await p.evaluate(() => Math.round(document.querySelector("#sheet")
+     .getBoundingClientRect().height / (96/25.4) * 10) / 10));
+ok("詰めたぶんは放課後が受け取る（その日の放課後が広い）",
+   await p.evaluate(() => {
+     const h = s => document.querySelector(s).getBoundingClientRect().height;
+     return h("#sheet .cell[data-d='1'][data-s='after']") > h("#sheet .cell[data-d='0'][data-s='after']") + 5;
+   }) === true);
+
+console.log("\n■ 休み：1〜6に1本の斜め線");
+await p.locator("#sheet .hd[data-d='3']").click(); await p.waitForTimeout(250);
+await p.locator("#dayForms .dayform[data-f='off']").click(); await p.waitForTimeout(350);
+ok("見出しに「休」の印が出る",
+   (await p.locator("#sheet .hd[data-d='3'] .mark").innerText()).trim() === "休");
+ok("斜め線は1本だけ（コマごとに切れない）",
+   await p.locator("#sheet .daycol[data-d='3'] .dayoff svg line").count() === 1,
+   await p.locator("#sheet .dayoff svg line").count());
+ok("線は図形で描く（背景の色ではない。白黒印刷で消えない）",
+   await p.locator("#sheet .daycol[data-d='3'] .dayoff svg").count() === 1);
+ok("1時間目の上から6時間目の下までを覆う", await p.evaluate(() => {
+     const r = document.querySelector("#sheet .daycol[data-d='3'] .dayoff").getBoundingClientRect();
+     const p1 = document.querySelector("#sheet .cell[data-d='3'][data-s='p1']").getBoundingClientRect();
+     const p6 = document.querySelector("#sheet .cell[data-d='3'][data-s='p6']").getBoundingClientRect();
+     return Math.abs(r.top - p1.top) < 2 && Math.abs(r.bottom - p6.bottom) < 2;
+   }) === true);
+ok("休み①：1〜6は空にするが、朝学習は残す",
+   await p.evaluate(() => plain(cellFor(3, "am2").title).length >= 0
+     && document.querySelector("#sheet .cell[data-d='3'][data-s='am2']") !== null) === true);
+ok("休みの日の授業には書けない",
+   await p.evaluate(() => {
+     writeCell(3, "p2", {title:"算数", subject:"sansu"});
+     return plain(((week().home["3-1"]||{})["3|p2"]||{}).title || "");
+   }) === "");
+ok("休みの日でも、放課後には書ける",
+   await p.evaluate(() => {
+     openView({kind:"class", cls:"3-1"});
+     writeCell(3, "after", {note:"部活動"});
+     const v = plain(cellFor(3, "after").note);
+     openView({kind:"school"});
+     return v;
+   }) === "部活動");
+ok("休みの日は時数に数えない", await p.evaluate(() => {
+     db.settings.tally.classes = "3-1";
+     const g = tallyGrid(), block = Math.max(1, +db.settings.tally.block || 10);
+     return g[3 * block].every(v => v === "");
+   }) === true, await p.evaluate(() => tallyGrid()[3 * (+db.settings.tally.block || 10)]));
+ok("ふつうに戻すと、書いてある予定がそのまま出る", await (async () => {
+     await p.locator("#sheet .hd[data-d='3']").click(); await p.waitForTimeout(250);
+     await p.locator("#dayForms .dayform[data-f='']").click(); await p.waitForTimeout(350);
+     return await p.locator("#sheet .daycol[data-d='3'] .dayoff").count() === 0
+         && await p.locator("#sheet .hd[data-d='3'] .mark").count() === 0;
+   })() === true);
+/* 片づける */
+await p.locator("#sheet .hd[data-d='1']").click(); await p.waitForTimeout(250);
+await p.locator("#dayForms .dayform[data-f='']").click(); await p.waitForTimeout(350);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(400);
+
 console.log("\n■ 月〜土の6列。日曜は置かない");
 ok("曜日の見出しは 月・火・水・木・金・土",
    (await p.locator("#sheet .hd").allInnerTexts()).map(t => t.slice(-1)).join("")
@@ -867,6 +978,8 @@ ok("備考は題名の 0.6 〜 0.9 倍", fsN > fsT * 0.6 && fsN < fsT * 0.95, [f
 ok("前（7pt）より大きい", fsN >= 14, fsN);
 
 console.log("\n■ 週メモは、学級ごとに持つ");
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='3-3']").click(); await p.waitForTimeout(400);
 await p.evaluate(() => { const w = week(); w.memos = {}; w.memos["3-3"] = "3-3のメモ"; buildSheet(); });
 await p.waitForTimeout(200);
 ok("3-3 で書いたメモが 3-3 に出る",
