@@ -367,13 +367,34 @@ ok("交流級はすべての学級から選べる",
    await p.locator("#tpSel .tpchip").count()
      === await p.evaluate(() => allClasses().length),
    await p.locator("#tpSel .tpchip").count());
-ok("選ぶまでは出せない", await p.locator("#tpGo").isDisabled() === true);
-ok("まだ選んでいないと言う",
-   (await p.locator("#tpWarn").innerText()).indexOf("選んでいません") >= 0,
+ok("入れるまでは出せない", await p.locator("#tpGo").isDisabled() === true);
+ok("まだ誰も入れていないと言う",
+   (await p.locator("#tpWarn").innerText()).indexOf("まだ誰も入れていません") >= 0,
    await p.locator("#tpWarn").innerText());
 
-/* 3-3 は担任が書いた週。1-1 は基本時間割のまま。3-1 は学年の予定だけ。 */
+/* **たんぽぽの組が受け皿。** 既定は4組で、空でも出しておく（落とす先が要る） */
+ok("たんぽぽの組が4つ出ている", await p.locator("#tpSel .tpgrp").count() === 4,
+   await p.locator("#tpSel .tpgrp").count());
+ok("1組から順に並ぶ",
+   (await p.locator("#tpSel .tpgrp .tpghead").first().innerText()).indexOf("1組") >= 0,
+   await p.locator("#tpSel .tpgrp .tpghead").first().innerText());
+ok("空の組は、入れ方を字で言う",
+   (await p.locator("#tpSel .tpgrp").first().innerText()).indexOf("引っぱって") >= 0,
+   await p.locator("#tpSel .tpgrp").first().innerText());
+ok("偶数の組は地の色で分ける",
+   await p.locator("#tpSel .tpgrp.even").count() === 2,
+   await p.locator("#tpSel .tpgrp.even").count());
+ok("偶数の組は色だけに頼らない（太い縦線も引く）", await p.evaluate(() => {
+     const e = document.querySelector("#tpSel .tpgrp.even .tpghead");
+     return parseFloat(getComputedStyle(e).borderLeftWidth) >= 4;
+   }) === true);
+
+/* 3-3 は担任が書いた週。1-1 は基本時間割のまま。3-1 は学年の予定だけ。
+   引っぱれない端末のために、押しても「いま選んでいる組」へ入る。 */
 await p.locator("#tpSel .tpchip[data-c='3-3']").click(); await p.waitForTimeout(200);
+ok("押すと1組へ入る", await p.evaluate(() => tpIn("1")).then
+   ? true : (await p.evaluate(() => tpIn("1"))).indexOf("3-3") >= 0,
+   await p.evaluate(() => tpIn("1")));
 ok("予定が入っているクラスだけなら知らせは出ない",
    (await p.locator("#tpWarn").innerText()).indexOf("基本時間割のまま") < 0,
    await p.locator("#tpWarn").innerText());
@@ -384,12 +405,47 @@ ok("基本時間割から動いていないクラスを知らせる",
    tpWarn.indexOf("1-1") >= 0 && tpWarn.indexOf("基本時間割のまま") >= 0, tpWarn);
 ok("上位の予定しか入っていないクラスも知らせる",
    tpWarn.indexOf("3-1") >= 0 && tpWarn.indexOf("担任は未着手") >= 0, tpWarn);
-ok("選んだ数を出す",
-   (await p.locator("#tpCount").innerText()).indexOf("3 クラス") >= 0,
+ok("出す人数と列の数を出す",
+   (await p.locator("#tpCount").innerText()).indexOf("3 人") >= 0,
    await p.locator("#tpCount").innerText());
-ok("選んだクラスは入口にも出る",
+ok("入れたクラスは入口にも出る",
    await p.evaluate(() => tpChosen().length) === 3,
    await p.evaluate(() => tpChosen()));
+
+/* **同じ組へ2回入れれば2人（＝2列）。** 前のクリック切り替えはもう無い */
+await p.locator("#tpSel .tpchip[data-c='3-3']").click(); await p.waitForTimeout(200);
+ok("同じ組へ2回入れると2人になる", await p.evaluate(() => tpCount("3-3")) === 2,
+   await p.evaluate(() => tpCount("3-3")));
+ok("組の中はクラス順に並ぶ",
+   JSON.stringify(await p.evaluate(() => tpIn("1"))) === JSON.stringify(["1-1","3-1","3-3","3-3"]),
+   await p.evaluate(() => tpIn("1")));
+ok("チップにどの組かを字で出す",
+   (await p.locator("#tpSel .tpchip[data-c='3-3']").innerText()).indexOf("1組") >= 0,
+   await p.locator("#tpSel .tpchip[data-c='3-3']").innerText());
+ok("組の中の1人を押すと外れる", await (async () => {
+     await p.locator("#tpSel .tpin[data-g='1'][data-i='3']").click();
+     await p.waitForTimeout(200);
+     return await p.evaluate(() => tpCount("3-3")) === 1;
+   })() === true, await p.evaluate(() => tpIn("1")));
+
+/* **出す列の並びは たんぽぽ1組 → 2組 …。** 組の中はクラス順 */
+await p.locator("#tpSel .tpghead[data-g='2']").click(); await p.waitForTimeout(150);
+await p.locator("#tpSel .tpchip[data-c='1-1']").click(); await p.waitForTimeout(200);
+ok("2組を選んでから押すと、2組へ入る",
+   (await p.evaluate(() => tpIn("2"))).indexOf("1-1") >= 0,
+   await p.evaluate(() => tpIn("2")));
+ok("出す列は1組の全員 → 2組の全員の順",
+   JSON.stringify(await p.evaluate(() => tpColumns()))
+     === JSON.stringify([{cls:"1-1",group:1},{cls:"3-1",group:1},{cls:"3-3",group:1},
+                         {cls:"1-1",group:2}]),
+   await p.evaluate(() => tpColumns()));
+ok("組を足せる", await (async () => {
+     await p.locator("#tpAddG").click(); await p.waitForTimeout(200);
+     return await p.locator("#tpSel .tpgrp").count() === 5;
+   })() === true);
+/* 足した組は空のままにして、あとの検査に響かせない */
+await p.locator("#tpSel .tpghead[data-g='1']").click(); await p.waitForTimeout(150);
+await p.locator("#tpSel .tpin[data-g='2'][data-i='0']").click(); await p.waitForTimeout(200);
 
 /* 出す。**たんぽぽ側の直しが消えること**を先に言ってから開く。 */
 let tpAsked = null;

@@ -119,9 +119,10 @@ function newYear(y){
     classes:  prev ? clone(prev.classes)  : clone(DEFAULT_CLASSES),
     specials: prev ? clone(prev.specials) : clone(DEFAULT_SPECIALS),
     base:{}, weeks:{}, week1: firstMonday(y),
-    /* たんぽぽ児童がいる交流級。ここで選んだクラスだけを たんぽぽ時間割へ出す */
-    /* たんぽぽ児童がいる交流級と、その**人数**。{"3-3":2} のように持つ。
-       たんぽぽ時間割は児童ごとに1列なので、2人いれば2列に書く */
+    /* たんぽぽ児童を、**たんぽぽの組ごとに**持つ。{"1":["1-3","3-2"], "2":["4-1"]}。
+       たんぽぽ時間割は児童ごとに1列で、たんぽぽ担当は組ごとに見るので、
+       出す列も 1組の全員 → 2組の全員 … の順に並べる。
+       同じ交流級を同じ組へ2つ入れれば2人（＝2列）。 */
     tanpopo: prev ? clone(prev.tanpopo || {}) : {}
   };
 }
@@ -136,24 +137,85 @@ function Y(){
   if(!Yr.base)  Yr.base  = {};
   if(!Yr.weeks) Yr.weeks = {};
   if(!Yr.week1) Yr.week1 = firstMonday(+y);
-  /* **毎回作り直さない。** 作り直すと、直した中身が次の呼び出しで捨てられる */
-  if(!Yr.tanpopo || typeof Yr.tanpopo !== "object" || Array.isArray(Yr.tanpopo))
+  /* **毎回作り直さない。** 作り直すと、直した中身が次の呼び出しで捨てられる。
+     組ごとの並び（値が配列）になっていなければ、そのときだけ直す。 */
+  if(!Yr.tanpopo || typeof Yr.tanpopo !== "object" || Array.isArray(Yr.tanpopo)
+     || Object.keys(Yr.tanpopo).some(k => !Array.isArray(Yr.tanpopo[k])))
     Yr.tanpopo = tpNorm_(Yr.tanpopo);
   return Yr;
 }
-/* 前は「クラス名の並び」で持っていた。人数を持つ形に直す。
-   **古い控えを捨てない。** 捨てると、選び直しからやることになる。 */
+/* たんぽぽの組。**既定は4組。** 学校によって数が違うので増やせる。 */
+const TP_GROUPS = 4;
+
+/* 持ち方を「組ごとの並び」へそろえる。**古い控えを捨てない。**
+   捨てると、選び直しからやることになる。
+
+     ["3-3","1-1"]          いちばん古い形（並びだけ）→ 全員を1組へ
+     {"3-3":2, "1-1":1}     人数で持っていた形        → 全員を1組へ
+     {"1":["3-3"], "2":[…]} いまの形                  → そのまま */
 function tpNorm_(v){
   const out = {};
-  if(Array.isArray(v)){ for(const c of v) out[c] = 1; return out; }
-  if(v && typeof v === "object")
-    for(const c in v){ const n = +v[c] || 0; if(n > 0) out[c] = Math.min(9, n); }
+  const put = (g, c) => { const k = String(g); (out[k] || (out[k] = [])).push(String(c)); };
+  if(Array.isArray(v)){ for(const c of v) put(1, c); }
+  else if(v && typeof v === "object"){
+    for(const k in v){
+      const val = v[k];
+      if(Array.isArray(val)){ for(const c of val) put(k, c); }        /* いまの形 */
+      else { const n = +val || 0; for(let i = 0; i < Math.min(9, n); i++) put(1, k); }
+    }
+  }
+  for(const k in out) out[k].sort(clsRank_);
   return out;
 }
-/* そのクラスに何人いるか。0 なら出さない */
-const tpCount  = c => (Y().tanpopo || {})[c] || 0;
-const tpChosen = () => Object.keys(Y().tanpopo || {}).filter(c => tpCount(c) > 0);
-const tpTotal  = () => tpChosen().reduce((a, c) => a + tpCount(c), 0);
+/* クラスの並び順。**1-1 〜 6-4。** 名前を割って数で見る（字の順では 10 が 2 の前に来る） */
+function clsRank_(a, b){
+  const r = c => { const m = String(c).match(/^(\d+)-(\d+)$/);
+                   return m ? (+m[1]) * 100 + (+m[2]) : 9999; };
+  return r(a) - r(b);
+}
+/* たんぽぽの組の番号。**空の組も出す**（引っぱって落とす先が要る） */
+function tpGroups(){
+  const t = Y().tanpopo || {};
+  let n = TP_GROUPS;
+  /* **空の組も数に入れる。** 足したばかりの組が消えると、落とす先が無くなる */
+  for(const k in t) n = Math.max(n, +k || 0);
+  const out = [];
+  for(let i = 1; i <= n; i++) out.push(String(i));
+  return out;
+}
+const tpIn = g => (Y().tanpopo || {})[String(g)] || [];
+/* 1人足す／1人減らす。**同じ交流級を2つ入れれば2人（＝2列）。** */
+function tpAdd(g, cls){
+  const t = Y().tanpopo, k = String(g);
+  (t[k] || (t[k] = [])).push(String(cls));
+  t[k].sort(clsRank_);
+}
+/* **空になっても組は残す。** 消すと、いま見ている受け皿が画面から無くなる */
+function tpDrop(g, cls){
+  const a = (Y().tanpopo || {})[String(g)] || [];
+  const i = a.indexOf(String(cls));
+  if(i >= 0) a.splice(i, 1);
+}
+/* 組を1つ足す。空の組を増やしても、出すときは飛ばされる */
+function tpAddGroup(){ Y().tanpopo[String(tpGroups().length + 1)] = []; }
+
+/* 出す列の並び。**1組の全員 → 2組の全員 → …**、組の中はクラス順。 */
+function tpColumns(){
+  const out = [];
+  for(const g of tpGroups())
+    for(const c of tpIn(g)) out.push({cls:c, group:+g});
+  return out;
+}
+/* そのクラスに何人いるか（組をまたいだ合計）。0 なら出さない */
+const tpCount  = c => tpColumns().filter(x => x.cls === c).length;
+const tpChosen = () => {
+  const seen = {}, out = [];
+  for(const x of tpColumns()) if(!seen[x.cls]){ seen[x.cls] = 1; out.push(x.cls); }
+  return out.sort(clsRank_);
+};
+const tpTotal  = () => tpColumns().length;
+/* そのクラスがどの組に入っているか（画面の印に使う） */
+const tpGroupsOf = c => tpGroups().filter(g => tpIn(g).indexOf(c) >= 0);
 
 const knownYears = () => Object.keys(db.years).sort();
 

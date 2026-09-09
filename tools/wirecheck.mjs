@@ -56,7 +56,7 @@ await p.addInitScript(() => {
         classes: {"1":["1-1","1-2"], "5":["5-1","5-2","5-3","5-4"]},
         specials: [{code:"ongaku", label:"音楽"}],
         week1: "2026-04-06",
-        tanpopo: ["5-1"]
+        tanpopo: {"1":["5-1"]}
       },
       base: {"5-1": {A: {"0|p1": {title:"国語", subject:"kokugo"}}}}
     },
@@ -441,26 +441,39 @@ ok("A週とB週の両方が届く",
    !!ba && !!ba.args[1]["5-1"].A && !!ba.args[1]["5-1"].B, ba && Object.keys(ba.args[1]));
 await p.locator("#baseClose").click(); await p.waitForTimeout(250);
 
-console.log("\n■ たんぽぽ交流級もシートで持つ");
-ok("シートの印がそのまま選択になる（人数つき）",
-   JSON.stringify(await p.evaluate(() => Y().tanpopo)) === JSON.stringify({"5-1":1}),
+console.log("\n■ たんぽぽの組もシートで持つ");
+ok("シートの組がそのまま画面の組になる",
+   JSON.stringify(await p.evaluate(() => Y().tanpopo)) === JSON.stringify({"1":["5-1"]}),
    await p.evaluate(() => Y().tanpopo));
 await p.evaluate(() => { window.__calls.length = 0; });
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".master.tp").click(); await p.waitForTimeout(300);
 await p.locator("#tpSel .tpchip[data-c='5-2']").click(); await p.waitForTimeout(300);
 const tq = await lastCall("apiWriteRoster");
-ok("選び直すとシートへ書く（人数で）",
-   !!tq && JSON.stringify(tq.args[4]) === JSON.stringify({"5-1":1, "5-2":1}),
+ok("入れるとシートへ書く（組ごとの並びで）",
+   !!tq && JSON.stringify(tq.args[4]) === JSON.stringify({"1":["5-1","5-2"]}),
    tq && tq.args[4]);
-/* 押すたびに 0人 → 1人 → 2人 → 0人 */
+/* **同じ組へ2回入れれば2人。** 前のクリック切り替えはもう無い */
 await p.locator("#tpSel .tpchip[data-c='5-2']").click(); await p.waitForTimeout(250);
-ok("もう一度押すと2人になる", await p.evaluate(() => tpCount("5-2")) === 2,
+ok("同じ組へ2回入れると2人になる", await p.evaluate(() => tpCount("5-2")) === 2,
    await p.evaluate(() => tpCount("5-2")));
-await p.locator("#tpSel .tpchip[data-c='5-2']").click(); await p.waitForTimeout(250);
-ok("もう一度押すと0人に戻る", await p.evaluate(() => tpCount("5-2")) === 0,
+ok("2人ぶんが2列として並ぶ",
+   (await p.evaluate(() => tpColumns())).filter(x => x.cls === "5-2").length === 2,
+   await p.evaluate(() => tpColumns()));
+await p.locator("#tpSel .tpin[data-g='1'][data-i='2']").click(); await p.waitForTimeout(250);
+ok("組の中の1人を押すと外れる", await p.evaluate(() => tpCount("5-2")) === 1,
    await p.evaluate(() => Y().tanpopo));
+/* 2組へも入れて、出す並びが 1組 → 2組 になることを見る */
+await p.locator("#tpSel .tpghead[data-g='2']").click(); await p.waitForTimeout(150);
 await p.locator("#tpSel .tpchip[data-c='5-2']").click(); await p.waitForTimeout(250);
+ok("たんぽぽ1組の全員 → 2組の全員 の順に並ぶ",
+   JSON.stringify(await p.evaluate(() => tpColumns()))
+     === JSON.stringify([{cls:"5-1",group:1},{cls:"5-2",group:1},{cls:"5-2",group:2}]),
+   await p.evaluate(() => tpColumns()));
+ok("シートには組の番号が届く",
+   JSON.stringify((await lastCall("apiWriteRoster")).args[4])
+     === JSON.stringify({"1":["5-1","5-2"], "2":["5-2"]}),
+   (await lastCall("apiWriteRoster")).args[4]);
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(300);
 
@@ -476,8 +489,10 @@ ok("出す前に、書いたぶんを先に送る",
    (await calls()).indexOf("apiWriteCells") <
    (await calls()).indexOf("apiExportTanpopo")
    || (await calls()).indexOf("apiWriteCells") < 0, await calls());
-ok("選んだ交流級を人数のまま渡す（2人いれば2列いる）",
-   !!tp && JSON.stringify(tp.args[3]) === JSON.stringify({"5-1":1, "5-2":1}),
+/* 出す中身は交流級だけで決まる（どの組かは列の並びの話）。
+   **人数はそのまま渡す。** あちらの列の数と合っているかを見るため */
+ok("交流級ごとの人数を渡す（2人いれば2列いる）",
+   !!tp && JSON.stringify(tp.args[3]) === JSON.stringify({"5-1":1, "5-2":2}),
    tp && tp.args[3]);
 ok("紙に出ているとおりの授業名を渡す（月〜金ぶん）",
    !!tp && Object.keys(tp.args[2]["5-1"]).length === 5, tp && tp.args[2]["5-1"]);
@@ -508,8 +523,11 @@ p.once("dialog", d => d.accept());
 await p.locator("#tpBuild").click(); await p.waitForTimeout(500);
 const bd = await lastCall("apiBuildTanpopo");
 ok("「この形で作りなおす」で apiBuildTanpopo を呼ぶ", !!bd, await calls());
-ok("児童の人数のまま渡す（2人いれば2列）",
-   !!bd && JSON.stringify(bd.args[2]) === JSON.stringify({"5-1":1, "5-2":1}),
+/* **形を作るときは、組ごとの並びをそのまま渡す。**
+   出す先の列も 1組の全員 → 2組の全員 … の順になる */
+ok("組ごとの並びで渡す",
+   !!bd && JSON.stringify(bd.args[2])
+     === JSON.stringify([{cls:"5-1",group:1},{cls:"5-2",group:1},{cls:"5-2",group:2}]),
    bd && bd.args[2]);
 const bdOut = await p.locator("#tpShapeOut").innerText();
 ok("作りなおしたことと、前の形を残したことを出す",

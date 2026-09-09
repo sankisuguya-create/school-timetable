@@ -281,7 +281,16 @@ const Sheets = (function(){
      （すぐ下の担当者・場所が「た」で始まるか）が塗る。
      こちらが塗ると、たんぽぽ担当が担当者・場所を直したあとに色と中身が食い違う。
      ここに残しているのは、シート側の書式を作るときの値の控え（docs/setup.md Step 8）。 */
-  const TANPOPO_FILL = {imported: "#DCDCDC", own: "#FFFFFF"};
+  const TANPOPO_FILL = {
+    imported: "#DCDCDC",   /* このサイトから入れたコマ（奇数組） */
+    own:      "#FFFFFF",   /* たんぽぽの中で受ける授業（担当が「た」） */
+    /* **たんぽぽ偶数組の列。** 奇数組と見分けるための地。
+       色だけに頼らない：組の境目には太い縦罫線も引く（→ Store.buildTanpopo）。
+       青みの側に振ってあるのは、青が最も多くの色覚型で灰と分かれるため。
+       どちらも黒文字とのコントラストは 10:1 を超える。 */
+    evenImported: "#C3D2E2",   /* 偶数組の授業名の行 */
+    evenBody:     "#EDF2F8"    /* 偶数組のそれ以外の行 */
+  };
 
   function asClass(v){
     if(isDate(v)) return (v.getMonth() + 1) + "-" + v.getDate();

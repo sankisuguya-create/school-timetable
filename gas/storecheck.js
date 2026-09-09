@@ -101,7 +101,15 @@ function fakeSheetOn(grid, name){
           return this; },
         setValue(v){ grid[r - 1][c - 1] = v; return this; },
         clearContent(){ return this; },
-        setFontWeight(){ return this; }, setNumberFormat(){ return this; },
+        setFontWeight(){ return this; },
+        /* **書式を実際に覚える。** 覚えない偽物にしていると、
+           「交流級の列を書式なしテキストにした」ことを検査できない */
+        setNumberFormat(f){
+          for(let i = 0; i < nr; i++) for(let j = 0; j < nc; j++)
+            FORMATS[name + "/" + (r + i) + "," + (c + j)] = f;
+          return this;
+        },
+        setBorder(){ return this; },
         setBackground(){ return this; }
       };
     },
@@ -144,6 +152,7 @@ const sandbox = {
   Logger: {log(){}},
   Session: {getActiveUser: () => ({getEmail: () => EMAIL})},
   SpreadsheetApp: {
+    BorderStyle: {SOLID_THICK: "SOLID_THICK"},
     newConditionalFormatRule(){
       const r = {whenFormulaSatisfied(){ return r; }, setBackground(){ return r; },
                  setRanges(){ return r; }, build(){ return {}; }};
@@ -203,6 +212,7 @@ function ok(name, cond, got){
   console.log((pass ? "  ○ " : "  × ") + name + (pass ? "" : "   → " + JSON.stringify(got)));
 }
 const rowsOf = name => SHEETS[name].filter(r => r.some(v => v !== "" && v != null));
+const Sheets_asClass = v => ev("Sheets.asClass")(v);
 
 /* ── シートを作る ─────────────────────────────── */
 console.log("■ シートを作る");
@@ -389,22 +399,48 @@ threwEmpty = false;
 try{ ev(`Store.writeRoster(2026, {"1":[], "2":[]}, [], "")`); }catch(e){ threwEmpty = true; }
 ok("学年だけあってクラスが無いのも断る", threwEmpty === true);
 
-console.log("\n■ たんぽぽ交流級は人数で持つ");
+/* **たんぽぽ児童は、たんぽぽの組ごとに持つ。**
+   たんぽぽ担当は組ごとに見るので、出す列も 1組の全員 → 2組の全員 … と並べる。 */
+console.log("\n■ たんぽぽ児童は、たんぽぽの組ごとに持つ");
 ev(`Store.writeRoster(2028, {"3":["3-1","3-2","3-3"]},
-    [{code:"ongaku", label:"音楽"}], "2028-04-03", {"3-1":1, "3-3":2})`);
+    [{code:"ongaku", label:"音楽"}], "2028-04-03",
+    {"1":["3-3","3-1"], "2":["3-3"]})`);
 const r28 = ev("Store.readRoster(2028)");
-ok("人数のまま返る（2人いる交流級がある）",
-   JSON.stringify(r28.tanpopo) === JSON.stringify({"3-1":1, "3-3":2}), r28.tanpopo);
-ok("シートには数で書く", (function(){
+ok("組ごとに返る",
+   JSON.stringify(r28.tanpopo) === JSON.stringify({"1":["3-1","3-3"], "2":["3-3"]}),
+   r28.tanpopo);
+ok("組の中はクラス順に並ぶ（字の順ではない）",
+   JSON.stringify(r28.tanpopo["1"]) === JSON.stringify(["3-1","3-3"]), r28.tanpopo["1"]);
+ok("シートには組の番号を書く", (function(){
      const at = ev('Sheets.head("クラス").at');
      return SHEETS["クラス"].some(r => String(r[at["年度"]]) === "2028"
-       && String(r[at["クラス"]]) === "3-3" && String(r[at["たんぽぽ交流級"]]) === "2");
+       && String(r[at["クラス"]]) === "3-3" && String(r[at["たんぽぽ交流級"]]) === "1,2");
+   })() === true, SHEETS["クラス"].slice(-4));
+ok("1つの組にしかいなければ番号1つ", (function(){
+     const at = ev('Sheets.head("クラス").at');
+     return SHEETS["クラス"].some(r => String(r[at["年度"]]) === "2028"
+       && String(r[at["クラス"]]) === "3-1" && String(r[at["たんぽぽ交流級"]]) === "1");
    })() === true);
-/* 前の形（クラス名の並び）でも受ける */
+/* 同じ組に2人 */
+ev(`Store.writeRoster(2030, {"3":["3-1"]}, [], "", {"1":["3-1","3-1"]})`);
+ok("同じ組に2人なら、番号を2つ書く", (function(){
+     const at = ev('Sheets.head("クラス").at');
+     return SHEETS["クラス"].some(r => String(r[at["年度"]]) === "2030"
+       && String(r[at["たんぽぽ交流級"]]) === "1,1");
+   })() === true);
+ok("読み直しても2人のまま",
+   JSON.stringify(ev("Store.readRoster(2030)").tanpopo) === JSON.stringify({"1":["3-1","3-1"]}),
+   ev("Store.readRoster(2030)").tanpopo);
+
+/* 古い形も受ける。**書き直させない。** */
 ev(`Store.writeRoster(2029, {"3":["3-1","3-2"]}, [], "", ["3-1"])`);
-ok("前の形（並び）で渡されても1人として受ける",
-   JSON.stringify(ev("Store.readRoster(2029)").tanpopo) === JSON.stringify({"3-1":1}),
+ok("いちばん古い形（並びだけ）は1組として受ける",
+   JSON.stringify(ev("Store.readRoster(2029)").tanpopo) === JSON.stringify({"1":["3-1"]}),
    ev("Store.readRoster(2029)").tanpopo);
+ev(`Store.writeRoster(2031, {"3":["3-1","3-2"]}, [], "", {"3-2":2})`);
+ok("人数で持っていた形も1組として受ける",
+   JSON.stringify(ev("Store.readRoster(2031)").tanpopo) === JSON.stringify({"1":["3-2","3-2"]}),
+   ev("Store.readRoster(2031)").tanpopo);
 ok("印はクラス表の欄で持つ（コードに書かない）",
    ev('Sheets.head("クラス").at["たんぽぽ交流級"]') >= 0,
    ev('Sheets.head("クラス").cols'));
@@ -415,8 +451,8 @@ ok("印はクラス表の欄で持つ（コードに書かない）",
     if(String(row[at["年度"]]) === "2028" && String(row[at["クラス"]]) === "3-2")
       row[at["たんぽぽ交流級"]] = "○";
 })();
-ok("○ と書いてあれば1人として読む",
-   ev("Store.readRoster(2028).tanpopo")["3-2"] === 1,
+ok("○ と書いてあれば1組の1人として読む",
+   ev("Store.readRoster(2028).tanpopo")["1"].indexOf("3-2") >= 0,
    ev("Store.readRoster(2028).tanpopo"));
 
 console.log("\n■ 学級編成を直しても、人が入れた欄を消さない");
@@ -442,8 +478,8 @@ ok("専科のメールも残る", (function(){
      return SHEETS["専科"].some(r => String(r[at["年度"]]) === "2028"
        && String(r[at["メール"]]) === "sp@edu.nishi.or.jp");
    })() === true);
-ok("印は書き直したとおりになる",
-   JSON.stringify(ev("Store.readRoster(2028).tanpopo")) === JSON.stringify({"3-1":1}),
+ok("たんぽぽの組は書き直したとおりになる",
+   JSON.stringify(ev("Store.readRoster(2028).tanpopo")) === JSON.stringify({"1":["3-1"]}),
    ev("Store.readRoster(2028).tanpopo"));
 
 console.log("\n■ 固定時間割の取り込み（貼り付け用シート）");
@@ -807,6 +843,114 @@ ok("担当者・場所の行は空のまま（たんぽぽ担当が書く）",
 /* **年度末に、人がドライブでファイルを丸ごと複製する。**
    こちらは数える・照合する・消すだけ。複製をコードで書かないので、
    コピー漏れが原理的に起きない。本体のURLは変わらない。 */
+/* **交流級の見出しは Date に化ける。** 1-2 は「1月2日」として取り込まれる。
+   画面には 1-2 と出るのに getValues() は Date を返すので、字として比べると
+   交流級が1つも見つからず、1コマも書けない。落ちないので気づかない。 */
+console.log("\n■ 交流級の見出しが日付に化けても読む");
+ok("Date の 1-2 を交流級として読む",
+   ev('Store.__tpCls(new Date(2026, 0, 2))') === "1-2",
+   ev('Store.__tpCls(new Date(2026, 0, 2))'));
+ok("Date の 6-4 も読む（6月4日）",
+   ev('Store.__tpCls(new Date(2026, 5, 4))') === "6-4",
+   ev('Store.__tpCls(new Date(2026, 5, 4))'));
+ok("字のままの見出しはそのまま", ev('Store.__tpCls("3-3")') === "3-3");
+ok("全角や長音の混じった見出しも直す",
+   ev('Store.__tpCls("１ー１")') === "1-1", ev('Store.__tpCls("１ー１")'));
+
+/* 作った形の見出しが、次に読むとき字として残っているか */
+console.log("\n■ たんぽぽの列は、組ごとに並べて作る");
+(function(){
+  const at = ev('Sheets.head("設定").at');
+  for(const row of SHEETS["設定"]){
+    if(String(row[at["キー"]]) === "たんぽぽシート名")   row[at["値"]] = "組ならび";
+    if(String(row[at["キー"]]) === "たんぽぽファイルID") row[at["値"]] = TPID;
+  }
+})();
+TPFILE.sheets["組ならび"] = [["たんぽぽ"], ["x"]];
+const bg = ev(`Store.buildTanpopo(2026, "2026-11-16", [
+  {cls:"6-4", group:1}, {cls:"1-2", group:2}, {cls:"3-3", group:1},
+  {cls:"1-1", group:2}, {cls:"3-3", group:2}
+], ["p1","p2","p3","p4","p5","p6"])`);
+ok("たんぽぽ1組から順に、組の中はクラス順",
+   JSON.stringify(bg.list) === JSON.stringify(["3-3","6-4","1-1","1-2","3-3"]), bg.list);
+ok("どの列が何組かも返す",
+   JSON.stringify(bg.groups) === JSON.stringify([1,1,2,2,2]), bg.groups);
+const GB = TPFILE.sheets["組ならび"];
+ok("見出しは字として残る（Date にならない）",
+   typeof GB[1][1] === "string" && GB[1][1] === "3-3", GB[1].slice(0, 6));
+ok("B列から右を書式なしテキストにしている",
+   FORMATS["組ならび/1,2"] === "@" && FORMATS["組ならび/1,6"] === "@",
+   [FORMATS["組ならび/1,2"], FORMATS["組ならび/1,6"]]);
+ok("A列（日付）は書式なしテキストにしない",
+   FORMATS["組ならび/1,1"] !== "@", FORMATS["組ならび/1,1"]);
+ok("日ブロックの先頭は日付のまま",
+   !!GB[1][0] && typeof GB[1][0] === "object", String(GB[1][0]));
+
+/* **6-4 は「6月4日」に化けやすい。** 往復して残ることを見る */
+ok("6-4 の列がそのまま残る", GB[1].indexOf("6-4") > 0, GB[1].slice(0, 6));
+const bg2 = ev(`Store.shapeTanpopo("2026-11-16")`);
+ok("作った形を読み直すと、交流級の列が数えられる", bg2.classCols === 5, bg2.classCols);
+ok("見出しを読み返しても 6-4 のまま",
+   bg2.head.indexOf("6-4") >= 0, bg2.head.slice(0, 8));
+/* 出す側も、化けた見出しを読めること */
+const ex = ev(`Store.exportTanpopo(2026, "2026-11-16",
+  {"3-3":{"0":{p1:"国語"},"1":{},"2":{},"3":{},"4":{}},
+   "6-4":{"0":{p1:"算数"},"1":{},"2":{},"3":{},"4":{}},
+   "1-1":{"0":{p1:"生活"},"1":{},"2":{},"3":{},"4":{}},
+   "1-2":{"0":{p1:"体育"},"1":{},"2":{},"3":{},"4":{}}},
+  {"3-3":2, "6-4":1, "1-1":1, "1-2":1})`);
+ok("組ごとの並びのまま書き込める", ex.days === 5 && (ex.short || []).length === 0, ex);
+ok("6-4 の列に 6-4 の授業が入る",
+   String(GB[2][GB[1].indexOf("6-4")]) === "算数", GB[2].slice(0, 6));
+(function(){
+  const at = ev('Sheets.head("設定").at');
+  for(const row of SHEETS["設定"])
+    if(String(row[at["キー"]]) === "たんぽぽシート名") row[at["値"]] = "";
+})();
+
+/* **たんぽぽの設定が保存できないという報告があった。**
+   6-4 は「6月4日」に化けるクラス名なので、往復を1件ずつ見る。 */
+console.log("\n■ たんぽぽ交流級の設定が往復する（6-4 を含む）");
+const rw = ev(`Store.writeRoster(2026,
+  {"6":["6-1","6-2","6-3","6-4"], "1":["1-1","1-2","1-3"]}, [], "",
+  {"1":["6-4","6-1"], "2":["6-4","1-2"]})`);
+ok("6-4 が2つの組に残る",
+   rw.tanpopo["1"].indexOf("6-4") >= 0 && rw.tanpopo["2"].indexOf("6-4") >= 0, rw.tanpopo);
+ok("6-4 は合わせて2人（＝2列）", ev("Store.__tpColumns")(
+     ev("Store.readRoster(2026)").tanpopo["1"].map(c => ({cls:c, group:1}))
+       .concat(ev("Store.readRoster(2026)").tanpopo["2"].map(c => ({cls:c, group:2}))))
+     .filter(x => x.cls === "6-4").length === 2);
+ok("ほかのクラスも残る",
+   rw.tanpopo["1"].indexOf("6-1") >= 0 && rw.tanpopo["2"].indexOf("1-2") >= 0, rw.tanpopo);
+ok("選んでいないクラスは入らない",
+   JSON.stringify(rw.tanpopo).indexOf("6-2") < 0, rw.tanpopo);
+ok("読み直しても同じ",
+   JSON.stringify(ev("Store.readRoster(2026)").tanpopo) === JSON.stringify(rw.tanpopo),
+   ev("Store.readRoster(2026)").tanpopo);
+/* シートに化けた Date が入っていても読める形にしておく */
+(function(){
+  const at = ev('Sheets.head("クラス").at');
+  for(const row of SHEETS["クラス"])
+    if(String(row[at["年度"]]) === "2026" && Sheets_asClass(row[at["クラス"]]) === "6-4")
+      row[at["クラス"]] = new Date(2026, 5, 4);      /* 6月4日に化けた状態を作る */
+})();
+ok("クラス名が日付に化けていても、たんぽぽの設定を見失わない",
+   ev("Store.readRoster(2026)").tanpopo["1"].indexOf("6-4") >= 0,
+   ev("Store.readRoster(2026)").tanpopo);
+ok("学級編成そのものも化けたまま出さない",
+   ev("Store.readRoster(2026)").classes["6"].indexOf("6-4") >= 0,
+   ev("Store.readRoster(2026)").classes["6"]);
+/* **編成を元に戻す。** この節でクラスを2学年ぶんに置き換えたままにすると、
+   あとの節（年度の検査など）が別の学校を見ることになる。 */
+ev(`Store.writeRoster(2026, {"1":["1-1","1-2","1-3"],"2":["2-1","2-2","2-3"],
+  "3":["3-1","3-2","3-3"],"4":["4-1","4-2","4-3"],
+  "5":["5-1","5-2","5-3","5-4"],"6":["6-1","6-2","6-3","6-4"]},
+  [{code:"ongaku",label:"音楽"},{code:"zuko",label:"図工"},
+   {code:"rika",label:"理科"},{code:"gaikoku",label:"外国語"}], "", {})`);
+ok("戻したら20学級", ev("Store.readRoster(2026)").classes["5"].length === 4
+   && Object.keys(ev("Store.readRoster(2026)").classes).length === 6,
+   ev("Store.readRoster(2026)").classes);
+
 console.log("\n■ 年度の退避（数える → 照合する → 消す）");
 /* 2025年度と2026年度の週案を1コマずつ入れておく */
 ev(`Store.writeCells(2025, [{date:"2025-06-10", slot:"p1", layer:"home",
