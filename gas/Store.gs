@@ -477,7 +477,8 @@ const Store = (function(){
      日付は書いた瞬間にシートの側で日付型になるので、文字のまま覚えた行番号は
      次に読んだときもう合わない。合わないと、直したつもりの行が増えていく。 */
   function writeCells(year, patches){
-    if(!patches || !patches.length) return {at:{}, count:0, ms:0, waitMs:0};
+    if(!patches || !patches.length)
+      return {at:{}, count:0, asked:0, conflicts:[], ms:0, waitMs:0};
     /* **保存にかかった時間を測って返す。**
        「速くする改造」は、必ず正しさを削る方向に働く。数字が基準に届く前に
        手を入れない（→ docs/spec.md 13-2）。ロック待ちと書き込みは分けて測る。
@@ -490,6 +491,9 @@ const Store = (function(){
     try{
       const rank = slotRank();
       const now = new Date(), at = {};
+      /* **競合したコマは、黙って飛ばさない。** 数も中身も返す。
+         返さないと、教師は書けたつもりで書けていないまま週を進める。 */
+      const conflicts = [];
       const me = (function(){ try{ return Gate.activeEmail(); }catch(e){ return ""; } })();
 
       /* シートごとにまとめる */
@@ -513,6 +517,30 @@ const Store = (function(){
           const outKey = [date, p.slot, p.layer, target].join("|");
           const empty = !String(p.title || "").trim() && !String(p.note || "").trim();
           const i = index[k];
+
+          /* **古い画面からの保存を止める。**
+             expectedAt ＝「この編集を始めたとき、自分が知っていたサーバの更新時刻」。
+             いまシートに入っている時刻と違えば、そのあいだに誰かが書いている。
+             そのまま書くと、書いた本人にも見えないまま消える。
+
+             expectedAt が無いのは古い版の画面。**そこは今までどおり書く**
+             （止めると、貼り替えの途中で全員が保存できなくなる）。 */
+          if(p.expectedAt !== undefined && p.expectedAt !== null){
+            const cur = (i !== undefined) ? rows[i] : null;
+            const curAt = (cur && Sheets.isDate(cur["更新時刻"]))
+                        ? cur["更新時刻"].getTime() : 0;
+            if(curAt !== (+p.expectedAt || 0)){
+              conflicts.push({
+                date: date, slot: p.slot, layer: p.layer, target: target,
+                expectedAt: +p.expectedAt || 0, currentAt: curAt,
+                currentTitle: cur ? String(cur["題名"] || "") : "",
+                currentNote:  cur ? String(cur["詳細"] || "") : "",
+                currentBy:    cur ? String(cur["更新者"] || "") : ""
+              });
+              continue;                 /* **このコマは書かない。黙って飛ばさない** */
+            }
+          }
+
           if(p.remove || empty){
             if(i !== undefined) drop[i] = true;
             at[outKey] = 0;
@@ -539,7 +567,9 @@ const Store = (function(){
         Sheets.writePlan(name, keep);
       }
       SpreadsheetApp.flush();
-      return {at, count: patches.length, sheets: Object.keys(byName).length,
+      return {at, count: patches.length - conflicts.length,
+              asked: patches.length, conflicts: conflicts,
+              sheets: Object.keys(byName).length,
               ms: Date.now() - t1, waitMs: t1 - t0};
     } finally {
       lock.releaseLock();

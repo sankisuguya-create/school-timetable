@@ -1072,6 +1072,80 @@ ok("そのときも「エラーが発生しました」で終わらせない",
     if(String(row[at["キー"]]) === "たんぽぽシート名") row[at["値"]] = "";
 })();
 
+/* **古い画面からの保存を止める。**
+   A先生が読み、B先生が保存し、そのあとA先生が古い画面のまま保存すると、
+   B先生の予定は書いた本人にも見えないまま消える。 */
+console.log("\n■ 古い状態からの保存は競合として止める");
+const CW = (patches) => ev("Store.writeCells")(2026, patches);
+const one = (extra) => Object.assign({date:"2026-06-15", slot:"p4", layer:"home",
+  target:"3-3", note:"", subject:null}, extra);
+
+/* 新しいコマ。まだ誰も書いていない ＝ expectedAt 0 */
+let cw = CW([one({title:"Aの国語", expectedAt:0})]);
+ok("誰も書いていないコマは expectedAt 0 で入る",
+   cw.count === 1 && cw.conflicts.length === 0, cw);
+const at1 = cw.at["2026-06-15|p4|home|3-3"];
+ok("入った時刻を返す", typeof at1 === "number" && at1 > 0, at1);
+
+/* B先生が上書きする（最新の時刻を知っている） */
+cw = CW([one({title:"Bの算数", expectedAt:at1})]);
+ok("最新を知っていれば書ける", cw.count === 1 && cw.conflicts.length === 0, cw);
+const at2 = cw.at["2026-06-15|p4|home|3-3"];
+
+/* ケース1：A先生が古い画面のまま保存 */
+cw = CW([one({title:"Aの理科", expectedAt:at1})]);
+ok("古い時刻のまま保存すると競合する", cw.conflicts.length === 1, cw);
+ok("競合したぶんは数に入れない", cw.count === 0 && cw.asked === 1, cw);
+ok("いま入っている中身を返す", cw.conflicts[0].currentTitle === "Bの算数", cw.conflicts[0]);
+ok("いま入っている時刻も返す", cw.conflicts[0].currentAt === at2, cw.conflicts[0]);
+ok("誰が入れたかも返す",
+   cw.conflicts[0].currentBy === "tanaka@edu.nishi.or.jp", cw.conflicts[0]);
+ok("どのコマかを返す",
+   cw.conflicts[0].date === "2026-06-15" && cw.conflicts[0].slot === "p4"
+   && cw.conflicts[0].layer === "home" && cw.conflicts[0].target === "3-3", cw.conflicts[0]);
+ok("**Bの内容は書き替わっていない**",
+   ev(`Store.readWeek(2026, "2026-06-15", [{layer:"home",target:"3-3"}])`)
+     .home["3-3"]["0|p4"].title === "Bの算数",
+   ev(`Store.readWeek(2026, "2026-06-15", [{layer:"home",target:"3-3"}])`).home["3-3"]);
+
+/* ケース3：A先生が「それでも上書きする」（最新の時刻で送り直す） */
+cw = CW([one({title:"Aの理科", expectedAt:at2})]);
+ok("最新の時刻で送り直せば書ける", cw.count === 1 && cw.conflicts.length === 0, cw);
+const at3 = cw.at["2026-06-15|p4|home|3-3"];
+ok("上書きが入っている",
+   ev(`Store.readWeek(2026, "2026-06-15", [{layer:"home",target:"3-3"}])`)
+     .home["3-3"]["0|p4"].title === "Aの理科");
+
+/* ケース4：確認しているあいだに、さらに別の人が書いた */
+CW([one({title:"Cの体育", expectedAt:at3})]);
+cw = CW([one({title:"Aの理科（再）", expectedAt:at3})]);
+ok("確認しているあいだに書かれたら、もう一度競合する", cw.conflicts.length === 1, cw);
+ok("そのときも中身は Cのまま", cw.conflicts[0].currentTitle === "Cの体育", cw.conflicts[0]);
+
+/* 消すときも同じ */
+cw = CW([one({title:"", remove:true, expectedAt:at1})]);
+ok("消すときも古い時刻なら止める", cw.conflicts.length === 1, cw);
+ok("止めたので消えていない",
+   !!ev(`Store.readWeek(2026, "2026-06-15", [{layer:"home",target:"3-3"}])`)
+     .home["3-3"]["0|p4"]);
+
+/* 1つのまとめの中に、通るものと競合するものが混じる */
+const two = ev("Store.writeCells")(2026, [
+  one({title:"通るほう", slot:"p5", expectedAt:0}),
+  one({title:"競合するほう", expectedAt:at1})
+]);
+ok("通るぶんは書く", two.count === 1, two);
+ok("競合するぶんだけ返す", two.conflicts.length === 1
+   && two.conflicts[0].slot === "p4", two.conflicts);
+ok("通ったコマは実際に入っている",
+   ev(`Store.readWeek(2026, "2026-06-15", [{layer:"home",target:"3-3"}])`)
+     .home["3-3"]["0|p5"].title === "通るほう");
+
+/* 古い版の画面（expectedAt を送らない）は、今までどおり書ける */
+cw = CW([one({title:"古い版から", slot:"p6"})]);
+ok("expectedAt を送らない画面は今までどおり書ける",
+   cw.count === 1 && cw.conflicts.length === 0, cw);
+
 console.log("\n■ 保存にかかった時間を返す");
 const tm = ev(`Store.writeCells(2026, [{date:"2026-11-16", slot:"p1", layer:"home",
   target:"3-3", title:"国語", note:"", subject:"kokugo"}])`);

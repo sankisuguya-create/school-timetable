@@ -290,25 +290,30 @@ function writeCell(d, s, patch){
     for(const c of allClasses()){
       const e = (w.special[c] || {})[key];
       if(e && e.sp === view.sp){
+        const was = e.sat || 0;          /* 消す前に、サーバの時刻を控える */
         delete w.special[c][key];
-        if(c !== target) Backend.cellChanged("special", c, d, s);
+        if(c !== target) Backend.cellChanged("special", c, d, s, was);
       }
     }
     if(target && allClasses().indexOf(target) >= 0){
       const sub = SUB_BY_CODE[view.sp];
+      const was = ((w.special[target] || {})[key] || {}).sat || 0;
       (w.special[target] || (w.special[target] = {}))[key] = {
         title: escText(sub ? sub.name : viewName()),
         subject: view.sp, sp: view.sp,
         note: ("note" in patch) ? clean(patch.note) : (cur.note || ""),
         at: Date.now(), by: myEmail()
       };
-      Backend.cellChanged("special", target, d, s);
+      Backend.cellChanged("special", target, d, s, was);
     }
     return save();
   }
 
   const st  = targetStore();
   const cur = cellFor(d, s);
+  /* **書き替える前に、サーバの時刻を控える。**
+     空にする操作ではコマごと消えるので、あとからでは読めない */
+  const was = (st[key] || {}).sat || 0;
   const e   = st[key] || {
     title:   cur.layer === "base" ? cur.title   : "",
     note:    "",
@@ -319,8 +324,8 @@ function writeCell(d, s, patch){
   if("subject" in patch) e.subject = patch.subject;
   e.by = myEmail();          /* 層ではなく人。層は開いている面から分かる */
   e.at = Date.now();
-  if(isEmptyCell(e)) delete st[key]; else st[key] = e;
-  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s);
+  if(isEmptyCell(e)) delete st[key]; else { e.sat = was; st[key] = e; }
+  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s, was);
   return save();
 }
 

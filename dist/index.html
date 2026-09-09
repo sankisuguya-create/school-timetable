@@ -1634,11 +1634,18 @@ const Backend = (function(){
   /* 1コマ変わった。**場所を覚えるだけで、まだ送らない。**
      手元（localStorage）はそのつど丸ごと書き出しているので、
      ここで覚えるのは本番のシートへ送るぶん。 */
-  function cellChanged(layer, target, d, slotId){
+  /* baseAt ＝ **直す前に、そのコマがサーバで持っていた時刻。**
+     呼ぶ側（compose.js の writeCell）が、書き替える前に読んで渡す。
+     ここで読むのでは遅い。空にする操作では、もうコマが消えている。
+
+     いちど覚えたら、同じコマを続けて直しても**上書きしない**。
+     打鍵のたびに更新すると、物差しが自分の打鍵に追従して、競合を見逃す。 */
+  function cellChanged(layer, target, d, slotId, baseAt){
     if(!onGas) return;
     const k = [layer, target || "", fy(), wkKey(), d, slotId].join("|");
     if(!dirty[k]){ dirty[k] = {layer, target:target || "", year:fy(),
-                               monday:wkKey(), d, slot:slotId}; dirtyN++; }
+                               monday:wkKey(), d, slot:slotId,
+                               baseAt: +baseAt || 0}; dirtyN++; }
     onDirty(dirtyN, lastErr);
     persistSoon();
     schedule();
@@ -1668,7 +1675,16 @@ const Backend = (function(){
             note:    e ? e.note  : "",
             subject: e ? (e.subject || "") : "",
             sp:      e ? (e.sp || "")      : "",
-            remove:  !e};
+            remove:  !e,
+            /* **この編集を始めたとき、自分が知っていたサーバの更新時刻。**
+               サーバは、いまシートに入っている時刻とこれを見比べる。
+               違えば、そのあいだに誰かが書いている（競合）。
+
+               手元で打った時刻（at）ではない。**打つたびに at は進むので、
+               それを送ると必ず食い違い、全部が競合になる。**
+               直す前に控えた値（baseAt）を使う。コマを空にしたときは
+               もう中身が無いので、控えておかないと物差しが消える。 */
+            expectedAt: +m.baseAt || 0};
   }
 
   /* 貯めたぶんを送る。after は送り終わってから呼ぶ（押した手ごたえを返すため）。 */
@@ -1778,7 +1794,8 @@ const Backend = (function(){
                  : p[2] === "grade"  ? w.grade[p[3]]
                  : p[2] === "special"? w.special[p[3]]
                  : w.home[p[3]];
-      if(bank && bank[key]) bank[key].at = at[k];
+      /* **サーバが打った時刻。** 次にこのコマを直すときの物差しになる */
+      if(bank && bank[key]){ bank[key].at = at[k]; bank[key].sat = at[k]; }
     }
   }
 
@@ -1967,14 +1984,20 @@ const Backend = (function(){
     if(!Yr || !Yr.weeks) return;      /* その年度がもう無い */
     const cur = Yr.weeks[m] || (Yr.weeks[m] =
       {school:{}, grade:{}, special:{}, home:{}, acked:[], variant:"A"});
+    /* サーバから来たコマには、**その時刻を「知っていた時刻」として控える**。
+       次にこのコマを直すとき、これを expectedAt として送る。 */
+    const stamp = bank => {
+      for(const k in (bank || {})) bank[k].sat = bank[k].at || 0;
+      return bank || {};
+    };
     for(const t of want){
       /* まだ送っていないコマがある対象は触らない */
       if(hasPending(t.layer, t.target)) continue;
-      if(t.layer === "school")     cur.school = w.school || {};
-      else if(t.layer === "grade") cur.grade[t.target]  = (w.grade || {})[t.target] || {};
+      if(t.layer === "school")     cur.school = stamp(w.school);
+      else if(t.layer === "grade") cur.grade[t.target]  = stamp((w.grade || {})[t.target]);
       else {
-        cur.home[t.target]    = (w.home    || {})[t.target] || {};
-        cur.special[t.target] = (w.special || {})[t.target] || {};
+        cur.home[t.target]    = stamp((w.home    || {})[t.target]);
+        cur.special[t.target] = stamp((w.special || {})[t.target]);
       }
       loadedWeek[weekTag(t, y, m)] = true;
     }
@@ -2649,25 +2672,30 @@ function writeCell(d, s, patch){
     for(const c of allClasses()){
       const e = (w.special[c] || {})[key];
       if(e && e.sp === view.sp){
+        const was = e.sat || 0;          /* 消す前に、サーバの時刻を控える */
         delete w.special[c][key];
-        if(c !== target) Backend.cellChanged("special", c, d, s);
+        if(c !== target) Backend.cellChanged("special", c, d, s, was);
       }
     }
     if(target && allClasses().indexOf(target) >= 0){
       const sub = SUB_BY_CODE[view.sp];
+      const was = ((w.special[target] || {})[key] || {}).sat || 0;
       (w.special[target] || (w.special[target] = {}))[key] = {
         title: escText(sub ? sub.name : viewName()),
         subject: view.sp, sp: view.sp,
         note: ("note" in patch) ? clean(patch.note) : (cur.note || ""),
         at: Date.now(), by: myEmail()
       };
-      Backend.cellChanged("special", target, d, s);
+      Backend.cellChanged("special", target, d, s, was);
     }
     return save();
   }
 
   const st  = targetStore();
   const cur = cellFor(d, s);
+  /* **書き替える前に、サーバの時刻を控える。**
+     空にする操作ではコマごと消えるので、あとからでは読めない */
+  const was = (st[key] || {}).sat || 0;
   const e   = st[key] || {
     title:   cur.layer === "base" ? cur.title   : "",
     note:    "",
@@ -2678,8 +2706,8 @@ function writeCell(d, s, patch){
   if("subject" in patch) e.subject = patch.subject;
   e.by = myEmail();          /* 層ではなく人。層は開いている面から分かる */
   e.at = Date.now();
-  if(isEmptyCell(e)) delete st[key]; else st[key] = e;
-  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s);
+  if(isEmptyCell(e)) delete st[key]; else { e.sat = was; st[key] = e; }
+  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s, was);
   return save();
 }
 
