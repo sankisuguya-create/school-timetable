@@ -1,6 +1,7 @@
 /* 層の合成と書き込み。**この画面のいちばん大事な決まりがここにある。**
 
-   勝つのは「最後に書かれたもの」。層は勝ち負けを決めない。
+   勝つのは「最新の状態を見たうえで、最後に書いたもの」。層は勝ち負けを決めない。
+   最新を見ていない保存はサーバが止める（→ gas/Store.gs writeCells の expectedAt）。
    時刻で決めないと、上位があとから入れた予定が、先に入っていた担任の予定に負ける。
    それでは学年主任が学年体育を入れても反映されず、入れた本人にも見えない。
    （層の順で組んだ初版を実際に動かして見つけた欠陥） */
@@ -242,10 +243,13 @@ function setMemo(html){
   const a = memoAt();
   if(!a) return false;
   const bank = memoBank(a), key = ck(0, a.slot), t = clean(html);
+  /* 書き替える前に、サーバの時刻を控える（競合の物差し） */
+  const was = (bank[key] || {}).sat || 0;
   if(!plain(t).trim() && !/<a\b/i.test(t)) delete bank[key];
-  else bank[key] = {title:t, note:"", subject:null, by:myEmail(), at:Date.now()};
+  else bank[key] = {title:t, note:"", subject:null, sat:(bank[key] || {}).sat,
+                    by:myEmail(), at:Date.now()};
   if((week().memos || {})[viewName()] !== undefined) delete week().memos[viewName()];
-  Backend.cellChanged(a.layer, a.target, 0, a.slot);
+  Backend.cellChanged(a.layer, a.target, 0, a.slot, was);
   return save();
 }
 
@@ -267,11 +271,13 @@ const slotShown = (d, s) => !(isDaySpecial(d) && s.id === "am2");
 function setDayForm(d, form){
   if(typeof isLocked === "function" && isLocked()) return false;
   const w = week(), key = ck(d, DAY_SLOT);
+  const was = (w.school[key] || {}).sat || 0;   /* 消す前に物差しを控える */
   if(!form) delete w.school[key];
   else w.school[key] = {title: escText(DAY_FORM[form].label), note:"", subject:null,
+                        sat: (w.school[key] || {}).sat,
                         by: myEmail(), at: Date.now()};
   /* **学校全体の層として送る。** 全クラスの紙に効く */
-  Backend.cellChanged("school", "", d, DAY_SLOT);
+  Backend.cellChanged("school", "", d, DAY_SLOT, was);
   return save();
 }
 
@@ -392,25 +398,30 @@ function writeCell(d, s, patch){
     for(const c of allClasses()){
       const e = (w.special[c] || {})[key];
       if(e && e.sp === view.sp){
+        const was = e.sat || 0;          /* 消す前に、サーバの時刻を控える */
         delete w.special[c][key];
-        if(c !== target) Backend.cellChanged("special", c, d, s);
+        if(c !== target) Backend.cellChanged("special", c, d, s, was);
       }
     }
     if(target && allClasses().indexOf(target) >= 0){
       const sub = SUB_BY_CODE[view.sp];
+      const was = ((w.special[target] || {})[key] || {}).sat || 0;
       (w.special[target] || (w.special[target] = {}))[key] = {
         title: escText(sub ? sub.name : viewName()),
         subject: view.sp, sp: view.sp,
         note: ("note" in patch) ? clean(patch.note) : (cur.note || ""),
         at: Date.now(), by: myEmail()
       };
-      Backend.cellChanged("special", target, d, s);
+      Backend.cellChanged("special", target, d, s, was);
     }
     return save();
   }
 
   const st  = targetStore();
   const cur = cellFor(d, s);
+  /* **書き替える前に、サーバの時刻を控える。**
+     空にする操作ではコマごと消えるので、あとからでは読めない */
+  const was = (st[key] || {}).sat || 0;
   /* **いま紙に出ているものを引き継いでから直す。**
      前は基本時間割から来たときだけ引き継いでいたので、全校や学年から
      降りてきたコマに詳細を1字書くと、題名が空のまま「担任」として入り、
@@ -425,8 +436,8 @@ function writeCell(d, s, patch){
   if("subject" in patch) e.subject = patch.subject;
   e.by = myEmail();          /* 層ではなく人。層は開いている面から分かる */
   e.at = Date.now();
-  if(isEmptyCell(e)) delete st[key]; else st[key] = e;
-  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s);
+  if(isEmptyCell(e)) delete st[key]; else { e.sat = was; st[key] = e; }
+  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s, was);
   return save();
 }
 

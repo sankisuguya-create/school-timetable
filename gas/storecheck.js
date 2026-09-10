@@ -200,15 +200,21 @@ function copyBook(){
 let EMAIL = "tanaka@edu.nishi.or.jp";
 const locks = {held:0};
 
+const CFRULES = [];                      /* 入れた条件付き書式（式と背景色） */
 const sandbox = {
   console,
   Logger: {log(){}},
   Session: {getActiveUser: () => ({getEmail: () => EMAIL})},
   SpreadsheetApp: {
     BorderStyle: {SOLID_THICK: "SOLID_THICK"},
+    /* **条件付き書式の式を覚える。** 塗り分けの決まりはこの式にしかないので、
+       捨てると「白になるはずのコマが灰色のまま」を検査で見つけられない。 */
     newConditionalFormatRule(){
-      const r = {whenFormulaSatisfied(){ return r; }, setBackground(){ return r; },
-                 setRanges(){ return r; }, build(){ return {}; }};
+      const got = {formula:"", bg:""};
+      const r = {whenFormulaSatisfied(f){ got.formula = f; return r; },
+                 setBackground(c){ got.bg = c; return r; },
+                 setRanges(){ return r; },
+                 build(){ CFRULES.push(got); return got; }};
       return r;
     },
     getActive: () => activeBook(),
@@ -891,6 +897,7 @@ console.log("\n■ シートの行・列は、足りなければ先に伸ばす�
   ok("1クラスの週案が1,000行を超えても保存できる", !!w && w.count === 1100, why2 || w);
   ok("超えたぶんも読み直せる",
      rowsOf("週案 3-3").length > 1000, rowsOf("週案 3-3").length);
+
 })();
 
 /* **たんぽぽの設定が保存できないという報告があった。**
@@ -1093,6 +1100,121 @@ ok("どのファイルの話かを言う", se.message.indexOf("たんぽぽ時�
 ok("何が足りないかを言う", se.message.indexOf("行が 1 しかありません") >= 0, se.message);
 ok("次に何をすればよいかも言う", se.message.indexOf("形を直してから") >= 0, se.message);
 ok("行と列の数を見ろと言う", se.message.indexOf("何行×何列") >= 0, se.message);
+
+/* **古い画面からの保存を止める。**
+   A先生が読み、B先生が保存し、そのあとA先生が古い画面のまま保存すると、
+   B先生の予定は書いた本人にも見えないまま消える。 */
+console.log("\n■ 古い状態からの保存は競合として止める");
+const CW = (patches) => ev("Store.writeCells")(2026, patches);
+const one = (extra) => Object.assign({date:"2026-06-15", slot:"p4", layer:"home",
+  target:"3-3", note:"", subject:null}, extra);
+
+/* 新しいコマ。まだ誰も書いていない ＝ expectedAt 0 */
+let cw = CW([one({title:"Aの国語", expectedAt:0})]);
+ok("誰も書いていないコマは expectedAt 0 で入る",
+   cw.count === 1 && cw.conflicts.length === 0, cw);
+const at1 = cw.at["2026-06-15|p4|home|3-3"];
+ok("入った時刻を返す", typeof at1 === "number" && at1 > 0, at1);
+
+/* B先生が上書きする（最新の時刻を知っている） */
+cw = CW([one({title:"Bの算数", expectedAt:at1})]);
+ok("最新を知っていれば書ける", cw.count === 1 && cw.conflicts.length === 0, cw);
+const at2 = cw.at["2026-06-15|p4|home|3-3"];
+
+/* ケース1：A先生が古い画面のまま保存 */
+cw = CW([one({title:"Aの理科", expectedAt:at1})]);
+ok("古い時刻のまま保存すると競合する", cw.conflicts.length === 1, cw);
+ok("競合したぶんは数に入れない", cw.count === 0 && cw.asked === 1, cw);
+ok("いま入っている中身を返す", cw.conflicts[0].currentTitle === "Bの算数", cw.conflicts[0]);
+ok("いま入っている時刻も返す", cw.conflicts[0].currentAt === at2, cw.conflicts[0]);
+ok("誰が入れたかも返す",
+   cw.conflicts[0].currentBy === "tanaka@edu.nishi.or.jp", cw.conflicts[0]);
+ok("どのコマかを返す",
+   cw.conflicts[0].date === "2026-06-15" && cw.conflicts[0].slot === "p4"
+   && cw.conflicts[0].layer === "home" && cw.conflicts[0].target === "3-3", cw.conflicts[0]);
+ok("**Bの内容は書き替わっていない**",
+   ev(`Store.readWeek(2026, "2026-06-15", [{layer:"home",target:"3-3"}])`)
+     .home["3-3"]["0|p4"].title === "Bの算数",
+   ev(`Store.readWeek(2026, "2026-06-15", [{layer:"home",target:"3-3"}])`).home["3-3"]);
+
+/* ケース3：A先生が「それでも上書きする」（最新の時刻で送り直す） */
+cw = CW([one({title:"Aの理科", expectedAt:at2})]);
+ok("最新の時刻で送り直せば書ける", cw.count === 1 && cw.conflicts.length === 0, cw);
+const at3 = cw.at["2026-06-15|p4|home|3-3"];
+ok("上書きが入っている",
+   ev(`Store.readWeek(2026, "2026-06-15", [{layer:"home",target:"3-3"}])`)
+     .home["3-3"]["0|p4"].title === "Aの理科");
+
+/* ケース4：確認しているあいだに、さらに別の人が書いた */
+CW([one({title:"Cの体育", expectedAt:at3})]);
+cw = CW([one({title:"Aの理科（再）", expectedAt:at3})]);
+ok("確認しているあいだに書かれたら、もう一度競合する", cw.conflicts.length === 1, cw);
+ok("そのときも中身は Cのまま", cw.conflicts[0].currentTitle === "Cの体育", cw.conflicts[0]);
+
+/* 消すときも同じ */
+cw = CW([one({title:"", remove:true, expectedAt:at1})]);
+ok("消すときも古い時刻なら止める", cw.conflicts.length === 1, cw);
+ok("止めたので消えていない",
+   !!ev(`Store.readWeek(2026, "2026-06-15", [{layer:"home",target:"3-3"}])`)
+     .home["3-3"]["0|p4"]);
+
+/* 1つのまとめの中に、通るものと競合するものが混じる */
+const two = ev("Store.writeCells")(2026, [
+  one({title:"通るほう", slot:"p5", expectedAt:0}),
+  one({title:"競合するほう", expectedAt:at1})
+]);
+ok("通るぶんは書く", two.count === 1, two);
+ok("競合するぶんだけ返す", two.conflicts.length === 1
+   && two.conflicts[0].slot === "p4", two.conflicts);
+ok("通ったコマは実際に入っている",
+   ev(`Store.readWeek(2026, "2026-06-15", [{layer:"home",target:"3-3"}])`)
+     .home["3-3"]["0|p5"].title === "通るほう");
+
+/* 古い版の画面（expectedAt を送らない）は、今までどおり書ける */
+cw = CW([one({title:"古い版から", slot:"p6"})]);
+ok("expectedAt を送らない画面は今までどおり書ける",
+   cw.count === 1 && cw.conflicts.length === 0, cw);
+
+/* サーバは、競合を見るための物差し（sat）を読み取りにも付けて返す。
+   画面はこれを控えて、次に直すとき expectedAt として送る。 */
+ok("読み取りは sat（競合を見る物差し）も返す",
+   (function(){ const c = ev(`Store.readWeek(2026, "2026-06-15",
+                  [{layer:"home",target:"3-3"}])`).home["3-3"]["0|p5"];
+                return c.sat === c.at && c.sat > 0; })() === true,
+   ev(`Store.readWeek(2026, "2026-06-15", [{layer:"home",target:"3-3"}])`).home["3-3"]["0|p5"]);
+
+/* **更新時刻が入っていない行。**
+   1.3.0 より前に書かれた行や、人がシートに手で足した行がこれになる。
+   0（＝その行がまだ無い）と同じ扱いにすると、新しいコマのつもりで 0 を
+   送ってきた画面と一致してしまい、見ないまま上書きできてしまう。 */
+console.log("\n■ 更新時刻が入っていない行も、見ないまま上書きさせない");
+const OLD = (extra) => Object.assign({date:"2026-06-16", slot:"p1", layer:"home",
+  target:"3-3", note:"", subject:null}, extra);
+CW([OLD({title:"むかし書いた行", expectedAt:0})]);
+(function(){                       /* その行の更新時刻を消す（古い行を作る） */
+  const name = ev('Sheets.planName("home","3-3")');
+  const cols = ev("Sheets.PLAN_COLS");
+  const ti = cols.indexOf("題名"), ui = cols.indexOf("更新時刻");
+  for(const row of SHEETS[name])
+    if(String(row[ti]) === "むかし書いた行") row[ui] = "";
+})();
+const oldCell = () => ev(`Store.readWeek(2026, "2026-06-15",
+  [{layer:"home",target:"3-3"}])`).home["3-3"]["1|p1"];
+ok("更新時刻が無い行は sat を -1 で返す", oldCell().sat === -1, oldCell());
+ok("**重ね順に使う at は 0 のまま。** 負にすると基本時間割より下に沈んで画面から消える",
+   oldCell().at === 0, oldCell());
+
+cw = CW([OLD({title:"新しいコマのつもりで書く", expectedAt:0})]);
+ok("新しいコマのつもりの 0 では書けない",
+   cw.conflicts.length === 1 && cw.count === 0, cw);
+ok("いまの時刻は -1（＝行はあるが時刻が分からない）と返す",
+   cw.conflicts[0].currentAt === -1, cw.conflicts[0]);
+ok("むかしの行は残っている", oldCell().title === "むかし書いた行", oldCell());
+
+cw = CW([OLD({title:"見たうえで上書き", expectedAt:-1})]);
+ok("-1 を送り返せば書ける", cw.count === 1 && cw.conflicts.length === 0, cw);
+ok("書いたので更新時刻が入り、次からは時刻で見られる",
+   oldCell().title === "見たうえで上書き" && oldCell().sat > 0, oldCell());
 
 console.log("\n■ 保存にかかった時間を返す");
 const tm = ev(`Store.writeCells(2026, [{date:"2026-11-16", slot:"p1", layer:"home",

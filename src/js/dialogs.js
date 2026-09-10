@@ -578,3 +578,113 @@ function paintArchive(){
   if(a.url){ link.href = a.url; link.hidden = false; }
   else link.hidden = true;
 }
+
+/* ── 保存の競合 ──────────────────────────────
+   自分が画面を開いたあとに、別の人が同じコマを直していた。
+   そのまま送ると、その人の書いたものが**書いた本人にも見えないまま**消える。
+   サーバはコマ単位で止めて conflicts で返す（→ gas/Store.gs writeCells）。
+
+   **既定は「最新の内容を見る」。** Esc も、外側を押したときも、
+   返事をしないまま消えたときも同じ。上書きは、そう答えたときだけ。
+
+   ソフトロック窓（swDlg「ほかの人が入れた予定です」）とは別の窓にする。
+   あちらは**見えている予定**を潰すときの確認で、こちらは
+   **見えていない変更**を潰すときの確認。原因が違うので1つにできない。
+   だから、上書きを選んだときは、週を読み直してから改めてあちらを通す。 */
+
+let cfAsk = null;
+
+function cfWhen(h){
+  const dt = parseISO(h.c.date), sl = SLOT_BY_ID[h.c.slot];
+  if(!dt) return String(h.c.date);
+  return md(dt) + "(" + (DOW[(dt.getDay() + 6) % 7] || "") + ") "
+       + (sl ? sl.name + (sl.kind === "lesson" ? "校時" : "") : h.c.slot);
+}
+function cfWho(h){
+  const t = h.c.target || "";
+  return h.c.layer === "school" ? "学校全体"
+       : h.c.layer === "grade"  ? t + "年"
+       : h.c.layer === "special"? t + "（専科）" : t;
+}
+
+function showConflicts(list){
+  if(!list || !list.length) return;
+  cfAsk = list;
+  $("cfList").innerHTML = list.map(h => {
+    const mine = !h.q ? "（分からない）"
+               : h.q.remove ? "（消す）" : (plain(h.q.title) || "（空）");
+    const now  = plain(h.c.currentTitle) || "（空）";
+    return "<li><b>" + escText(cfWhen(h)) + "</b>　" + escText(cfWho(h))
+      + "<br>あなたが入れようとしたもの：「" + escText(mine) + "」"
+      + "<br><span class=\"who\">いま入っているのは「" + escText(now) + "」"
+      + (h.c.currentBy ? "・" + escText(whoName(h.c.currentBy)) + " が入れたもの" : "")
+      + "</span></li>";
+  }).join("");
+  $("cfDlg").showModal();
+  $("cfSee").focus();               /* **既定は「最新の内容を見る」。** */
+}
+
+/* 窓の返事を1回だけ流す。閉じ方（ボタン・Esc・外側）で取りこぼさない */
+function cfAnswer(mine){
+  const list = cfAsk;
+  cfAsk = null;
+  if(!list) return;
+  Backend.dropHeld();               /* 控えはここで引き取る。二重に出さない */
+  setBusy(true, "最新の内容を読んでいます");
+  Backend.reloadWeek(list, () => {
+    setBusy(false);
+    refreshWeek();
+    if(!mine) return toast("<b>最新の内容にした</b>　入れ直すときは、もう一度打つ");
+    applyHeld(list);
+  });
+}
+
+/* 「それでも自分の内容で上書きする」と答えたぶんを入れ直す。
+   **読み直したあとに入れ直す。** 読み直す前に送ると、
+   見ていない変更をもう一度潰しにいくことになる。 */
+function applyHeld(list){
+  let i = 0, put = 0, miss = 0;
+  const next = () => {
+    if(i >= list.length){
+      save(); refreshWeek();
+      if(miss) toast("<b>" + miss + " コマは入れ直せなかった</b>　その週を開いて打ち直す");
+      if(put) doSave(true); else if(!miss) toast("入れ直さなかった");
+      return;
+    }
+    const h = list[i++];
+    if(!h.q){ miss++; return next(); }        /* 送った中身が分からない */
+    /* いま開いている週・いま書いている先のコマだけ、ソフトロック窓を通す。
+       ほかの週のコマは、その週を出していないので窓に出しても読めない。 */
+    if(!cfInView(h)){ if(restoreConflicted(h)) put++; else miss++; return next(); }
+    forgetAsked(h.loc.d, h.c.slot);           /* 前の答えは別の中身への答え */
+    okToOverwrite(h.loc.d, h.c.slot, h.q.remove ? "" : plain(h.q.title),
+                  () => { if(restoreConflicted(h)) put++; else miss++; next(); },
+                  () => next());
+  };
+  next();
+}
+
+const cfInView = h =>
+  String(h.loc.year) === String(fy()) && h.loc.monday === wkKey()
+  && h.c.layer === layerOfStore() && (h.c.target || "") === (targetOfStore() || "");
+
+/* 送ろうとした中身を、その週の控えへ戻す。
+   物差し（sat）は**サーバがいま持っている時刻**にする。
+   ここを元の値のままにすると、送り直してもまた競合する。 */
+function restoreConflicted(h){
+  const q = h.q, c = h.c;
+  const Yr = db.years[String(h.loc.year)];
+  const wk = Yr && Yr.weeks && Yr.weeks[h.loc.monday];
+  if(!wk) return false;                      /* その週の控えがもう無い */
+  const bank = c.layer === "school" ? wk.school
+             : c.layer === "grade"  ? (wk.grade[c.target]   || (wk.grade[c.target]   = {}))
+             : c.layer === "special"? (wk.special[c.target] || (wk.special[c.target] = {}))
+             :                        (wk.home[c.target]    || (wk.home[c.target]    = {}));
+  const key = ck(h.loc.d, c.slot), sat = +c.currentAt || 0;
+  if(q.remove) delete bank[key];
+  else bank[key] = {title:q.title, note:q.note, subject:q.subject || null,
+                    sp:q.sp || "", at:Date.now(), by:myEmail(), sat};
+  Backend.cellChanged(c.layer, c.target, h.loc.d, c.slot, sat,
+                      {year:h.loc.year, monday:h.loc.monday});
+  return true;
+}

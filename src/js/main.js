@@ -245,6 +245,12 @@ function wire(){
 
   /* 上書きの窓。**閉じ方が何であれ「変更しない」に落ちる。**
      Esc も、外側を押したときも、返事をしないまま消えたときも同じ */
+  /* 保存の競合。**閉じ方が何であれ「最新の内容を見る」に落ちる。**
+     上書きは、そう答えたときだけ */
+  on("cfSee","click",  () => { $("cfDlg").close(); });
+  on("cfMine","click", () => { cfAnswer(true); $("cfDlg").close(); });
+  on("cfDlg","close",  () => cfAnswer(false));
+
   on("swNo","click",  () => { $("swDlg").close(); });
   on("swYes","click", () => { owAnswer(true); $("swDlg").close(); });
   on("swDlg","close", () => owAnswer(false));
@@ -389,10 +395,15 @@ function wire(){
   on("pRevert","click", () => {
     if(!selCell || view.kind !== "class") return;
     if(isLocked()) return toast("この画面はロック中");
-    delete (week().home[view.cls] || {})[ck(selCell.d, selCell.s)];
+    const key = ck(selCell.d, selCell.s);
+    /* **消す前に、サーバの時刻を控える。** 消してからでは読めない。
+       控えずに送ると expectedAt が 0 になり、サーバは
+       「まだ無い行を消そうとしている」と見て競合で止める（消えない） */
+    const was = ((week().home[view.cls] || {})[key] || {}).sat || 0;
+    delete (week().home[view.cls] || {})[key];
     /* **シートにも伝える。** 前はここで手元から消すだけだったので、
        戻したように見えて、次に開くと戻ってきた。行はシートに残っていた */
-    Backend.cellChanged("home", view.cls, selCell.d, selCell.s);
+    Backend.cellChanged("home", view.cls, selCell.d, selCell.s, was);
     save(); paintSheet(); fillPanel();
   });
   /* 5日ぶんを1日ずつ聞くと、窓が最大5回出る。**まとめて1回だけ聞く。** */
@@ -447,6 +458,9 @@ function start(){
   Backend.setDirtyWatcher((n, err) => {
     saveState.n = n; saveState.err = err; paintSave();
   });
+  /* **競合したことを黙って飲み込まない。** 出さないと、教師は書けたつもりで
+     書けていないまま週を進める（→ dialogs.js showConflicts） */
+  Backend.setConflictWatcher(list => showConflicts(list));
   wire();
   if(storeBroken) toast("<b>" + escText(storeBroken) + "</b>");
 

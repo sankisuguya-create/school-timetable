@@ -5,9 +5,10 @@
    URL を開ける人は google.script.run で直接叩ける。
    画面を出さないのは目隠しであって関門ではない。
 
-   勝ち負けは「最後に書かれたもの」で決まる（docs/spec.md 3節）。
-   その時刻は **サーバが打つ**。教師それぞれの PC の時計を信じると、
-   時計が進んでいる人がいつも勝つ。
+   勝ち負けは「最新の状態を見たうえで、最後に書いたもの」で決まる
+   （docs/spec.md 3節）。その時刻は **サーバが打つ**。教師それぞれの PC の
+   時計を信じると、時計が進んでいる人がいつも勝つ。
+   最新を見ていない保存は writeCells がコマ単位で止める（expectedAt）。
 ================================================================== */
 const Store = (function(){
 
@@ -63,6 +64,17 @@ const Store = (function(){
           note:    String(r["詳細"] || ""),
           subject: String(r["教科コード"] || "") || null,
           at:      Sheets.isDate(r["更新時刻"]) ? r["更新時刻"].getTime() : 0,
+          /* **競合を見るための物差し。** at とは別に持つ。
+             at は層の重ね順（あとから書いたものが上に出る）にも使うので、
+             更新時刻の無い行を負の値にすると、その行が基本時間割より
+             下に沈んで画面から消える。だから at は 0 のままにする。
+
+             sat の 0 は「その行がまだ無い」の意味に使う。
+             行はあるのに更新時刻が無い（1.3.0 より前に書かれた行、
+             人が手で足した行）を 0 と同じ扱いにすると、
+             画面が「新しいコマだ」と思って送ってくる 0 と一致してしまい、
+             見えないまま上書きできてしまう。だから -1 で区別する。 */
+          sat:     Sheets.isDate(r["更新時刻"]) ? r["更新時刻"].getTime() : -1,
           by:      String(r["更新者"] || "")
         };
         const off = dayOffset_(date, mondayISO);
@@ -654,7 +666,8 @@ const Store = (function(){
      日付は書いた瞬間にシートの側で日付型になるので、文字のまま覚えた行番号は
      次に読んだときもう合わない。合わないと、直したつもりの行が増えていく。 */
   function writeCells(year, patches){
-    if(!patches || !patches.length) return {at:{}, count:0, ms:0, waitMs:0};
+    if(!patches || !patches.length)
+      return {at:{}, count:0, asked:0, conflicts:[], ms:0, waitMs:0};
     /* **保存にかかった時間を測って返す。**
        「速くする改造」は、必ず正しさを削る方向に働く。数字が基準に届く前に
        手を入れない（→ docs/spec.md 13-2）。ロック待ちと書き込みは分けて測る。
@@ -667,6 +680,9 @@ const Store = (function(){
     try{
       const rank = slotRank();
       const now = new Date(), at = {};
+      /* **競合したコマは、黙って飛ばさない。** 数も中身も返す。
+         返さないと、教師は書けたつもりで書けていないまま週を進める。 */
+      const conflicts = [];
       const me = (function(){ try{ return Gate.activeEmail(); }catch(e){ return ""; } })();
 
       /* シートごとにまとめる */
@@ -690,6 +706,33 @@ const Store = (function(){
           const outKey = [date, p.slot, p.layer, target].join("|");
           const empty = !String(p.title || "").trim() && !String(p.note || "").trim();
           const i = index[k];
+
+          /* **古い画面からの保存を止める。**
+             expectedAt ＝「この編集を始めたとき、自分が知っていたサーバの更新時刻」。
+             いまシートに入っている時刻と違えば、そのあいだに誰かが書いている。
+             そのまま書くと、書いた本人にも見えないまま消える。
+
+             expectedAt が無いのは古い版の画面。**そこは今までどおり書く**
+             （止めると、貼り替えの途中で全員が保存できなくなる）。 */
+          if(p.expectedAt !== undefined && p.expectedAt !== null){
+            /* 0 は「行がまだ無い」。**行はあるが更新時刻が無い**ときは -1。
+               どちらも 0 にすると、新しいコマのつもりで 0 を送ってきた画面と
+               一致してしまい、1.3.0 より前に書かれた行を見ないまま消せる。 */
+            const cur = (i !== undefined) ? rows[i] : null;
+            const curAt = !cur ? 0
+                        : Sheets.isDate(cur["更新時刻"]) ? cur["更新時刻"].getTime() : -1;
+            if(curAt !== (+p.expectedAt || 0)){
+              conflicts.push({
+                date: date, slot: p.slot, layer: p.layer, target: target,
+                expectedAt: +p.expectedAt || 0, currentAt: curAt,
+                currentTitle: cur ? String(cur["題名"] || "") : "",
+                currentNote:  cur ? String(cur["詳細"] || "") : "",
+                currentBy:    cur ? String(cur["更新者"] || "") : ""
+              });
+              continue;                 /* **このコマは書かない。黙って飛ばさない** */
+            }
+          }
+
           if(p.remove || empty){
             if(i !== undefined) drop[i] = true;
             at[outKey] = 0;
@@ -716,7 +759,9 @@ const Store = (function(){
         Sheets.writePlan(name, keep);
       }
       SpreadsheetApp.flush();
-      return {at, count: patches.length, sheets: Object.keys(byName).length,
+      return {at, count: patches.length - conflicts.length,
+              asked: patches.length, conflicts: conflicts,
+              sheets: Object.keys(byName).length,
               ms: Date.now() - t1, waitMs: t1 - t0};
     } finally {
       lock.releaseLock();
@@ -948,7 +993,12 @@ const Store = (function(){
     for(const c of even)
       nw.getRange(1, c, rows.length, 1).setBackground(F.evenBody);
 
-    /* 授業名の行は灰色。担当者・場所が「た」で始まる列だけ、条件付き書式で白に戻す */
+    /* 授業名の行は灰色。**たんぽぽの中で受けるコマだけ、条件付き書式で白に戻す。**
+       白にするのは次のどちらか。
+         ・すぐ下の担当者・場所が「た」で始まる（担当が自分で直したコマ）
+         ・授業名そのものが 国語・算数・自立 で始まる（Sheets.TANPOPO_OWN）
+       2つめは、担当者・場所を直す前でも自分の持ちコマが白く出るようにするため。
+       **前方一致にする。** 「含むか」で見ると「外国語」が「国語」を含む。 */
     const rules = [];
     for(let d = 0; d < 5; d++){
       const top = 2 + d * TP_BUILD_ROWS;
@@ -957,8 +1007,11 @@ const Store = (function(){
         const rng = nw.getRange(r, 2, 1, width - 1);
         rng.setBackground(F.imported);
         for(const c of even) nw.getRange(r, c).setBackground(F.evenImported);
+        const own = Sheets.TANPOPO_OWN.map(function(w){
+          return 'LEFT(B' + r + ',' + w.length + ')="' + w + '"';
+        }).join(",");
         rules.push(SpreadsheetApp.newConditionalFormatRule()
-          .whenFormulaSatisfied('=LEFT(B' + (r + 1) + ',1)="た"')
+          .whenFormulaSatisfied('=OR(LEFT(B' + (r + 1) + ',1)="た",' + own + ')')
           .setBackground(F.own).setRanges([rng]).build());
       }
       nw.getRange(top, 1, 1, width).setFontWeight("bold");

@@ -74,6 +74,20 @@ await p.addInitScript(() => {
   window.__sheetSet = v => {
     try{ localStorage.setItem(SHEET_KEY, JSON.stringify(v)); }catch(e){}
   };
+  /* **ほかの先生が、この画面を通さずにシートを直した形を作る。**
+     競合はこれでしか作れない（同じ画面から2回書いても競合しない）。 */
+  window.__other = (y, layer, target, date, slot, title) => {
+    const st = window.__sheet();
+    const key = [y, layer, target || ""].join("\u0001");
+    const bank = st[key] || (st[key] = {});
+    /* **書くたびに時刻を進める。** 同じ時刻のままだと、
+       読み直したあとの画面と一致してしまい、2度目の競合が作れない。 */
+    const t = 1700000009999 + (window.__otherN = (window.__otherN || 0) + 1);
+    bank[date + "|" + slot] = {title, note:"", subject:null, sp:"",
+                               at:t, sat:t, by:"sato@edu.nishi.or.jp"};
+    window.__sheetSet(st);
+    return t;
+  };
   const call = (name, args, ret) => {
     window.__calls.push({name, args});
     return ret;
@@ -129,24 +143,40 @@ await p.addInitScript(() => {
           setTimeout(() => ngFn(new Error("通信できない")), 0);
           return;
         }
-        /* シートに入ったことにして覚える */
+        /* シートに入ったことにして覚える。
+           **本番と同じく expectedAt を見る**（→ gas/Store.gs writeCells）。
+           古い状態からの保存はコマ単位で止めて conflicts で返す。 */
         const st = window.__sheet();
+        const at = {}, conflicts = [];
         for(const q of patches){
           const key = [y, q.layer, q.target || ""].join("\u0001");
           const bank = st[key] || (st[key] = {});
           const dk = q.date + "|" + q.slot;
+          const cur = bank[dk] || null;
+          const curAt = !cur ? 0 : (cur.at || -1);
+          if(q.expectedAt !== undefined && q.expectedAt !== null
+             && curAt !== (+q.expectedAt || 0)){
+            conflicts.push({date:q.date, slot:q.slot, layer:q.layer,
+                            target:q.target || "", expectedAt:+q.expectedAt || 0,
+                            currentAt:curAt,
+                            currentTitle: cur ? (cur.title || "") : "",
+                            currentNote:  cur ? (cur.note  || "") : "",
+                            currentBy:    cur ? (cur.by    || "") : ""});
+            continue;                      /* このコマは書かない */
+          }
+          const now = window.__now || 1700000000000;
           if(q.remove || (!q.title && !q.note)) delete bank[dk];
           else bank[dk] = {title:q.title, note:q.note, subject:q.subject || null,
-                           sp:q.sp || "", at:1700000000000, by:"tanaka@edu.nishi.or.jp"};
+                           sp:q.sp || "", at:now, sat:now, by:"tanaka@edu.nishi.or.jp"};
+          at[[q.date, q.slot, q.layer, q.target].join("|")] = q.remove ? 0 : now;
         }
         window.__sheetSet(st);
-        const at = {};
-        for(const q of patches)
-          at[[q.date, q.slot, q.layer, q.target].join("|")] = q.remove ? 0 : 1700000000000;
         /* 本番と同じ形で返す。**時間も返す**（管理・システムに出る） */
         const names = {};
         for(const q of patches) names[q.layer + "|" + (q.target || "")] = 1;
-        setTimeout(() => okFn({at, count:patches.length, sheets:Object.keys(names).length,
+        setTimeout(() => okFn({at, count:patches.length - conflicts.length,
+                               asked:patches.length, conflicts,
+                               sheets:Object.keys(names).length,
                                ms:120, waitMs:40}), 0);
       },
       apiWriteRoster(y, c, s, w, tp){ call("apiWriteRoster", [y, c, s, w, tp]); setTimeout(() => okFn({}), 0); },
@@ -405,6 +435,84 @@ await p.locator("#pClear").click();
 await p.locator("#saveBtn").click(); await p.waitForTimeout(600);
 const dq = (await lastCall("apiWriteCells")).args[1].slice(-1)[0];
 ok("消す指示になる", dq.remove === true || (!dq.title && !dq.note), dq);
+
+/* **一連。** 通常の保存 → ほかの先生が先に直す → 競合 → 上書きで送り直す。
+   1つずつ確かめても、つなぐと落ちる（控えた物差しが打鍵で進む、
+   競合したぶんが送信の列から消える、など）。 */
+console.log("\n■ 通常保存 → 競合 → それでも上書き");
+await p.evaluate(() => { window.__calls.length = 0; });
+const CELL = "#sheet .cell[data-d='3'][data-s='p3']";
+await p.locator(CELL + " .t").click(); await p.waitForTimeout(150);
+await p.locator("#pScope input[value='self']").check();
+await p.locator(".pal[data-v='kokugo']").click();
+await p.locator("#saveBtn").click(); await p.waitForTimeout(600);
+const c1 = (await lastCall("apiWriteCells")).args[1].slice(-1)[0];
+ok("はじめの保存は expectedAt 0（まだ誰も書いていない）", c1.expectedAt === 0, c1);
+ok("そのまま入る", await p.locator("#cfDlg").isVisible() === false);
+
+/* ほかの先生が、この画面を通さずに同じコマを直した */
+const theDate = await p.evaluate(() => iso(addDays(monday, 3)));
+const oAt1 = await p.evaluate(([d]) =>
+  window.__other(fy(), "home", "5-1", d, "p3", "行事（佐藤）"), [theDate]);
+
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator(CELL + " .t").click(); await p.waitForTimeout(120);
+await p.locator(".pal[data-v='sansu']").click();
+await p.locator("#saveBtn").click(); await p.waitForTimeout(700);
+const c2 = (await lastCall("apiWriteCells")).args[1].slice(-1)[0];
+ok("2回目は、はじめに知っていた時刻を送る", c2.expectedAt === 1700000000000, c2);
+ok("**打鍵のたびに物差しが進んでいない**", c2.expectedAt !== 0 && c2.title === "算数", c2);
+ok("競合の窓が出る", await p.locator("#cfDlg").isVisible() === true);
+ok("いま入っている中身を出す",
+   (await p.locator("#cfList").innerText()).indexOf("行事（佐藤）") >= 0,
+   await p.locator("#cfList").innerText());
+ok("自分が入れようとした中身も出す",
+   (await p.locator("#cfList").innerText()).indexOf("算数") >= 0,
+   await p.locator("#cfList").innerText());
+ok("**既定は「最新の内容を見る」**",
+   await p.evaluate(() => document.activeElement && document.activeElement.id) === "cfSee",
+   await p.evaluate(() => document.activeElement && document.activeElement.id));
+
+/* ケース：Esc で閉じる。**上書きしない側に落ちる。** */
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.keyboard.press("Escape");
+await p.waitForTimeout(800);
+ok("Esc は「最新の内容を見る」に落ちる",
+   (await calls()).indexOf("apiWriteCells") < 0, await calls());
+ok("そのとき週を読み直す", (await calls()).indexOf("apiReadWeek") >= 0, await calls());
+ok("画面はほかの先生の内容になる",
+   (await p.locator(CELL + " .t").innerText()).indexOf("行事") >= 0,
+   await p.locator(CELL + " .t").innerText());
+ok("送っていないコマは残っていない",
+   (await p.locator("#saveTxt").innerText()).indexOf("ずみ") >= 0,
+   await p.locator("#saveTxt").innerText());
+
+/* ケース：もう一度ぶつけて、今度は「それでも自分の内容で上書きする」 */
+const oAt2 = await p.evaluate(([d]) =>
+  window.__other(fy(), "home", "5-1", d, "p3", "行事（佐藤・2）"), [theDate]);
+ok("ほかの先生は違う時刻で書いた（読み直したあとの画面とは食い違う）",
+   oAt2 > oAt1, [oAt1, oAt2]);
+await p.locator(CELL + " .t").click(); await p.waitForTimeout(120);
+await p.locator(".pal[data-v='rika']").click();
+await p.locator("#saveBtn").click(); await p.waitForTimeout(700);
+ok("もう一度競合する", await p.locator("#cfDlg").isVisible() === true);
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator("#cfMine").click();
+await p.waitForTimeout(1200);
+const c3 = (await lastCall("apiWriteCells")).args[1].slice(-1)[0];
+ok("上書きを選ぶと送り直す", !!c3, c3);
+ok("**送り直しは、いまサーバにある時刻で送る**",
+   c3 && c3.expectedAt === oAt2, [c3, oAt2]);
+ok("force のような合図は足さない", c3 && c3.force === undefined, c3);
+ok("送るのは自分の内容", c3 && c3.title === "理科", c3);
+ok("送り直す前に読み直している",
+   (await calls()).indexOf("apiReadWeek") >= 0
+   && (await calls()).indexOf("apiReadWeek") < (await calls()).lastIndexOf("apiWriteCells"),
+   await calls());
+ok("入ったので窓は閉じている", await p.locator("#cfDlg").isVisible() === false);
+ok("画面は自分の内容になる",
+   (await p.locator(CELL + " .t").innerText()).indexOf("理科") >= 0,
+   await p.locator(CELL + " .t").innerText());
 
 console.log("\n■ 学級編成を直すとシートへ書く");
 await p.evaluate(() => { window.__calls.length = 0; });
