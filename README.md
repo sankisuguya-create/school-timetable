@@ -16,6 +16,7 @@
 | `dist/index.html` | ブラウザで開ける生成物。ダブルクリックで動く |
 | [`gas/`](gas/) | Apps Script 側。関門・シート・読み書きまで |
 | `tools/` | ブラウザで動かして確かめる |
+| [`EXTERNAL_AI_BUNDLE.md`](EXTERNAL_AI_BUNDLE.md) | サンドボックスを見られない外部AIへ渡す、コード一式の単一ファイル |
 
 ```
 npm install               検査に playwright が要る（1回だけ）
@@ -27,6 +28,10 @@ node gas/storecheck.js    シートの読み書きを確かめる（279件）
 node gas/gatecheck.js     関門を確かめる（27件）
 node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明を見る（52件）
 ```
+
+外部AIへコードを渡し直すときは、`python3 tools/make-ai-bundle.py` を実行する。
+Git管理されている正本・検査・文書を、元ファイル名つきで `EXTERNAL_AI_BUNDLE.md` にまとめる。
+`dist/index.html` と `gas/plan.html` は生成物なので収録せず、外部AIには `src/` を直すよう伝える。
 
 **この6つが通らないものはデプロイしない。**
 
