@@ -138,6 +138,8 @@ await p.addInitScript(() => {
         call("apiWriteCells", [y, patches]);
         /* __hang のあいだは返事をしない（送れないまま閉じた形を作る） */
         if(window.__hang) return;
+        /* __slowWrite のあいだは返事が遅れる（処理中の全面表示を見るため） */
+        const wlag = window.__slowWrite || 0;
         /* __failWrite のあいだは必ず失敗する（回線が落ちている形を作る） */
         if(window.__failWrite){
           setTimeout(() => ngFn(new Error("通信できない")), 0);
@@ -177,7 +179,7 @@ await p.addInitScript(() => {
         setTimeout(() => okFn({at, count:patches.length - conflicts.length,
                                asked:patches.length, conflicts,
                                sheets:Object.keys(names).length,
-                               ms:120, waitMs:40}), 0);
+                               ms:120, waitMs:40}), wlag);
       },
       apiWriteRoster(y, c, s, w, tp){ call("apiWriteRoster", [y, c, s, w, tp]); setTimeout(() => okFn({}), 0); },
       apiWriteBase(y, c, v, bank){ call("apiWriteBase", [y, c, v, bank]); setTimeout(() => okFn(true), 0); },
@@ -1225,6 +1227,108 @@ ok("まだ送っていないコマがあるときは、何も捨てない", awai
      delete W["2000-01-03"];
      return n === 0 && kept;
    }) === true);
+
+console.log("\n■ 書いているあいだは、全面にかぶせて次の操作を受け付けない");
+/* 残りを片づけ、5-1 を開いた素の状態から始める。
+   前の検査が入れたコマが残っていると、保存が重なりの窓を開いてしまう */
+await p.evaluate(() => {
+  window.__hang = false; window.__failWrite = false;
+  window.__slow = 0; window.__slowWrite = 0;
+  for(const d of document.querySelectorAll("dialog")) if(d.open) d.close();
+});
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(500);
+await p.evaluate(() => {
+  const st = window.__sheet();
+  for(const k of Object.keys(st)) delete st[k];
+  window.__sheetSet(st);
+  const w = db.years[String(fy())].weeks[wkKey()];
+  if(w){ w.school = {}; w.grade = {}; w.special = {}; w.home = {}; }
+  save(); refreshWeek();
+});
+await p.waitForTimeout(200);
+/* 保存のたびに、重なりの窓が出ていたら閉じる（この節で見たいのは全面表示） */
+const closeCf = () => p.evaluate(() => { if($("cfDlg").open) $("cfDlg").close(); });
+
+/* ① すぐ終わる保存では出さない（ちらつきを作らない） */
+await p.evaluate(() => { Backend.cellChanged("home", "5-1", 0, "p1"); });
+await p.locator("#saveBtn").click();
+await p.waitForTimeout(90);
+ok("すぐ終わる保存では、全面表示を出さない",
+   await p.evaluate(() => $("wait").open) === false);
+await p.waitForTimeout(400); await closeCf();
+
+/* ② 時間のかかる保存では出す */
+await p.evaluate(() => { window.__slowWrite = 900; Backend.cellChanged("home", "5-1", 1, "p1"); });
+await p.locator("#saveBtn").click();
+await p.waitForTimeout(400);
+ok("時間のかかる保存では、全面表示が出る",
+   await p.evaluate(() => $("wait").open) === true);
+ok("何をしているかが大きく出る",
+   (await p.locator("#waitTxt").innerText()).indexOf("保存") >= 0,
+   await p.locator("#waitTxt").innerText());
+ok("字は紙のコマより大きい（探さなくても目に入る）",
+   await p.evaluate(() => parseFloat(getComputedStyle($("waitTxt")).fontSize)) >= 20,
+   await p.evaluate(() => getComputedStyle($("waitTxt")).fontSize));
+ok("下の紙は透けて読める（背を不透明にしない）",
+   await p.evaluate(() => {
+     const bg = getComputedStyle($("wait"), "::backdrop").backgroundColor;
+     const m = bg.match(/rgba\(([^)]+)\)/);
+     const a = m ? parseFloat(m[1].split(",")[3]) : 1;
+     return a > 0 && a < 1;
+   }) === true,
+   await p.evaluate(() => getComputedStyle($("wait"), "::backdrop").backgroundColor));
+
+/* ③ 出ているあいだ、まわりに触れない（開いている窓の仕組みで止める） */
+ok("紙のコマに書き込めない", await p.evaluate(() => {
+     const c = document.querySelector("#sheet .cell .t");
+     if(!c) return "コマが無い";
+     c.focus();
+     return document.activeElement === c ? "紙に移った" : true;
+   }) === true);
+ok("サイドバーのボタンも押せない", await p.evaluate(() => {
+     const bt = $("lockBtn"); if(!bt) return "ボタンが無い";
+     bt.focus();
+     return document.activeElement === bt ? "押せてしまう" : true;
+   }) === true);
+
+/* ④ 押した瞬間から2回目を受けない（出る前の 200ms も含めて） */
+ok("処理中は、次の処理を受け付けない",
+   await p.evaluate(() => Wait.guard()) === false);
+
+/* ⑤ 終われば閉じ、まわりが元どおり触れる */
+await p.waitForTimeout(1200); await closeCf();
+ok("終われば閉じる", await p.evaluate(() => $("wait").open) === false);
+ok("閉じたあとは紙に書ける", await p.evaluate(() => {
+     const c = document.querySelector("#sheet .cell .t");
+     if(!c) return "コマが無い";
+     c.focus();
+     return document.activeElement === c ? true : "書けない";
+   }) === true);
+ok("閉じたあとは、次の処理を受け付ける",
+   await p.evaluate(() => Wait.guard()) === true);
+
+/* ⑥ 番犬。**返らない処理を、いつまでも掴ませない。**
+   20秒は待てないので、間合いを縮めて本当に解けるかを見る */
+await p.evaluate(() => {
+  Wait.tune(20, 300); window.__hang = true;
+  Backend.cellChanged("home", "5-1", 2, "p1"); doSave(true);
+});
+await p.waitForTimeout(120);
+ok("返事が来ないあいだは、出たまま",
+   await p.evaluate(() => $("wait").open) === true);
+await p.waitForTimeout(500);
+ok("返事が来なければ、自分で解いて画面を返す",
+   await p.evaluate(() => $("wait").open) === false);
+ok("解いたことを知らせる",
+   (await p.locator("#toast").innerText()).indexOf("返事がありません") >= 0,
+   await p.locator("#toast").innerText());
+ok("解いたあとは、次の処理を受け付ける",
+   await p.evaluate(() => Wait.guard()) === true);
+await p.evaluate(() => {
+  Wait.tune(200, 20000); window.__hang = false; window.__slowWrite = 0;
+});
+await p.waitForTimeout(200); await closeCf();
 
 console.log(errs.length ? "\n【エラー】\n" + errs.join("\n") : "\nJSエラーなし");
 if(errs.length) ng += errs.length;

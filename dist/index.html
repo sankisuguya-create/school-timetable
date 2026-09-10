@@ -439,6 +439,28 @@ dialog::backdrop{background:rgba(20,28,38,.42)}
 @keyframes sweep{0%{background-position:-45% 0}100%{background-position:145% 0}}
 .app.busy-on{cursor:progress}
 
+/* ── 処理中の全面表示 ─────────────────────────
+   **シートへ書いているあいだは、全面にかぶせて次の操作を受け付けない。**
+   細い印だけでは、書いている最中に別の週へ移れてしまう。移られると
+   送った内容と画面が食い違い、あとから追えなくなる。
+
+   <dialog> を showModal() で出している。ふつうの div を重ねると、
+   たんぽぽの窓が開いているあいだはその下に潜る。
+   止めるのは書き込みだけで、週を開く読み込みは上の細い印のまま。 */
+.wait{position:fixed;inset:0;margin:auto;width:max-content;height:max-content;
+  max-width:92vw;max-height:none;padding:0;border:0;background:none;overflow:visible}
+/* 下の紙が透けて読める濃さにする。書きかけの週案を隠すためのものではない */
+.wait::backdrop{background:rgba(24,26,30,.55)}
+.waitbox{display:flex;align-items:center;gap:16px;padding:22px 30px;
+  border-radius:14px;background:var(--tx);color:var(--card);
+  box-shadow:0 12px 44px rgba(0,0,0,.4)}
+.waitwd{display:flex;flex-direction:column;gap:3px}
+.waitwd b{font-size:22px;font-weight:700;line-height:1.3}
+.waitwd small{font-size:12.5px;font-weight:600;opacity:.72}
+.waitspin{width:28px;height:28px;border-radius:50%;flex:none;
+  border:3px solid rgba(255,255,255,.3);border-top-color:#fff;
+  animation:spin .8s linear infinite}
+
 /* 押したタイル。**押した場所そのものが応える。** */
 .tile.opening,.master.opening{background:var(--tint);border-color:var(--ink-link);
   color:var(--ink-link)}
@@ -447,7 +469,7 @@ dialog::backdrop{background:rgba(20,28,38,.42)}
   border:2px solid var(--line);border-top-color:var(--ink-link);
   animation:spin .7s linear infinite}
 @media (prefers-reduced-motion:reduce){
-  .spin,.tile.opening::after,.master.opening::after{animation:none}
+  .spin,.waitspin,.tile.opening::after,.master.opening::after{animation:none}
   .app.busy-on::before{animation:none;background:var(--ink-link);background-size:100% 100%}
 }
 .tpwrap{overflow:auto;max-height:46vh;border:1px solid var(--line);border-radius:var(--r-sm)}
@@ -708,7 +730,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
    画面のものは何も刷らない。層の色も印も刷らない。
    リンクは下線だけ残す。URL は刷らない。 */
 @media print{
-  .side,.panel,.gate,.toast,.tpview,.busy,.arc{display:none!important}
+  .side,.panel,.gate,.toast,.tpview,.busy,.arc,.wait{display:none!important}
   .app::before{display:none!important}   /* 待っている印は刷らない */
   /* 時刻は画面だけのもの。紙の版面は教務必携の枠に合わせたまま動かさない
      （時程の列は 9mm。ここを広げると曜日の列がその分だけ痩せる） */
@@ -978,6 +1000,16 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 
 <div class="toast" id="toast" hidden></div>
 
+<!-- 処理中。**全面にかぶせて、次の操作を受け付けない。**
+     窓が開いているあいだも上に乗るよう <dialog> にしてある（js/wait.js） -->
+<dialog id="wait" class="wait">
+  <div class="waitbox">
+    <span class="waitspin" aria-hidden="true"></span>
+    <span class="waitwd"><b id="waitTxt">処理しています</b>
+      <small>終わるまで、ほかの操作はできません</small></span>
+  </div>
+</dialog>
+
 <dialog id="baseDlg"><div class="dlg">
   <h2>基本時間割 <span style="font-size:12px;color:var(--tx-sub)" id="baseFy"></span></h2>
   <p>ここに入れたものが、<b>週案を開いた時点で全部のコマに出る</b>。担任は毎週30コマ埋めるのではなく、変えたところだけ直す。<br>
@@ -1206,7 +1238,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.8.0";
+let APP_VERSION = "1.9.0";
 let BUILD_DATE  = "2026-09-10";
 
 /* 時程。行を固定しない（学校ごとに違う）。
@@ -1448,6 +1480,99 @@ function normCls(raw){
   return x.trim().replace(/[-‐‑‒–—―ー−ｰ－]/g, "-");
 }
 /* ▲ src/js/util.js ▲ */
+/* ▼ src/js/wait.js ▼ */
+/* ── 処理中の全面表示 ──────────────────────────
+   **シートへ書いているあいだは、次の操作を受け付けない。**
+
+   止めるのは書き込みだけ ── 保存・たんぽぽ出力・年度の検査・年度の退避。
+   週を開く読み込みは今までどおり止めない（サイドバーの細い印のまま）。
+   控えで描いた紙を読みながら週を繰れる手ざわりを、ここで殺さない。
+
+   書き込みの途中に別の操作が挟まると、送った内容と画面が食い違う。
+   食い違ったことに誰も気づかないまま刷られるのが、いちばん高くつく。
+
+   出し方は <dialog>.showModal()。ふつうの div を重ねると、たんぽぽの窓が
+   開いているあいだはその窓の下に潜る（開いている窓は最前面の層にいる）。
+   showModal なら窓の上に乗り、まわり全部が触れなくなる。
+   遮断はブラウザ側の仕組みなので、Tab でも Enter でも抜けられない。
+
+   ・200ms 待ってから出す。すぐ終わる処理でちらつかせない
+   ・**遮断は押した瞬間から効く。** 出ていない 200ms のあいだは guard() が受ける
+   ・20秒返らなければ自分で解いて知らせる。掴んだまま固まらせない */
+const Wait = (() => {
+  let DELAY = 200;            /* これより短い処理では出さない */
+  let DOG   = 20000;          /* 返らない処理を、いつまでも掴ませない */
+  const live  = new Map();    /* id -> {text, shown, show, dog} */
+  let seq = 0, wired = false;
+
+  /* Esc で閉じられると、書いている途中に画面が開いてしまう。
+     閉じ方をこちらだけが持つ */
+  function wire(d){
+    if(wired || !d) return;
+    wired = true;
+    d.addEventListener("cancel", ev => ev.preventDefault());
+  }
+
+  function first(){
+    for(const w of live.values()) if(w.shown) return w;
+    return null;
+  }
+  function paint(){
+    const d = $("wait");
+    if(!d) return;
+    wire(d);
+    const w = first();
+    if(w){
+      const t = $("waitTxt");
+      if(t) t.textContent = w.text;
+      if(!d.open) d.showModal();
+    } else if(d.open){
+      d.close();
+    }
+  }
+
+  /* 始める。**返ってきた札を必ず end() に渡す。** */
+  function begin(text){
+    const id = ++seq;
+    const w = {text:text || "処理しています", shown:false, show:0, dog:0};
+    w.show = setTimeout(() => { w.shown = true; paint(); }, DELAY);
+    w.dog  = setTimeout(() => {
+      live.delete(id); clearTimeout(w.show); paint();
+      toast("<b>返事がありません</b>　" + escText(w.text)
+          + "が20秒たっても終わらなかった。回線を確かめて、もう一度押す");
+    }, DOG);
+    live.set(id, w);
+    return id;
+  }
+  /* 終える。2回渡しても、番犬が先に解いていても、何も起きない */
+  function end(id){
+    const w = live.get(id);
+    if(!w) return;
+    clearTimeout(w.show); clearTimeout(w.dog);
+    live.delete(id);
+    paint();
+  }
+
+  const busy = () => live.size > 0;
+
+  /* 押した瞬間の関門。**出る前の 200ms も、ここが受ける。**
+     窓が出てしまえばブラウザが止めるが、出るまでの隙に2回目が通ると
+     同じものを2回シートへ送ることになる */
+  function guard(){
+    const w = live.values().next().value;
+    if(!w) return true;
+    toast("<b>" + escText(w.text) + "</b>　終わるまで待つ");
+    return false;
+  }
+
+  /* 間合いを縮める口。**検査からだけ呼ぶ。**
+     20秒を待つ検査は書けないので、番犬が本当に解くかをここで短くして見る。
+     画面のどこからも呼んでいない（呼んでも出る間合いが変わるだけ） */
+  function tune(delay, dog){ DELAY = delay; DOG = dog; }
+
+  return {begin, end, busy, guard, tune};
+})();
+/* ▲ src/js/wait.js ▲ */
 /* ▼ src/js/store.js ▼ */
 /* 保存。**年度で丸ごう分ける。前の年度は消さずに残る。**
 
@@ -3880,6 +4005,7 @@ function reflectTanpopo(){
 }
 
 function doExportTanpopo(){
+  if(!Wait.guard()) return;             /* 2回押しで、同じ週を2回出させない */
   const chosen = tpChosenHere();
   if(!chosen.length) return;
   const cols = tpColumns().filter(x => allClasses().indexOf(x.cls) >= 0);
@@ -3895,17 +4021,17 @@ function doExportTanpopo(){
   /* 先に、書いたぶんをシートへ送る。送る前に出すと、出した紙と週案が食い違う */
   $("tpGo").disabled = true;
   $("tpCount").innerHTML = "たんぽぽ時間割へ書いている…";
-  setBusy(true, "たんぽぽ時間割へ出しています");
+  const w = Wait.begin("たんぽぽ時間割へ出しています");
   Backend.flush(() => {
     Backend.exportWeek(tanpopoTitles(chosen), cols, tpSlots(), name,
       r => {
-        setBusy(false);
+        Wait.end(w);
         $("tpGo").disabled = false;
         drawTanpopoView();
         showTanpopoResult(r);
       },
       why => {
-        setBusy(false);
+        Wait.end(w);
         $("tpGo").disabled = false;
         drawTanpopoView();
         $("tpWarn").innerHTML =
@@ -4556,11 +4682,13 @@ function drawCheck(r){
       + "</td></tr>").join("") + "</table>";
 }
 function runCheck(){
+  if(!Wait.guard()) return;
   $("ckGo").disabled = true;
   $("ckStat").textContent = "検査しています…";
+  const w = Wait.begin("この年度を検査しています");
   Backend.checkYear(
-    r => { $("ckGo").disabled = false; drawCheck(r); },
-    why => { $("ckGo").disabled = false; $("ckStat").textContent = why; });
+    r => { Wait.end(w); $("ckGo").disabled = false; drawCheck(r); },
+    why => { Wait.end(w); $("ckGo").disabled = false; $("ckStat").textContent = why; });
 }
 
 /* ── 年度の退避 ──────────────────────────────
@@ -4588,10 +4716,13 @@ function arYear(){ return +$("arYear").value || fy() - 1; }
 
 /* ① 数える */
 function arRunCount(){
+  if(!Wait.guard()) return;
   const y = arYear();
   $("arStat").textContent = "数えています…";
   $("arStep2").hidden = true; $("arStep4").hidden = true; arChecked = null;
+  const w = Wait.begin(y + "年度を数えています");
   Backend.archiveCount(y, r => {
+    Wait.end(w);
     const done = r.done;
     $("arStat").textContent = done ? y + "年度は退避ずみ" : "";
     $("arOut").innerHTML =
@@ -4614,16 +4745,19 @@ function arRunCount(){
     $("arFile").textContent = r.file;
     $("arName").textContent = "週案 保存 " + r.year + "年度";
     $("arStep2").hidden = false;
-  }, why => { $("arStat").textContent = why; });
+  }, why => { Wait.end(w); $("arStat").textContent = why; });
 }
 
 /* ③ 照合する。**ここが通るまで、消すボタンは出さない。** */
 function arRunVerify(){
+  if(!Wait.guard()) return;
   const y = arYear(), url = $("arUrl").value.trim();
   if(!url) return void ($("arWhy").textContent = "退避先のURLを貼る");
   $("arWhy").textContent = "照合しています…";
   $("arStep4").hidden = true; arChecked = null;
+  const w = Wait.begin("退避先と照合しています");
   Backend.archiveVerify(y, url, r => {
+    Wait.end(w);
     if(!r.ok){
       $("arWhy").innerHTML = "<b>合っていない。消せません。</b><ul>"
         + r.why.map(w => "<li>" + escText(w) + "</li>").join("") + "</ul>";
@@ -4635,16 +4769,19 @@ function arRunVerify(){
     $("arTyped").value = "";
     $("arGo").disabled = true;
     $("arStep4").hidden = false;
-  }, why => { $("arWhy").textContent = why; });
+  }, why => { Wait.end(w); $("arWhy").textContent = why; });
 }
 
 /* ④ 消す。年度を打ち込ませる。**誤クリックで消えない。** */
 function arRunPurge(){
+  if(!Wait.guard()) return;
   if(!arChecked) return;
   const typed = $("arTyped").value.trim();
   $("arGo").disabled = true;
   $("arWhy").textContent = "消しています…";
+  const w = Wait.begin("本体から消しています");
   Backend.archivePurge(arChecked.year, arChecked.url, typed, r => {
+    Wait.end(w);
     $("arWhy").innerHTML = "<b>" + r.year + "年度を退避した。</b>"
       + r.rows + " 行（" + r.cells + " コマ・" + r.sheets + " シート）を本体から消した。"
       + "中身は保管庫に残っている。";
@@ -4653,6 +4790,7 @@ function arRunPurge(){
     paintArchive();
     toast(r.year + "年度を退避した。本体のURLは変わっていない");
   }, why => {
+    Wait.end(w);
     $("arWhy").innerHTML = "<b>消さなかった。</b><br>" + escText(why).replace(/\n/g, "<br>");
     $("arGo").disabled = false;
   });
@@ -4821,9 +4959,10 @@ function paintSave(){
 }
 function doSave(loud){
   if(!Backend.isGas()){ save(); if(loud) toast("この端末に保存した（本番ではシートへ）"); return; }
-  saveState.busy = true; paintSave(); setBusy(true, "シートに保存しています");
+  saveState.busy = true; paintSave();
+  const w = Wait.begin("シートに保存しています");
   Backend.flush(okAll => {
-    saveState.busy = false; paintSave(); setBusy(false);
+    saveState.busy = false; paintSave(); Wait.end(w);
     if(loud && okAll) toast("シートに保存した");
   });
 }
@@ -5108,7 +5247,9 @@ function wire(){
   on("baseDlg","close", () => { if(view.kind !== "gate") buildSheet(); });
 
   /* 保存。**打つたびには送らない。** ここで1コマ1件にまとめて送る */
-  on("saveBtn","click", () => doSave(true));
+  /* 押した瞬間から2回目を受けない。窓が出る 200ms のあいだも、ここが受ける。
+     doSave 自体は弾かない（重なりの入れ直しがコードから呼ぶ。弾くと黙って送られない） */
+  on("saveBtn","click", () => { if(Wait.guard()) doSave(true); });
   on("lockBtn","click", () => setLock(!isLocked()));
 
   /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */

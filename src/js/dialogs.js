@@ -460,11 +460,13 @@ function drawCheck(r){
       + "</td></tr>").join("") + "</table>";
 }
 function runCheck(){
+  if(!Wait.guard()) return;
   $("ckGo").disabled = true;
   $("ckStat").textContent = "検査しています…";
+  const w = Wait.begin("この年度を検査しています");
   Backend.checkYear(
-    r => { $("ckGo").disabled = false; drawCheck(r); },
-    why => { $("ckGo").disabled = false; $("ckStat").textContent = why; });
+    r => { Wait.end(w); $("ckGo").disabled = false; drawCheck(r); },
+    why => { Wait.end(w); $("ckGo").disabled = false; $("ckStat").textContent = why; });
 }
 
 /* ── 年度の退避 ──────────────────────────────
@@ -492,10 +494,13 @@ function arYear(){ return +$("arYear").value || fy() - 1; }
 
 /* ① 数える */
 function arRunCount(){
+  if(!Wait.guard()) return;
   const y = arYear();
   $("arStat").textContent = "数えています…";
   $("arStep2").hidden = true; $("arStep4").hidden = true; arChecked = null;
+  const w = Wait.begin(y + "年度を数えています");
   Backend.archiveCount(y, r => {
+    Wait.end(w);
     const done = r.done;
     $("arStat").textContent = done ? y + "年度は退避ずみ" : "";
     $("arOut").innerHTML =
@@ -518,16 +523,19 @@ function arRunCount(){
     $("arFile").textContent = r.file;
     $("arName").textContent = "週案 保存 " + r.year + "年度";
     $("arStep2").hidden = false;
-  }, why => { $("arStat").textContent = why; });
+  }, why => { Wait.end(w); $("arStat").textContent = why; });
 }
 
 /* ③ 照合する。**ここが通るまで、消すボタンは出さない。** */
 function arRunVerify(){
+  if(!Wait.guard()) return;
   const y = arYear(), url = $("arUrl").value.trim();
   if(!url) return void ($("arWhy").textContent = "退避先のURLを貼る");
   $("arWhy").textContent = "照合しています…";
   $("arStep4").hidden = true; arChecked = null;
+  const w = Wait.begin("退避先と照合しています");
   Backend.archiveVerify(y, url, r => {
+    Wait.end(w);
     if(!r.ok){
       $("arWhy").innerHTML = "<b>合っていない。消せません。</b><ul>"
         + r.why.map(w => "<li>" + escText(w) + "</li>").join("") + "</ul>";
@@ -539,16 +547,19 @@ function arRunVerify(){
     $("arTyped").value = "";
     $("arGo").disabled = true;
     $("arStep4").hidden = false;
-  }, why => { $("arWhy").textContent = why; });
+  }, why => { Wait.end(w); $("arWhy").textContent = why; });
 }
 
 /* ④ 消す。年度を打ち込ませる。**誤クリックで消えない。** */
 function arRunPurge(){
+  if(!Wait.guard()) return;
   if(!arChecked) return;
   const typed = $("arTyped").value.trim();
   $("arGo").disabled = true;
   $("arWhy").textContent = "消しています…";
+  const w = Wait.begin("本体から消しています");
   Backend.archivePurge(arChecked.year, arChecked.url, typed, r => {
+    Wait.end(w);
     $("arWhy").innerHTML = "<b>" + r.year + "年度を退避した。</b>"
       + r.rows + " 行（" + r.cells + " コマ・" + r.sheets + " シート）を本体から消した。"
       + "中身は保管庫に残っている。";
@@ -557,6 +568,7 @@ function arRunPurge(){
     paintArchive();
     toast(r.year + "年度を退避した。本体のURLは変わっていない");
   }, why => {
+    Wait.end(w);
     $("arWhy").innerHTML = "<b>消さなかった。</b><br>" + escText(why).replace(/\n/g, "<br>");
     $("arGo").disabled = false;
   });

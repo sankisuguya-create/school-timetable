@@ -248,6 +248,16 @@
 
 <div class="toast" id="toast" hidden></div>
 
+<!-- 処理中。**全面にかぶせて、次の操作を受け付けない。**
+     窓が開いているあいだも上に乗るよう <dialog> にしてある（js/wait.js） -->
+<dialog id="wait" class="wait">
+  <div class="waitbox">
+    <span class="waitspin" aria-hidden="true"></span>
+    <span class="waitwd"><b id="waitTxt">処理しています</b>
+      <small>終わるまで、ほかの操作はできません</small></span>
+  </div>
+</dialog>
+
 <dialog id="baseDlg"><div class="dlg">
   <h2>基本時間割 <span style="font-size:12px;color:var(--tx-sub)" id="baseFy"></span></h2>
   <p>ここに入れたものが、<b>週案を開いた時点で全部のコマに出る</b>。担任は毎週30コマ埋めるのではなく、変えたところだけ直す。<br>
@@ -471,6 +481,7 @@
 "use strict";
 /* @include js/config.js */
 /* @include js/util.js */
+/* @include js/wait.js */
 /* @include js/store.js */
 /* @include js/backend.js */
 /* @include js/fixed.js */

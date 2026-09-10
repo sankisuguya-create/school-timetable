@@ -33,9 +33,10 @@ function paintSave(){
 }
 function doSave(loud){
   if(!Backend.isGas()){ save(); if(loud) toast("この端末に保存した（本番ではシートへ）"); return; }
-  saveState.busy = true; paintSave(); setBusy(true, "シートに保存しています");
+  saveState.busy = true; paintSave();
+  const w = Wait.begin("シートに保存しています");
   Backend.flush(okAll => {
-    saveState.busy = false; paintSave(); setBusy(false);
+    saveState.busy = false; paintSave(); Wait.end(w);
     if(loud && okAll) toast("シートに保存した");
   });
 }
@@ -320,7 +321,9 @@ function wire(){
   on("baseDlg","close", () => { if(view.kind !== "gate") buildSheet(); });
 
   /* 保存。**打つたびには送らない。** ここで1コマ1件にまとめて送る */
-  on("saveBtn","click", () => doSave(true));
+  /* 押した瞬間から2回目を受けない。窓が出る 200ms のあいだも、ここが受ける。
+     doSave 自体は弾かない（重なりの入れ直しがコードから呼ぶ。弾くと黙って送られない） */
+  on("saveBtn","click", () => { if(Wait.guard()) doSave(true); });
   on("lockBtn","click", () => setLock(!isLocked()));
 
   /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */

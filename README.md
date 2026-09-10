@@ -22,8 +22,8 @@
 npm install               検査に playwright が要る（1回だけ）
 python3 build.py          src/ から dist/index.html と gas/plan.html を作る
 python3 build.py --check  生成物が src と一致するか調べる
-node tools/check.mjs      画面を動かして確かめる（283件）
-node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（191件）
+node tools/check.mjs      画面を動かして確かめる（287件）
+node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（206件）
 node gas/storecheck.js    シートの読み書きを確かめる（279件）
 node gas/gatecheck.js     関門を確かめる（27件）
 node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明を見る（52件）
@@ -74,6 +74,9 @@ Git管理されている正本・検査・文書を、元ファイル名つき�
 - **上書きは両側に知らせる。** 書く側には書く前に1回、された側には次に開いたときに
 - **クラス名は日付に化ける。** `1-1` は「1月1日」。列を書式なしテキストにし、
   化けていたら月-日から戻す
+- **書き込みのあいだは、全面にかぶせて次の操作を受け付けない。**
+  保存・たんぽぽ出力・年度の検査と退避。週を開く読み込みは止めない
+  （止めると、開いたのに何も出ない時間ができる）
 
 ## 児童は入れない
 

@@ -88,6 +88,14 @@ ok("ロックと保存が折り返さず、見出しと同じ行に並ぶ",
    }));
 ok("待っている印は、左メニューの操作のすぐ下に出る",
    await p.locator(".side .wk + #busy").count() === 1);
+/* 処理中の全面表示。**ふだんは閉じている。**
+   閉じているあいだは紙の上に何も乗らない（window 直下に置いてある） */
+ok("処理中の全面表示は、ふだん閉じている",
+   await p.evaluate(() => $("wait").open) === false);
+ok("処理中の全面表示は .app の外に置く（窓の上に乗せるため）",
+   await p.evaluate(() => !document.querySelector(".app").contains($("wait"))) === true);
+ok("処理中の全面表示には ✕ を差し込まない（自分では閉じさせない）",
+   await p.locator("#wait .dlgx").count() === 0);
 ok("手元では送るものが無いので「保存ずみ」",
    (await p.locator("#saveTxt").innerText()).indexOf("ずみ") >= 0,
    await p.locator("#saveTxt").innerText());
@@ -939,6 +947,16 @@ ok("刷っても枠からはみ出さない（刷るときの列の幅で測っ�
      .filter(t => t.scrollWidth > t.clientWidth + 1).map(t => t.innerText)));
 ok("刷るとき、待っている印は出さない",
    await p.evaluate(() => getComputedStyle(document.querySelector(".busy")).display) === "none");
+/* 処理中の全面表示は開いていると最前面の層に乗る。**紙には出さない。**
+   出したまま刷ると、週案の真ん中に黒い箱が刷り込まれる */
+ok("刷るとき、処理中の全面表示も出さない", await p.evaluate(() => {
+     const w = Wait.begin("刷るときの検査");
+     const d = document.getElementById("wait");
+     d.showModal();                       /* 200ms を待たずに、その場で出す */
+     const dsp = getComputedStyle(d).display;
+     Wait.end(w); if(d.open) d.close();
+     return dsp;
+   }) === "none");
 ok("刷るとき、選んでいる印も消える",
    await p.evaluate(() => {
      const e = document.querySelector("#sheet .cell.sel");

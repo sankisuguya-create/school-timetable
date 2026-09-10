@@ -181,6 +181,7 @@ function reflectTanpopo(){
 }
 
 function doExportTanpopo(){
+  if(!Wait.guard()) return;             /* 2回押しで、同じ週を2回出させない */
   const chosen = tpChosenHere();
   if(!chosen.length) return;
   const cols = tpColumns().filter(x => allClasses().indexOf(x.cls) >= 0);
@@ -196,17 +197,17 @@ function doExportTanpopo(){
   /* 先に、書いたぶんをシートへ送る。送る前に出すと、出した紙と週案が食い違う */
   $("tpGo").disabled = true;
   $("tpCount").innerHTML = "たんぽぽ時間割へ書いている…";
-  setBusy(true, "たんぽぽ時間割へ出しています");
+  const w = Wait.begin("たんぽぽ時間割へ出しています");
   Backend.flush(() => {
     Backend.exportWeek(tanpopoTitles(chosen), cols, tpSlots(), name,
       r => {
-        setBusy(false);
+        Wait.end(w);
         $("tpGo").disabled = false;
         drawTanpopoView();
         showTanpopoResult(r);
       },
       why => {
-        setBusy(false);
+        Wait.end(w);
         $("tpGo").disabled = false;
         drawTanpopoView();
         $("tpWarn").innerHTML =
