@@ -1307,6 +1307,45 @@ ok("「自動に戻す」で日付どおりに戻る", await (async () => {
          && await p.locator("#abAuto").isHidden();
    })() === true);
 
+console.log("\n■ 教科チップの色は、字が運んでいるものを二重にするだけ");
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
+await p.locator(".tile[data-c='1-1']").click(); await p.waitForTimeout(500);
+ok("教科ごとに地の色がある",
+   await p.evaluate(() => new Set([...document.querySelectorAll(".pal")]
+     .map(x => getComputedStyle(x).backgroundColor)).size) >= 12,
+   await p.evaluate(() => new Set([...document.querySelectorAll(".pal")]
+     .map(x => getComputedStyle(x).backgroundColor)).size));
+/* **色は識別を担わない。** 字を消さない。色だけの凡例も作らない */
+ok("チップには教科名が必ず書いてある（色だけにしない）",
+   await p.evaluate(() => [...document.querySelectorAll(".pal")]
+     .every(x => x.textContent.trim().length > 0)) === true);
+/* 硬い条件は、地の上で字が読めること */
+ok("どの地の上でも字が読める（4.5以上）", await p.evaluate(() => {
+     const lin = v => { v /= 255; return v <= .03928 ? v / 12.92
+                                 : Math.pow((v + .055) / 1.055, 2.4); };
+     const L = c => { const m = c.match(/\d+/g).map(Number);
+       return .2126 * lin(m[0]) + .7152 * lin(m[1]) + .0722 * lin(m[2]); };
+     const ratio = (a, b) => { const x = L(a), y = L(b);
+       return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+     return [...document.querySelectorAll(".pal")].map(x => {
+       const s = getComputedStyle(x);
+       return ratio(s.backgroundColor, s.color);
+     }).every(r => r >= 4.5);
+   }) === true, await p.evaluate(() => [...document.querySelectorAll(".pal")]
+     .map(x => getComputedStyle(x).backgroundColor + " / " + getComputedStyle(x).color)));
+/* **紙の上には出さない。** 紙のコマの地は「層」を表し、モノクロで刷る */
+ok("教科の色は、紙のコマには出さない", await p.evaluate(() => {
+     const pal = new Set([...document.querySelectorAll(".pal")]
+       .map(x => getComputedStyle(x).backgroundColor));
+     pal.delete("rgba(0, 0, 0, 0)");
+     return [...document.querySelectorAll("#sheet .cell")]
+       .every(x => !pal.has(getComputedStyle(x).backgroundColor));
+   }) === true);
+/* 時数に数えない教科は、色を外しても分かる（破線の枠） */
+ok("時数に数えない教科は、枠の形でも分かる", await p.evaluate(() =>
+     [...document.querySelectorAll(".pal.off")]
+       .every(x => getComputedStyle(x).borderStyle === "dashed")) === true);
+
 console.log("\n■ たんぽぽへの提出は、担任が押す");
 await p.evaluate(() => { Y().tanpopo = {"1":["1-1","3-2"], "2":["6-1"]}; save(); });
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
