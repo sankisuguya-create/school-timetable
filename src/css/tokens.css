@@ -12,6 +12,21 @@
    凡例を出せば「色で区別できる」という約束になるが、その約束を守れない。
    教科はセルの文字が言っているので、色で言い直す必要もない。 */
 :root{
+  /* ── 字 ────────────────────────────────────
+     **日本語が日本語の字で出ること。** ここを外すと、日本語の字形を持たない
+     フォントに当たって、中国語の字形（编／编 のような形）で出る。
+     「編」の右上が違って見えるのは、たいていこれ。
+
+       Hiragino Sans        Mac・iPhone
+       Noto Sans JP         Chromebook（児童機）
+       Yu Gothic UI / Meiryo Windows（校務PC）。**Yu Gothic は入れない**
+                            （UI でないほうは小さい字で細く、かすれて見える）
+       system-ui            それ以外
+     最後に日本語のフォントを置くと、英字だけのフォントに当たったときに
+     日本語がぶら下がって出る。**日本語のものを先に置く。** */
+  --ff:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",
+       "Yu Gothic UI",Meiryo,system-ui,sans-serif;
+
   /* 紙（印刷される面） */
   --sheet:#FFFFFF;
   --ink:#1A1A1A; --ink-sub:#616870; --ink-link:#0F5EA8; --ink-alert:#C0330A;

@@ -34,6 +34,19 @@ function tpSheetName(mon){
    （右のクラスを押すと、いま選んでいる組へ入る）。 */
 let tpPick = "1";              /* いま選んでいる組。押して入れるときの行き先 */
 
+/* 交流級の着手／未着手。**組の中のチップそのものに出す。**
+   下に字でまとめて出していたころは、組の並びと読み合わせないと
+   どのクラスのことか分からなかった。
+   **色だけに頼らない。** 短い字と左端の太い線を必ず添える。 */
+const TP_ST = {
+  ok:   {mark:"済", why:"担任が「今週ぶんは書き終えた」と出している"},
+  base: {mark:"未", why:"担任がまだ出していない"}
+};
+/* **1コマでも書いてあれば済、にはしない。**
+   ちょっと触っただけの週と、出してよい週を、たんぽぽ担当が見分けられない。
+   担任がクラスの画面で「たんぽぽに提出」を押したものだけを済にする。 */
+const tpState = cls => tpSubmitted(cls) ? "ok" : "base";
+
 /* ── 出す先 ──────────────────────────────────
    **1本とはかぎらない。** たんぽぽ時間割が学年で分かれている学校も、
    年度でファイルを作り直す学校もある。「たんぽぽ出力先」シートが正本で、
@@ -71,6 +84,11 @@ function drawTargets(){
            + tpTargets.map((x, i) => "<option value='" + i + "'"
                + (x === now ? " selected" : "") + ">" + escText(x.name) + "</option>").join("")
            + "</select>"
+           /* **出す先を、その場で開ける。** 出したあと「入ったか」を見るのに、
+              毎回ドライブから探し直すことになっていた */
+           + (now ? "<a class='tptopen' href='" + escText(now.url) + "'"
+                  + " target='_blank' rel='noopener noreferrer'>"
+                  + "たんぽぽ時間割をひらく</a>" : "")
          : "<span class='hint bad'>1つもありません。足さないと出せません</span>")
       + "<button class='btn' id='tpTgtEdit'>出す先を直す</button></div>";
     const sel = $("tpTgtSel");
@@ -174,9 +192,15 @@ function drawTanpopoView(){
     + "たんぽぽ" + escText(g) + "組<span>" + tpIn(g).length + "人</span></button>"
     + "<div class='tpgbody'>"
     + (tpIn(g).length
-       ? tpIn(g).map((c, i) =>
-           "<button class='tpin' data-g='" + escText(g) + "' data-i='" + i + "'"
-           + " title='押すと、この1人を外す'>" + escText(c) + "<u>×</u></button>").join("")
+       ? tpIn(g).map((c, i) => {
+           /* **どのクラスが今週まだ書いていないかを、その場で見せる。**
+              下に字でまとめて出していたころは、組の並びと読み合わせる必要があった */
+           const st = tpState(c);
+           return "<button class='tpin st-" + st + "' data-g='" + escText(g) + "'"
+             + " data-i='" + i + "' title='" + escText(c + "：" + TP_ST[st].why)
+             + "。押すと、この1人を外す'>"
+             + escText(c) + "<em>" + TP_ST[st].mark + "</em><u>×</u></button>";
+         }).join("")
        : "<i>ここへ引っぱって入れる</i>")
     + "</div></div>").join("");
 
@@ -195,7 +219,12 @@ function drawTanpopoView(){
     + "</div></div>").join("");
 
   $("tpSel").innerHTML =
-    "<div class='tpplace'><div class='tpto'>" + left
+    "<div class='tpplace'><div class='tpto'>"
+    + "<div class='tpleg'><b>今週の提出</b>"
+    + ["ok","base"].map(k =>
+        "<span class='st-" + k + "'><i></i>" + TP_ST[k].mark + "</span>").join("")
+    + "</div>"
+    + left
     + "<button class='btn tpaddg' id='tpAddG'>組を足す</button></div>"
     + "<div class='tpfrom'>" + right + "</div></div>";
 
@@ -254,27 +283,29 @@ function tpWarnBoxes(){
   if(Backend.isGas() && tpTargets !== null && !tpTargets.length)
     return ["<div class='box'><b>出す先が1つもありません。</b>"
           + "「出す先を直す」から、たんぽぽ時間割のURLを1つ入れてください。</div>"];
-  const base  = chosen.filter(c => planState(c) === "base");
-  const upper = chosen.filter(c => planState(c) === "upper");
   const gone  = tpChosen().filter(c => allClasses().indexOf(c) < 0);
   const boxes = [];
-  if(base.length)
-    boxes.push("<div class='box'><b>" + base.map(escText).join("・")
-      + "</b> は今週まだ<b>基本時間割のまま</b>です。<br>"
-      + "このまま出すと、担任がまだ書いていない予定をたんぽぽへ配ることになります。</div>");
-  if(upper.length)
-    boxes.push("<div class='box'><b>" + upper.map(escText).join("・")
-      + "</b> は<b>上位（全校・学年）の予定しか入っていません</b>。担任は未着手です。</div>");
+  /* **着手／未着手は、ここに字で書かない。** 組の中のチップそのものに出す
+     （下にまとめて書くと、組の並びと読み合わせないと、どのクラスのことか
+     分からない）。ここに残すのは、組から外さないと直らないものだけ。 */
   if(gone.length)
     boxes.push("<div class='box'><b>" + gone.map(escText).join("・")
       + "</b> は<b>いまの学級編成にありません</b>。組から外してください。</div>");
   if(!chosen.length)
     boxes.push("<div class='box ok'>まだ誰も入れていません。"
       + "右のクラスを、左のたんぽぽの組へ引っぱってください。</div>");
-  else if(!boxes.length)
-    boxes.push("<div class='box ok'>入れている " + chosen.length
-      + " クラスは、いずれも今週の予定が入っています。</div>");
   return boxes;
+}
+
+/* **出す前だけの知らせ。** たんぽぽの面には出さない（組のチップが言う）。
+   出したものを見てたんぽぽ担当が支援員を組むので、まだ書き終えていない
+   週を配ると、あとでやり直しになる。 */
+function tpNotYetBox(){
+  const yet = tpChosenHere().filter(c => !tpSubmitted(c));
+  if(!yet.length) return "";
+  return "<div class='box'><b>" + yet.map(escText).join("・")
+       + "</b> は、担任がまだ<b>「たんぽぽに提出」を押していません</b>。<br>"
+       + "このまま出すと、書き終えていない週をたんぽぽへ配ることになります。</div>";
 }
 
 /* 出す中身を組む。**層を重ねたあとの、紙に出ているとおりの授業名。**
@@ -313,7 +344,13 @@ function reflectTanpopo(){
     + "<tr><th>出す児童</th><td>" + tpTotal() + " 人（" + tpTotal() + " 列）</td></tr>"
     + "<tr><th>交流級</th><td>"
       + chosen.map(c => escText(c) + "×" + tpCount(c)).join("、") + "</td></tr>";
-  $("tpDlgWarn").innerHTML = tpWarnBoxes().filter(b => b.indexOf("box ok") < 0).join("");
+  /* **出す前だけは、まだ出していないクラスを名指しする。**
+     たんぽぽの面そのものには字で書かない（組のチップが言う）が、
+     出すのは週に1回の大きな操作で、出したものを見てたんぽぽ担当が
+     支援員を組む。まだ書き終えていない週を配ると、あとでやり直しになる。
+     止めはしない（金曜までに全担任が書き終わらない週はある）。 */
+  $("tpDlgWarn").innerHTML =
+    tpWarnBoxes().filter(b => b.indexOf("box ok") < 0).join("") + tpNotYetBox();
   $("tpDlg").showModal();
   $("tpNo").focus();                    /* **既定は「出さない」。** */
 }

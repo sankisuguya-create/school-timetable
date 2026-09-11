@@ -22,11 +22,11 @@
 npm install               検査に playwright が要る（1回だけ）
 python3 build.py          src/ から dist/index.html と gas/plan.html を作る
 python3 build.py --check  生成物が src と一致するか調べる
-node tools/check.mjs      画面を動かして確かめる（300件）
-node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（242件）
-node gas/storecheck.js    シートの読み書きを確かめる（330件）
+node tools/check.mjs      画面を動かして確かめる（315件）
+node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（248件）
+node gas/storecheck.js    シートの読み書きを確かめる（338件）
 node gas/gatecheck.js     関門を確かめる（27件）
-node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明を見る（76件）
+node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明を見る（79件）
 ```
 
 外部AIへコードを渡し直すときは、`python3 tools/make-ai-bundle.py` を実行する。
@@ -77,6 +77,9 @@ Git管理されている正本・検査・文書を、元ファイル名つき�
 - **書き込みのあいだは、全面にかぶせて次の操作を受け付けない。**
   保存・たんぽぽ出力・年度の検査と退避。週を開く読み込みは止めない
   （止めると、開いたのに何も出ない時間ができる）
+- **たんぽぽへ出してよいかは、担任が押して決める。** 1コマでも書いてあれば
+  済、にはしない。ちょっと触っただけの週と、出してよい週を、たんぽぽ担当が
+  見分けられなくなる。印は**週ごとに立て直す**
 - **たんぽぽの出す先は1本とはかぎらない。** 画面から足す・消す・変える。
   消すのは一覧の行だけで、向こうのファイルには手を出さない
 - **左の並びには「？」がある。** 押すと、その項目が何で、押すと何が起きて、

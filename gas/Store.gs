@@ -88,6 +88,9 @@ const Store = (function(){
         else if(layer === "home")    (w.home[target]    || (w.home[target]    = {}))[k] = cell;
       }
     }
+    /* **提出の印も一緒に返す。** 別に取りに行くと、その回数だけ待つ。
+       週の読みは週ごとに1回来るので、ここに載せるのがいちばん安い */
+    w.submits = tpSubmits(year, mondayISO);
     return w;
   }
 
@@ -828,6 +831,54 @@ const Store = (function(){
      出ているのに getValues() は Date を返すので、字として比べると
      交流級の列が1つも見つからない。Sheets.asClass が月-日から元の字へ戻す。 */
   function tpCls(v){ return tpNorm(Sheets.asClass(v)); }
+
+  /* ── たんぽぽへの提出 ────────────────────────
+     **担任が「今週ぶんは書き終えた」と言った印。**
+     1コマでも書いてあれば済、にはしない。ちょっと触っただけの週と、
+     出してよい週を、たんぽぽ担当が見分けられなくなる。
+
+     週ごとに持つ。月曜が変われば、また未に戻る。
+     たんぽぽ担当は「今週はだれがまだか」を見て支援員を組むので、
+     前の週の印が残っていると、組んだあとで予定が変わる。 */
+  function tpSubmits(year, mondayISO){
+    const out = {};
+    for(const r of Sheets.readAllSoft("たんぽぽ提出").rows){
+      if(String(r["年度"]).trim() !== String(year)) continue;
+      if(ymd(r["月曜"]) !== String(mondayISO)) continue;
+      const c = Sheets.asClass(r["クラス"]);
+      if(c) out[c] = {at: String(r["提出日時"] || ""), by: String(r["提出者"] || "")};
+    }
+    return out;
+  }
+  /* 立てる／外す。**外せるようにしておく。**
+     押し間違いを直せないと、押すこと自体が怖くなる。 */
+  function tpSubmit(year, mondayISO, cls, on){
+    const c = Sheets.asClass(cls);
+    if(!c) throw new Error("クラスが分かりません");
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(mondayISO)))
+      throw new Error("週の月曜が分かりません（" + mondayISO + "）");
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try{
+      const me = Gate.check().email;
+      let row = 0;
+      for(const r of Sheets.readAllSoft("たんぽぽ提出").rows)
+        if(String(r["年度"]).trim() === String(year)
+           && ymd(r["月曜"]) === String(mondayISO)
+           && Sheets.asClass(r["クラス"]) === c){ row = r.__row; break; }
+      if(on){
+        const when = Utilities.formatDate(new Date(), TZ, "yyyy-MM-dd HH:mm");
+        const obj = {"年度": +year, "月曜": String(mondayISO), "クラス": c,
+                     "提出日時": when, "提出者": me};
+        if(row) Sheets.setRow("たんぽぽ提出", row, obj);
+        else Sheets.appendRows("たんぽぽ提出", [Sheets.toArray("たんぽぽ提出", obj)]);
+      }else if(row){
+        Sheets.blankRow("たんぽぽ提出", row);
+      }
+      SpreadsheetApp.flush();
+      return tpSubmits(year, mondayISO);
+    }finally{ lock.releaseLock(); }
+  }
 
   /* ── たんぽぽの出す先 ────────────────────────
      **1本とはかぎらない。** たんぽぽ時間割が学年で分かれている学校もあるし、
@@ -1644,7 +1695,7 @@ const Store = (function(){
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste,
           exportWeek, weekSheetName, weekOrder, migratePlan, checkYear, readEvents,
           archiveCount, archiveVerify, archivePurge, archivedAll, ymd,
-          tpTargets, writeTargets, testTarget,
+          tpTargets, writeTargets, testTarget, tpSubmits, tpSubmit,
           yearSetup, tickYearSetup, writeVariantOrigin, writeEvents,
           /* 検査から呼ぶ。**画面からは呼ばない**（形を読むための道具） */
           __tpCls: tpCls, __tpColumns: tpColumns_};
@@ -1771,6 +1822,12 @@ function apiExportWeek(year, mondayISO, titles, cols, slots, name, url){
 }
 /* たんぽぽの出す先。**1本とはかぎらない。**
    行が1つも無いあいだは「設定」の たんぽぽファイルID を1本として返す。 */
+/* たんぽぽへの提出。**担任が「今週ぶんは書き終えた」と言った印。**
+   週ごとに立て直す（月曜が変われば、また未に戻る）。 */
+function apiTpSubmit(year, mondayISO, cls, on){
+  Gate.check();
+  return Store.tpSubmit(year, mondayISO, cls, !!on);
+}
 function apiTpTargets(){
   Gate.check();
   return Store.tpTargets();

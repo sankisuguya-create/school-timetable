@@ -32,6 +32,9 @@
   --fs-a:11pt;     /* 放課後の備考。罫線 5.2mm に合わせた */
 
   background:var(--sheet); color:var(--ink);
+  /* **紙の上だけ、字の幅を詰める。** 1コマに入る字数がここで決まる。
+     画面のほうに掛けると、小さい字の字間がばらついて字形が崩れて見える */
+  font-feature-settings:"palt" 1;
   width:calc(var(--pw) - var(--pm)*2);
   min-height:calc(var(--ph) - var(--pm)*2);
   display:grid;

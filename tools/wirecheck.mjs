@@ -182,6 +182,7 @@ await p.addInitScript(() => {
             else (out.home[p[2]] || (out.home[p[2]] = {}))[kk] = bank[dk];
           }
         }
+        out.submits = Object.assign({}, ((window.__subs || {})[y + "|" + m]) || {});
         call("apiReadWeek", [y, m, t], out);
         /* __lag に週を書いておくと、その週の返事だけ遅れる
            （校内の回線では、古い週の返事があとから届くことがある） */
@@ -237,6 +238,16 @@ await p.addInitScript(() => {
       },
       apiWriteRoster(y, c, s, w, tp){ call("apiWriteRoster", [y, c, s, w, tp]); setTimeout(() => okFn({}), 0); },
       /* たんぽぽの出す先。**1本とはかぎらない。** */
+      /* たんぽぽへの提出。**週ごとに立て直す印。** */
+      apiTpSubmit(y, mon, cls, on){
+        call("apiTpSubmit", [y, mon, cls, on]);
+        const k = y + "|" + mon;
+        const all = window.__subs || (window.__subs = {});
+        const m = all[k] || (all[k] = {});
+        if(on) m[cls] = {at:"2026-09-11 17:00", by:"tanaka@edu.nishi.or.jp"};
+        else delete m[cls];
+        setTimeout(() => okFn(Object.assign({}, m)), 0);
+      },
       apiTpTargets(){
         call("apiTpTargets", []);
         const r = window.__targets || [];
@@ -1328,6 +1339,37 @@ ok("まだ送っていないコマがあるときは、何も捨てない", awai
      delete W["2000-01-03"];
      return n === 0 && kept;
    }) === true);
+
+console.log("\n■ たんぽぽへの提出は、サーバに残る");
+await p.evaluate(() => {
+  for(const d of document.querySelectorAll("dialog")) if(d.open) d.close();
+  Y().tanpopo = {"1":["5-1"]}; save();
+});
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
+await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(600);
+ok("たんぽぽの児童がいるクラスに、提出ボタンが出る",
+   await p.locator("#tpSubBtn").isVisible() === true);
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator("#tpSubBtn").click(); await p.waitForTimeout(500);
+const sub = await lastCall("apiTpSubmit");
+ok("押すと、年度と週の月曜とクラスを送る",
+   !!sub && sub.args[2] === "5-1" && sub.args[3] === true
+   && /^\d{4}-\d{2}-\d{2}$/.test(String(sub.args[1])), sub && sub.args);
+ok("サーバが返した印を、そのまま画面に入れる",
+   await p.evaluate(() => tpSubmitted("5-1")) === true);
+/* **外せるようにしておく。** 押し間違いを直せないと、押すのが怖くなる */
+await p.locator("#tpSubBtn").click(); await p.waitForTimeout(500);
+ok("もう一度押すと、取り消せる",
+   await p.evaluate(() => tpSubmitted("5-1")) === false);
+await p.locator("#tpSubBtn").click(); await p.waitForTimeout(500);
+/* **週ごとに立て直す。** 前の週の印が残っていると、たんぽぽ担当が
+   組んだあとで予定が変わる */
+await p.locator("#nextWk").click(); await p.waitForTimeout(900);
+ok("次の週は、また未に戻る",
+   await p.evaluate(() => tpSubmitted("5-1")) === false);
+await p.locator("#prevWk").click(); await p.waitForTimeout(900);
+ok("元の週へ戻れば、また済に戻る（シートから読み直す）",
+   await p.evaluate(() => tpSubmitted("5-1")) === true);
 
 console.log("\n■ たんぽぽの出す先は、画面から足す・消す・変える");
 await p.evaluate(() => {

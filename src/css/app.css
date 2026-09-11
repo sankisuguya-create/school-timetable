@@ -5,9 +5,12 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}   /* .gate{display:flex} などと同じ強さなので必要 */
 html,body{height:100%}
+/* **palt をここに掛けない。** 字の幅を詰める指定で、紙の上では効くが、
+   画面の小さい字では字間がばらついて、字形そのものが崩れて見える。
+   紙（.sheet）にだけ掛ける。 */
 body{margin:0;background:var(--bg);color:var(--tx);
-  font:14px/1.55 "Hiragino Sans","Noto Sans JP","Yu Gothic",system-ui,sans-serif;
-  -webkit-text-size-adjust:100%;font-feature-settings:"palt" 1}
+  font:14px/1.7 var(--ff);
+  -webkit-text-size-adjust:100%}
 button,select,input,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--ink-link);outline-offset:2px}
 
@@ -69,10 +72,15 @@ button,select,input,textarea{font:inherit;color:inherit}
   font-family:inherit;opacity:.55;transition:opacity .12s}
 .nav:hover .helpq,.admin:hover .helpq,.helpq:hover,.helpq:focus-visible{opacity:1}
 .helpq:hover{border-color:var(--ink-link);color:var(--ink-link);background:var(--tint)}
-/* ボタンでない入れもの。週の行は並びの終わり、凡例は右上へ寄せる */
+/* ボタンでない入れもの。**場所を先に空けてから置く。**
+   並びの終わりに足すだけだと、幅の足りない行で A週B週の上に重なる */
 .legend{position:relative}
 .legend>.helpq{position:absolute;top:-2px;right:0;margin:0}
-.wkrow>.helpq{margin-left:0}
+/* **折り返させる。** 場所を空けて絶対位置に置くと、字の大きさが変わった
+   環境（Windows のフォント）で A週B週の上に重なる。
+   入りきらない幅では次の行へ落ちるほうが、重なるより読める */
+.wkrow{flex-wrap:wrap;row-gap:6px}
+.wkrow>.helpq{margin-left:auto}
 #helpBody p{margin:0 0 10px;font-size:13px;line-height:1.9;color:var(--tx)}
 #helpBody p:last-child{margin-bottom:0}
 #helpBody b{font-weight:700}
@@ -182,6 +190,39 @@ button,select,input,textarea{font:inherit;color:inherit}
 .tpin:hover{border-color:var(--cat-clash);color:var(--cat-clash)}
 .tpin u{text-decoration:none;font-size:11px;color:var(--tx-sub)}
 .tpin:hover u{color:var(--cat-clash)}
+
+/* 交流級の着手／未着手。**組の中のチップそのものが言う。**
+   下に字でまとめて出していたころは、組の並びと読み合わせないと
+   どのクラスのことか分からなかった。
+
+   **色だけに頼らない。** 3つとも短い字（書いた／上位だけ／まだ）を持ち、
+   左端に太い線を引く。色を外しても、字と線の位置で見分けられる。
+   使う色は既にあるもの。新しい色を作らない。 */
+.tpin{position:relative;padding-left:13px;overflow:hidden}
+.tpin::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px}
+.tpin em{font-style:normal;font-size:10.5px;font-weight:700;letter-spacing:.02em}
+.tpin.st-ok::before{background:var(--ok,#2F6E4E)}
+.tpin.st-ok em{color:var(--ok,#2F6E4E)}
+.tpin.st-upper{background:#FFF8EC}
+.tpin.st-upper::before{background:var(--cat-grade)}
+.tpin.st-upper em{color:var(--cat-grade)}
+.tpin.st-base{background:#FDF0EC}
+.tpin.st-base::before{background:var(--cat-clash)}
+.tpin.st-base em{color:var(--cat-clash)}
+
+/* 見分け方は組の**上**に置く。下に置くと、組を読んだあとで下まで目を運ぶ */
+.tpleg{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  font-size:11.5px;color:var(--tx-sub);padding:0 2px 2px}
+.tpleg b{color:var(--tx);font-size:11.5px}
+.tpleg span{display:inline-flex;align-items:center;gap:4px}
+.tpleg i{width:4px;height:13px;border-radius:2px;flex:none}
+.tpleg .st-ok i{background:var(--ok,#2F6E4E)}
+.tpleg .st-upper i{background:var(--cat-grade)}
+.tpleg .st-base i{background:var(--cat-clash)}
+
+/* 出す先をひらくリンク。**出したあと「入ったか」をその場で見に行ける。** */
+.tptopen{font-size:12.5px;color:var(--ink-link);text-underline-offset:3px;
+  white-space:nowrap}
 .tpaddg{align-self:flex-start;font-size:12px;padding:5px 10px}
 .tpwarn{display:flex;flex-direction:column;gap:8px}
 .tpwarn .box{border:1px solid var(--line);border-left:4px solid var(--cat-clash);
@@ -230,6 +271,20 @@ button,select,input,textarea{font:inherit;color:inherit}
 .save.dirty{background:var(--ink-link);border-color:var(--ink-link);color:#fff}
 .save.dirty:hover{filter:brightness(1.06)}
 .save.bad{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff}
+/* たんぽぽへの提出。**保存の右隣。** たんぽぽの児童がいるクラスだけに出る。
+   色は既にある専科の茶（--cat-special）。保存の青とも、ロックの赤とも
+   混ざらない。**押す前は塗って、押したあとは淡くする**——
+   「まだ押していない」ほうを目立たせる（押すのは週に1回）。
+   色だけに頼らず、字そのものが「提出」「提出ずみ」と変わる。 */
+.tpsub{display:inline-flex;align-items:center;gap:5px;padding:7px 11px;font-size:12.5px;
+  font-weight:700;border-radius:var(--r-sm);cursor:pointer;white-space:nowrap;
+  border:1px solid var(--cat-special);background:var(--cat-special);color:#fff;
+  font-family:inherit}
+.tpsub:hover{filter:brightness(1.08)}
+.tpsub.on{background:var(--card);color:var(--cat-special);font-weight:600}
+.tpsub.on:hover{background:var(--hover);filter:none}
+.tpsub:focus-visible{outline:2px solid var(--ink-link);outline-offset:2px}
+
 /* 左の「週案」の右。入口へ1押しで戻れる */
 .gridbtn{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;
   width:30px;height:30px;border-radius:var(--r-sm);cursor:pointer;

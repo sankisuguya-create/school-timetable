@@ -22,6 +22,21 @@
    凡例を出せば「色で区別できる」という約束になるが、その約束を守れない。
    教科はセルの文字が言っているので、色で言い直す必要もない。 */
 :root{
+  /* ── 字 ────────────────────────────────────
+     **日本語が日本語の字で出ること。** ここを外すと、日本語の字形を持たない
+     フォントに当たって、中国語の字形（编／编 のような形）で出る。
+     「編」の右上が違って見えるのは、たいていこれ。
+
+       Hiragino Sans        Mac・iPhone
+       Noto Sans JP         Chromebook（児童機）
+       Yu Gothic UI / Meiryo Windows（校務PC）。**Yu Gothic は入れない**
+                            （UI でないほうは小さい字で細く、かすれて見える）
+       system-ui            それ以外
+     最後に日本語のフォントを置くと、英字だけのフォントに当たったときに
+     日本語がぶら下がって出る。**日本語のものを先に置く。** */
+  --ff:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",
+       "Yu Gothic UI",Meiryo,system-ui,sans-serif;
+
   /* 紙（印刷される面） */
   --sheet:#FFFFFF;
   --ink:#1A1A1A; --ink-sub:#616870; --ink-link:#0F5EA8; --ink-alert:#C0330A;
@@ -65,9 +80,12 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}   /* .gate{display:flex} などと同じ強さなので必要 */
 html,body{height:100%}
+/* **palt をここに掛けない。** 字の幅を詰める指定で、紙の上では効くが、
+   画面の小さい字では字間がばらついて、字形そのものが崩れて見える。
+   紙（.sheet）にだけ掛ける。 */
 body{margin:0;background:var(--bg);color:var(--tx);
-  font:14px/1.55 "Hiragino Sans","Noto Sans JP","Yu Gothic",system-ui,sans-serif;
-  -webkit-text-size-adjust:100%;font-feature-settings:"palt" 1}
+  font:14px/1.7 var(--ff);
+  -webkit-text-size-adjust:100%}
 button,select,input,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--ink-link);outline-offset:2px}
 
@@ -129,10 +147,15 @@ button,select,input,textarea{font:inherit;color:inherit}
   font-family:inherit;opacity:.55;transition:opacity .12s}
 .nav:hover .helpq,.admin:hover .helpq,.helpq:hover,.helpq:focus-visible{opacity:1}
 .helpq:hover{border-color:var(--ink-link);color:var(--ink-link);background:var(--tint)}
-/* ボタンでない入れもの。週の行は並びの終わり、凡例は右上へ寄せる */
+/* ボタンでない入れもの。**場所を先に空けてから置く。**
+   並びの終わりに足すだけだと、幅の足りない行で A週B週の上に重なる */
 .legend{position:relative}
 .legend>.helpq{position:absolute;top:-2px;right:0;margin:0}
-.wkrow>.helpq{margin-left:0}
+/* **折り返させる。** 場所を空けて絶対位置に置くと、字の大きさが変わった
+   環境（Windows のフォント）で A週B週の上に重なる。
+   入りきらない幅では次の行へ落ちるほうが、重なるより読める */
+.wkrow{flex-wrap:wrap;row-gap:6px}
+.wkrow>.helpq{margin-left:auto}
 #helpBody p{margin:0 0 10px;font-size:13px;line-height:1.9;color:var(--tx)}
 #helpBody p:last-child{margin-bottom:0}
 #helpBody b{font-weight:700}
@@ -242,6 +265,39 @@ button,select,input,textarea{font:inherit;color:inherit}
 .tpin:hover{border-color:var(--cat-clash);color:var(--cat-clash)}
 .tpin u{text-decoration:none;font-size:11px;color:var(--tx-sub)}
 .tpin:hover u{color:var(--cat-clash)}
+
+/* 交流級の着手／未着手。**組の中のチップそのものが言う。**
+   下に字でまとめて出していたころは、組の並びと読み合わせないと
+   どのクラスのことか分からなかった。
+
+   **色だけに頼らない。** 3つとも短い字（書いた／上位だけ／まだ）を持ち、
+   左端に太い線を引く。色を外しても、字と線の位置で見分けられる。
+   使う色は既にあるもの。新しい色を作らない。 */
+.tpin{position:relative;padding-left:13px;overflow:hidden}
+.tpin::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px}
+.tpin em{font-style:normal;font-size:10.5px;font-weight:700;letter-spacing:.02em}
+.tpin.st-ok::before{background:var(--ok,#2F6E4E)}
+.tpin.st-ok em{color:var(--ok,#2F6E4E)}
+.tpin.st-upper{background:#FFF8EC}
+.tpin.st-upper::before{background:var(--cat-grade)}
+.tpin.st-upper em{color:var(--cat-grade)}
+.tpin.st-base{background:#FDF0EC}
+.tpin.st-base::before{background:var(--cat-clash)}
+.tpin.st-base em{color:var(--cat-clash)}
+
+/* 見分け方は組の**上**に置く。下に置くと、組を読んだあとで下まで目を運ぶ */
+.tpleg{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  font-size:11.5px;color:var(--tx-sub);padding:0 2px 2px}
+.tpleg b{color:var(--tx);font-size:11.5px}
+.tpleg span{display:inline-flex;align-items:center;gap:4px}
+.tpleg i{width:4px;height:13px;border-radius:2px;flex:none}
+.tpleg .st-ok i{background:var(--ok,#2F6E4E)}
+.tpleg .st-upper i{background:var(--cat-grade)}
+.tpleg .st-base i{background:var(--cat-clash)}
+
+/* 出す先をひらくリンク。**出したあと「入ったか」をその場で見に行ける。** */
+.tptopen{font-size:12.5px;color:var(--ink-link);text-underline-offset:3px;
+  white-space:nowrap}
 .tpaddg{align-self:flex-start;font-size:12px;padding:5px 10px}
 .tpwarn{display:flex;flex-direction:column;gap:8px}
 .tpwarn .box{border:1px solid var(--line);border-left:4px solid var(--cat-clash);
@@ -290,6 +346,20 @@ button,select,input,textarea{font:inherit;color:inherit}
 .save.dirty{background:var(--ink-link);border-color:var(--ink-link);color:#fff}
 .save.dirty:hover{filter:brightness(1.06)}
 .save.bad{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff}
+/* たんぽぽへの提出。**保存の右隣。** たんぽぽの児童がいるクラスだけに出る。
+   色は既にある専科の茶（--cat-special）。保存の青とも、ロックの赤とも
+   混ざらない。**押す前は塗って、押したあとは淡くする**——
+   「まだ押していない」ほうを目立たせる（押すのは週に1回）。
+   色だけに頼らず、字そのものが「提出」「提出ずみ」と変わる。 */
+.tpsub{display:inline-flex;align-items:center;gap:5px;padding:7px 11px;font-size:12.5px;
+  font-weight:700;border-radius:var(--r-sm);cursor:pointer;white-space:nowrap;
+  border:1px solid var(--cat-special);background:var(--cat-special);color:#fff;
+  font-family:inherit}
+.tpsub:hover{filter:brightness(1.08)}
+.tpsub.on{background:var(--card);color:var(--cat-special);font-weight:600}
+.tpsub.on:hover{background:var(--hover);filter:none}
+.tpsub:focus-visible{outline:2px solid var(--ink-link);outline-offset:2px}
+
 /* 左の「週案」の右。入口へ1押しで戻れる */
 .gridbtn{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;
   width:30px;height:30px;border-radius:var(--r-sm);cursor:pointer;
@@ -720,6 +790,9 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   --fs-a:11pt;     /* 放課後の備考。罫線 5.2mm に合わせた */
 
   background:var(--sheet); color:var(--ink);
+  /* **紙の上だけ、字の幅を詰める。** 1コマに入る字数がここで決まる。
+     画面のほうに掛けると、小さい字の字間がばらついて字形が崩れて見える */
+  font-feature-settings:"palt" 1;
   width:calc(var(--pw) - var(--pm)*2);
   min-height:calc(var(--ph) - var(--pm)*2);
   display:grid;
@@ -1070,6 +1143,11 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
             <svg width="15" height="15"><use href="#i-lock"/></svg><span id="lockTxt">ロック</span></button>
           <button class="save" id="saveBtn" aria-live="polite">
             <svg width="16" height="16"><use href="#i-save"/></svg><span id="saveTxt">保存</span></button>
+          <!-- たんぽぽへの提出。**たんぽぽの児童がいるクラスだけに出る。**
+               担任が「今週ぶんは書き終えた」と言う印。週ごとに立て直す -->
+          <button class="tpsub" id="tpSubBtn" aria-pressed="false" hidden>
+            <svg width="15" height="15"><use href="#i-send"/></svg>
+            <span id="tpSubTxt">たんぽぽに提出</span></button>
         </div>
       </div>
       <p class="lockmsg" id="lockMsg" hidden>
@@ -1439,7 +1517,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.11.0";
+let APP_VERSION = "1.12.0";
 let BUILD_DATE  = "2026-09-11";
 
 /* 時程。行を固定しない（学校ごとに違う）。
@@ -1967,6 +2045,10 @@ function tpGroups(){
   return out;
 }
 const tpIn = g => (Y().tanpopo || {})[String(g)] || [];
+/* たんぽぽへの提出。**担任が「今週ぶんは書き終えた」と言った印。**
+   週ごとの持ちもので、月曜が変われば、また未に戻る。 */
+const tpSubmitted = cls => !!(week().tpSub || {})[String(cls)];
+const tpSubmitInfo = cls => (week().tpSub || {})[String(cls)] || null;
 /* 1人足す／1人減らす。**同じ交流級を2つ入れれば2人（＝2列）。** */
 function tpAdd(g, cls){
   const t = Y().tanpopo, k = String(g);
@@ -2603,6 +2685,9 @@ const Backend = (function(){
       }
       loadedWeek[weekTag(t, y, m)] = Date.now();
     }
+    /* **提出の印は、対象にかかわらず載せ替える。**
+       週ごとの持ちもので、どのクラスを読んだかとは関係しない */
+    if(w && w.submits) cur.tpSub = w.submits;
   }
   /* **開きっぱなしの画面を、たまに読み直す。**
      木曜の夕方に30人が同じ週を触る運用で、開いたまま置いている担任に
@@ -2726,6 +2811,29 @@ const Backend = (function(){
       .apiExportWeek(fy(), wkKey(), titles, cols, slots, name, url || "");
   }
 
+  /* ── たんぽぽへの提出 ────────────────────────
+     **担任が「今週ぶんは書き終えた」と言った印。** 週ごとに立て直す。
+     手元では、この端末の中だけに持つ（シートにつないでいない）。 */
+  function tpSubmit(cls, on, ok, ng){
+    const w = week();
+    if(!onGas){
+      if(!w.tpSub) w.tpSub = {};
+      if(on) w.tpSub[cls] = {at:"（手元）", by:"（手元）"};
+      else delete w.tpSub[cls];
+      save();
+      return ok(w.tpSub);
+    }
+    google.script.run
+      .withSuccessHandler(r => {
+        const cw = week();
+        cw.tpSub = r || {};
+        save();
+        ok(cw.tpSub);
+      })
+      .withFailureHandler(e => ng(String((e && e.message) || "立てられなかった")))
+      .apiTpSubmit(fy(), wkKey(), cls, !!on);
+  }
+
   /* ── たんぽぽの出す先 ────────────────────────
      **1本とはかぎらない。** 手元では設定を持たないので、空で返す
      （画面は「手元では出す先を持てない」と出す）。 */
@@ -2807,7 +2915,7 @@ const Backend = (function(){
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,
-          tpTargets, saveTpTargets, testTpTarget,
+          tpTargets, saveTpTargets, testTpTarget, tpSubmit,
           yearSetup, tickYearSetup, setupPlanSheets, saveVariantOrigin, saveEvents};
 })();
 /* ▲ src/js/backend.js ▲ */
@@ -4126,6 +4234,19 @@ function tpSheetName(mon){
    （右のクラスを押すと、いま選んでいる組へ入る）。 */
 let tpPick = "1";              /* いま選んでいる組。押して入れるときの行き先 */
 
+/* 交流級の着手／未着手。**組の中のチップそのものに出す。**
+   下に字でまとめて出していたころは、組の並びと読み合わせないと
+   どのクラスのことか分からなかった。
+   **色だけに頼らない。** 短い字と左端の太い線を必ず添える。 */
+const TP_ST = {
+  ok:   {mark:"済", why:"担任が「今週ぶんは書き終えた」と出している"},
+  base: {mark:"未", why:"担任がまだ出していない"}
+};
+/* **1コマでも書いてあれば済、にはしない。**
+   ちょっと触っただけの週と、出してよい週を、たんぽぽ担当が見分けられない。
+   担任がクラスの画面で「たんぽぽに提出」を押したものだけを済にする。 */
+const tpState = cls => tpSubmitted(cls) ? "ok" : "base";
+
 /* ── 出す先 ──────────────────────────────────
    **1本とはかぎらない。** たんぽぽ時間割が学年で分かれている学校も、
    年度でファイルを作り直す学校もある。「たんぽぽ出力先」シートが正本で、
@@ -4163,6 +4284,11 @@ function drawTargets(){
            + tpTargets.map((x, i) => "<option value='" + i + "'"
                + (x === now ? " selected" : "") + ">" + escText(x.name) + "</option>").join("")
            + "</select>"
+           /* **出す先を、その場で開ける。** 出したあと「入ったか」を見るのに、
+              毎回ドライブから探し直すことになっていた */
+           + (now ? "<a class='tptopen' href='" + escText(now.url) + "'"
+                  + " target='_blank' rel='noopener noreferrer'>"
+                  + "たんぽぽ時間割をひらく</a>" : "")
          : "<span class='hint bad'>1つもありません。足さないと出せません</span>")
       + "<button class='btn' id='tpTgtEdit'>出す先を直す</button></div>";
     const sel = $("tpTgtSel");
@@ -4266,9 +4392,15 @@ function drawTanpopoView(){
     + "たんぽぽ" + escText(g) + "組<span>" + tpIn(g).length + "人</span></button>"
     + "<div class='tpgbody'>"
     + (tpIn(g).length
-       ? tpIn(g).map((c, i) =>
-           "<button class='tpin' data-g='" + escText(g) + "' data-i='" + i + "'"
-           + " title='押すと、この1人を外す'>" + escText(c) + "<u>×</u></button>").join("")
+       ? tpIn(g).map((c, i) => {
+           /* **どのクラスが今週まだ書いていないかを、その場で見せる。**
+              下に字でまとめて出していたころは、組の並びと読み合わせる必要があった */
+           const st = tpState(c);
+           return "<button class='tpin st-" + st + "' data-g='" + escText(g) + "'"
+             + " data-i='" + i + "' title='" + escText(c + "：" + TP_ST[st].why)
+             + "。押すと、この1人を外す'>"
+             + escText(c) + "<em>" + TP_ST[st].mark + "</em><u>×</u></button>";
+         }).join("")
        : "<i>ここへ引っぱって入れる</i>")
     + "</div></div>").join("");
 
@@ -4287,7 +4419,12 @@ function drawTanpopoView(){
     + "</div></div>").join("");
 
   $("tpSel").innerHTML =
-    "<div class='tpplace'><div class='tpto'>" + left
+    "<div class='tpplace'><div class='tpto'>"
+    + "<div class='tpleg'><b>今週の提出</b>"
+    + ["ok","base"].map(k =>
+        "<span class='st-" + k + "'><i></i>" + TP_ST[k].mark + "</span>").join("")
+    + "</div>"
+    + left
     + "<button class='btn tpaddg' id='tpAddG'>組を足す</button></div>"
     + "<div class='tpfrom'>" + right + "</div></div>";
 
@@ -4346,27 +4483,29 @@ function tpWarnBoxes(){
   if(Backend.isGas() && tpTargets !== null && !tpTargets.length)
     return ["<div class='box'><b>出す先が1つもありません。</b>"
           + "「出す先を直す」から、たんぽぽ時間割のURLを1つ入れてください。</div>"];
-  const base  = chosen.filter(c => planState(c) === "base");
-  const upper = chosen.filter(c => planState(c) === "upper");
   const gone  = tpChosen().filter(c => allClasses().indexOf(c) < 0);
   const boxes = [];
-  if(base.length)
-    boxes.push("<div class='box'><b>" + base.map(escText).join("・")
-      + "</b> は今週まだ<b>基本時間割のまま</b>です。<br>"
-      + "このまま出すと、担任がまだ書いていない予定をたんぽぽへ配ることになります。</div>");
-  if(upper.length)
-    boxes.push("<div class='box'><b>" + upper.map(escText).join("・")
-      + "</b> は<b>上位（全校・学年）の予定しか入っていません</b>。担任は未着手です。</div>");
+  /* **着手／未着手は、ここに字で書かない。** 組の中のチップそのものに出す
+     （下にまとめて書くと、組の並びと読み合わせないと、どのクラスのことか
+     分からない）。ここに残すのは、組から外さないと直らないものだけ。 */
   if(gone.length)
     boxes.push("<div class='box'><b>" + gone.map(escText).join("・")
       + "</b> は<b>いまの学級編成にありません</b>。組から外してください。</div>");
   if(!chosen.length)
     boxes.push("<div class='box ok'>まだ誰も入れていません。"
       + "右のクラスを、左のたんぽぽの組へ引っぱってください。</div>");
-  else if(!boxes.length)
-    boxes.push("<div class='box ok'>入れている " + chosen.length
-      + " クラスは、いずれも今週の予定が入っています。</div>");
   return boxes;
+}
+
+/* **出す前だけの知らせ。** たんぽぽの面には出さない（組のチップが言う）。
+   出したものを見てたんぽぽ担当が支援員を組むので、まだ書き終えていない
+   週を配ると、あとでやり直しになる。 */
+function tpNotYetBox(){
+  const yet = tpChosenHere().filter(c => !tpSubmitted(c));
+  if(!yet.length) return "";
+  return "<div class='box'><b>" + yet.map(escText).join("・")
+       + "</b> は、担任がまだ<b>「たんぽぽに提出」を押していません</b>。<br>"
+       + "このまま出すと、書き終えていない週をたんぽぽへ配ることになります。</div>";
 }
 
 /* 出す中身を組む。**層を重ねたあとの、紙に出ているとおりの授業名。**
@@ -4405,7 +4544,13 @@ function reflectTanpopo(){
     + "<tr><th>出す児童</th><td>" + tpTotal() + " 人（" + tpTotal() + " 列）</td></tr>"
     + "<tr><th>交流級</th><td>"
       + chosen.map(c => escText(c) + "×" + tpCount(c)).join("、") + "</td></tr>";
-  $("tpDlgWarn").innerHTML = tpWarnBoxes().filter(b => b.indexOf("box ok") < 0).join("");
+  /* **出す前だけは、まだ出していないクラスを名指しする。**
+     たんぽぽの面そのものには字で書かない（組のチップが言う）が、
+     出すのは週に1回の大きな操作で、出したものを見てたんぽぽ担当が
+     支援員を組む。まだ書き終えていない週を配ると、あとでやり直しになる。
+     止めはしない（金曜までに全担任が書き終わらない週はある）。 */
+  $("tpDlgWarn").innerHTML =
+    tpWarnBoxes().filter(b => b.indexOf("box ok") < 0).join("") + tpNotYetBox();
   $("tpDlg").showModal();
   $("tpNo").focus();                    /* **既定は「出さない」。** */
 }
@@ -5730,6 +5875,45 @@ function paintSave(){
           : n   ? n + " コマぶんがまだシートに入っていない"
                 : "シートに入っている";
 }
+/* ── たんぽぽへの提出 ────────────────────────
+   **担任が「今週ぶんは書き終えた」と言う印。** 週ごとに立て直す。
+
+   1コマでも書いてあれば済、にはしない。ちょっと触っただけの週と、
+   出してよい週を、たんぽぽ担当が見分けられなくなる。
+   たんぽぽ担当はこれを見て支援員を組むので、あとから変わるとやり直しになる。
+
+   **たんぽぽの児童がいるクラスにだけ出す。** 全クラスに出すと、
+   関係のない28人が「押すものなのか」を毎週考えることになる。 */
+function paintTpSub(){
+  const b = $("tpSubBtn"), tx = $("tpSubTxt");
+  if(!b) return;
+  const cls = view.kind === "class" ? view.cls : "";
+  const show = !!cls && tpCount(cls) > 0;
+  b.hidden = !show;
+  if(!show) return;
+  const on = tpSubmitted(cls);
+  const info = tpSubmitInfo(cls);
+  b.classList.toggle("on", on);
+  b.setAttribute("aria-pressed", String(on));
+  tx.textContent = on ? "たんぽぽに提出ずみ" : "たんぽぽに提出";
+  b.title = on
+    ? "提出ずみ" + (info && info.at ? "（" + info.at + "）" : "")
+      + "　押すと取り消せる。週が変わればまた未に戻る"
+    : "今週ぶんを書き終えたら押す。たんぽぽ担当の画面で「済」になる";
+}
+function toggleTpSub(){
+  const cls = view.kind === "class" ? view.cls : "";
+  if(!cls || !Wait.guard()) return;
+  const on = !tpSubmitted(cls);
+  const w = Wait.begin(on ? "たんぽぽへ提出しています" : "提出を取り消しています");
+  Backend.tpSubmit(cls, on, () => {
+    Wait.end(w); paintTpSub();
+    if(view.kind === "tanpopo") drawTanpopoView();
+    toast(on ? "<b>たんぽぽに提出した</b>　週が変わると、また未に戻る"
+             : "提出を取り消した");
+  }, why => { Wait.end(w); toast(why); });
+}
+
 function doSave(loud){
   if(!Backend.isGas()){ save(); if(loud) toast("この端末に保存した（本番ではシートへ）"); return; }
   saveState.busy = true; paintSave();
@@ -5782,6 +5966,7 @@ function refreshWeek(){
   $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
   paintArchive();                 /* 週をまたぐと年度が変わる。**そのつど見る** */
+  paintTpSub();                   /* 提出の印は週ごと。週をまたぐと未に戻る */
   if(view.kind === "tanpopo"){
     /* **待たせない。** 先に面を描いて、出す先は届いてから描き直す。
        出す先は1回だけ読む（週を繰るたびに読みに行かない） */
@@ -6037,6 +6222,7 @@ function wire(){
      doSave 自体は弾かない（重なりの入れ直しがコードから呼ぶ。弾くと黙って送られない） */
   on("saveBtn","click", () => { if(Wait.guard()) doSave(true); });
   on("lockBtn","click", () => setLock(!isLocked()));
+  on("tpSubBtn","click", toggleTpSub);
   /* 新年度の設定。**ふだんは管理・システムの中だけ。**
      未了のあいだだけ、左メニューにも出る（結線は dialogs.js） */
   on("nyOpen","click", () => { $("adminDlg").close(); openNewYearDlg(); });

@@ -285,10 +285,10 @@ const Sheets_asClass = v => ev("Sheets.asClass")(v);
 /* ── シートを作る ─────────────────────────────── */
 console.log("■ シートを作る");
 let made = ev("Sheets.setup()");
-ok("11枚＋取り込み用の2枚ができる", made.made.length === 13, made.made);
+ok("12枚＋取り込み用の2枚ができる", made.made.length === 14, made.made);
 made = ev("Sheets.setup()");
 ok("2回目は何も作らない（何度走らせても同じ）",
-   made.made.length === 0 && made.kept.length === 11, made);
+   made.made.length === 0 && made.kept.length === 12, made);
 ok("列は名前で引ける", Object.keys(ev('Sheets.head("週案").at')).length >= 11);
 
 console.log("\n■ 既定値の読み取り");
@@ -1541,6 +1541,36 @@ console.log("\n■ 新年度の設定は、手順として出す");
     ok("いま順番の段には、順番でないとは言わない",
        g1.every(x => x.wait === ""), g1.map(x => x.wait));
   }
+})();
+
+console.log("\n■ たんぽぽへの提出は、担任が立てる印");
+(function(){
+  const mon = "2026-11-16";
+  ok("初めは、誰も提出していない",
+     Object.keys(ev('Store.tpSubmits(2026, "' + mon + '")')).length === 0);
+  let s = ev('Store.tpSubmit(2026, "' + mon + '", "5-1", true)');
+  ok("立てると、そのクラスだけ済になる",
+     !!s["5-1"] && !s["5-2"], s);
+  ok("誰がいつ立てたかが残る", s["5-1"].by === EMAIL && !!s["5-1"].at, s["5-1"]);
+  /* **外せるようにしておく。** 押し間違いを直せないと、押すのが怖くなる */
+  s = ev('Store.tpSubmit(2026, "' + mon + '", "5-1", false)');
+  ok("外せる（押し間違いを直せる）", !s["5-1"], s);
+  /* 2回立てても行は増えない */
+  ev('Store.tpSubmit(2026, "' + mon + '", "5-1", true)');
+  ev('Store.tpSubmit(2026, "' + mon + '", "5-1", true)');
+  ok("2回立てても、行は増えない",
+     SHEETS["たんぽぽ提出"].filter(r => String(r[2]) === "5-1").length === 1,
+     SHEETS["たんぽぽ提出"]);
+  /* **週ごとに立て直す。** 前の週の印が残っていると、たんぽぽ担当が
+     組んだあとで予定が変わる */
+  ok("次の週は、また未に戻る",
+     !ev('Store.tpSubmits(2026, "2026-11-23")')["5-1"]);
+  ok("週の読みに、提出の印も載る（別に取りに行かせない）",
+     !!ev('Store.readWeek(2026, "' + mon + '", [])').submits["5-1"]);
+  let why = "";
+  try{ ev('Store.tpSubmit(2026, "11/16", "5-1", true)'); }
+  catch(e){ why = String(e && e.message); }
+  ok("月曜の形が違えば受け取らない", why.indexOf("月曜") >= 0, why);
 })();
 
 console.log("\n■ 使い始める前の年度には、新年度の知らせを出さない");

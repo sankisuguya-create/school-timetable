@@ -190,6 +190,10 @@ function tpGroups(){
   return out;
 }
 const tpIn = g => (Y().tanpopo || {})[String(g)] || [];
+/* たんぽぽへの提出。**担任が「今週ぶんは書き終えた」と言った印。**
+   週ごとの持ちもので、月曜が変われば、また未に戻る。 */
+const tpSubmitted = cls => !!(week().tpSub || {})[String(cls)];
+const tpSubmitInfo = cls => (week().tpSub || {})[String(cls)] || null;
 /* 1人足す／1人減らす。**同じ交流級を2つ入れれば2人（＝2列）。** */
 function tpAdd(g, cls){
   const t = Y().tanpopo, k = String(g);

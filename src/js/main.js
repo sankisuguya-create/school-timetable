@@ -31,6 +31,45 @@ function paintSave(){
           : n   ? n + " コマぶんがまだシートに入っていない"
                 : "シートに入っている";
 }
+/* ── たんぽぽへの提出 ────────────────────────
+   **担任が「今週ぶんは書き終えた」と言う印。** 週ごとに立て直す。
+
+   1コマでも書いてあれば済、にはしない。ちょっと触っただけの週と、
+   出してよい週を、たんぽぽ担当が見分けられなくなる。
+   たんぽぽ担当はこれを見て支援員を組むので、あとから変わるとやり直しになる。
+
+   **たんぽぽの児童がいるクラスにだけ出す。** 全クラスに出すと、
+   関係のない28人が「押すものなのか」を毎週考えることになる。 */
+function paintTpSub(){
+  const b = $("tpSubBtn"), tx = $("tpSubTxt");
+  if(!b) return;
+  const cls = view.kind === "class" ? view.cls : "";
+  const show = !!cls && tpCount(cls) > 0;
+  b.hidden = !show;
+  if(!show) return;
+  const on = tpSubmitted(cls);
+  const info = tpSubmitInfo(cls);
+  b.classList.toggle("on", on);
+  b.setAttribute("aria-pressed", String(on));
+  tx.textContent = on ? "たんぽぽに提出ずみ" : "たんぽぽに提出";
+  b.title = on
+    ? "提出ずみ" + (info && info.at ? "（" + info.at + "）" : "")
+      + "　押すと取り消せる。週が変わればまた未に戻る"
+    : "今週ぶんを書き終えたら押す。たんぽぽ担当の画面で「済」になる";
+}
+function toggleTpSub(){
+  const cls = view.kind === "class" ? view.cls : "";
+  if(!cls || !Wait.guard()) return;
+  const on = !tpSubmitted(cls);
+  const w = Wait.begin(on ? "たんぽぽへ提出しています" : "提出を取り消しています");
+  Backend.tpSubmit(cls, on, () => {
+    Wait.end(w); paintTpSub();
+    if(view.kind === "tanpopo") drawTanpopoView();
+    toast(on ? "<b>たんぽぽに提出した</b>　週が変わると、また未に戻る"
+             : "提出を取り消した");
+  }, why => { Wait.end(w); toast(why); });
+}
+
 function doSave(loud){
   if(!Backend.isGas()){ save(); if(loud) toast("この端末に保存した（本番ではシートへ）"); return; }
   saveState.busy = true; paintSave();
@@ -83,6 +122,7 @@ function refreshWeek(){
   $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
   paintArchive();                 /* 週をまたぐと年度が変わる。**そのつど見る** */
+  paintTpSub();                   /* 提出の印は週ごと。週をまたぐと未に戻る */
   if(view.kind === "tanpopo"){
     /* **待たせない。** 先に面を描いて、出す先は届いてから描き直す。
        出す先は1回だけ読む（週を繰るたびに読みに行かない） */
@@ -338,6 +378,7 @@ function wire(){
      doSave 自体は弾かない（重なりの入れ直しがコードから呼ぶ。弾くと黙って送られない） */
   on("saveBtn","click", () => { if(Wait.guard()) doSave(true); });
   on("lockBtn","click", () => setLock(!isLocked()));
+  on("tpSubBtn","click", toggleTpSub);
   /* 新年度の設定。**ふだんは管理・システムの中だけ。**
      未了のあいだだけ、左メニューにも出る（結線は dialogs.js） */
   on("nyOpen","click", () => { $("adminDlg").close(); openNewYearDlg(); });

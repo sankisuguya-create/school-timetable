@@ -545,16 +545,17 @@ await p.locator("#tpSel .tpchip[data-c='3-3']").click(); await p.waitForTimeout(
 ok("押すと1組へ入る", await p.evaluate(() => tpIn("1")).then
    ? true : (await p.evaluate(() => tpIn("1"))).indexOf("3-3") >= 0,
    await p.evaluate(() => tpIn("1")));
-ok("予定が入っているクラスだけなら知らせは出ない",
-   (await p.locator("#tpWarn").innerText()).indexOf("基本時間割のまま") < 0,
-   await p.locator("#tpWarn").innerText());
 await p.locator("#tpSel .tpchip[data-c='1-1']").click(); await p.waitForTimeout(200);
 await p.locator("#tpSel .tpchip[data-c='3-1']").click(); await p.waitForTimeout(200);
+/* **済／未は、下の欄に字で書かない。** 組のチップそのものが言う
+   （下にまとめて書くと、組の並びと読み合わせないと、どのクラスか分からない） */
 const tpWarn = await p.locator("#tpWarn").innerText();
-ok("基本時間割から動いていないクラスを知らせる",
-   tpWarn.indexOf("1-1") >= 0 && tpWarn.indexOf("基本時間割のまま") >= 0, tpWarn);
-ok("上位の予定しか入っていないクラスも知らせる",
-   tpWarn.indexOf("3-1") >= 0 && tpWarn.indexOf("担任は未着手") >= 0, tpWarn);
+ok("下の欄には、済／未を字で書かない",
+   tpWarn.indexOf("基本時間割のまま") < 0 && tpWarn.indexOf("未着手") < 0
+   && tpWarn.indexOf("提出") < 0, tpWarn);
+ok("組のチップが、まだのクラスを言う", await p.evaluate(() =>
+     [...document.querySelectorAll(".tpin")].some(x => /1-1/.test(x.textContent)
+       && x.classList.contains("st-base"))) === true);
 ok("出す人数と列の数を出す",
    (await p.locator("#tpCount").innerText()).indexOf("3 人") >= 0,
    await p.locator("#tpCount").innerText());
@@ -616,8 +617,10 @@ ok("どの交流級を何人出すかを言う", tpAsked.indexOf("3-3") >= 0, tp
 ok("同じ名前のシートは残すことを言う",
    tpAsked.indexOf("名前を変えて残す") >= 0, tpAsked.slice(0, 400));
 ok("シートが週の順に並ぶことを言う", tpAsked.indexOf("週の順") >= 0, tpAsked.slice(0, 400));
-ok("基本時間割のままのクラスも言う",
-   (await p.locator("#tpDlgWarn").innerText()).indexOf("基本時間割") >= 0,
+/* **出す前だけは名指しする。** 出したものを見てたんぽぽ担当が支援員を
+   組むので、まだ書き終えていない週を配ると、あとでやり直しになる */
+ok("出す前は、まだ提出していないクラスを名指しする",
+   (await p.locator("#tpDlgWarn").innerText()).indexOf("提出") >= 0,
    await p.locator("#tpDlgWarn").innerText());
 ok("担当者・場所の行には書かないことを言う",
    tpAsked.indexOf("授業名の行だけ") >= 0, tpAsked.slice(0, 600));
@@ -1303,6 +1306,103 @@ ok("「自動に戻す」で日付どおりに戻る", await (async () => {
      return await p.evaluate(() => week().variant === autoVariant(wkKey()))
          && await p.locator("#abAuto").isHidden();
    })() === true);
+
+console.log("\n■ たんぽぽへの提出は、担任が押す");
+await p.evaluate(() => { Y().tanpopo = {"1":["1-1","3-2"], "2":["6-1"]}; save(); });
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
+await p.locator(".tile[data-c='1-1']").click(); await p.waitForTimeout(500);
+/* **たんぽぽの児童がいるクラスにだけ出す。** 全クラスに出すと、
+   関係のない人が「押すものなのか」を毎週考えることになる */
+ok("たんぽぽの児童がいるクラスには、提出ボタンが出る",
+   await p.locator("#tpSubBtn").isVisible() === true);
+ok("提出ボタンは、保存の右隣にある", await p.evaluate(() => {
+     const s = document.getElementById("saveBtn").getBoundingClientRect();
+     const b2 = document.getElementById("tpSubBtn").getBoundingClientRect();
+     return b2.left >= s.right - 2 && Math.abs(b2.top - s.top) < 12;
+   }) === true);
+ok("押す前は塗ってある（押していないほうを目立たせる）", await p.evaluate(() => {
+     const b2 = document.getElementById("tpSubBtn");
+     const bg = getComputedStyle(b2).backgroundColor;
+     return !b2.classList.contains("on") && bg !== "rgba(0, 0, 0, 0)"
+         && !/255, 255, 255/.test(bg);
+   }) === true, await p.evaluate(() => getComputedStyle($("tpSubBtn")).backgroundColor));
+await p.locator("#tpSubBtn").click(); await p.waitForTimeout(400);
+ok("押すと、提出ずみになる",
+   (await p.locator("#tpSubTxt").innerText()).indexOf("提出ずみ") >= 0,
+   await p.locator("#tpSubTxt").innerText());
+/* **色だけに頼らない。** 字そのものが変わる */
+ok("色だけでなく、字も変わる",
+   await p.evaluate(() => $("tpSubBtn").getAttribute("aria-pressed")) === "true");
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
+await p.locator(".tile[data-c='1-2']").click(); await p.waitForTimeout(500);
+ok("たんぽぽの児童がいないクラスには、出さない",
+   await p.locator("#tpSubBtn").isHidden() === true);
+
+console.log("\n■ たんぽぽの組は、提出したかをチップそのものが言う");
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
+await p.locator(".master[data-go='tanpopo']").click(); await p.waitForTimeout(500);
+ok("出したクラスと、まだのクラスを見分ける",
+   await p.evaluate(() => [...document.querySelectorAll(".tpin")]
+     .map(x => x.className.match(/st-\w+/)[0]).join(",")) === "st-ok,st-base,st-base",
+   await p.evaluate(() => [...document.querySelectorAll(".tpin")].map(x => x.className)));
+/* **色だけに頼らない。** どちらも短い字を持つ */
+ok("色だけでなく、字でも言う（済／未）",
+   await p.evaluate(() => [...document.querySelectorAll(".tpin em")]
+     .map(x => x.textContent).join(",")) === "済,未,未",
+   await p.evaluate(() => [...document.querySelectorAll(".tpin em")].map(x => x.textContent)));
+ok("済と未は色が違う（左端の線）", await p.evaluate(() => {
+     const c = [...document.querySelectorAll(".tpin")]
+       .map(x => getComputedStyle(x, "::before").backgroundColor);
+     return new Set(c).size === 2;
+   }) === true);
+ok("見分け方は、組の上に置く（下ではない）", await p.evaluate(() => {
+     const l = document.querySelector(".tpleg"), g = document.querySelector(".tpgrp");
+     return !!l && !!g && l.getBoundingClientRect().bottom <= g.getBoundingClientRect().top;
+   }) === true);
+/* **下の字では書かない。** 組の並びと読み合わせる手間をなくしたのが目的 */
+ok("下の欄には、済／未を字で書かない",
+   await p.evaluate(() => {
+     const s = document.getElementById("tpWarn").innerText;
+     return s.indexOf("基本時間割のまま") < 0 && s.indexOf("上位（全校・学年）") < 0;
+   }) === true, await p.locator("#tpWarn").innerText());
+/* **1コマでも書いてあれば済、にはしない。** ちょっと触っただけの週と、
+   出してよい週を、たんぽぽ担当が見分けられなくなる */
+ok("書いただけでは済にならない（押したものだけが済）", await p.evaluate(() => {
+     const w = week();
+     w.home["3-2"] = {[ck(0,"p1")]:{title:"国語"}};
+     save(); drawTanpopoView();
+     const el2 = [...document.querySelectorAll(".tpin")].find(x => /3-2/.test(x.textContent));
+     return el2.classList.contains("st-base");
+   }) === true);
+
+console.log("\n■ 字は、日本語の字で出る");
+/* **日本語の字形を持つフォントを、英字だけのフォントより先に置く。**
+   外すと「編」などが中国語の字形で出る */
+ok("日本語のフォントを先に並べている", await p.evaluate(() => {
+     const f = getComputedStyle(document.body).fontFamily;
+     const ja = ["Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo"];
+     const i = f.indexOf("system-ui");
+     return ja.every(n => f.indexOf(n) >= 0 && (i < 0 || f.indexOf(n) < i));
+   }) === true, await p.evaluate(() => getComputedStyle(document.body).fontFamily));
+ok("小さい字がかすれる Yu Gothic（UI でないほう）は並べない",
+   await p.evaluate(() => {
+     const f = getComputedStyle(document.body).fontFamily;
+     return !/"?Yu Gothic"?\s*(,|$)/.test(f.replace(/Yu Gothic UI/g, ""));
+   }) === true, await p.evaluate(() => getComputedStyle(document.body).fontFamily));
+/* **字幅を詰めるのは紙の上だけ。** 画面の小さい字に掛けると字間がばらつく */
+ok("字幅を詰めるのは紙の上だけ", await p.evaluate(() => {
+     const b = getComputedStyle(document.body).fontFeatureSettings || "normal";
+     const s = getComputedStyle(document.querySelector(".sheet")).fontFeatureSettings || "";
+     return b.indexOf("palt") < 0 && s.indexOf("palt") >= 0;
+   }) === true, await p.evaluate(() => [
+     getComputedStyle(document.body).fontFeatureSettings,
+     getComputedStyle(document.querySelector(".sheet")).fontFeatureSettings]));
+ok("左の並びの「？」が、A週B週の上に重ならない", await p.evaluate(() => {
+     const q = document.querySelector(".wkrow > .helpq"), b2 = document.getElementById("abB");
+     if(!q || !b2) return "無い";
+     const a = q.getBoundingClientRect(), c = b2.getBoundingClientRect();
+     return !(a.left < c.right && a.right > c.left && a.top < c.bottom && a.bottom > c.top);
+   }) === true);
 
 console.log("\n■ 入口の表（上が見切れない・説明が要る）");
 await p.locator("[data-act='gate']").first().click(); await p.waitForTimeout(300);

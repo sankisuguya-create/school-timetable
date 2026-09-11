@@ -549,6 +549,9 @@ const Backend = (function(){
       }
       loadedWeek[weekTag(t, y, m)] = Date.now();
     }
+    /* **提出の印は、対象にかかわらず載せ替える。**
+       週ごとの持ちもので、どのクラスを読んだかとは関係しない */
+    if(w && w.submits) cur.tpSub = w.submits;
   }
   /* **開きっぱなしの画面を、たまに読み直す。**
      木曜の夕方に30人が同じ週を触る運用で、開いたまま置いている担任に
@@ -672,6 +675,29 @@ const Backend = (function(){
       .apiExportWeek(fy(), wkKey(), titles, cols, slots, name, url || "");
   }
 
+  /* ── たんぽぽへの提出 ────────────────────────
+     **担任が「今週ぶんは書き終えた」と言った印。** 週ごとに立て直す。
+     手元では、この端末の中だけに持つ（シートにつないでいない）。 */
+  function tpSubmit(cls, on, ok, ng){
+    const w = week();
+    if(!onGas){
+      if(!w.tpSub) w.tpSub = {};
+      if(on) w.tpSub[cls] = {at:"（手元）", by:"（手元）"};
+      else delete w.tpSub[cls];
+      save();
+      return ok(w.tpSub);
+    }
+    google.script.run
+      .withSuccessHandler(r => {
+        const cw = week();
+        cw.tpSub = r || {};
+        save();
+        ok(cw.tpSub);
+      })
+      .withFailureHandler(e => ng(String((e && e.message) || "立てられなかった")))
+      .apiTpSubmit(fy(), wkKey(), cls, !!on);
+  }
+
   /* ── たんぽぽの出す先 ────────────────────────
      **1本とはかぎらない。** 手元では設定を持たないので、空で返す
      （画面は「手元では出す先を持てない」と出す）。 */
@@ -753,6 +779,6 @@ const Backend = (function(){
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,
-          tpTargets, saveTpTargets, testTpTarget,
+          tpTargets, saveTpTargets, testTpTarget, tpSubmit,
           yearSetup, tickYearSetup, setupPlanSheets, saveVariantOrigin, saveEvents};
 })();
