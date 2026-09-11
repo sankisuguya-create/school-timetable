@@ -22,7 +22,7 @@
 npm install               検査に playwright が要る（1回だけ）
 python3 build.py          src/ から dist/index.html と gas/plan.html を作る
 python3 build.py --check  生成物が src と一致するか調べる
-node tools/check.mjs      画面を動かして確かめる（354件）
+node tools/check.mjs      画面を動かして確かめる（363件）
 node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（253件）
 node gas/storecheck.js    シートの読み書きを確かめる（338件）
 node gas/gatecheck.js     関門を確かめる（27件）

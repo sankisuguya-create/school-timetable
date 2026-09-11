@@ -643,8 +643,14 @@ ok("Esc で閉じても出さない", await p.locator("#tpDlg").evaluate(d => d.
    出す先の形をこちらが毎週作るので、形を読み違える余地そのものが無い */
 ok("「いまの形をみる」は置かない", await p.locator("#tpShape").count() === 0);
 ok("「この形で作りなおす」も置かない", await p.locator("#tpBuild").count() === 0);
-ok("たんぽぽの面に押すものは「出す」だけ",
-   await p.locator("#tpView .tpact .btn").count() === 1,
+/* **出すボタンは見出しの右。** 下に置いていたころは、組を並べ終えてから
+   目で探しに行っていた。この面でいちばん大きく動く操作なので、上に出す */
+ok("出すボタンは、見出しの右にある", await p.evaluate(() => {
+     const h = document.querySelector(".tphead h2");
+     return !!h && h.contains(document.getElementById("tpGo"));
+   }) === true);
+ok("下の欄には、押すものを置かない",
+   await p.locator("#tpView .tpact .btn").count() === 0,
    await p.locator("#tpView .tpact .btn").count());
 
 /* 手元では書き込まない。**書かないことを画面に出す** */
@@ -665,13 +671,14 @@ ok("組と交流級の上端がそろっている", await p.evaluate(() => {
      const from = document.querySelector(".tpfrom").getBoundingClientRect();
      return Math.abs(to.top - from.top) < 2;
    }) === true);
-ok("説明は畳んである（開かないと出ない）",
-   await p.locator(".tphead details").evaluate(d => d.open) === false);
-ok("畳んだ説明は開ける", await (async () => {
-     await p.locator(".tphead summary").click(); await p.waitForTimeout(150);
-     const open = await p.locator(".tphead details").evaluate(d => d.open);
-     await p.locator(".tphead summary").click(); await p.waitForTimeout(150);
-     return open;
+/* 説明は ？ に寄せた。**畳んだ説明を毎回たどらせない。**
+   ほかの面の「？」と同じ押し方にそろえる */
+ok("説明は ？ から読める", await (async () => {
+     await p.locator(".tphead .helpq").click(); await p.waitForTimeout(250);
+     const open = await p.locator("#helpDlg").evaluate(d => d.open);
+     const txt = await p.locator("#helpBody").innerText();
+     await p.locator("#helpDlg .dlgx").click(); await p.waitForTimeout(200);
+     return open && txt.indexOf("たんぽぽ") >= 0;
    })() === true);
 ok("出す先のシート名を面にも出す",
    /\d+月\d+週/.test(await p.locator("#tpCount").innerText()),
@@ -1390,6 +1397,49 @@ ok("欄の中の Ctrl+Z は横取りしない", await p.evaluate(() => {
      e.blur();
      return ev2.defaultPrevented === false;
    }) === true);
+
+console.log("\n■ たんぽぽの面の見出し（出すボタン・出す週）");
+await p.evaluate(() => { Y().tanpopo = {"1":["1-1","3-2"]};
+                         week().tpSub = {}; save(); drawTanpopoView(); });
+await p.waitForTimeout(300);
+/* 説明は ？ に寄せる。畳んだ説明を毎回たどらせない */
+ok("「この面ですること」の折りたたみは置かない",
+   await p.locator(".tphead details").count() === 0);
+ok("説明は ？ から読める", await p.locator(".tphead .helpq").count() === 1);
+/* **出す週を、ボタンのとなりにもう一度出す。** 左メニューの週とは離れている */
+ok("出す週を、ボタンのとなりに出す",
+   /\d+\/\d+\s*→\s*\d+\/\d+/.test(await p.locator("#tpWeek").innerText()),
+   await p.locator("#tpWeek").innerText());
+ok("まだのクラスがあれば、出すボタンは緑にしない",
+   await p.evaluate(() => $("tpGo").classList.contains("ready")) === false);
+ok("まだの数を、週のとなりに出す",
+   (await p.locator("#tpWeek").innerText()).indexOf("未提出 2 クラス") >= 0,
+   await p.locator("#tpWeek").innerText());
+await p.evaluate(() => {
+  week().tpSub = {"1-1":{at:"x",by:"y"}, "3-2":{at:"x",by:"y"}};
+  save(); drawTanpopoView();
+});
+await p.waitForTimeout(300);
+ok("全クラスが出していれば、出すボタンが緑になる",
+   await p.evaluate(() => $("tpGo").classList.contains("ready")) === true);
+/* **色だけに頼らない。** 緑と青は3型で ΔE 7.3（閾値18）と潰れる */
+ok("色だけでなく、ボタンの字も変わる（✓）",
+   (await p.locator("#tpGo").innerText()).indexOf("✓") === 0,
+   await p.locator("#tpGo").innerText());
+ok("色だけでなく、となりにも字で出す",
+   (await p.locator("#tpWeek").innerText()).indexOf("ぜんぶ提出ずみ") >= 0,
+   await p.locator("#tpWeek").innerText());
+ok("緑の上でも字が読める（4.5以上）", await p.evaluate(() => {
+     const lin = v => { v /= 255; return v <= .03928 ? v/12.92
+                                 : Math.pow((v + .055)/1.055, 2.4); };
+     const L = c => { const m = c.match(/\d+/g).map(Number);
+       return .2126*lin(m[0]) + .7152*lin(m[1]) + .0722*lin(m[2]); };
+     const s = getComputedStyle(document.getElementById("tpGo"));
+     const x = L(s.backgroundColor), y = L(s.color);
+     return (Math.max(x,y) + .05) / (Math.min(x,y) + .05) >= 4.5;
+   }) === true);
+await p.evaluate(() => { week().tpSub = {}; save(); drawTanpopoView(); });
+await p.waitForTimeout(200);
 
 console.log("\n■ たんぽぽの面（ロック・交流級の畳み・外す確認）");
 await p.evaluate(() => { Y().tanpopo = {"1":["1-1"]}; save(); });

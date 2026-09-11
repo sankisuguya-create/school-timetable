@@ -316,9 +316,27 @@ button,select,input,textarea{font:inherit;color:inherit}
 .tpfromq:hover{background:var(--hover);border-color:var(--ink-link);color:var(--ink-link)}
 .tpfromq span{color:var(--tx-sub);font-weight:400}
 .tpfromb{margin-top:10px;display:flex;flex-direction:column;gap:8px}
-/* たんぽぽの面のロック。見出しの右に置く */
-.tphead h2{display:flex;align-items:center;gap:10px}
+/* 見出しの行。出すボタン・出す週・ロックを、見出しの右へ並べる */
+.tphead{position:relative}
+.tphead h2{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .tphead h2 .lock{font-size:12px;padding:5px 10px}
+.tphead h2 .grow{flex:1}
+.tphead>.helpq{position:absolute;top:4px;right:0;margin:0;opacity:1}
+/* 出すボタン。**この面でいちばん大きく動く操作。** 見出しのとなりに置く */
+.tpgo{font-size:13px;padding:8px 16px}
+/* 全クラスが出していれば緑。**色だけに頼らない** ── 緑と青は3型で潰れるので、
+   ✓ と、となりの字（ぜんぶ提出ずみ）を必ず添える */
+.btn.tpgo.ready{background:var(--ok,#2F6E4E);border-color:var(--ok,#2F6E4E);color:#fff}
+.btn.tpgo.ready:hover{filter:brightness(1.08)}
+/* 出す週。**左メニューの週とは離れているので、ここにもう一度出す** */
+.tpweek{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;
+  color:var(--tx-sub);padding:5px 11px;border:1px solid var(--line);
+  border-radius:var(--r-sm);background:var(--card);white-space:nowrap}
+.tpweek b{color:var(--tx);font-size:13.5px;font-variant-numeric:tabular-nums}
+.tpweek i{font-style:normal;font-weight:700;font-size:11.5px;
+  border-radius:99px;padding:1px 8px;border:1px solid currentColor}
+.tpweek i.ok{color:var(--ok,#2F6E4E)}
+.tpweek i.yet{color:var(--cat-clash)}
 .tpfrom{display:flex;flex-direction:column;gap:8px}
 .tpto{display:flex;flex-direction:column;gap:8px}
 .tpgrp{border:1px solid var(--line);border-radius:var(--r);background:var(--card);
@@ -1237,35 +1255,26 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 
       <!-- たんぽぽの面。週案の紙ではないので、紙の代わりにここを出す -->
       <div class="tpview" id="tpView" hidden>
-        <div class="tphead">
+        <div class="tphead" data-help="tanpopo">
         <h2>たんぽぽ
+          <!-- 出すボタンは、見出しの右。**この面でいちばん大きく動く操作。**
+               下に置いていたころは、組を並べ終えてから目で探しに行っていた -->
+          <button class="btn go tpgo" id="tpGo">たんぽぽ時間割へ出す</button>
+          <span class="tpweek" id="tpWeek"></span>
+          <span class="grow"></span>
           <!-- ソフトロック。**この面からの書き込みを止める。**
                週案の紙と同じ作りで、この端末にだけ残る -->
           <button class="lock" id="tpLockBtn" aria-pressed="false"
                   title="この面からの書き込みを止める">
             <svg width="15" height="15"><use href="#i-lock"/></svg>
             <span id="tpLockTxt">ロック</span></button></h2>
-        <details>
-          <summary>この面ですること</summary>
-          <p>右の<b>交流級</b>を、左の<b>たんぽぽの組</b>へ引っぱって入れる。
-             <b>1回入れると児童1人＝出す先の1列。</b>同じ組へ2回入れれば2人。<br>
-             出す先の列は<b>たんぽぽ1組・2組…の順</b>に並び、組の中はクラス順になる。
-             偶数の組は地の色と太い縦線で区切る。<br>
-             <b>出すと、たんぽぽ時間割に「9月1週」という名前のシートが1枚できる。</b>
-             同じ名前のシートがあれば、消さずに名前を変えて残す。<br>
-             入れた組は<b>クラス表の「たんぽぽ交流級」欄</b>に組の番号として残る
-             （<code>1</code>／<code>1,2</code>）。表から直してもよい。</p>
-        </details>
       </div>
       <!-- 出す先。**1本とはかぎらない。**
            たんぽぽ時間割が学年で分かれている学校も、年度で作り直す学校もある -->
       <div class="tptgt" id="tpTgt"></div>
       <div class="tpsel" id="tpSel"></div>
       <div class="tpwarn" id="tpWarn"></div>
-      <div class="tpact">
-        <button class="btn go" id="tpGo">たんぽぽ時間割へ出す</button>
-        <span class="hint" id="tpCount"></span>
-      </div>
+      <div class="tpact"><span class="hint" id="tpCount"></span></div>
       </div>
     </main>
 
@@ -1666,7 +1675,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.15.0";
+let APP_VERSION = "1.16.0";
 let BUILD_DATE  = "2026-09-11";
 
 /* 時程。行を固定しない（学校ごとに違う）。
@@ -4881,12 +4890,29 @@ function drawTanpopoView(){
   /* 出す先が1つも無いあいだ、直している最中は出させない。
      **どこへ出るか分からないまま押させない。** */
   const tgt = tpTargetNow();
+  const chosen = tpChosenHere();
   $("tpGo").disabled = !tpTotal() || tpTgtEdit
                     || (typeof isLocked === "function" && isLocked())
                     || (Backend.isGas() && !tgt);
+  /* **全クラスが出していれば、出すボタンを緑にする。**
+     ただし色だけに頼らない ── 緑と青は3型で ΔE 7.3（閾値18）と潰れるので、
+     ✓ と字を必ず添える（色を外しても、出してよい週かが分かる）。 */
+  const yet = chosen.filter(c => !tpSubmitted(c));
+  const allIn = chosen.length > 0 && !yet.length;
+  $("tpGo").classList.toggle("ready", allIn);
+  $("tpGo").textContent = allIn ? "✓ たんぽぽ時間割へ出す" : "たんぽぽ時間割へ出す";
+  $("tpGo").title = !chosen.length ? "先に交流級を組へ入れる"
+    : allIn ? "入れている " + chosen.length + " クラスは、ぜんぶ提出ずみ"
+            : "まだ " + yet.length + " クラスが提出していない（" + yet.join("・") + "）";
+  /* **出す週を、ボタンのとなりにもう一度出す。** 左メニューの週とは離れていて、
+     組を並べているうちに「どの週を出すのか」が目から外れる */
+  $("tpWeek").innerHTML = "<b>" + md(monday) + " → " + md(addDays(monday, 4)) + "</b>"
+    + "<span>の週を出す</span>"
+    + (chosen.length ? (allIn ? "<i class='ok'>ぜんぶ提出ずみ</i>"
+                              : "<i class='yet'>未提出 " + yet.length + " クラス</i>") : "");
   $("tpCount").innerHTML = tpTotal()
     ? "出すのは <b>" + tpTotal() + " 人</b>（" + tpTotal() + " 列）・"
-      + "<b>" + tpChosenHere().length + " クラス</b>　シート名 <b>"
+      + "<b>" + chosen.length + " クラス</b>　シート名 <b>"
       + escText(tpSheetName()) + "</b>"
       + (tgt ? "　出す先 <b>" + escText(tgt.name) + "</b>" : "")
     : "";
@@ -5669,6 +5695,17 @@ const HELP = {
        + "その1つには ⚠ が付いていて、押す前に必ず突き合わせが入ります。",
        "<i>はじめの人がつまずくところ：</i>やることは主に管理の3人の仕事です。"
        + "自分の担当でなければ、開いて見るだけで構いません。"]},
+  tanpopo: {t:"たんぽぽ",
+    b:["<b>たんぽぽ学級へ渡す時間割を作る画面です。</b>"
+       + "左の<b>たんぽぽの組</b>が、そのまま出す先の列の並びになります。",
+       "<b>交流級から入れる</b>を開いて、クラスを組へ引っぱるか押すかで入れます。"
+       + "<b>1回入れると児童1人＝出す先の1列。</b>同じ組へ2回入れれば2人です。",
+       "組の中のクラスに付く <b>済／未</b> は、"
+       + "その担任が「たんぽぽに提出」を押したかどうかです。",
+       "<b>出すと、たんぽぽ時間割に「9月1週」という名前のシートが1枚できます。</b>"
+       + "同じ名前のシートがあれば、消さずに名前を変えて残します。",
+       "<i>はじめの人がつまずくところ：</i>入れた組は「学級編成」の"
+       + "たんぽぽ交流級の欄に残ります。年度の初めに直すのはそちらです。"]},
   month: {t:"月で見る（B4）",
     b:["<b>いま見ている週から4週間ぶんを、2×2に並べて見る画面です。</b>"
        + "B4 の紙よこ1枚に、そのまま刷れます。",

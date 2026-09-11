@@ -310,12 +310,29 @@ function drawTanpopoView(){
   /* 出す先が1つも無いあいだ、直している最中は出させない。
      **どこへ出るか分からないまま押させない。** */
   const tgt = tpTargetNow();
+  const chosen = tpChosenHere();
   $("tpGo").disabled = !tpTotal() || tpTgtEdit
                     || (typeof isLocked === "function" && isLocked())
                     || (Backend.isGas() && !tgt);
+  /* **全クラスが出していれば、出すボタンを緑にする。**
+     ただし色だけに頼らない ── 緑と青は3型で ΔE 7.3（閾値18）と潰れるので、
+     ✓ と字を必ず添える（色を外しても、出してよい週かが分かる）。 */
+  const yet = chosen.filter(c => !tpSubmitted(c));
+  const allIn = chosen.length > 0 && !yet.length;
+  $("tpGo").classList.toggle("ready", allIn);
+  $("tpGo").textContent = allIn ? "✓ たんぽぽ時間割へ出す" : "たんぽぽ時間割へ出す";
+  $("tpGo").title = !chosen.length ? "先に交流級を組へ入れる"
+    : allIn ? "入れている " + chosen.length + " クラスは、ぜんぶ提出ずみ"
+            : "まだ " + yet.length + " クラスが提出していない（" + yet.join("・") + "）";
+  /* **出す週を、ボタンのとなりにもう一度出す。** 左メニューの週とは離れていて、
+     組を並べているうちに「どの週を出すのか」が目から外れる */
+  $("tpWeek").innerHTML = "<b>" + md(monday) + " → " + md(addDays(monday, 4)) + "</b>"
+    + "<span>の週を出す</span>"
+    + (chosen.length ? (allIn ? "<i class='ok'>ぜんぶ提出ずみ</i>"
+                              : "<i class='yet'>未提出 " + yet.length + " クラス</i>") : "");
   $("tpCount").innerHTML = tpTotal()
     ? "出すのは <b>" + tpTotal() + " 人</b>（" + tpTotal() + " 列）・"
-      + "<b>" + tpChosenHere().length + " クラス</b>　シート名 <b>"
+      + "<b>" + chosen.length + " クラス</b>　シート名 <b>"
       + escText(tpSheetName()) + "</b>"
       + (tgt ? "　出す先 <b>" + escText(tgt.name) + "</b>" : "")
     : "";

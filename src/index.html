@@ -169,35 +169,26 @@
 
       <!-- たんぽぽの面。週案の紙ではないので、紙の代わりにここを出す -->
       <div class="tpview" id="tpView" hidden>
-        <div class="tphead">
+        <div class="tphead" data-help="tanpopo">
         <h2>たんぽぽ
+          <!-- 出すボタンは、見出しの右。**この面でいちばん大きく動く操作。**
+               下に置いていたころは、組を並べ終えてから目で探しに行っていた -->
+          <button class="btn go tpgo" id="tpGo">たんぽぽ時間割へ出す</button>
+          <span class="tpweek" id="tpWeek"></span>
+          <span class="grow"></span>
           <!-- ソフトロック。**この面からの書き込みを止める。**
                週案の紙と同じ作りで、この端末にだけ残る -->
           <button class="lock" id="tpLockBtn" aria-pressed="false"
                   title="この面からの書き込みを止める">
             <svg width="15" height="15"><use href="#i-lock"/></svg>
             <span id="tpLockTxt">ロック</span></button></h2>
-        <details>
-          <summary>この面ですること</summary>
-          <p>右の<b>交流級</b>を、左の<b>たんぽぽの組</b>へ引っぱって入れる。
-             <b>1回入れると児童1人＝出す先の1列。</b>同じ組へ2回入れれば2人。<br>
-             出す先の列は<b>たんぽぽ1組・2組…の順</b>に並び、組の中はクラス順になる。
-             偶数の組は地の色と太い縦線で区切る。<br>
-             <b>出すと、たんぽぽ時間割に「9月1週」という名前のシートが1枚できる。</b>
-             同じ名前のシートがあれば、消さずに名前を変えて残す。<br>
-             入れた組は<b>クラス表の「たんぽぽ交流級」欄</b>に組の番号として残る
-             （<code>1</code>／<code>1,2</code>）。表から直してもよい。</p>
-        </details>
       </div>
       <!-- 出す先。**1本とはかぎらない。**
            たんぽぽ時間割が学年で分かれている学校も、年度で作り直す学校もある -->
       <div class="tptgt" id="tpTgt"></div>
       <div class="tpsel" id="tpSel"></div>
       <div class="tpwarn" id="tpWarn"></div>
-      <div class="tpact">
-        <button class="btn go" id="tpGo">たんぽぽ時間割へ出す</button>
-        <span class="hint" id="tpCount"></span>
-      </div>
+      <div class="tpact"><span class="hint" id="tpCount"></span></div>
       </div>
     </main>
 
