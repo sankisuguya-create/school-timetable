@@ -109,6 +109,8 @@
         <svg width="17" height="17"><use href="#i-print"/></svg><span>印刷（B5）</span></button>
       <button class="nav" data-act="tally" data-help="tally">
         <svg width="17" height="17"><use href="#i-copy"/></svg><span>時数をコピー</span></button>
+      <button class="nav" data-act="month" data-help="month">
+        <svg width="17" height="17"><use href="#i-grid"/></svg><span>月で見る（B4）</span></button>
 
       <!-- 新年度の設定が未了のあいだだけ出る。**ふだんは管理・システムの中だけ。**
            4/1 から、全部が済むまで出し続ける（消えると忘れる） -->
@@ -149,6 +151,24 @@
         <a id="arcLink" target="_blank" rel="noopener">保管庫をひらく</a>
       </div>
       <div class="stage" id="stage"><div class="paper" id="paper"><div class="sheet" id="sheet"></div></div></div>
+
+      <!-- 月の面。**4週ぶんを 2×2 に並べて、B4 に1枚で刷る。**
+           紙の代わりにここを出す（紙と入れ替える） -->
+      <div class="mview" id="monthView" hidden>
+        <div class="mbar">
+          <button class="btn" id="mPrev">◀ 前の4週</button>
+          <b id="mTitle"></b>
+          <button class="btn" id="mNext">次の4週 ▶</button>
+          <span class="grow"></span>
+          <button class="btn go" id="mPrint">印刷（B4・よこ）</button>
+          <button class="btn" id="mClose">週の紙へ戻る</button>
+        </div>
+        <p class="hint" id="mHint"></p>
+        <div class="mpaper" id="mPaper">
+          <div class="sheet mini" id="mS0"></div><div class="sheet mini" id="mS1"></div>
+          <div class="sheet mini" id="mS2"></div><div class="sheet mini" id="mS3"></div>
+        </div>
+      </div>
 
       <!-- たんぽぽの面。週案の紙ではないので、紙の代わりにここを出す -->
       <div class="tpview" id="tpView" hidden>

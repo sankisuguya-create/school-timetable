@@ -477,6 +477,27 @@ const Backend = (function(){
       })
       .apiReadWeek(year, mon, want);
   }
+  /* **いくつかの週を、まとめて読む。** 月の面は4週ぶんを一度に出す。
+     1週ずつ開いて読ませると、4回待つことになる。
+     いま見ている画面に要る対象だけ読む（27枚は読まない）。 */
+  function readWeeks(mons, after){
+    if(!onGas) return after();
+    const want = targetsForView();
+    const year = fy();
+    const todo = (mons || []).filter(m => want.some(t => !fresh_(weekTag(t, year, m))));
+    if(!todo.length || !want.length) return after();
+    let left = todo.length;
+    const done = () => { if(--left <= 0) after(); };
+    for(const m of todo){
+      google.script.run
+        .withSuccessHandler((function(mm){
+          return w => { mergeWeek(want, w, year, mm); done(); };
+        })(m))
+        /* **読めなくても先へ進む。** 進まないと、開いたつもりの面が出ない */
+        .withFailureHandler(() => done())
+        .apiReadWeek(year, m, want);
+    }
+  }
   const weekTag = (t, year, mon) =>
     (year === undefined ? fy() : year) + "/" + (mon === undefined ? wkKey() : mon)
     + "/" + t.layer + "/" + (t.target || "");
@@ -775,7 +796,7 @@ const Backend = (function(){
   });
 
   return {isGas, info, setNotifier, setDirtyWatcher, setConflictWatcher,
-          unsaved, prefetchWeek, watch, stale, heldCells, dropHeld, reloadWeek,
+          unsaved, prefetchWeek, readWeeks, watch, stale, heldCells, dropHeld, reloadWeek,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,

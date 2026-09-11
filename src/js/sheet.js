@@ -25,8 +25,19 @@ const rowH = s => s.kind === "note"   ? "1fr"
    外の行をずらす形にすると、朝学習の行に授業1コマが落ちてその行が
    6mm から 29mm に膨らみ、**ほかの5日ぶんも巻き添えで崩れる**
    （紙が 239.5mm → 295.2mm になり B5 に入らない。実測）。 */
-function buildSheet(){
-  const sh = $("sheet");
+/* 紙を1枚組む。**どこへ、どの週を描くかを渡せる。**
+   月の面は同じものを4枚並べるので、組み立てを2つ持たない
+   （2つ持つと、片方だけ直した版が出る）。
+   渡さなければ、いつもの1枚（#sheet ・いま見ている週）。 */
+function buildSheet(into, mon){
+  const sh = into || $("sheet");
+  /* **いま見ている週を、一時だけ差し替える。** 層の重ね方・行事・メモは
+     すべて monday から決まるので、ここを動かせば中身がそろって動く */
+  const keep = monday;
+  if(mon) monday = mon;
+  try{ buildSheet_(sh); } finally{ monday = keep; }
+}
+function buildSheet_(sh){
   sh.textContent = "";
   sh.style.gridTemplateRows = "auto 1fr auto";      /* 見出し／本体／週メモ */
 
@@ -85,7 +96,7 @@ function buildSheet(){
     setMemo(ft.innerHTML);
   });
 
-  paintSheet();
+  paintSheet(null, sh);
   if(typeof applyLock === "function") applyLock();
 }
 
@@ -227,8 +238,11 @@ function fitTitles(els){
 }
 
 /* 中身を流し込む。el を渡すとそのコマだけ塗り直す。 */
-function paintSheet(one){
-  const list = one ? [one] : [...document.querySelectorAll("#sheet .cell")];
+/* root を渡すと、その紙の中だけを塗り直す。**月の面は紙が4枚ある。**
+   渡さなければ、いつもの1枚（#sheet）。 */
+function paintSheet(one, root){
+  const list = one ? [one]
+    : [...(root || document.getElementById("sheet")).querySelectorAll(".cell")];
   const mine = layerOf();
 
   for(const e of list){
@@ -280,4 +294,116 @@ function warnOverwritten(){
   const dlg = $("owDlg");
   dlg.showModal();
   dlg.onclose = () => { fresh.forEach(x => w.acked.push(sig(x))); save(); };
+}
+
+/* ── 月の面 ──────────────────────────────────
+   **4週ぶんを 2×2 に並べて、B4 に1枚で刷る。**
+
+   週の紙は1枚ずつ見るためのもので、月のつながりが見えない。
+   単元の配当・行事の重なり・専科の巡りは、4週を並べて初めて分かる。
+
+   組み立ては週の紙と同じ buildSheet を使う（2つ持つと、片方だけ直した版が出る）。
+   詰めるのは高さだけ ── 詳細と放課後と週メモを薄くして、授業名を残す。
+
+   **転がさずに1画面へ収める。** 収まらなければ紙にもならない。
+   4枠のうち1枠の大きさを測って、入るところまで --k を下げる。 */
+const MONTH_WEEKS = 4;
+let mMonday = null;               /* 月の面の左上の週。いま見ている週から始める */
+
+const mWeeks = () => {
+  const out = [];
+  for(let i = 0; i < MONTH_WEEKS; i++) out.push(addDays(mMonday, i * 7));
+  return out;
+};
+
+function openMonth(){
+  if(view.kind !== "class" && view.kind !== "grade"
+     && view.kind !== "school" && view.kind !== "special")
+    return toast("クラスや学年を開いてから押す");
+  mMonday = new Date(monday);
+  showMonth(true);
+  drawMonth();
+}
+function showMonth(on){
+  $("monthView").hidden = !on;
+  $("stage").hidden = on;
+  document.querySelector(".panel").hidden = on;
+  document.querySelector(".work").classList.toggle("no-panel", on);
+  if(!on){ refreshWeek(); autoFit(); }
+}
+function drawMonth(){
+  const ws = mWeeks();
+  $("mTitle").textContent = viewName() + "　"
+    + md(ws[0]) + " → " + md(addDays(ws[MONTH_WEEKS - 1], 5));
+  $("mHint").innerHTML = "いま見ている週から <b>" + MONTH_WEEKS + "週間</b>。"
+    + "左上から右へ、上の段・下の段の順に並びます。"
+    + "<b>詳細と放課後は薄くしてあります</b>（4枚を1枚に収めるため）。"
+    + "直すのは週の紙のほうで。ここは見るだけです。";
+  for(let i = 0; i < MONTH_WEEKS; i++) buildSheet($("mS" + i), ws[i]);
+  fitMonth();
+  /* **まだ読んでいない週は、読んでから描き直す。** 先に描いておくのは、
+     待っているあいだ何も出ない時間を作らないため（週の紙と同じ作り） */
+  const w = Wait.begin("4週ぶんを読んでいます");
+  Backend.readWeeks(ws.map(iso), () => {
+    Wait.end(w);
+    if($("monthView").hidden) return;
+    for(let i = 0; i < MONTH_WEEKS; i++) buildSheet($("mS" + i), ws[i]);
+    fitMonth();
+  });
+}
+
+/* 1枠に入るところまで --k を下げる。**測って決める。**
+   行の高さは mm で書いてあるが、字の回り込みまでは式で出せない。
+   2〜3回測れば、たいてい 1% 以内に入る。
+
+   cell を渡すと、その大きさの枠に合わせる（刷るときは mm で渡す）。
+   **刷るときに画面の px で測らない。** 画面の広さと紙の広さは別もので、
+   画面に合わせた倍率のまま刷ると、紙からはみ出すか、すかすかになる。 */
+const M_GAP = 6;                 /* 枠と枠のすきま（画面は px・紙は mm） */
+/* B4 のよこ。**CSS の B4 とは書かない**（週の紙の B5 と同じ理由）。
+   364×257mm から余白と、まん中のすきまを引いた1枠 */
+const M_PAGE = {w:364, h:257, mg:6};
+function mCellMM(){
+  return {w: (M_PAGE.w - M_PAGE.mg * 2 - M_GAP) / 2 + "mm",
+          h: (M_PAGE.h - M_PAGE.mg * 2 - M_GAP) / 2 + "mm"};
+}
+function fitMonth(cell){
+  const box = $("mPaper"), one = $("mS0");
+  if(!box || !one) return;
+  const c = cell || {w: ((box.clientWidth  - M_GAP) / 2) + "px",
+                     h: ((box.clientHeight - M_GAP) / 2) + "px"};
+  if(!cell && (box.clientWidth < 2 || box.clientHeight < 2)) return;
+  /* **枠の大きさを、並べ方の側にも入れる。**
+     1fr のままだと、刷るときに画面の広さで割った幅に押し戻される
+     （紙は 352mm なのに、画面の 1500px を割った幅で組まれる）。 */
+  if(cell){
+    box.style.gridTemplateColumns = "repeat(2," + c.w + ")";
+    box.style.gridTemplateRows    = "repeat(2," + c.h + ")";
+    /* **入れものにも幅を持たせる。** 持たせないと画面の幅いっぱいに広がり、
+       紙からはみ出したぶんが切られる（右半分が出ない） */
+    box.style.width = "calc(" + c.w + "*2 + " + M_GAP + "mm)";
+  }else{
+    box.style.removeProperty("grid-template-columns");
+    box.style.removeProperty("grid-template-rows");
+    box.style.removeProperty("width");
+  }
+  let k = 1;
+  for(let pass = 0; pass < 4; pass++){
+    for(let i = 0; i < MONTH_WEEKS; i++){
+      const s = $("mS" + i);
+      s.style.setProperty("--pw", c.w);
+      s.style.setProperty("--ph", c.h);
+      s.style.setProperty("--pm", "0px");
+      s.style.setProperty("--k", String(k));
+    }
+    /* **枠そのものの高さと比べる。** 紙のほうは枠が mm で決まっていて、
+       中身がそれを超えても紙は伸びない（超えたぶんが次のページへ落ちる）。
+       中身の高さどうしを比べると、超えていることに気づけない。 */
+    const rows = getComputedStyle(box).gridTemplateRows.split(" ");
+    const want = parseFloat(rows[0]) || one.clientHeight;
+    const have = one.scrollHeight;
+    if(want < 2) return;
+    if(have <= want + 0.5) break;
+    k = Math.max(.2, k * (want / have) * .99);
+  }
 }

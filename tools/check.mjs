@@ -1307,6 +1307,75 @@ ok("「自動に戻す」で日付どおりに戻る", await (async () => {
          && await p.locator("#abAuto").isHidden();
    })() === true);
 
+console.log("\n■ いま見ている週は、転がしても左上に残る");
+ok("左メニューを転がしても、週の欄が見えたまま", await p.evaluate(() => {
+     const s = document.querySelector(".side"), w = document.querySelector(".side .wk");
+     s.scrollTop = 0;
+     const a = w.getBoundingClientRect().top - s.getBoundingClientRect().top;
+     s.scrollTop = 9999;
+     const b2 = w.getBoundingClientRect().top - s.getBoundingClientRect().top;
+     s.scrollTop = 0;
+     return b2 <= a + 1 && b2 >= -20;       /* 上へ張りつく（流れ去らない） */
+   }) === true);
+ok("張りついたとき、下の並びが透けない",
+   await p.evaluate(() => getComputedStyle(document.querySelector(".side .wk"))
+     .backgroundColor) !== "rgba(0, 0, 0, 0)");
+
+console.log("\n■ 月の面（4週を 2×2 で、B4 よこ1枚に）");
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
+await p.locator(".tile[data-c='1-1']").click(); await p.waitForTimeout(500);
+await p.locator(".nav[data-act='month']").click(); await p.waitForTimeout(700);
+ok("紙が4枚出る", await p.locator("#mPaper .sheet").count() === 4,
+   await p.locator("#mPaper .sheet").count());
+ok("2×2 に並ぶ", await p.evaluate(() => {
+     const s = [...document.querySelectorAll("#mPaper .sheet")]
+       .map(x => x.getBoundingClientRect());
+     return s[0].top === s[1].top && s[2].top === s[3].top
+         && s[0].left === s[2].left && s[0].top < s[2].top;
+   }) === true);
+ok("4枚とも別の週を出す", await p.evaluate(() => {
+     const h = [...document.querySelectorAll("#mPaper .sheet")]
+       .map(x => x.querySelector(".hd span").textContent);
+     return new Set(h).size === 4;
+   }) === true, await p.evaluate(() => [...document.querySelectorAll("#mPaper .sheet")]
+     .map(x => x.querySelector(".hd span").textContent)));
+/* **転がさずに1画面へ収める。** 収まらなければ紙にもならない */
+ok("画面を転がさずに収まる",
+   await p.evaluate(() => document.documentElement.scrollHeight - window.innerHeight) <= 0,
+   await p.evaluate(() => document.documentElement.scrollHeight - window.innerHeight));
+ok("どの1枚も枠からはみ出さない", await p.evaluate(() =>
+     [...document.querySelectorAll("#mPaper .sheet")]
+       .every(x => x.scrollHeight <= x.clientHeight + 1)) === true);
+/* **見るだけ。** 直すのは週の紙のほうで */
+ok("月の面では書き込めない", await p.evaluate(() =>
+     [...document.querySelectorAll("#mPaper .cell .t")]
+       .every(x => getComputedStyle(x).pointerEvents === "none")) === true);
+/* **紙の大きさで組み直してから刷る。** 画面の広さのまま刷ると、はみ出す */
+await p.emulateMedia({media:"print"});
+await p.evaluate(() => { document.body.classList.add("printing-month"); fitMonth(mCellMM()); });
+await p.waitForTimeout(300);
+const mm = px => px / (96 / 25.4);
+ok("刷ると B4 よこの版面（352×245mm）に収まる", await p.evaluate(() => {
+     const b2 = document.getElementById("mPaper");
+     const w = b2.getBoundingClientRect().width / (96 / 25.4);
+     const h = b2.scrollHeight / (96 / 25.4);
+     return w <= 352.5 && h <= 245.5 && w >= 340 && h >= 235;
+   }) === true, await p.evaluate(() => {
+     const b2 = document.getElementById("mPaper");
+     return [ +(b2.getBoundingClientRect().width / (96/25.4)).toFixed(1),
+              +(b2.scrollHeight / (96/25.4)).toFixed(1) ];
+   }));
+ok("刷るときは、まわりの操作も週の1枚も出さない", await p.evaluate(() =>
+     getComputedStyle(document.querySelector(".mbar")).display === "none"
+     && getComputedStyle(document.getElementById("stage")).display === "none") === true);
+await p.evaluate(() => { document.body.classList.remove("printing-month"); fitMonth(); });
+await p.emulateMedia({media:"screen"});
+await p.evaluate(() => showMonth(false));
+await p.waitForTimeout(400);
+ok("戻ると、いつもの週の紙に戻る",
+   await p.locator("#monthView").evaluate(e => e.hidden) === true
+   && await p.locator("#stage").evaluate(e => e.hidden) === false);
+
 console.log("\n■ 教科チップの色は、字が運んでいるものを二重にするだけ");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
 await p.locator(".tile[data-c='1-1']").click(); await p.waitForTimeout(500);

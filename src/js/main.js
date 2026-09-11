@@ -315,6 +315,7 @@ function wire(){
       if(a === "paper")   return $("setDlg").showModal();
       if(a === "admin")   return openAdminDlg();
       if(a === "newyear") return openNewYearDlg();
+      if(a === "month")   return openMonth();
       if(a === "print")   return window.print();
     });
   for(const b of document.querySelectorAll("[data-close]"))
@@ -379,6 +380,13 @@ function wire(){
   on("saveBtn","click", () => { if(Wait.guard()) doSave(true); });
   on("lockBtn","click", () => setLock(!isLocked()));
   on("tpSubBtn","click", toggleTpSub);
+
+  /* 月の面。**見るだけ。** 直すのは週の紙のほうで */
+  on("mPrev","click",  () => { mMonday = addDays(mMonday, -7 * MONTH_WEEKS); drawMonth(); });
+  on("mNext","click",  () => { mMonday = addDays(mMonday,  7 * MONTH_WEEKS); drawMonth(); });
+  on("mClose","click", () => showMonth(false));
+  on("mPrint","click", printMonth);
+  addEventListener("resize", () => { if(!$("monthView").hidden) fitMonth(); });
   /* 新年度の設定。**ふだんは管理・システムの中だけ。**
      未了のあいだだけ、左メニューにも出る（結線は dialogs.js） */
   on("nyOpen","click", () => { $("adminDlg").close(); openNewYearDlg(); });

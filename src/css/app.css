@@ -40,7 +40,12 @@ button,select,input,textarea{font:inherit;color:inherit}
 .nav svg{flex:none;opacity:.72}
 .nav[aria-current=true] svg{opacity:1}
 .side hr{border:0;border-top:1px solid var(--line-soft);margin:10px 6px}
-.side .wk{display:flex;flex-direction:column;gap:7px;padding:0 4px}
+/* 週・年度・行き先。**左メニューを転がしても、いつも左上に残す。**
+   いま何週の、どれを見ているか。ここを見失うと、書いた先を間違える。
+   下に並ぶものは長く、転がすと真っ先に消えるのがこの3行だった。 */
+.side .wk{display:flex;flex-direction:column;gap:7px;padding:8px 4px 10px;
+  position:sticky;top:-14px;z-index:4;background:var(--card);
+  box-shadow:0 6px 10px -8px var(--shade-2)}
 /* 「自動に戻す」。**手で変えた週にだけ出る。** 出しっぱなしにすると、
    押す必要のないものが毎週目に入る */
 .abauto{border:1px solid var(--line);border-radius:9px;background:var(--card);
@@ -128,6 +133,30 @@ button,select,input,textarea{font:inherit;color:inherit}
 .stage{overflow:auto;padding:10px;display:flex;justify-content:center;
   align-items:flex-start;min-height:0;min-width:0}
 .stage[hidden]{display:none!important}
+
+/* 月の面。**4週ぶんを 2×2 に並べる。** 紙と入れ替えて出す。
+   転がさずに1画面へ収める（収まらなければ紙にもならない）。 */
+.mview{grid-area:1/1/2/2;display:grid;grid-template-rows:auto auto minmax(0,1fr);
+  gap:8px;padding:12px 16px 16px;min-height:0;min-width:0}
+.mview[hidden]{display:none!important}
+.mbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mbar b{font-size:15px}
+.mbar .grow{flex:1}
+.mview .hint{margin:0;font-size:12px;color:var(--tx-sub);line-height:1.7}
+.mview .hint b{color:var(--tx)}
+.mpaper{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
+  gap:6px;min-height:0;min-width:0;justify-items:center;align-items:start}
+/* 月の面の紙。**詰めるのは高さだけ。** 授業名は残す */
+.sheet.mini{
+  --h-note:6mm;      /* 詳細。週の紙は 21mm */
+  --h-after:5mm;     /* 放課後 */
+  --h-foot:4mm;      /* 週のメモ */
+  --h-title:7mm;
+  --fs-t:13pt; --fs-n:6.5pt; --fs-a:6pt; --fs-b:7pt; --fs-s:5pt;
+  box-shadow:0 1px 3px var(--shade);
+}
+/* **見るだけ。** 直すのは週の紙のほうで（触れると、月の面で直したつもりになる） */
+.sheet.mini .cell .t,.sheet.mini .cell .n,.sheet.mini .foot .t{pointer-events:none}
 
 /* たんぽぽの面。週案の紙ではないので、紙と入れ替えて出す */
 .tpview{grid-area:1/1/2/2;overflow:auto;padding:22px 26px;display:flex;

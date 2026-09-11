@@ -176,6 +176,17 @@
    リンクは下線だけ残す。URL は刷らない。 */
 @media print{
   .side,.panel,.gate,.toast,.tpview,.busy,.arc,.wait{display:none!important}
+  /* 月の面を刷るとき。**まわりの操作も、週の1枚も出さない。**
+     刷るのは 2×2 の4枚だけ（B4 よこ） */
+  body.printing-month .stage{display:none!important}
+  body.printing-month .mbar,body.printing-month .mview .hint{display:none!important}
+  body.printing-month .mview{padding:0;gap:0;grid-template-rows:auto;display:block}
+  /* 1枠の大きさは JS が mm で入れる。ここは並べ方だけ決める */
+  body.printing-month .mpaper{gap:6mm;align-items:start;justify-items:stretch}
+  /* **月の紙は幅を持たせる。** 下の .sheet{width:auto} は週の1枚のためのもので、
+     そのままだと 2×2 の枠が中身の幅まで縮み、紙の右半分が空く */
+  body.printing-month .sheet.mini{width:calc(var(--pw) - var(--pm)*2)}
+  body:not(.printing-month) .mview{display:none!important}
   .app::before{display:none!important}   /* 待っている印は刷らない */
   /* 時刻は画面だけのもの。紙の版面は教務必携の枠に合わせたまま動かさない
      （時程の列は 9mm。ここを広げると曜日の列がその分だけ痩せる） */

@@ -294,6 +294,30 @@ function drawDayForms(){
 
 /* ── 用紙 ────────────────────────────────────── */
 
+/* 月の面を刷る。**B4 のよこ（364×257mm）に1枚。**
+   週の紙とは用紙が違うので、刷る直前に @page を書き替え、
+   刷り終わったら元へ戻す（戻さないと、次に週の紙を刷るとき B4 で出る）。 */
+function printMonth(){
+  const st = $("pagecss");
+  const had = st ? st.textContent : "";
+  if(st) st.textContent = "@page{size:" + M_PAGE.w + "mm " + M_PAGE.h + "mm;margin:"
+                        + M_PAGE.mg + "mm}";
+  document.body.classList.add("printing-month");
+  /* **紙の大きさで組み直してから刷る。** 画面の広さで合わせた倍率のまま
+     刷ると、紙からはみ出すか、すかすかになる */
+  fitMonth(mCellMM());
+  const back = () => {
+    document.body.classList.remove("printing-month");
+    if(st) st.textContent = had;
+    fitMonth();
+  };
+  /* 刷り終わり（またはやめた）を拾って戻す。拾えない環境のために保険も置く */
+  const once = () => { removeEventListener("afterprint", once); back(); };
+  addEventListener("afterprint", once);
+  setTimeout(() => { if(document.body.classList.contains("printing-month")) back(); }, 4000);
+  window.print();
+}
+
 function applyPaper(){
   const s = db.settings, sh = $("sheet");
   const [w, h] = s.paper === "A4" ? ["210mm", "297mm"] : ["182mm", "257mm"];
@@ -450,6 +474,13 @@ const HELP = {
        + "その1つには ⚠ が付いていて、押す前に必ず突き合わせが入ります。",
        "<i>はじめの人がつまずくところ：</i>やることは主に管理の3人の仕事です。"
        + "自分の担当でなければ、開いて見るだけで構いません。"]},
+  month: {t:"月で見る（B4）",
+    b:["<b>いま見ている週から4週間ぶんを、2×2に並べて見る画面です。</b>"
+       + "B4 の紙よこ1枚に、そのまま刷れます。",
+       "単元の配当・行事の重なり・専科の巡りは、<b>4週を並べて初めて分かります。</b>",
+       "<b>ここは見るだけです。</b>直すのは、いつもの週の紙のほうで。",
+       "<i>はじめの人がつまずくところ：</i>4枚を1枚に収めるため、"
+       + "詳細と放課後の欄は薄くしてあります。授業名は残ります。"]},
   base: {t:"基本時間割",
     b:["<b>毎週くり返す、もとの時間割です。</b>"
        + "週案を開いたとき、初めに出ているのがこれです。",
