@@ -33,6 +33,8 @@ function tpSheetName(mon){
    引っぱれない端末のために、押しても入るようにしてある
    （右のクラスを押すと、いま選んでいる組へ入る）。 */
 let tpPick = "1";              /* いま選んでいる組。押して入れるときの行き先 */
+/* 右の交流級を開いているか。**ふだんは畳む**（入れ替えは年度の初めだけ） */
+let tpFromOpen = false;
 
 /* 交流級の着手／未着手。**組の中のチップそのものに出す。**
    下に字でまとめて出していたころは、組の並びと読み合わせないと
@@ -97,7 +99,11 @@ function drawTargets(){
       for(let k = 0; k < tpTargets.length; k++) tpTargets[k].def = (k === i);
       putTargets(() => toast("出す先を「" + tpTargets[i].name + "」にした"));
     };
-    $("tpTgtEdit").onclick = () => { tpTgtEdit = true; drawTanpopoView(); };
+    $("tpTgtEdit").onclick = () => {
+      if(typeof isLocked === "function" && isLocked())
+        return toast("この面はロックしてある。<b>直すには、上のロックを押す</b>");
+      tpTgtEdit = true; drawTanpopoView();
+    };
     return;
   }
   /* 直しているあいだ。**行ごとに、名前・URL・試す・消すを並べる。** */
@@ -131,14 +137,10 @@ function drawTargets(){
   for(const b of box.querySelectorAll(".tptdel"))
     b.onclick = () => {
       read();
-      const x = tpTargets[+b.dataset.i];
       /* **消すのはこの一覧の行だけ。** 向こうのシートには手を出さない。
-         たんぽぽ担当が書いた担当者・場所を、こちらから消せる口を作らない */
-      if(!confirm("「" + x.name + "」を出す先の一覧から外します。\n"
-                + "たんぽぽ時間割のファイルそのものは消えません。")) return;
-      tpTargets.splice(+b.dataset.i, 1);
-      if(tpTargets.length && !tpTargets.some(y => y.def)) tpTargets[0].def = true;
-      drawTanpopoView();
+         たんぽぽ担当が書いた担当者・場所を、こちらから消せる口を作らない。
+         確認は専用の窓で、既定は「外さない」（confirm は Enter で「はい」に落ちる） */
+      askTpDel(+b.dataset.i);
     };
   for(const b of box.querySelectorAll(".tpttest"))
     b.onclick = () => {
@@ -173,6 +175,31 @@ function drawTargets(){
     });
   };
 }
+/* 出す先を一覧から外す確認。**既定は「外さない」。**
+   ブラウザの confirm は Enter で「はい」に落ちる。 */
+let tpDelAt = -1;
+function askTpDel(i){
+  const x = tpTargets[i];
+  if(!x) return;
+  tpDelAt = i;
+  $("tpDelTbl").innerHTML =
+      "<tr><th>名前</th><td><b>" + escText(x.name) + "</b></td></tr>"
+    + "<tr><th>URL</th><td>" + escText(String(x.url).slice(0, 70)) + "</td></tr>"
+    + (x.def ? "<tr><th>いまの既定</th><td>これが既定の出す先です。"
+             + "外すと、いちばん上のものが既定になります</td></tr>" : "");
+  $("tpDelDlg").showModal();
+  $("tpDelNo").focus();               /* **既定は「外さない」。** */
+}
+function tpDelAnswer(yes){
+  const i = tpDelAt;
+  tpDelAt = -1;
+  $("tpDelDlg").close();
+  if(!yes || i < 0 || !tpTargets[i]) return;
+  tpTargets.splice(i, 1);
+  if(tpTargets.length && !tpTargets.some(y => y.def)) tpTargets[0].def = true;
+  drawTanpopoView();
+}
+
 function putTargets(after){
   const w = Wait.begin("出す先を入れています");
   Backend.saveTpTargets(tpTargets, () => { Wait.end(w); if(after) after(); drawTanpopoView(); },
@@ -218,18 +245,38 @@ function drawTanpopoView(){
       }).join("")
     + "</div></div>").join("");
 
+  /* **右の交流級は畳んでおく。** 入れ替えるのは年度の初めだけで、
+     ふだん見たいのは左の組の並び（出す列そのもの）。
+     開いたままにすると、毎週その20個を越えないと組に手が届かない。 */
+  const open = !!tpFromOpen;
   $("tpSel").innerHTML =
-    "<div class='tpplace'><div class='tpto'>"
+    "<div class='tpplace" + (open ? "" : " shut") + "'><div class='tpto'>"
     + "<div class='tpleg'><b>今週の提出</b>"
     + ["ok","base"].map(k =>
         "<span class='st-" + k + "'><i></i>" + TP_ST[k].mark + "</span>").join("")
     + "</div>"
     + left
     + "<button class='btn tpaddg' id='tpAddG'>組を足す</button></div>"
-    + "<div class='tpfrom'>" + right + "</div></div>";
+    + "<div class='tpfrom'>"
+    + "<button class='tpfromq' id='tpFromQ' aria-expanded='" + open + "'>"
+    + (open ? "▾" : "▸") + " 交流級から入れる"
+    + "<span>" + allClasses().length + " クラス</span></button>"
+    + "<div class='tpfromb'" + (open ? "" : " hidden") + ">" + right + "</div>"
+    + "</div></div>";
 
-  /* 入れる／外す。**押しても引っぱっても同じことが起きる。** */
+  const q = $("tpFromQ");
+  if(q) q.onclick = () => { tpFromOpen = !tpFromOpen; drawTanpopoView(); };
+
+  /* 入れる／外す。**押しても引っぱっても同じことが起きる。**
+     ロック中は入れない（見るだけのつもりで開いた面で、出す列がずれる） */
   const redraw = () => { save(); Backend.saveRoster(); drawTanpopoView(); };
+  const locked = () => {
+    if(typeof isLocked === "function" && isLocked()){
+      toast("この面はロックしてある。<b>直すには、上のロックを押す</b>");
+      return true;
+    }
+    return false;
+  };
   for(const b of $("tpSel").querySelectorAll(".tpchip")){
     b.addEventListener("dragstart", ev => {
       ev.dataTransfer.setData("text/x-tanpopo", b.dataset.c);
@@ -237,12 +284,13 @@ function drawTanpopoView(){
       b.classList.add("drag");
     });
     b.addEventListener("dragend", () => b.classList.remove("drag"));
-    b.onclick = () => { tpAdd(tpPick, b.dataset.c); redraw(); };
+    b.onclick = () => { if(locked()) return; tpAdd(tpPick, b.dataset.c); redraw(); };
   }
   for(const h of $("tpSel").querySelectorAll(".tpghead"))
     h.onclick = () => { tpPick = h.dataset.g; drawTanpopoView(); };
   for(const x of $("tpSel").querySelectorAll(".tpin"))
-    x.onclick = () => { tpDrop(x.dataset.g, tpIn(x.dataset.g)[+x.dataset.i]); redraw(); };
+    x.onclick = () => { if(locked()) return;
+                        tpDrop(x.dataset.g, tpIn(x.dataset.g)[+x.dataset.i]); redraw(); };
   for(const box of $("tpSel").querySelectorAll(".tpgrp")){
     box.addEventListener("dragover", ev => {
       if(ev.dataTransfer.types.indexOf("text/x-tanpopo") < 0) return;
@@ -252,17 +300,18 @@ function drawTanpopoView(){
     box.addEventListener("drop", ev => {
       ev.preventDefault(); box.classList.remove("over");
       const c = ev.dataTransfer.getData("text/x-tanpopo");
-      if(c){ tpPick = box.dataset.g; tpAdd(box.dataset.g, c); redraw(); }
+      if(c){ if(locked()) return; tpPick = box.dataset.g; tpAdd(box.dataset.g, c); redraw(); }
     });
   }
   const add = $("tpAddG");
-  if(add) add.onclick = () => { tpAddGroup(); save(); drawTanpopoView(); };
+  if(add) add.onclick = () => { if(locked()) return; tpAddGroup(); save(); drawTanpopoView(); };
 
   $("tpWarn").innerHTML = tpWarnBoxes().join("");
   /* 出す先が1つも無いあいだ、直している最中は出させない。
      **どこへ出るか分からないまま押させない。** */
   const tgt = tpTargetNow();
   $("tpGo").disabled = !tpTotal() || tpTgtEdit
+                    || (typeof isLocked === "function" && isLocked())
                     || (Backend.isGas() && !tgt);
   $("tpCount").innerHTML = tpTotal()
     ? "出すのは <b>" + tpTotal() + " 人</b>（" + tpTotal() + " 列）・"

@@ -88,6 +88,10 @@
 
 /* 全学年の面だけ、日付の見出しを押せる。**押せることは画面でだけ見せる** */
 .hd.pick{cursor:pointer}
+/* **押せることを、字で見せる。** 画面だけ（紙には出さない） */
+.hd .pk{font-size:calc(6pt*var(--k));color:var(--ink-link);font-weight:700;
+  border:1px solid var(--ink-link);border-radius:3px;line-height:1;
+  padding:1px 2px;margin-left:.15em}
 .hd.pick:hover{background:var(--fill-a)}
 .hd.pick:focus-visible{outline:2px solid var(--ink-link);outline-offset:-2px}
 
@@ -195,6 +199,7 @@
   /* 選んでいる印・打ち込み中の色も刷らない */
   .cell.sel{box-shadow:none}
   .hd.pick{background:transparent!important;cursor:default}
+  .hd .pk{display:none!important}          /* 押せる印は画面だけのもの */
   .cell .t:focus,.cell .n:focus{background:transparent;box-shadow:none}
   /* **紙の外の入れ物に、高さを持たせない。** html,body が height:100% なので、
      そのままだと本文の高さが画面の高さになり、紙が1枚に収まっていても

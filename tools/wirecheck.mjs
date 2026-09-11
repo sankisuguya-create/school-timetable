@@ -669,7 +669,10 @@ ok("シートの組がそのまま画面の組になる",
    await p.evaluate(() => Y().tanpopo));
 await p.evaluate(() => { window.__calls.length = 0; });
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
-await p.locator(".master.tp").click(); await p.waitForTimeout(300);
+await p.locator(".master.tp").click(); await p.waitForTimeout(400);
+/* **交流級は畳んである。** 触る前に開く（入れ替えは年度の初めだけ） */
+await p.evaluate(() => { tpFromOpen = true; drawTanpopoView(); });
+await p.waitForTimeout(300);
 await p.locator("#tpSel .tpchip[data-c='5-2']").click(); await p.waitForTimeout(300);
 const tq = await lastCall("apiWriteRoster");
 ok("入れるとシートへ書く（組ごとの並びで）",
@@ -1378,6 +1381,11 @@ await p.evaluate(() => {
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".master[data-go='tanpopo']").click();
 await p.waitForTimeout(600);
+/* **交流級は畳んである。** 触る前に開く */
+await p.waitForTimeout(400);
+if(await p.locator(".tpfromb").count()
+   && await p.locator(".tpfromb").evaluate(e => e.hidden))
+  await p.locator("#tpFromQ").click();
 ok("出す先が、たんぽぽの面に出る", await p.locator("#tpTgt").isVisible() === true);
 ok("版を上げただけの学校は、設定の1本がそのまま出す先になる",
    (await p.locator("#tpTgt").innerText()).indexOf("たんぽぽ時間割") >= 0,
@@ -1412,10 +1420,26 @@ ok("選んだものが、出す先になる",
    (await p.locator("#tpCount").innerText()).indexOf("ひまわり") >= 0,
    await p.locator("#tpCount").innerText());
 /* 消す。**向こうのファイルには手を出さない** */
-p.once("dialog", d => d.accept());
 await p.locator("#tpTgtEdit").click(); await p.waitForTimeout(200);
 await p.locator(".tptdel").nth(1).click(); await p.waitForTimeout(300);
-ok("消すと、一覧から消える", await p.locator(".tpturl").count() === 1,
+/* **ブラウザの confirm を使わない。** confirm は Enter で「はい」に落ちる */
+ok("外す前に、専用の窓で確かめる",
+   await p.locator("#tpDelDlg").evaluate(d => d.open) === true);
+ok("何を外すのかを名指しする",
+   (await p.locator("#tpDelTbl").innerText()).indexOf("ひまわり") >= 0,
+   await p.locator("#tpDelTbl").innerText());
+ok("向こうのファイルは消えないと書いてある",
+   (await p.locator("#tpDelDlg").innerText()).indexOf("ファイルそのものは消えません") >= 0);
+/* **既定は「外さない」。** いちばん戻しにくい操作を、弱い止め方にしない */
+ok("既定は「外さない」に当たっている",
+   await p.evaluate(() => document.activeElement.id) === "tpDelNo",
+   await p.evaluate(() => document.activeElement.id));
+await p.locator("#tpDelNo").click(); await p.waitForTimeout(300);
+ok("「外さない」を押せば、そのまま残る", await p.locator(".tpturl").count() === 2,
+   await p.locator(".tpturl").count());
+await p.locator(".tptdel").nth(1).click(); await p.waitForTimeout(300);
+await p.locator("#tpDelYes").click(); await p.waitForTimeout(300);
+ok("「外す」を押すと、一覧から消える", await p.locator(".tpturl").count() === 1,
    await p.locator(".tpturl").count());
 await p.locator("#tpTgtSave").click(); await p.waitForTimeout(400);
 ok("出す先を消しても、向こうのファイルは消さない（一覧から外すだけ）",

@@ -116,11 +116,11 @@ function showGate(){
   paintArchive();
 }
 
-/* 上の帯・左の並び・中央のセレクトの「いま」を合わせる */
+/* 上の帯・左の並び・中央のセレクトの「いま」を合わせる。
+   **「いま：◯年◯組」の行は置かない。** すぐ上の行き先の欄が同じことを
+   言っていて、同じものを2か所に置くと、どちらを見ればよいかを毎回考える。 */
 function paintHeader(){
   const open = view.kind !== "gate";
-  $("navOpen").hidden = !open;
-  $("navOpenName").textContent = open ? viewName() : "";
   for(const b of document.querySelectorAll(".nav[data-screen]"))
     b.setAttribute("aria-current", String(b.dataset.screen === (open ? "plan" : "gate")));
   drawTargetSelect();

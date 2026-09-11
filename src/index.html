@@ -67,8 +67,8 @@
 
     <aside class="side">
       <h2><svg width="19" height="19"><use href="#i-school"/></svg><span>週案</span>
-        <button class="gridbtn" id="gridBtn" data-act="gate" title="ほかの週案をひらく"
-                aria-label="ほかの週案をひらく">
+        <button class="gridbtn" id="gridBtn" data-act="gate" title="ほかの週案を開く"
+                aria-label="ほかの週案を開く">
           <svg width="17" height="17"><use href="#i-grid"/></svg></button></h2>
 
       <!-- 週。**紙の上下には何も置かない**ので、ここに寄せる -->
@@ -98,10 +98,7 @@
 
       <hr>
       <button class="nav" data-screen="gate" data-act="gate" data-help="gate">
-        <svg width="17" height="17"><use href="#i-layers"/></svg><span>ほかの週案をひらく</span></button>
-      <button class="nav" data-screen="plan" data-act="open" id="navOpen" data-help="now" hidden>
-        <svg width="17" height="17"><use href="#i-cal"/></svg>
-        <span>いま：<b id="navOpenName"></b></span></button>
+        <svg width="17" height="17"><use href="#i-layers"/></svg><span>ほかの週案を開く</span></button>
 
       <hr>
       <h3>この週から出す</h3>
@@ -173,7 +170,13 @@
       <!-- たんぽぽの面。週案の紙ではないので、紙の代わりにここを出す -->
       <div class="tpview" id="tpView" hidden>
         <div class="tphead">
-        <h2>たんぽぽ</h2>
+        <h2>たんぽぽ
+          <!-- ソフトロック。**この面からの書き込みを止める。**
+               週案の紙と同じ作りで、この端末にだけ残る -->
+          <button class="lock" id="tpLockBtn" aria-pressed="false"
+                  title="この面からの書き込みを止める">
+            <svg width="15" height="15"><use href="#i-lock"/></svg>
+            <span id="tpLockTxt">ロック</span></button></h2>
         <details>
           <summary>この面ですること</summary>
           <p>右の<b>交流級</b>を、左の<b>たんぽぽの組</b>へ引っぱって入れる。
@@ -272,8 +275,7 @@
       <!-- 週と年度とA週B週は左のメニューにある。ここには置かない。
            同じものを2か所に置くと、どちらを見ればよいかを毎回考えることになる -->
       <div class="grid" id="grid"></div>
-      <p class="note"><b>各学年</b>に入力すると学年全体に反映、<b>全学年</b>に入力すると全クラスに反映されます。<br>
-        <button class="btn" id="gClose" style="margin-top:10px">閉じる</button></p>
+      <p class="note"><button class="btn" id="gClose">閉じる</button></p>
     </div>
 
   </div>
@@ -409,6 +411,20 @@
      順序を持たない。年度初めにやることは順序が要る -->
 <!-- 左の並びの「？」から開く。**1つの窓で全部まかなう。**
      項目ごとに窓を作ると、書き方が項目ごとにばらつく -->
+<!-- 出す先を一覧から外す確認。**ブラウザの confirm を使わない。**
+     confirm は Enter で「はい」に落ちる。この面でいちばん戻しにくい操作を、
+     いちばん弱い止め方にしない（1コマの上書きと同じ作りにそろえる） -->
+<dialog id="tpDelDlg"><div class="dlg">
+  <h2>この出す先を、一覧から外しますか</h2>
+  <table class="sys" id="tpDelTbl"></table>
+  <p><b>たんぽぽ時間割のファイルそのものは消えません。</b>
+     消えるのは、この画面が持っている「出す先」の行だけです。<br>
+     もう一度URLを貼れば、そのまま戻せます。</p>
+  <div class="end">
+    <button class="btn go" id="tpDelNo">外さない</button>
+    <button class="btn danger" id="tpDelYes">外す</button></div>
+</div></dialog>
+
 <dialog id="helpDlg"><div class="dlg">
   <h2 id="helpTtl"></h2>
   <div id="helpBody"></div>

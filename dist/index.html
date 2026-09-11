@@ -139,9 +139,12 @@ button,select,input,textarea{font:inherit;color:inherit}
   align-items:center;gap:8px}
 .side h3{margin:14px 8px 5px;font-size:10.5px;letter-spacing:.11em;color:var(--tx-sub);
   font-weight:600}
+/* **1行に収める。** 折り返すと、並びの高さがばらついて、
+   どこまでが1つの項目か分からなくなる */
 .nav{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border:0;
   border-radius:var(--r-sm);background:transparent;color:var(--tx);font-size:13.5px;
   text-align:left;cursor:pointer;line-height:1.35}
+.nav>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .nav:hover{background:var(--hover)}
 .nav[aria-current=true]{background:var(--tint);color:var(--ink-link);font-weight:600}
 .nav svg{flex:none;opacity:.72}
@@ -303,6 +306,19 @@ button,select,input,textarea{font:inherit;color:inherit}
    出す先を先に読ませて、そこへ落とす向きにそろえる。 */
 .tpplace{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:18px;
   align-items:start}
+/* 交流級を畳んでいるあいだは、組の並びを広く使う */
+.tpplace.shut{grid-template-columns:minmax(0,1fr)}
+.tpplace.shut .tpfrom{grid-column:1}
+/* 交流級のトグル。**ふだんは畳む**（入れ替えは年度の初めだけ） */
+.tpfromq{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;
+  border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);
+  color:var(--tx);font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit}
+.tpfromq:hover{background:var(--hover);border-color:var(--ink-link);color:var(--ink-link)}
+.tpfromq span{color:var(--tx-sub);font-weight:400}
+.tpfromb{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+/* たんぽぽの面のロック。見出しの右に置く */
+.tphead h2{display:flex;align-items:center;gap:10px}
+.tphead h2 .lock{font-size:12px;padding:5px 10px}
 .tpfrom{display:flex;flex-direction:column;gap:8px}
 .tpto{display:flex;flex-direction:column;gap:8px}
 .tpgrp{border:1px solid var(--line);border-radius:var(--r);background:var(--card);
@@ -530,8 +546,7 @@ button,select,input,textarea{font:inherit;color:inherit}
 .tile.sp:hover{transform:none;box-shadow:none;background:var(--hover)}
 .tile.sp i{position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--cat-special)}
 .tile.none{visibility:hidden}
-.gate .note{font-size:12px;color:var(--tx-sub);text-align:center;line-height:1.9;max-width:58ch}
-.gate .note b{color:var(--tx)}
+.gate .note{margin:0;text-align:center}
 
 /* ── 窓 ──────────────────────────────────────── */
 /* **overflow を切らない。** ✕ を角に重ねて出すので、切ると ✕ が欠ける */
@@ -928,6 +943,10 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 
 /* 全学年の面だけ、日付の見出しを押せる。**押せることは画面でだけ見せる** */
 .hd.pick{cursor:pointer}
+/* **押せることを、字で見せる。** 画面だけ（紙には出さない） */
+.hd .pk{font-size:calc(6pt*var(--k));color:var(--ink-link);font-weight:700;
+  border:1px solid var(--ink-link);border-radius:3px;line-height:1;
+  padding:1px 2px;margin-left:.15em}
 .hd.pick:hover{background:var(--fill-a)}
 .hd.pick:focus-visible{outline:2px solid var(--ink-link);outline-offset:-2px}
 
@@ -1035,6 +1054,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   /* 選んでいる印・打ち込み中の色も刷らない */
   .cell.sel{box-shadow:none}
   .hd.pick{background:transparent!important;cursor:default}
+  .hd .pk{display:none!important}          /* 押せる印は画面だけのもの */
   .cell .t:focus,.cell .n:focus{background:transparent;box-shadow:none}
   /* **紙の外の入れ物に、高さを持たせない。** html,body が height:100% なので、
      そのままだと本文の高さが画面の高さになり、紙が1枚に収まっていても
@@ -1115,8 +1135,8 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 
     <aside class="side">
       <h2><svg width="19" height="19"><use href="#i-school"/></svg><span>週案</span>
-        <button class="gridbtn" id="gridBtn" data-act="gate" title="ほかの週案をひらく"
-                aria-label="ほかの週案をひらく">
+        <button class="gridbtn" id="gridBtn" data-act="gate" title="ほかの週案を開く"
+                aria-label="ほかの週案を開く">
           <svg width="17" height="17"><use href="#i-grid"/></svg></button></h2>
 
       <!-- 週。**紙の上下には何も置かない**ので、ここに寄せる -->
@@ -1146,10 +1166,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 
       <hr>
       <button class="nav" data-screen="gate" data-act="gate" data-help="gate">
-        <svg width="17" height="17"><use href="#i-layers"/></svg><span>ほかの週案をひらく</span></button>
-      <button class="nav" data-screen="plan" data-act="open" id="navOpen" data-help="now" hidden>
-        <svg width="17" height="17"><use href="#i-cal"/></svg>
-        <span>いま：<b id="navOpenName"></b></span></button>
+        <svg width="17" height="17"><use href="#i-layers"/></svg><span>ほかの週案を開く</span></button>
 
       <hr>
       <h3>この週から出す</h3>
@@ -1221,7 +1238,13 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
       <!-- たんぽぽの面。週案の紙ではないので、紙の代わりにここを出す -->
       <div class="tpview" id="tpView" hidden>
         <div class="tphead">
-        <h2>たんぽぽ</h2>
+        <h2>たんぽぽ
+          <!-- ソフトロック。**この面からの書き込みを止める。**
+               週案の紙と同じ作りで、この端末にだけ残る -->
+          <button class="lock" id="tpLockBtn" aria-pressed="false"
+                  title="この面からの書き込みを止める">
+            <svg width="15" height="15"><use href="#i-lock"/></svg>
+            <span id="tpLockTxt">ロック</span></button></h2>
         <details>
           <summary>この面ですること</summary>
           <p>右の<b>交流級</b>を、左の<b>たんぽぽの組</b>へ引っぱって入れる。
@@ -1320,8 +1343,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
       <!-- 週と年度とA週B週は左のメニューにある。ここには置かない。
            同じものを2か所に置くと、どちらを見ればよいかを毎回考えることになる -->
       <div class="grid" id="grid"></div>
-      <p class="note"><b>各学年</b>に入力すると学年全体に反映、<b>全学年</b>に入力すると全クラスに反映されます。<br>
-        <button class="btn" id="gClose" style="margin-top:10px">閉じる</button></p>
+      <p class="note"><button class="btn" id="gClose">閉じる</button></p>
     </div>
 
   </div>
@@ -1457,6 +1479,20 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
      順序を持たない。年度初めにやることは順序が要る -->
 <!-- 左の並びの「？」から開く。**1つの窓で全部まかなう。**
      項目ごとに窓を作ると、書き方が項目ごとにばらつく -->
+<!-- 出す先を一覧から外す確認。**ブラウザの confirm を使わない。**
+     confirm は Enter で「はい」に落ちる。この面でいちばん戻しにくい操作を、
+     いちばん弱い止め方にしない（1コマの上書きと同じ作りにそろえる） -->
+<dialog id="tpDelDlg"><div class="dlg">
+  <h2>この出す先を、一覧から外しますか</h2>
+  <table class="sys" id="tpDelTbl"></table>
+  <p><b>たんぽぽ時間割のファイルそのものは消えません。</b>
+     消えるのは、この画面が持っている「出す先」の行だけです。<br>
+     もう一度URLを貼れば、そのまま戻せます。</p>
+  <div class="end">
+    <button class="btn go" id="tpDelNo">外さない</button>
+    <button class="btn danger" id="tpDelYes">外す</button></div>
+</div></dialog>
+
 <dialog id="helpDlg"><div class="dlg">
   <h2 id="helpTtl"></h2>
   <div id="helpBody"></div>
@@ -1630,7 +1666,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.14.0";
+let APP_VERSION = "1.15.0";
 let BUILD_DATE  = "2026-09-11";
 
 /* 時程。行を固定しない（学校ごとに違う）。
@@ -3345,7 +3381,8 @@ function viewName(){
 function viewWhere(){
   if(view.kind === "class")   return "書いたものは " + view.cls + " だけに入る";
   if(view.kind === "grade")   return "書いたものは " + view.grade + "年の全クラスに入る";
-  if(view.kind === "school")  return "書いたものは全クラスに入る";
+  if(view.kind === "school")  return "書いたものは全クラスに入る。"
+                                   + "日付を押すと、その日を休みや特別校時にできる";
   if(view.kind === "special") return "コマにクラスを入れると、そのクラスに「"
                                    + viewName() + "」として入る";
   if(view.kind === "tanpopo") return "交流級を選んで、たんぽぽ時間割へ出す";
@@ -3696,6 +3733,75 @@ function overwrittenHere(){
   return out;
 }
 
+/* ── 一手戻す ────────────────────────────────
+   **書き込みは writeCell の1本道。** だから、ここで直前の中身を控えておけば、
+   引っぱって入れたぶんも、パレットを押したぶんも、まとめて戻せる。
+
+   控えるのは「書き込み先の棚に入っている、そのままの中身」。
+   紙に出ている見かけ（上位から降りてきたもの）を控えると、
+   戻したときに、自分の層へ降りてきたものを写して固めてしまう。
+
+   戻すのは **いま見ている週・いま見ている画面のぶんだけ**。
+   週やクラスをまたいで戻すと、いま出ていない紙が黙って書き換わる。
+
+   専科の面では戻さない（1コマが20クラスに散るので、1手が1か所で終わらない）。
+   欄の中の Ctrl+Z はブラウザに任せる（→ main.js のキー結線）。 */
+const UNDO_MAX = 60;
+let undoStack = [], redoStack = [], undoBusy = false, undoLast = 0, undoLastKey = "";
+const canUndo = () => view.kind === "class" || view.kind === "grade" || view.kind === "school";
+const undoScope = () => fy() + "/" + wkKey() + "/" + layerOfStore() + "/" + targetOfStore();
+
+function pushUndo(d, s){
+  if(undoBusy || !canUndo()) return;
+  const key = undoScope() + "/" + ck(d, s);
+  const now = Date.now();
+  /* 同じコマを続けて直したときは1手にまとめる（打鍵ごとに1手にしない） */
+  if(key === undoLastKey && now - undoLast < 1200){ undoLast = now; return; }
+  undoLastKey = key; undoLast = now;
+  const cur = targetStore()[ck(d, s)];
+  undoStack.push({scope: undoScope(), d, s, prev: cur ? clone(cur) : null});
+  if(undoStack.length > UNDO_MAX) undoStack.shift();
+  redoStack = [];                 /* 新しく書いたら、やり直しの先は無くなる */
+}
+/* 控えた中身を、棚へそのまま戻す。**writeCell を通さない。**
+   通すと「いま紙に出ているものを引き継ぐ」が働いて、戻したいものと違うものが入る */
+function restoreCell(d, s, prev){
+  const st = targetStore(), key = ck(d, s);
+  const was = (st[key] || {}).sat || 0;
+  if(prev){ const e = clone(prev); e.sat = was; st[key] = e; }
+  else delete st[key];
+  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s, was);
+  save();
+}
+function stepUndo(from, to){
+  const sc = undoScope();
+  for(let i = from.length - 1; i >= 0; i--){
+    if(from[i].scope !== sc) continue;
+    const e = from.splice(i, 1)[0];
+    const back = targetStore()[ck(e.d, e.s)];
+    undoBusy = true;
+    try{ restoreCell(e.d, e.s, e.prev); } finally{ undoBusy = false; }
+    to.push({scope: sc, d: e.d, s: e.s, prev: back ? clone(back) : null});
+    undoLastKey = "";
+    return e;
+  }
+  return null;
+}
+function doUndo(){
+  if(!canUndo()) return toast("この面では戻せません");
+  if(typeof isLocked === "function" && isLocked())
+    return toast("この画面はロックしてある。<b>直すには、ロックを押す</b>");
+  if(!stepUndo(undoStack, redoStack)) return toast("戻せるものがありません");
+  refreshWeek();
+  toast("1手戻した　<b>やり直しは Ctrl+Shift+Z</b>");
+}
+function doRedo(){
+  if(!canUndo() || (typeof isLocked === "function" && isLocked())) return;
+  if(!stepUndo(redoStack, undoStack)) return toast("やり直せるものがありません");
+  refreshWeek();
+  toast("やり直した");
+}
+
 function writeCell(d, s, patch){
   /* **ロック中は書かない。** ここが書き込みの1本道なので、ここで止めれば
      引っぱって入れても、打っても、パレットを押しても入らない */
@@ -3704,6 +3810,7 @@ function writeCell(d, s, patch){
      刷った紙で「休みなのか、授業があるのか」が読めなくなる。
      朝学習と放課後は書ける（休業日でも出勤・部活・行事の準備が入る） */
   if(isDayOff(d) && (SLOT_BY_ID[s] || {}).kind === "lesson") return false;
+  pushUndo(d, s);                 /* 書く前の中身を控える。戻せるようにする */
   const w = week(), key = ck(d, s);
 
   /* 専科の週では、コマの中身は「どのクラスへ行くか」 */
@@ -3837,7 +3944,11 @@ function buildSheet_(sh){
        担任の画面から押せると、自分の学級を直したついでに全校が動く */
     if(view.kind === "school"){
       hd.classList.add("pick");
-      hd.title = "この日の形を決める（全クラスに入る）";
+      hd.title = "押すと、この日の形を決められる（ふつう／特別校時／休み）。全クラスに入る";
+      /* **押せることを、字で見せる。** 印を出していなかったころは、
+         日付を押せると気づかれず、休みの日を入れる口そのものが無いと言われた。
+         印は画面だけに出す（紙に出すと、決め終わったあとも版面に残る） */
+      hd.appendChild(el("span", "pk", "▾"));
       hd.addEventListener("click", () => openDayDlg(d));
     }
     put(hd, 2 + d, 1);
@@ -4493,6 +4604,8 @@ function tpSheetName(mon){
    引っぱれない端末のために、押しても入るようにしてある
    （右のクラスを押すと、いま選んでいる組へ入る）。 */
 let tpPick = "1";              /* いま選んでいる組。押して入れるときの行き先 */
+/* 右の交流級を開いているか。**ふだんは畳む**（入れ替えは年度の初めだけ） */
+let tpFromOpen = false;
 
 /* 交流級の着手／未着手。**組の中のチップそのものに出す。**
    下に字でまとめて出していたころは、組の並びと読み合わせないと
@@ -4557,7 +4670,11 @@ function drawTargets(){
       for(let k = 0; k < tpTargets.length; k++) tpTargets[k].def = (k === i);
       putTargets(() => toast("出す先を「" + tpTargets[i].name + "」にした"));
     };
-    $("tpTgtEdit").onclick = () => { tpTgtEdit = true; drawTanpopoView(); };
+    $("tpTgtEdit").onclick = () => {
+      if(typeof isLocked === "function" && isLocked())
+        return toast("この面はロックしてある。<b>直すには、上のロックを押す</b>");
+      tpTgtEdit = true; drawTanpopoView();
+    };
     return;
   }
   /* 直しているあいだ。**行ごとに、名前・URL・試す・消すを並べる。** */
@@ -4591,14 +4708,10 @@ function drawTargets(){
   for(const b of box.querySelectorAll(".tptdel"))
     b.onclick = () => {
       read();
-      const x = tpTargets[+b.dataset.i];
       /* **消すのはこの一覧の行だけ。** 向こうのシートには手を出さない。
-         たんぽぽ担当が書いた担当者・場所を、こちらから消せる口を作らない */
-      if(!confirm("「" + x.name + "」を出す先の一覧から外します。\n"
-                + "たんぽぽ時間割のファイルそのものは消えません。")) return;
-      tpTargets.splice(+b.dataset.i, 1);
-      if(tpTargets.length && !tpTargets.some(y => y.def)) tpTargets[0].def = true;
-      drawTanpopoView();
+         たんぽぽ担当が書いた担当者・場所を、こちらから消せる口を作らない。
+         確認は専用の窓で、既定は「外さない」（confirm は Enter で「はい」に落ちる） */
+      askTpDel(+b.dataset.i);
     };
   for(const b of box.querySelectorAll(".tpttest"))
     b.onclick = () => {
@@ -4633,6 +4746,31 @@ function drawTargets(){
     });
   };
 }
+/* 出す先を一覧から外す確認。**既定は「外さない」。**
+   ブラウザの confirm は Enter で「はい」に落ちる。 */
+let tpDelAt = -1;
+function askTpDel(i){
+  const x = tpTargets[i];
+  if(!x) return;
+  tpDelAt = i;
+  $("tpDelTbl").innerHTML =
+      "<tr><th>名前</th><td><b>" + escText(x.name) + "</b></td></tr>"
+    + "<tr><th>URL</th><td>" + escText(String(x.url).slice(0, 70)) + "</td></tr>"
+    + (x.def ? "<tr><th>いまの既定</th><td>これが既定の出す先です。"
+             + "外すと、いちばん上のものが既定になります</td></tr>" : "");
+  $("tpDelDlg").showModal();
+  $("tpDelNo").focus();               /* **既定は「外さない」。** */
+}
+function tpDelAnswer(yes){
+  const i = tpDelAt;
+  tpDelAt = -1;
+  $("tpDelDlg").close();
+  if(!yes || i < 0 || !tpTargets[i]) return;
+  tpTargets.splice(i, 1);
+  if(tpTargets.length && !tpTargets.some(y => y.def)) tpTargets[0].def = true;
+  drawTanpopoView();
+}
+
 function putTargets(after){
   const w = Wait.begin("出す先を入れています");
   Backend.saveTpTargets(tpTargets, () => { Wait.end(w); if(after) after(); drawTanpopoView(); },
@@ -4678,18 +4816,38 @@ function drawTanpopoView(){
       }).join("")
     + "</div></div>").join("");
 
+  /* **右の交流級は畳んでおく。** 入れ替えるのは年度の初めだけで、
+     ふだん見たいのは左の組の並び（出す列そのもの）。
+     開いたままにすると、毎週その20個を越えないと組に手が届かない。 */
+  const open = !!tpFromOpen;
   $("tpSel").innerHTML =
-    "<div class='tpplace'><div class='tpto'>"
+    "<div class='tpplace" + (open ? "" : " shut") + "'><div class='tpto'>"
     + "<div class='tpleg'><b>今週の提出</b>"
     + ["ok","base"].map(k =>
         "<span class='st-" + k + "'><i></i>" + TP_ST[k].mark + "</span>").join("")
     + "</div>"
     + left
     + "<button class='btn tpaddg' id='tpAddG'>組を足す</button></div>"
-    + "<div class='tpfrom'>" + right + "</div></div>";
+    + "<div class='tpfrom'>"
+    + "<button class='tpfromq' id='tpFromQ' aria-expanded='" + open + "'>"
+    + (open ? "▾" : "▸") + " 交流級から入れる"
+    + "<span>" + allClasses().length + " クラス</span></button>"
+    + "<div class='tpfromb'" + (open ? "" : " hidden") + ">" + right + "</div>"
+    + "</div></div>";
 
-  /* 入れる／外す。**押しても引っぱっても同じことが起きる。** */
+  const q = $("tpFromQ");
+  if(q) q.onclick = () => { tpFromOpen = !tpFromOpen; drawTanpopoView(); };
+
+  /* 入れる／外す。**押しても引っぱっても同じことが起きる。**
+     ロック中は入れない（見るだけのつもりで開いた面で、出す列がずれる） */
   const redraw = () => { save(); Backend.saveRoster(); drawTanpopoView(); };
+  const locked = () => {
+    if(typeof isLocked === "function" && isLocked()){
+      toast("この面はロックしてある。<b>直すには、上のロックを押す</b>");
+      return true;
+    }
+    return false;
+  };
   for(const b of $("tpSel").querySelectorAll(".tpchip")){
     b.addEventListener("dragstart", ev => {
       ev.dataTransfer.setData("text/x-tanpopo", b.dataset.c);
@@ -4697,12 +4855,13 @@ function drawTanpopoView(){
       b.classList.add("drag");
     });
     b.addEventListener("dragend", () => b.classList.remove("drag"));
-    b.onclick = () => { tpAdd(tpPick, b.dataset.c); redraw(); };
+    b.onclick = () => { if(locked()) return; tpAdd(tpPick, b.dataset.c); redraw(); };
   }
   for(const h of $("tpSel").querySelectorAll(".tpghead"))
     h.onclick = () => { tpPick = h.dataset.g; drawTanpopoView(); };
   for(const x of $("tpSel").querySelectorAll(".tpin"))
-    x.onclick = () => { tpDrop(x.dataset.g, tpIn(x.dataset.g)[+x.dataset.i]); redraw(); };
+    x.onclick = () => { if(locked()) return;
+                        tpDrop(x.dataset.g, tpIn(x.dataset.g)[+x.dataset.i]); redraw(); };
   for(const box of $("tpSel").querySelectorAll(".tpgrp")){
     box.addEventListener("dragover", ev => {
       if(ev.dataTransfer.types.indexOf("text/x-tanpopo") < 0) return;
@@ -4712,17 +4871,18 @@ function drawTanpopoView(){
     box.addEventListener("drop", ev => {
       ev.preventDefault(); box.classList.remove("over");
       const c = ev.dataTransfer.getData("text/x-tanpopo");
-      if(c){ tpPick = box.dataset.g; tpAdd(box.dataset.g, c); redraw(); }
+      if(c){ if(locked()) return; tpPick = box.dataset.g; tpAdd(box.dataset.g, c); redraw(); }
     });
   }
   const add = $("tpAddG");
-  if(add) add.onclick = () => { tpAddGroup(); save(); drawTanpopoView(); };
+  if(add) add.onclick = () => { if(locked()) return; tpAddGroup(); save(); drawTanpopoView(); };
 
   $("tpWarn").innerHTML = tpWarnBoxes().join("");
   /* 出す先が1つも無いあいだ、直している最中は出させない。
      **どこへ出るか分からないまま押させない。** */
   const tgt = tpTargetNow();
   $("tpGo").disabled = !tpTotal() || tpTgtEdit
+                    || (typeof isLocked === "function" && isLocked())
                     || (Backend.isGas() && !tgt);
   $("tpCount").innerHTML = tpTotal()
     ? "出すのは <b>" + tpTotal() + " 人</b>（" + tpTotal() + " 列）・"
@@ -4992,11 +5152,11 @@ function showGate(){
   paintArchive();
 }
 
-/* 上の帯・左の並び・中央のセレクトの「いま」を合わせる */
+/* 上の帯・左の並び・中央のセレクトの「いま」を合わせる。
+   **「いま：◯年◯組」の行は置かない。** すぐ上の行き先の欄が同じことを
+   言っていて、同じものを2か所に置くと、どちらを見ればよいかを毎回考える。 */
 function paintHeader(){
   const open = view.kind !== "gate";
-  $("navOpen").hidden = !open;
-  $("navOpenName").textContent = open ? viewName() : "";
   for(const b of document.querySelectorAll(".nav[data-screen]"))
     b.setAttribute("aria-current", String(b.dataset.screen === (open ? "plan" : "gate")));
   drawTargetSelect();
@@ -6302,7 +6462,10 @@ function lockKey(v){
   return x.kind === "class"   ? "class:" + x.cls
        : x.kind === "grade"   ? "grade:" + x.grade
        : x.kind === "special" ? "special:" + x.sp
-       : x.kind === "school"  ? "school:" : "";
+       : x.kind === "school"  ? "school:"
+       /* たんぽぽの面も止められるようにする。**組の並びは出す列そのもの。**
+          見るだけのつもりで開いて、うっかり1人入れると、出す列が1列ずれる */
+       : x.kind === "tanpopo" ? "tanpopo:" : "";
 }
 const isLocked = () => {
   const k = lockKey();
@@ -6322,11 +6485,14 @@ function setLock(on){
    **止めるのは書き込みだけ。** 読むこと・刷ること・時数を写すことは止めない。 */
 function applyLock(){
   const on = isLocked(), has = !!lockKey();
-  const b = $("lockBtn");
-  if(b){
+  /* 週案の紙と、たんぽぽの面。**同じ押し心地にそろえる。**
+     面ごとに別のボタンを作ると、片方だけ直した版が出る */
+  for(const [bid, tid] of [["lockBtn", "lockTxt"], ["tpLockBtn", "tpLockTxt"]]){
+    const b = $(bid);
+    if(!b) continue;
     b.hidden = !has;
     b.setAttribute("aria-pressed", String(on));
-    $("lockTxt").textContent = on ? "ロック中" : "ロック";
+    $(tid).textContent = on ? "ロック中" : "ロック";
   }
   $("lockMsg").hidden = !on;
   const sh = $("sheet");
@@ -6371,6 +6537,28 @@ function setVariant(v){
   save();
   if(view.kind === "gate") drawGate(); else refreshWeek();
 }
+
+/* ── キーの近道 ──────────────────────────────
+   **欄の中では、ブラウザに任せる。** 字を打っている最中の Ctrl+Z は
+   「いま打った字を戻す」であって、「1コマ前の操作を戻す」ではない。
+   ここで横取りすると、打ち間違いを1字だけ直せなくなる。
+
+   欄の外で押したときだけ、こちらの1手戻すが効く。
+   引っぱって入れたコマ・パレットで入れたコマは、押したあと欄の外にいる。 */
+const inField = e => !!(e && (e.isContentEditable
+  || /^(INPUT|TEXTAREA|SELECT)$/.test(e.tagName || "")));
+
+document.addEventListener("keydown", ev => {
+  const mod = ev.ctrlKey || ev.metaKey;
+  if(!mod) return;
+  const k = (ev.key || "").toLowerCase();
+  /* 保存。**どの画面でも同じ。** ブラウザの「ページを保存」は横取りする
+     （この画面で Ctrl+S に期待されるのは、そちらではない） */
+  if(k === "s"){ ev.preventDefault(); if(Wait.guard()) doSave(true); return; }
+  if(inField(document.activeElement)) return;
+  if(k === "z" && !ev.shiftKey){ ev.preventDefault(); doUndo(); return; }
+  if((k === "z" && ev.shiftKey) || k === "y"){ ev.preventDefault(); doRedo(); return; }
+});
 
 /* ── 画面ぜんぶに効くもの ─────────────────────── */
 
@@ -6514,6 +6702,11 @@ function wire(){
      doSave 自体は弾かない（重なりの入れ直しがコードから呼ぶ。弾くと黙って送られない） */
   on("saveBtn","click", () => { if(Wait.guard()) doSave(true); });
   on("lockBtn","click", () => setLock(!isLocked()));
+  on("tpLockBtn","click", () => { setLock(!isLocked()); drawTanpopoView(); });
+  on("tpDelNo","click",  () => tpDelAnswer(false));
+  on("tpDelYes","click", () => tpDelAnswer(true));
+  /* ✕ や Esc で閉じたときも「外さない」。取りこぼさない */
+  on("tpDelDlg","close", () => tpDelAnswer(false));
   on("tpSubBtn","click", toggleTpSub);
 
   /* 月の面。**見るだけ。** 直すのは週の紙のほうで */

@@ -539,6 +539,17 @@ ok("偶数の組は色だけに頼らない（太い縦線も引く）", await p
      return parseFloat(getComputedStyle(e).borderLeftWidth) >= 4;
    }) === true);
 
+/* **交流級は畳んである。** 触る前に開く（入れ替えは年度の初めだけなので、
+   ふだんは畳んでおく設計） */
+const openFrom = async () => {
+  if(await p.locator(".tpfromb").evaluate(e => e.hidden))
+    await p.locator("#tpFromQ").click();
+  await p.waitForTimeout(200);
+};
+await openFrom();
+ok("交流級は、押すと開くトグルに収まっている",
+   await p.locator("#tpFromQ").count() === 1);
+
 /* 3-3 は担任が書いた週。1-1 は基本時間割のまま。3-1 は学年の予定だけ。
    引っぱれない端末のために、押しても「いま選んでいる組」へ入る。 */
 await p.locator("#tpSel .tpchip[data-c='3-3']").click(); await p.waitForTimeout(200);
@@ -1307,6 +1318,101 @@ ok("「自動に戻す」で日付どおりに戻る", await (async () => {
          && await p.locator("#abAuto").isHidden();
    })() === true);
 
+console.log("\n■ 左の並びと入口の見え方");
+ok("左の並びは、どれも1行に収まる（折り返さない）", await p.evaluate(() =>
+     [...document.querySelectorAll(".side .nav")]
+       .every(n => n.getBoundingClientRect().height <= 40)) === true,
+   await p.evaluate(() => [...document.querySelectorAll(".side .nav")]
+     .map(n => n.textContent.trim() + ":" + Math.round(n.getBoundingClientRect().height))));
+ok("「ほかの週案を開く」になっている",
+   (await p.locator(".nav[data-act='gate']").first().innerText()).indexOf("週案を開く") >= 0,
+   await p.locator(".nav[data-act='gate']").first().innerText());
+/* **同じものを2か所に置かない。** 行き先の欄がすぐ上で同じことを言っている */
+ok("「いま：◯年◯組」の行は置かない", await p.locator("#navOpen").count() === 0);
+await p.locator(".nav[data-act='gate']").first().click(); await p.waitForTimeout(250);
+ok("入口の下に説明文を置かない（閉じるだけ）",
+   (await p.locator(".gate > p.note").innerText()).trim() === "閉じる",
+   await p.locator(".gate > p.note").innerText());
+
+console.log("\n■ 全学年の面では、日付を押して休みにできる");
+await p.locator(".master.all").click(); await p.waitForTimeout(500);
+/* **押せることを、字で見せる。** 印が無かったころは、口そのものが無いと言われた */
+ok("日付に、押せる印が出る", await p.locator("#sheet .hd .pk").count() === 6,
+   await p.locator("#sheet .hd .pk").count());
+ok("説明にも、押せると書いてある",
+   (await p.evaluate(() => viewWhere())).indexOf("休み") >= 0,
+   await p.evaluate(() => viewWhere()));
+await p.locator("#sheet .hd").first().click(); await p.waitForTimeout(300);
+await p.locator(".dayform[data-f='off']").click(); await p.waitForTimeout(400);
+ok("休みにすると、斜め線が入る", await p.locator("#sheet .dayoff").count() === 1);
+ok("休みの日の授業には書けない",
+   await p.evaluate(() => writeCell(0, "p1", {title:"あ"})) === false);
+ok("朝学習と放課後には書ける（休業日でも行事の準備が入る）",
+   await p.evaluate(() => writeCell(0, "after", {note:"準備"})) !== false);
+await p.locator("#sheet .hd").first().click(); await p.waitForTimeout(300);
+await p.locator(".dayform[data-f='']").click(); await p.waitForTimeout(400);
+ok("戻すと、斜め線は消える", await p.locator("#sheet .dayoff").count() === 0);
+/* **押せる印は画面だけ。** 決め終わったあとも版面に残ると、紙が汚れる */
+await p.emulateMedia({media:"print"}); await p.waitForTimeout(200);
+ok("押せる印は、紙には出さない", await p.evaluate(() =>
+     [...document.querySelectorAll("#sheet .hd .pk")]
+       .every(x => getComputedStyle(x).display === "none")) === true);
+await p.emulateMedia({media:"screen"}); await p.waitForTimeout(200);
+
+console.log("\n■ 一手戻す（Ctrl+Z）");
+await p.locator(".nav[data-act='gate']").first().click(); await p.waitForTimeout(250);
+await p.locator(".tile[data-c='1-1']").click(); await p.waitForTimeout(500);
+const cz = "#sheet .cell[data-d='0'][data-s='p1'] .t";
+const was0 = await p.locator(cz).innerText();
+await p.locator(cz).click(); await p.waitForTimeout(150);
+await p.locator(".pal[data-v='rika']").click(); await p.waitForTimeout(300);
+ok("パレットで入れたものが入る", await p.locator(cz).innerText() === "理科",
+   await p.locator(cz).innerText());
+await p.evaluate(() => document.activeElement.blur());
+await p.keyboard.press("Control+z"); await p.waitForTimeout(400);
+ok("Ctrl+Z で1手戻る", await p.locator(cz).innerText() === was0,
+   await p.locator(cz).innerText());
+await p.keyboard.press("Control+Shift+z"); await p.waitForTimeout(400);
+ok("Ctrl+Shift+Z でやり直せる", await p.locator(cz).innerText() === "理科",
+   await p.locator(cz).innerText());
+await p.keyboard.press("Control+z"); await p.waitForTimeout(400);
+await p.keyboard.press("Control+z"); await p.waitForTimeout(400);
+ok("戻すものが無ければ、そう言う（黙って別の週を直さない）",
+   (await p.locator("#toast").innerText()).indexOf("戻せるもの") >= 0,
+   await p.locator("#toast").innerText());
+/* **欄の中では、ブラウザに任せる。** 打ち間違いを1字だけ直せなくなる */
+ok("欄の中の Ctrl+Z は横取りしない", await p.evaluate(() => {
+     const e = document.querySelector("#sheet .cell[data-d='1'][data-s='p1'] .t");
+     e.focus();
+     const ev2 = new KeyboardEvent("keydown", {key:"z", ctrlKey:true,
+                                               bubbles:true, cancelable:true});
+     document.dispatchEvent(ev2);
+     e.blur();
+     return ev2.defaultPrevented === false;
+   }) === true);
+
+console.log("\n■ たんぽぽの面（ロック・交流級の畳み・外す確認）");
+await p.evaluate(() => { Y().tanpopo = {"1":["1-1"]}; save(); });
+await p.locator(".nav[data-act='gate']").first().click(); await p.waitForTimeout(250);
+await p.locator(".master[data-go='tanpopo']").click(); await p.waitForTimeout(600);
+ok("ロックのボタンがある", await p.locator("#tpLockBtn").isVisible() === true);
+/* **ふだんは畳む。** 入れ替えるのは年度の初めだけ
+   （前の節で開いてあるので、畳んだところから見る） */
+await p.evaluate(() => { tpFromOpen = false; drawTanpopoView(); });
+await p.waitForTimeout(300);
+ok("交流級は畳んである", await p.locator(".tpfromb").evaluate(e => e.hidden) === true);
+await p.locator("#tpFromQ").click(); await p.waitForTimeout(300);
+ok("押すと開く", await p.locator(".tpfromb").evaluate(e => e.hidden) === false
+   && await p.locator(".tpchip").count() > 0);
+await p.locator("#tpLockBtn").click(); await p.waitForTimeout(300);
+ok("ロック中は、出すボタンが押せない", await p.locator("#tpGo").isDisabled() === true);
+await p.locator(".tpchip").first().click(); await p.waitForTimeout(300);
+ok("ロック中は、組に入れられない",
+   await p.evaluate(() => tpCount("1-1")) === 1,
+   await p.evaluate(() => tpCount("1-1")));
+await p.locator("#tpLockBtn").click(); await p.waitForTimeout(300);
+ok("外すと、また入れられる", await p.locator("#tpGo").isDisabled() === false);
+
 console.log("\n■ いま見ている週は、転がしても左上に残る");
 ok("左メニューを転がしても、週の欄が見えたまま", await p.evaluate(() => {
      const s = document.querySelector(".side"), w = document.querySelector(".side .wk");
@@ -1528,9 +1634,10 @@ ok("狭い画面でも、表の上が見切れない", await p.evaluate(() => {
    }));
 await p.setViewportSize({width:1500, height:950});
 await p.waitForTimeout(300);
-ok("入口の下の説明は、入れた先がどこへ反映されるかを言う",
-   (await p.locator(".gate > p.note").innerText())
-     .indexOf("各学年に入力すると学年全体に反映") >= 0,
+/* **入口の下に説明文を置かない。** どこへ入るかは、開いた先の紙の上で
+   「書いたものは◯◯に入る」と出る。入口で先に読ませても覚えていない */
+ok("入口の下は、閉じるボタンだけ",
+   (await p.locator(".gate > p.note").innerText()).trim() === "閉じる",
    await p.locator(".gate > p.note").innerText());
 
 console.log("\n■ 左の並びには「？」があり、押すと説明が出る");

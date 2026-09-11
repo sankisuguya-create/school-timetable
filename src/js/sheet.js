@@ -62,7 +62,11 @@ function buildSheet_(sh){
        担任の画面から押せると、自分の学級を直したついでに全校が動く */
     if(view.kind === "school"){
       hd.classList.add("pick");
-      hd.title = "この日の形を決める（全クラスに入る）";
+      hd.title = "押すと、この日の形を決められる（ふつう／特別校時／休み）。全クラスに入る";
+      /* **押せることを、字で見せる。** 印を出していなかったころは、
+         日付を押せると気づかれず、休みの日を入れる口そのものが無いと言われた。
+         印は画面だけに出す（紙に出すと、決め終わったあとも版面に残る） */
+      hd.appendChild(el("span", "pk", "▾"));
       hd.addEventListener("click", () => openDayDlg(d));
     }
     put(hd, 2 + d, 1);

@@ -167,7 +167,10 @@ function lockKey(v){
   return x.kind === "class"   ? "class:" + x.cls
        : x.kind === "grade"   ? "grade:" + x.grade
        : x.kind === "special" ? "special:" + x.sp
-       : x.kind === "school"  ? "school:" : "";
+       : x.kind === "school"  ? "school:"
+       /* たんぽぽの面も止められるようにする。**組の並びは出す列そのもの。**
+          見るだけのつもりで開いて、うっかり1人入れると、出す列が1列ずれる */
+       : x.kind === "tanpopo" ? "tanpopo:" : "";
 }
 const isLocked = () => {
   const k = lockKey();
@@ -187,11 +190,14 @@ function setLock(on){
    **止めるのは書き込みだけ。** 読むこと・刷ること・時数を写すことは止めない。 */
 function applyLock(){
   const on = isLocked(), has = !!lockKey();
-  const b = $("lockBtn");
-  if(b){
+  /* 週案の紙と、たんぽぽの面。**同じ押し心地にそろえる。**
+     面ごとに別のボタンを作ると、片方だけ直した版が出る */
+  for(const [bid, tid] of [["lockBtn", "lockTxt"], ["tpLockBtn", "tpLockTxt"]]){
+    const b = $(bid);
+    if(!b) continue;
     b.hidden = !has;
     b.setAttribute("aria-pressed", String(on));
-    $("lockTxt").textContent = on ? "ロック中" : "ロック";
+    $(tid).textContent = on ? "ロック中" : "ロック";
   }
   $("lockMsg").hidden = !on;
   const sh = $("sheet");
@@ -236,6 +242,28 @@ function setVariant(v){
   save();
   if(view.kind === "gate") drawGate(); else refreshWeek();
 }
+
+/* ── キーの近道 ──────────────────────────────
+   **欄の中では、ブラウザに任せる。** 字を打っている最中の Ctrl+Z は
+   「いま打った字を戻す」であって、「1コマ前の操作を戻す」ではない。
+   ここで横取りすると、打ち間違いを1字だけ直せなくなる。
+
+   欄の外で押したときだけ、こちらの1手戻すが効く。
+   引っぱって入れたコマ・パレットで入れたコマは、押したあと欄の外にいる。 */
+const inField = e => !!(e && (e.isContentEditable
+  || /^(INPUT|TEXTAREA|SELECT)$/.test(e.tagName || "")));
+
+document.addEventListener("keydown", ev => {
+  const mod = ev.ctrlKey || ev.metaKey;
+  if(!mod) return;
+  const k = (ev.key || "").toLowerCase();
+  /* 保存。**どの画面でも同じ。** ブラウザの「ページを保存」は横取りする
+     （この画面で Ctrl+S に期待されるのは、そちらではない） */
+  if(k === "s"){ ev.preventDefault(); if(Wait.guard()) doSave(true); return; }
+  if(inField(document.activeElement)) return;
+  if(k === "z" && !ev.shiftKey){ ev.preventDefault(); doUndo(); return; }
+  if((k === "z" && ev.shiftKey) || k === "y"){ ev.preventDefault(); doRedo(); return; }
+});
 
 /* ── 画面ぜんぶに効くもの ─────────────────────── */
 
@@ -379,6 +407,11 @@ function wire(){
      doSave 自体は弾かない（重なりの入れ直しがコードから呼ぶ。弾くと黙って送られない） */
   on("saveBtn","click", () => { if(Wait.guard()) doSave(true); });
   on("lockBtn","click", () => setLock(!isLocked()));
+  on("tpLockBtn","click", () => { setLock(!isLocked()); drawTanpopoView(); });
+  on("tpDelNo","click",  () => tpDelAnswer(false));
+  on("tpDelYes","click", () => tpDelAnswer(true));
+  /* ✕ や Esc で閉じたときも「外さない」。取りこぼさない */
+  on("tpDelDlg","close", () => tpDelAnswer(false));
   on("tpSubBtn","click", toggleTpSub);
 
   /* 月の面。**見るだけ。** 直すのは週の紙のほうで */

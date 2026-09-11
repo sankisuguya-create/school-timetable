@@ -22,8 +22,8 @@
 npm install               検査に playwright が要る（1回だけ）
 python3 build.py          src/ から dist/index.html と gas/plan.html を作る
 python3 build.py --check  生成物が src と一致するか調べる
-node tools/check.mjs      画面を動かして確かめる（331件）
-node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（248件）
+node tools/check.mjs      画面を動かして確かめる（354件）
+node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（253件）
 node gas/storecheck.js    シートの読み書きを確かめる（338件）
 node gas/gatecheck.js     関門を確かめる（27件）
 node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明を見る（79件）
@@ -77,6 +77,8 @@ Git管理されている正本・検査・文書を、元ファイル名つき�
 - **書き込みのあいだは、全面にかぶせて次の操作を受け付けない。**
   保存・たんぽぽ出力・年度の検査と退避。週を開く読み込みは止めない
   （止めると、開いたのに何も出ない時間ができる）
+- **Ctrl+Z で一手戻せる。** 書き込みは1本道なので、そこで直前の中身を控える。
+  欄の中の Ctrl+Z はブラウザに任せる（打ち間違いを1字だけ直せなくならない）
 - **4週ぶんを 2×2 で見る面がある**（月で見る）。B4 のよこ1枚に刷る。
   組み立ては週の紙と同じもので、詰めるのは高さだけ。**見るだけの面**で、
   直すのは週の紙のほう

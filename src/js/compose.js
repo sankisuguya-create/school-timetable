@@ -26,7 +26,8 @@ function viewName(){
 function viewWhere(){
   if(view.kind === "class")   return "書いたものは " + view.cls + " だけに入る";
   if(view.kind === "grade")   return "書いたものは " + view.grade + "年の全クラスに入る";
-  if(view.kind === "school")  return "書いたものは全クラスに入る";
+  if(view.kind === "school")  return "書いたものは全クラスに入る。"
+                                   + "日付を押すと、その日を休みや特別校時にできる";
   if(view.kind === "special") return "コマにクラスを入れると、そのクラスに「"
                                    + viewName() + "」として入る";
   if(view.kind === "tanpopo") return "交流級を選んで、たんぽぽ時間割へ出す";
@@ -377,6 +378,75 @@ function overwrittenHere(){
   return out;
 }
 
+/* ── 一手戻す ────────────────────────────────
+   **書き込みは writeCell の1本道。** だから、ここで直前の中身を控えておけば、
+   引っぱって入れたぶんも、パレットを押したぶんも、まとめて戻せる。
+
+   控えるのは「書き込み先の棚に入っている、そのままの中身」。
+   紙に出ている見かけ（上位から降りてきたもの）を控えると、
+   戻したときに、自分の層へ降りてきたものを写して固めてしまう。
+
+   戻すのは **いま見ている週・いま見ている画面のぶんだけ**。
+   週やクラスをまたいで戻すと、いま出ていない紙が黙って書き換わる。
+
+   専科の面では戻さない（1コマが20クラスに散るので、1手が1か所で終わらない）。
+   欄の中の Ctrl+Z はブラウザに任せる（→ main.js のキー結線）。 */
+const UNDO_MAX = 60;
+let undoStack = [], redoStack = [], undoBusy = false, undoLast = 0, undoLastKey = "";
+const canUndo = () => view.kind === "class" || view.kind === "grade" || view.kind === "school";
+const undoScope = () => fy() + "/" + wkKey() + "/" + layerOfStore() + "/" + targetOfStore();
+
+function pushUndo(d, s){
+  if(undoBusy || !canUndo()) return;
+  const key = undoScope() + "/" + ck(d, s);
+  const now = Date.now();
+  /* 同じコマを続けて直したときは1手にまとめる（打鍵ごとに1手にしない） */
+  if(key === undoLastKey && now - undoLast < 1200){ undoLast = now; return; }
+  undoLastKey = key; undoLast = now;
+  const cur = targetStore()[ck(d, s)];
+  undoStack.push({scope: undoScope(), d, s, prev: cur ? clone(cur) : null});
+  if(undoStack.length > UNDO_MAX) undoStack.shift();
+  redoStack = [];                 /* 新しく書いたら、やり直しの先は無くなる */
+}
+/* 控えた中身を、棚へそのまま戻す。**writeCell を通さない。**
+   通すと「いま紙に出ているものを引き継ぐ」が働いて、戻したいものと違うものが入る */
+function restoreCell(d, s, prev){
+  const st = targetStore(), key = ck(d, s);
+  const was = (st[key] || {}).sat || 0;
+  if(prev){ const e = clone(prev); e.sat = was; st[key] = e; }
+  else delete st[key];
+  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s, was);
+  save();
+}
+function stepUndo(from, to){
+  const sc = undoScope();
+  for(let i = from.length - 1; i >= 0; i--){
+    if(from[i].scope !== sc) continue;
+    const e = from.splice(i, 1)[0];
+    const back = targetStore()[ck(e.d, e.s)];
+    undoBusy = true;
+    try{ restoreCell(e.d, e.s, e.prev); } finally{ undoBusy = false; }
+    to.push({scope: sc, d: e.d, s: e.s, prev: back ? clone(back) : null});
+    undoLastKey = "";
+    return e;
+  }
+  return null;
+}
+function doUndo(){
+  if(!canUndo()) return toast("この面では戻せません");
+  if(typeof isLocked === "function" && isLocked())
+    return toast("この画面はロックしてある。<b>直すには、ロックを押す</b>");
+  if(!stepUndo(undoStack, redoStack)) return toast("戻せるものがありません");
+  refreshWeek();
+  toast("1手戻した　<b>やり直しは Ctrl+Shift+Z</b>");
+}
+function doRedo(){
+  if(!canUndo() || (typeof isLocked === "function" && isLocked())) return;
+  if(!stepUndo(redoStack, undoStack)) return toast("やり直せるものがありません");
+  refreshWeek();
+  toast("やり直した");
+}
+
 function writeCell(d, s, patch){
   /* **ロック中は書かない。** ここが書き込みの1本道なので、ここで止めれば
      引っぱって入れても、打っても、パレットを押しても入らない */
@@ -385,6 +455,7 @@ function writeCell(d, s, patch){
      刷った紙で「休みなのか、授業があるのか」が読めなくなる。
      朝学習と放課後は書ける（休業日でも出勤・部活・行事の準備が入る） */
   if(isDayOff(d) && (SLOT_BY_ID[s] || {}).kind === "lesson") return false;
+  pushUndo(d, s);                 /* 書く前の中身を控える。戻せるようにする */
   const w = week(), key = ck(d, s);
 
   /* 専科の週では、コマの中身は「どのクラスへ行くか」 */
