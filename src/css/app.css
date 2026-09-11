@@ -59,6 +59,25 @@ button,select,input,textarea{font:inherit;color:inherit}
   cursor:pointer;text-align:left;font-family:inherit}
 .side .admin:hover{background:var(--card);color:var(--tx)}
 
+/* 左の並びの「？」。**ふだんは薄く、触れると出てくる。**
+   はじめの人には要るが、毎日使う人には毎日は要らない。
+   出しっぱなしで濃くすると、押すものが2つ並んでいるように見える。 */
+.helpq{margin-left:auto;flex:none;width:19px;height:19px;padding:0;
+  display:inline-flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);border-radius:50%;background:var(--card);
+  color:var(--tx-sub);font-size:10.5px;line-height:1;cursor:pointer;
+  font-family:inherit;opacity:.55;transition:opacity .12s}
+.nav:hover .helpq,.admin:hover .helpq,.helpq:hover,.helpq:focus-visible{opacity:1}
+.helpq:hover{border-color:var(--ink-link);color:var(--ink-link);background:var(--tint)}
+/* ボタンでない入れもの。週の行は並びの終わり、凡例は右上へ寄せる */
+.legend{position:relative}
+.legend>.helpq{position:absolute;top:-2px;right:0;margin:0}
+.wkrow>.helpq{margin-left:0}
+#helpBody p{margin:0 0 10px;font-size:13px;line-height:1.9;color:var(--tx)}
+#helpBody p:last-child{margin-bottom:0}
+#helpBody b{font-weight:700}
+#helpBody i{font-style:normal;color:var(--tx-sub);font-weight:600}
+
 /* ── 中央 ────────────────────────────────────── */
 /* **紙の上下には何も置かない。** 週の移動も凡例も左へ寄せてある。
    置くたびに紙が縮み、いちばん見たいものが小さくなる。 */
@@ -270,8 +289,12 @@ button,select,input,textarea{font:inherit;color:inherit}
    この表がそのまま層になっている。 */
 /* 中央と右のパネルだけを覆う。**左の並びは押せるままにする**——
    入口を開いたまま学級編成や基本時間割へ行けるように。 */
+/* **safe center。** ふつうの center は、中身が入りきらないと上へはみ出し、
+   はみ出したぶんはどう転がしても出てこない（表の1行目が見切れたまま残る）。
+   safe を付けると、入りきらないときだけ上寄せに切り替わる。 */
 .gate{grid-area:1/2/2/4;z-index:5;background:var(--bg);overflow:auto;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  display:flex;flex-direction:column;align-items:center;
+  justify-content:center;justify-content:safe center;
   padding:28px 20px;gap:20px;min-width:0}
 .grid{display:grid;gap:8px;grid-template-columns:auto repeat(var(--cols),minmax(88px,1fr));
   max-width:min(94vw,780px);width:100%}
@@ -299,7 +322,9 @@ button,select,input,textarea{font:inherit;color:inherit}
 .gate .note b{color:var(--tx)}
 
 /* ── 窓 ──────────────────────────────────────── */
-dialog{border:1px solid var(--line);border-radius:14px;padding:0;
+/* **overflow を切らない。** ✕ を角に重ねて出すので、切ると ✕ が欠ける */
+dialog{border:1px solid var(--line);border-radius:14px;padding:0;position:relative;
+  overflow:visible;margin:22px auto;
   max-width:min(96vw,920px);background:var(--card);color:var(--tx);
   box-shadow:0 24px 64px var(--shade-2)}
 dialog::backdrop{background:rgba(20,28,38,.42)}
@@ -307,10 +332,15 @@ dialog::backdrop{background:rgba(20,28,38,.42)}
    下の隅に「閉じる」を置くと、そこまで読み進めないと閉じ方が見つからない。
    窓は上から読むので、閉じ方も上に無いと探すことになる。 */
 .dlg{padding:20px 22px;max-height:84vh;overflow:auto;position:relative}
-.dlgx{position:absolute;top:10px;right:10px;width:30px;height:30px;padding:0;
+/* 閉じる ✕。**窓枠の右上、角に重ねて置く。**
+   窓の中に置いていたころは、中身の1行目と同じ高さに並んでいた。
+   枠に重ねておけば、中身がどれだけ長くても、いつも同じ場所にある。
+   窓は overflow:visible なので、角からはみ出しても切られない。 */
+.dlgx{position:absolute;top:-13px;right:-13px;width:32px;height:32px;padding:0;
   display:flex;align-items:center;justify-content:center;
-  border:1px solid var(--line);border-radius:8px;background:var(--card);
-  color:var(--tx-sub);font-size:17px;line-height:1;cursor:pointer;font-family:inherit}
+  border:1px solid var(--line);border-radius:50%;background:var(--card);
+  color:var(--tx-sub);font-size:16px;line-height:1;cursor:pointer;font-family:inherit;
+  box-shadow:0 2px 8px var(--shade-2);z-index:2}
 .dlgx:hover{border-color:var(--cat-clash);color:var(--cat-clash);background:var(--tint)}
 .dlgx:focus-visible{outline:2px solid var(--ink-link);outline-offset:2px}
 .dlg h2{padding-right:38px}

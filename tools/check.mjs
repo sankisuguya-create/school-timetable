@@ -1304,18 +1304,81 @@ ok("「自動に戻す」で日付どおりに戻る", await (async () => {
          && await p.locator("#abAuto").isHidden();
    })() === true);
 
+console.log("\n■ 入口の表（上が見切れない・説明が要る）");
+await p.locator("[data-act='gate']").first().click(); await p.waitForTimeout(300);
+/* **中身が入りきらない高さでも、1行目が見切れない。**
+   ふつうの center は上へはみ出し、はみ出したぶんは転がしても出てこない */
+await p.setViewportSize({width:1280, height:520});
+await p.waitForTimeout(300);
+ok("狭い画面でも、表の上が見切れない", await p.evaluate(() => {
+     const a = document.getElementById("gate"), g = document.getElementById("grid");
+     a.scrollTop = 0;
+     return g.getBoundingClientRect().top >= a.getBoundingClientRect().top;
+   }) === true, await p.evaluate(() => {
+     const a = document.getElementById("gate"), g = document.getElementById("grid");
+     return [Math.round(g.getBoundingClientRect().top), Math.round(a.getBoundingClientRect().top)];
+   }));
+await p.setViewportSize({width:1500, height:950});
+await p.waitForTimeout(300);
+ok("入口の下の説明は、入れた先がどこへ反映されるかを言う",
+   (await p.locator(".gate > p.note").innerText())
+     .indexOf("各学年に入力すると学年全体に反映") >= 0,
+   await p.locator(".gate > p.note").innerText());
+
+console.log("\n■ 左の並びには「？」があり、押すと説明が出る");
+ok("左の主な項目ぜんぶに「？」がある",
+   await p.locator(".side .helpq").count() >= 10,
+   await p.locator(".side .helpq").count());
+ok("「？」に説明の中身がある（空の窓を開かない）",
+   await p.evaluate(() => [...document.querySelectorAll("[data-help]")]
+     .every(e => HELP[e.dataset.help] && HELP[e.dataset.help].b.length > 0)) === true,
+   await p.evaluate(() => [...document.querySelectorAll("[data-help]")]
+     .filter(e => !HELP[e.dataset.help]).map(e => e.dataset.help)));
+/* **？を押しても、親の画面は切り替わらない。**
+   読もうとしただけの人が、開く気のない週案を開いてしまう */
+await p.locator(".nav[data-help='base'] .helpq").click();
+await p.waitForTimeout(300);
+ok("「？」を押すと説明の窓が開く",
+   await p.locator("#helpDlg").evaluate(d => d.open) === true);
+ok("「？」を押しても、その項目そのものは開かない",
+   await p.locator("#baseDlg").evaluate(d => d.open) === false);
+ok("説明は、何が起きるかを字で書いてある",
+   (await p.locator("#helpBody").innerText()).length > 40,
+   (await p.locator("#helpBody").innerText()).length);
+ok("はじめての人がつまずくところを添える",
+   (await p.locator("#helpBody").innerText()).indexOf("はじめの人がつまずくところ") >= 0);
+await p.locator("#helpDlg .dlgx").click(); await p.waitForTimeout(250);
+ok("説明の窓は ✕ で閉じる",
+   await p.locator("#helpDlg").evaluate(d => d.open) === false);
+
 console.log("\n■ 窓を閉じるところは、窓枠の右上");
 for(const [act, dlg] of [["base","baseDlg"], ["roster","rosterDlg"],
                          ["paper","setDlg"], ["admin","adminDlg"]]){
   await p.locator("[data-act='" + act + "']").click(); await p.waitForTimeout(250);
   const x = p.locator("#" + dlg + " .dlgx");
   ok(dlg + " に ✕ がある", await x.count() === 1);
-  ok(dlg + " の ✕ は窓の右上にある", await (async () => {
-       const box = await p.locator("#" + dlg + " .dlg").boundingBox();
+  /* **窓の中ではなく、窓枠の右上の角。** 中に置くと、中身の1行目と
+     同じ高さに並んで、読むものと閉じるものが混ざる */
+  ok(dlg + " の ✕ は窓枠の右上の角にある", await (async () => {
+       const box = await p.locator("#" + dlg).boundingBox();
        const bx  = await x.boundingBox();
        if(!box || !bx) return false;
-       return bx.y < box.y + 60 && (bx.x + bx.width) > (box.x + box.width - 60);
-     })() === true);
+       const cx = bx.x + bx.width / 2, cy = bx.y + bx.height / 2;
+       /* 中心が枠の右上の角のそば（角から 20px 以内）にあること */
+       return Math.abs(cx - (box.x + box.width)) < 20 && Math.abs(cy - box.y) < 20;
+     })() === true,
+     await (async () => JSON.stringify({
+       dlg: await p.locator("#" + dlg).boundingBox(),
+       x:   await x.boundingBox()}))());
+  ok(dlg + " の ✕ は窓の中身より上へはみ出している（1行目と並ばない）",
+     await (async () => {
+       const box = await p.locator("#" + dlg + " .dlg").boundingBox();
+       const bx  = await x.boundingBox();
+       return !!box && !!bx && bx.y < box.y && (bx.x + bx.width) > (box.x + box.width);
+     })() === true,
+     await (async () => JSON.stringify({
+       dlg: await p.locator("#" + dlg + " .dlg").boundingBox(),
+       x:   await x.boundingBox()}))());
   await x.click(); await p.waitForTimeout(250);
   ok(dlg + " は ✕ で閉じる", await p.locator("#" + dlg).evaluate(d => d.open) === false);
 }

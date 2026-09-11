@@ -75,7 +75,10 @@ await p.addInitScript(() => {
     for(const x of items) if(x.group === blocked) x.wait = "";
     const ng = items.filter(x => x.level === "ng").length;
     const next = items.filter(x => x.level === "ng")[0];
+    /* 使い始める前の年度には知らせを出さない（設定「新年度の準備を出す年度から」） */
+    const since = window.__nySince === undefined ? 2027 : window.__nySince;
     return {year:y, prev:y - 1, items, ng, done: ng === 0,
+            off: since > 0 && y < since, from: since,
             next: next ? next.key : "", file:"週案 2026（高木北）"};
   };
   const DATA = {
@@ -1382,6 +1385,14 @@ await p.evaluate(() => {
   for(const d of document.querySelectorAll("dialog")) if(d.open) d.close();
   pollNewYear();
 });
+await p.waitForTimeout(400);
+/* **使い始める前の年度には出さない。** 2026年度はもう走っているので、
+   いまさら「未了」と出しても、やることは無いのに橙色だけが消えない */
+await p.evaluate(() => { window.__nySince = 2100; pollNewYear(); });
+await p.waitForTimeout(400);
+ok("使い始める前の年度には、未了でも知らせを出さない",
+   await p.locator("#navNewYear").isHidden() === true);
+await p.evaluate(() => { window.__nySince = 0; pollNewYear(); });
 await p.waitForTimeout(400);
 ok("未了のあいだは、左メニューに出る",
    await p.locator("#navNewYear").isVisible() === true);

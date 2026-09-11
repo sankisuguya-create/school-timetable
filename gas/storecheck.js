@@ -1543,6 +1543,26 @@ console.log("\n■ 新年度の設定は、手順として出す");
   }
 })();
 
+console.log("\n■ 使い始める前の年度には、新年度の知らせを出さない");
+(function(){
+  /* 2026年度はもう走っているので、いまさら「準備が未了」と出しても、
+     やることは無いのに橙色の知らせだけが消えない */
+  const at = ev('Sheets.head("設定").at');
+  const put = v => { for(const row of SHEETS["設定"])
+    if(String(row[at["キー"]]) === "新年度の準備を出す年度から") row[at["値"]] = v; };
+  put(2027);
+  ok("既定は 2027年度から", ev('Store.readConfig()["新年度の準備を出す年度から"]') == 2027);
+  ok("2026年度は off（知らせを出さない）", ev("Store.yearSetup(2026)").off === true);
+  ok("2027年度は off でない", ev("Store.yearSetup(2027)").off === false);
+  /* **手順そのものは見られる。** 去年どうやったかを確かめたい年がある */
+  ok("off の年度でも、手順の中身は返す", ev("Store.yearSetup(2026)").items.length > 0);
+  ok("どの年度から出すかを返す（画面がそう言えるように）",
+     ev("Store.yearSetup(2026)").from === 2027);
+  put(2026);
+  ok("設定を動かせば、その年度から出る", ev("Store.yearSetup(2026)").off === false);
+  put(2027);
+})();
+
 console.log("\n■ A週の起点は、月曜しか受け取らない");
 (function(){
   ok("月曜なら入る", ev('Store.writeVariantOrigin("2026-09-07")').saved === "2026-09-07");

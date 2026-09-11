@@ -119,6 +119,25 @@ button,select,input,textarea{font:inherit;color:inherit}
   cursor:pointer;text-align:left;font-family:inherit}
 .side .admin:hover{background:var(--card);color:var(--tx)}
 
+/* 左の並びの「？」。**ふだんは薄く、触れると出てくる。**
+   はじめの人には要るが、毎日使う人には毎日は要らない。
+   出しっぱなしで濃くすると、押すものが2つ並んでいるように見える。 */
+.helpq{margin-left:auto;flex:none;width:19px;height:19px;padding:0;
+  display:inline-flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);border-radius:50%;background:var(--card);
+  color:var(--tx-sub);font-size:10.5px;line-height:1;cursor:pointer;
+  font-family:inherit;opacity:.55;transition:opacity .12s}
+.nav:hover .helpq,.admin:hover .helpq,.helpq:hover,.helpq:focus-visible{opacity:1}
+.helpq:hover{border-color:var(--ink-link);color:var(--ink-link);background:var(--tint)}
+/* ボタンでない入れもの。週の行は並びの終わり、凡例は右上へ寄せる */
+.legend{position:relative}
+.legend>.helpq{position:absolute;top:-2px;right:0;margin:0}
+.wkrow>.helpq{margin-left:0}
+#helpBody p{margin:0 0 10px;font-size:13px;line-height:1.9;color:var(--tx)}
+#helpBody p:last-child{margin-bottom:0}
+#helpBody b{font-weight:700}
+#helpBody i{font-style:normal;color:var(--tx-sub);font-weight:600}
+
 /* ── 中央 ────────────────────────────────────── */
 /* **紙の上下には何も置かない。** 週の移動も凡例も左へ寄せてある。
    置くたびに紙が縮み、いちばん見たいものが小さくなる。 */
@@ -330,8 +349,12 @@ button,select,input,textarea{font:inherit;color:inherit}
    この表がそのまま層になっている。 */
 /* 中央と右のパネルだけを覆う。**左の並びは押せるままにする**——
    入口を開いたまま学級編成や基本時間割へ行けるように。 */
+/* **safe center。** ふつうの center は、中身が入りきらないと上へはみ出し、
+   はみ出したぶんはどう転がしても出てこない（表の1行目が見切れたまま残る）。
+   safe を付けると、入りきらないときだけ上寄せに切り替わる。 */
 .gate{grid-area:1/2/2/4;z-index:5;background:var(--bg);overflow:auto;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  display:flex;flex-direction:column;align-items:center;
+  justify-content:center;justify-content:safe center;
   padding:28px 20px;gap:20px;min-width:0}
 .grid{display:grid;gap:8px;grid-template-columns:auto repeat(var(--cols),minmax(88px,1fr));
   max-width:min(94vw,780px);width:100%}
@@ -359,7 +382,9 @@ button,select,input,textarea{font:inherit;color:inherit}
 .gate .note b{color:var(--tx)}
 
 /* ── 窓 ──────────────────────────────────────── */
-dialog{border:1px solid var(--line);border-radius:14px;padding:0;
+/* **overflow を切らない。** ✕ を角に重ねて出すので、切ると ✕ が欠ける */
+dialog{border:1px solid var(--line);border-radius:14px;padding:0;position:relative;
+  overflow:visible;margin:22px auto;
   max-width:min(96vw,920px);background:var(--card);color:var(--tx);
   box-shadow:0 24px 64px var(--shade-2)}
 dialog::backdrop{background:rgba(20,28,38,.42)}
@@ -367,10 +392,15 @@ dialog::backdrop{background:rgba(20,28,38,.42)}
    下の隅に「閉じる」を置くと、そこまで読み進めないと閉じ方が見つからない。
    窓は上から読むので、閉じ方も上に無いと探すことになる。 */
 .dlg{padding:20px 22px;max-height:84vh;overflow:auto;position:relative}
-.dlgx{position:absolute;top:10px;right:10px;width:30px;height:30px;padding:0;
+/* 閉じる ✕。**窓枠の右上、角に重ねて置く。**
+   窓の中に置いていたころは、中身の1行目と同じ高さに並んでいた。
+   枠に重ねておけば、中身がどれだけ長くても、いつも同じ場所にある。
+   窓は overflow:visible なので、角からはみ出しても切られない。 */
+.dlgx{position:absolute;top:-13px;right:-13px;width:32px;height:32px;padding:0;
   display:flex;align-items:center;justify-content:center;
-  border:1px solid var(--line);border-radius:8px;background:var(--card);
-  color:var(--tx-sub);font-size:17px;line-height:1;cursor:pointer;font-family:inherit}
+  border:1px solid var(--line);border-radius:50%;background:var(--card);
+  color:var(--tx-sub);font-size:16px;line-height:1;cursor:pointer;font-family:inherit;
+  box-shadow:0 2px 8px var(--shade-2);z-index:2}
 .dlgx:hover{border-color:var(--cat-clash);color:var(--cat-clash);background:var(--tint)}
 .dlgx:focus-visible{outline:2px solid var(--ink-link);outline-offset:2px}
 .dlg h2{padding-right:38px}
@@ -930,7 +960,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
           <span class="date" id="weekLabel"></span>
           <button class="ico" id="nextWk" aria-label="次の週"><svg width="18" height="18"><use href="#i-right"/></svg></button>
         </div>
-        <div class="wkrow">
+        <div class="wkrow" data-help="week">
           <span class="wkno" id="weekNo"></span>
           <!-- A週・B週は**日付から決まる**（起点の月曜から1週ごとに入れ替わる）。
                押せば、その週だけ手で変えられる。変えたときだけ「自動に戻す」が出る -->
@@ -949,37 +979,37 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
       </div>
 
       <hr>
-      <button class="nav" data-screen="gate" data-act="gate">
+      <button class="nav" data-screen="gate" data-act="gate" data-help="gate">
         <svg width="17" height="17"><use href="#i-layers"/></svg><span>ほかの週案をひらく</span></button>
-      <button class="nav" data-screen="plan" data-act="open" id="navOpen" hidden>
+      <button class="nav" data-screen="plan" data-act="open" id="navOpen" data-help="now" hidden>
         <svg width="17" height="17"><use href="#i-cal"/></svg>
         <span>いま：<b id="navOpenName"></b></span></button>
 
       <hr>
       <h3>この週から出す</h3>
-      <button class="nav" data-act="print">
+      <button class="nav" data-act="print" data-help="print">
         <svg width="17" height="17"><use href="#i-print"/></svg><span>印刷（B5）</span></button>
-      <button class="nav" data-act="tally">
+      <button class="nav" data-act="tally" data-help="tally">
         <svg width="17" height="17"><use href="#i-copy"/></svg><span>時数をコピー</span></button>
 
       <!-- 新年度の設定が未了のあいだだけ出る。**ふだんは管理・システムの中だけ。**
            4/1 から、全部が済むまで出し続ける（消えると忘れる） -->
-      <button class="nav ny" data-act="newyear" id="navNewYear" hidden>
+      <button class="nav ny" data-act="newyear" id="navNewYear" data-help="newyear" hidden>
         <svg width="17" height="17"><use href="#i-gear"/></svg>
         <span>新年度設定<b>未了</b></span></button>
 
       <hr>
       <h3>もとになるもの</h3>
-      <button class="nav" data-act="base">
+      <button class="nav" data-act="base" data-help="base">
         <svg width="17" height="17"><use href="#i-cal"/></svg><span>基本時間割</span></button>
-      <button class="nav" data-act="roster">
+      <button class="nav" data-act="roster" data-help="roster">
         <svg width="17" height="17"><use href="#i-users"/></svg><span>学級編成</span></button>
-      <button class="nav" data-act="paper">
+      <button class="nav" data-act="paper" data-help="paper">
         <svg width="17" height="17"><use href="#i-gear"/></svg><span>用紙・印刷</span></button>
 
       <hr>
       <h3>紙の上の見え方</h3>
-      <div class="legend">
+      <div class="legend" data-help="legend">
         <span><i class="up"></i>上位から降りてきた</span>
         <span><i class="cl"></i>2つ以上入っている</span>
         <span><i class="bs"></i>基本時間割のまま</span>
@@ -989,7 +1019,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 
       <!-- 管理。**担任は使わない。** 学校で3人だけが押す。
            目立たせない代わりに、隠しもしない（探して見つからないほうが困る） -->
-      <button class="admin" data-act="admin">
+      <button class="admin" data-act="admin" data-help="admin">
         <svg width="13" height="13"><use href="#i-info"/></svg><span>管理・システム</span></button>
     </aside>
 
@@ -1099,8 +1129,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
       <!-- 週と年度とA週B週は左のメニューにある。ここには置かない。
            同じものを2か所に置くと、どちらを見ればよいかを毎回考えることになる -->
       <div class="grid" id="grid"></div>
-      <p class="note">開いたものが<b>どこに入るか</b>を決める。
-        <b>◯年</b>を開くとその学年の全クラスに、<b>全学年</b>を開くと全クラスに入る。<br>
+      <p class="note"><b>各学年</b>に入力すると学年全体に反映、<b>全学年</b>に入力すると全クラスに反映されます。<br>
         <button class="btn" id="gClose" style="margin-top:10px">閉じる</button></p>
     </div>
 
@@ -1235,6 +1264,13 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 
 <!-- 新年度の設定。**手順として出す。** 検査は「足りないもの」を名指しするだけで
      順序を持たない。年度初めにやることは順序が要る -->
+<!-- 左の並びの「？」から開く。**1つの窓で全部まかなう。**
+     項目ごとに窓を作ると、書き方が項目ごとにばらつく -->
+<dialog id="helpDlg"><div class="dlg">
+  <h2 id="helpTtl"></h2>
+  <div id="helpBody"></div>
+</div></dialog>
+
 <dialog id="nyDlg"><div class="dlg wide">
   <h2>新しい年度の準備 <span id="nyYear" style="font-size:13px;color:var(--tx-sub)"></span></h2>
   <p><b>上から順に、1つずつやれば終わります。</b>初めての人でも大丈夫なように作ってあります。<br>
@@ -1403,7 +1439,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.10.0";
+let APP_VERSION = "1.11.0";
 let BUILD_DATE  = "2026-09-11";
 
 /* 時程。行を固定しない（学校ごとに違う）。
@@ -4993,6 +5029,116 @@ function fillSelect(sel, arr, val){
     + (o.v === val ? " selected" : "") + ">" + escText(o.t) + "</option>").join("");
 }
 
+/* ── 左の並びの「？」 ───────────────────────
+   **初めてこの画面を開いた人が、押す前に何が起きるか分かるようにする。**
+
+   はじめに長い説明を読ませない。押す気になったものだけ、その場で読める。
+   1つの窓で全部まかなう（項目ごとに窓を作ると、書き方がばらつく）。
+
+   書き方の決まり
+     ・1行目で「これは何か」を言い切る
+     ・次に「押すと何が起きるか」
+     ・最後に、初めての人がつまずくところを1つだけ
+     ・専門語を使わない。使うときは、その場で言い換える */
+const HELP = {
+  week: {t:"週を行き来する・A週B週",
+    b:["<b>いま見ている1週間です。</b>◀ ▶ で前の週・次の週へ移ります。",
+       "その下の <b>A週 / B週</b> は、基本時間割の2種類のことです。"
+       + "どちらの週かは<b>日付から自動で決まる</b>ので、ふだんは押しません。",
+       "いちばん下の欄で、<b>どのクラス（または学年・専科）の週案を見るか</b>を選びます。",
+       "<i>はじめの人がつまずくところ：</i>A週B週を手で押すと、"
+       + "その週だけ・その端末だけが変わります。全校で入れ替えたいときは押さずに、"
+       + "管理の人に伝えてください。"]},
+  gate: {t:"ほかの週案をひらく",
+    b:["<b>クラスや学年を選ぶ、入口の表です。</b>押すと、その週案が開きます。",
+       "<b>開いたものが、書いた予定の入る先になります。</b>"
+       + "「3-3」を開いて書けば3年3組だけに、「3年」を開いて書けば3年の全クラスに、"
+       + "「全学年」を開いて書けば全クラスに入ります。",
+       "だから、<b>「だれとして書くか」を別に選ぶ必要はありません。</b>",
+       "<i>はじめの人がつまずくところ：</i>自分のクラスを開いてから書いてください。"
+       + "「全学年」を開いたまま書くと、全クラスに同じ予定が入ります。"]},
+  now: {t:"いま：◯◯",
+    b:["<b>いま開いているものの名前です。</b>押すと、そこへ戻ります。",
+       "入口の表を開いたあとで「やっぱり元のところへ」と思ったときに使います。"]},
+  print: {t:"印刷（B5）",
+    b:["<b>いま見ている1週間を、B5の紙1枚に刷ります。</b>教務必携に貼る大きさです。",
+       "押すと、ブラウザの印刷の窓が出ます。",
+       "<b>白い紙に出ているものだけが刷られます。</b>まわりのボタンや左の並びは刷られません。",
+       "<i>はじめの人がつまずくところ：</i>紙のサイズや余白は"
+       + "「用紙・印刷」で変えられます。刷ってみて合わなければ、そちらで直します。"]},
+  tally: {t:"時数をコピー",
+    b:["<b>いま見ている1週間の授業を、時数集計表に貼れる形でコピーします。</b>",
+       "押すとコピーされるので、Excel の時数集計表を開いて<b>貼り付け</b>てください。",
+       "<i>はじめの人がつまずくところ：</i>貼る場所がずれるときは、"
+       + "窓の中の「貼る先」を実物に合わせて直します。1回合わせれば、次からそのままです。"]},
+  newyear: {t:"新年度設定",
+    b:["<b>年度の初めにやることを、順に並べた画面です。</b>"
+       + "ぜんぶ終わるまで、ここに出ます。",
+       "<b>上から1つずつやれば終わります。</b>できたかどうかは、"
+       + "ほとんどこの画面が自分で見て判定します。",
+       "<b>元に戻せない操作は、ぜんぶで1つだけです。</b>"
+       + "その1つには ⚠ が付いていて、押す前に必ず突き合わせが入ります。",
+       "<i>はじめの人がつまずくところ：</i>やることは主に管理の3人の仕事です。"
+       + "自分の担当でなければ、開いて見るだけで構いません。"]},
+  base: {t:"基本時間割",
+    b:["<b>毎週くり返す、もとの時間割です。</b>"
+       + "週案を開いたとき、初めに出ているのがこれです。",
+       "ここを直すと、<b>まだ何も書いていない週</b>の見え方が変わります。"
+       + "すでに書いた予定は変わりません。",
+       "A週・B週の2種類を持てます。学校の固定時間割表を、表ごと貼って取り込むこともできます。",
+       "<i>はじめの人がつまずくところ：</i>1週だけ変えたいときは、ここではなく"
+       + "その週の紙の上で直してください。"]},
+  roster: {t:"学級編成",
+    b:["<b>学年とクラスの並び、専科の先生、たんぽぽの交流級を決めます。</b>",
+       "ここで決めたものが、そのまま「ほかの週案をひらく」の表になります。",
+       "<i>はじめの人がつまずくところ：</i>年度の初めに直すところです。"
+       + "ふだんは触りません。"]},
+  paper: {t:"用紙・印刷",
+    b:["<b>刷るときの紙のサイズ・余白・倍率を決めます。</b>",
+       "<b>画面の大きさ</b>もここで変えられます。"
+       + "画面を大きくしても、刷ったときの大きさは変わりません（別々に持っています）。",
+       "<i>はじめの人がつまずくところ：</i>1度刷って教務必携に当ててから決めると、"
+       + "やり直しが要りません。"]},
+  legend: {t:"紙の上の見え方",
+    b:["<b>コマの地の色が、そのコマがどこから来たかを表します。</b>",
+       "<b>上位から降りてきた</b>：学年や全学年で入れた予定が、このクラスにも出ているもの。",
+       "<b>2つ以上入っている</b>：同じコマに予定が重なっているもの。"
+       + "<b>あとから書かれたほうが出ています。</b>",
+       "<b>基本時間割のまま</b>：まだ誰も直していないコマ。",
+       "<i>色だけで分けていません。</i>誰が入れたかは、コマを押すと右側に字で出ます。"]},
+  admin: {t:"管理・システム",
+    b:["<b>担任の操作はここにありません。</b>"
+       + "いまどの版が、どのファイルにつないで動いているかを見るところです。",
+       "不具合を知らせるときは、この窓の下にある1行をそのまま伝えてください。"
+       + "原因が早く分かります。",
+       "年度の初めと終わりにやること（新年度の準備・前の年度の保管）も、ここから開きます。"]}
+};
+
+/* 「？」を差し込む。**1か所でまとめて付ける。**
+   項目ごとに HTML へ書くと、足した項目で付け忘れる。 */
+function wireHelp(){
+  for(const e of document.querySelectorAll("[data-help]")){
+    if(e.querySelector(":scope > .helpq")) continue;
+    const k = e.dataset.help;
+    if(!HELP[k]) continue;
+    const q = el("button", "helpq", "？");
+    q.type = "button";
+    q.title = HELP[k].t + " の説明";
+    q.setAttribute("aria-label", HELP[k].t + " の説明をひらく");
+    /* **親のボタンを押したことにしない。** ？を押して画面が切り替わると、
+       読もうとしただけの人が、開く気のない週案を開いてしまう */
+    q.addEventListener("click", ev => { ev.preventDefault(); ev.stopPropagation(); openHelp(k); });
+    e.appendChild(q);
+  }
+}
+function openHelp(k){
+  const h = HELP[k];
+  if(!h) return;
+  $("helpTtl").textContent = h.t;
+  $("helpBody").innerHTML = h.b.map(x => "<p>" + x + "</p>").join("");
+  $("helpDlg").showModal();
+}
+
 /* ── 新年度の設定 ────────────────────────────
    **4月に開いたとき、何を、どの順でやるかを1画面で出す。**
 
@@ -5012,9 +5158,12 @@ function pollNewYear(){
 }
 function paintNewYear(){
   const b = $("navNewYear");
-  if(b) b.hidden = !(nySt && !nySt.done);
+  /* off ＝ この画面を使い始める前の年度。**知らせを出さない。**
+     いまさら「未了」と出しても、やることは無いのに橙色だけが消えない */
+  if(b) b.hidden = !(nySt && !nySt.done && !nySt.off);
   const h = $("nyHint");
   if(h) h.textContent = !nySt ? ""
+    : nySt.off  ? fy() + "年度は、この画面を使い始める前の年度です"
     : nySt.done ? fy() + "年度は、ぜんぶ済んでいます"
                 : "まだ " + nySt.ng + " 件あります";
 }
@@ -5056,14 +5205,17 @@ const NY_MARK = {ok:"できている", warn:"見ておく", ng:"これから"};
    まず止まる。上から順に、いま押すものだけを開いておく。 */
 function drawNewYear(){
   const r = nySt;
-  $("nyStat").innerHTML = r.done
+  $("nyStat").innerHTML = r.off
+    ? "<b>" + r.year + "年度は、この画面を使い始める前の年度です。</b>"
+      + "知らせは出しません（" + r.from + "年度から出します）。下は参考です。"
+    : r.done
     ? "<b>ぜんぶできています。</b>左メニューの知らせは消えます。"
     : "<b>あと " + r.ng + " つです。</b>上から順にやってください。"
       + "ぜんぶできるまで、左メニューに出し続けます。";
 
   const box = [];
   /* いま押す1件を、いちばん上に大きく出す */
-  const nx = r.items.filter(x => x.key === r.next)[0];
+  const nx = r.off ? null : r.items.filter(x => x.key === r.next)[0];
   if(nx){
     const act = NY_ACT[nx.act];
     box.push("<div class='nynext'>"
@@ -5834,14 +5986,20 @@ function wire(){
      ここで1回だけ差し込む（窓ごとに HTML へ書くと、足した窓で付け忘れる）。 */
   for(const d of document.querySelectorAll("dialog")){
     const box = d.querySelector(".dlg");
-    if(!box || box.querySelector(".dlgx")) continue;
+    if(!box || d.querySelector(".dlgx")) continue;
     const x = el("button", "dlgx", "✕");
     x.type = "button";
     x.setAttribute("aria-label", "閉じる");
     x.title = "閉じる（Esc）";
     x.addEventListener("click", () => d.close());
-    box.insertBefore(x, box.firstChild);
+    /* **窓の中ではなく、窓枠の右上に出す。** 中に置くと、中身の1行目と
+       同じ高さに並んで、読むものと閉じるものが混ざる。
+       枠に付けておけば、どの窓でも同じ場所にある。 */
+    d.insertBefore(x, d.firstChild);
   }
+
+  /* 左の並びの「？」。**1か所でまとめて付ける**（項目ごとに書くと付け忘れる） */
+  wireHelp();
 
   /* 用紙 */
   on("stPaper","change", e => { db.settings.paper = e.target.value; save(); applyPaper(); });

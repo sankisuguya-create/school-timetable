@@ -1427,7 +1427,15 @@ const Store = (function(){
        上から順に、最初の「まだ」。迷わせないための1件なので、複数返さない。 */
     const next = items.filter(function(x){ return x.level === "ng"; })[0] || null;
     const ng = items.filter(function(x){ return x.level === "ng"; }).length;
+    /* **使い始める前の年度には、知らせを出さない。**
+       2026年度はもう走っているので、いまさら「準備が未了」と出しても、
+       やることは無いのに橙色の知らせだけが消えない。
+       「設定」の年度より前は off を立て、画面が知らせを出さない。
+       手順そのものは見られる（去年どうやったかを確かめたい年がある）。 */
+    const since = +readConfig()["新年度の準備を出す年度から"] || 0;
+    const off = since > 0 && y < since;
     return {year: y, prev: prev, items: items, ng: ng, done: ng === 0,
+            off: off, from: since,
             next: next ? next.key : "", file: Sheets.bookName()};
   }
 

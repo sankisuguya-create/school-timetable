@@ -78,7 +78,7 @@
           <span class="date" id="weekLabel"></span>
           <button class="ico" id="nextWk" aria-label="次の週"><svg width="18" height="18"><use href="#i-right"/></svg></button>
         </div>
-        <div class="wkrow">
+        <div class="wkrow" data-help="week">
           <span class="wkno" id="weekNo"></span>
           <!-- A週・B週は**日付から決まる**（起点の月曜から1週ごとに入れ替わる）。
                押せば、その週だけ手で変えられる。変えたときだけ「自動に戻す」が出る -->
@@ -97,37 +97,37 @@
       </div>
 
       <hr>
-      <button class="nav" data-screen="gate" data-act="gate">
+      <button class="nav" data-screen="gate" data-act="gate" data-help="gate">
         <svg width="17" height="17"><use href="#i-layers"/></svg><span>ほかの週案をひらく</span></button>
-      <button class="nav" data-screen="plan" data-act="open" id="navOpen" hidden>
+      <button class="nav" data-screen="plan" data-act="open" id="navOpen" data-help="now" hidden>
         <svg width="17" height="17"><use href="#i-cal"/></svg>
         <span>いま：<b id="navOpenName"></b></span></button>
 
       <hr>
       <h3>この週から出す</h3>
-      <button class="nav" data-act="print">
+      <button class="nav" data-act="print" data-help="print">
         <svg width="17" height="17"><use href="#i-print"/></svg><span>印刷（B5）</span></button>
-      <button class="nav" data-act="tally">
+      <button class="nav" data-act="tally" data-help="tally">
         <svg width="17" height="17"><use href="#i-copy"/></svg><span>時数をコピー</span></button>
 
       <!-- 新年度の設定が未了のあいだだけ出る。**ふだんは管理・システムの中だけ。**
            4/1 から、全部が済むまで出し続ける（消えると忘れる） -->
-      <button class="nav ny" data-act="newyear" id="navNewYear" hidden>
+      <button class="nav ny" data-act="newyear" id="navNewYear" data-help="newyear" hidden>
         <svg width="17" height="17"><use href="#i-gear"/></svg>
         <span>新年度設定<b>未了</b></span></button>
 
       <hr>
       <h3>もとになるもの</h3>
-      <button class="nav" data-act="base">
+      <button class="nav" data-act="base" data-help="base">
         <svg width="17" height="17"><use href="#i-cal"/></svg><span>基本時間割</span></button>
-      <button class="nav" data-act="roster">
+      <button class="nav" data-act="roster" data-help="roster">
         <svg width="17" height="17"><use href="#i-users"/></svg><span>学級編成</span></button>
-      <button class="nav" data-act="paper">
+      <button class="nav" data-act="paper" data-help="paper">
         <svg width="17" height="17"><use href="#i-gear"/></svg><span>用紙・印刷</span></button>
 
       <hr>
       <h3>紙の上の見え方</h3>
-      <div class="legend">
+      <div class="legend" data-help="legend">
         <span><i class="up"></i>上位から降りてきた</span>
         <span><i class="cl"></i>2つ以上入っている</span>
         <span><i class="bs"></i>基本時間割のまま</span>
@@ -137,7 +137,7 @@
 
       <!-- 管理。**担任は使わない。** 学校で3人だけが押す。
            目立たせない代わりに、隠しもしない（探して見つからないほうが困る） -->
-      <button class="admin" data-act="admin">
+      <button class="admin" data-act="admin" data-help="admin">
         <svg width="13" height="13"><use href="#i-info"/></svg><span>管理・システム</span></button>
     </aside>
 
@@ -247,8 +247,7 @@
       <!-- 週と年度とA週B週は左のメニューにある。ここには置かない。
            同じものを2か所に置くと、どちらを見ればよいかを毎回考えることになる -->
       <div class="grid" id="grid"></div>
-      <p class="note">開いたものが<b>どこに入るか</b>を決める。
-        <b>◯年</b>を開くとその学年の全クラスに、<b>全学年</b>を開くと全クラスに入る。<br>
+      <p class="note"><b>各学年</b>に入力すると学年全体に反映、<b>全学年</b>に入力すると全クラスに反映されます。<br>
         <button class="btn" id="gClose" style="margin-top:10px">閉じる</button></p>
     </div>
 
@@ -383,6 +382,13 @@
 
 <!-- 新年度の設定。**手順として出す。** 検査は「足りないもの」を名指しするだけで
      順序を持たない。年度初めにやることは順序が要る -->
+<!-- 左の並びの「？」から開く。**1つの窓で全部まかなう。**
+     項目ごとに窓を作ると、書き方が項目ごとにばらつく -->
+<dialog id="helpDlg"><div class="dlg">
+  <h2 id="helpTtl"></h2>
+  <div id="helpBody"></div>
+</div></dialog>
+
 <dialog id="nyDlg"><div class="dlg wide">
   <h2>新しい年度の準備 <span id="nyYear" style="font-size:13px;color:var(--tx-sub)"></span></h2>
   <p><b>上から順に、1つずつやれば終わります。</b>初めての人でも大丈夫なように作ってあります。<br>

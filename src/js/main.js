@@ -287,14 +287,20 @@ function wire(){
      ここで1回だけ差し込む（窓ごとに HTML へ書くと、足した窓で付け忘れる）。 */
   for(const d of document.querySelectorAll("dialog")){
     const box = d.querySelector(".dlg");
-    if(!box || box.querySelector(".dlgx")) continue;
+    if(!box || d.querySelector(".dlgx")) continue;
     const x = el("button", "dlgx", "✕");
     x.type = "button";
     x.setAttribute("aria-label", "閉じる");
     x.title = "閉じる（Esc）";
     x.addEventListener("click", () => d.close());
-    box.insertBefore(x, box.firstChild);
+    /* **窓の中ではなく、窓枠の右上に出す。** 中に置くと、中身の1行目と
+       同じ高さに並んで、読むものと閉じるものが混ざる。
+       枠に付けておけば、どの窓でも同じ場所にある。 */
+    d.insertBefore(x, d.firstChild);
   }
+
+  /* 左の並びの「？」。**1か所でまとめて付ける**（項目ごとに書くと付け忘れる） */
+  wireHelp();
 
   /* 用紙 */
   on("stPaper","change", e => { db.settings.paper = e.target.value; save(); applyPaper(); });
