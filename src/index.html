@@ -110,6 +110,12 @@
       <button class="nav" data-act="tally">
         <svg width="17" height="17"><use href="#i-copy"/></svg><span>時数をコピー</span></button>
 
+      <!-- 新年度の設定が未了のあいだだけ出る。**ふだんは管理・システムの中だけ。**
+           4/1 から、全部が済むまで出し続ける（消えると忘れる） -->
+      <button class="nav ny" data-act="newyear" id="navNewYear" hidden>
+        <svg width="17" height="17"><use href="#i-gear"/></svg>
+        <span>新年度設定<b>未了</b></span></button>
+
       <hr>
       <h3>もとになるもの</h3>
       <button class="nav" data-act="base">
@@ -160,6 +166,9 @@
              （<code>1</code>／<code>1,2</code>）。表から直してもよい。</p>
         </details>
       </div>
+      <!-- 出す先。**1本とはかぎらない。**
+           たんぽぽ時間割が学年で分かれている学校も、年度で作り直す学校もある -->
+      <div class="tptgt" id="tpTgt"></div>
       <div class="tpsel" id="tpSel"></div>
       <div class="tpwarn" id="tpWarn"></div>
       <div class="tpact">
@@ -313,6 +322,11 @@
   <div class="row"><span>第1週の月曜</span>
     <input type="text" id="rsW1" size="12">
     <span style="color:var(--tx-sub);font-size:12px">時数集計表のシート名（週番号）の起点</span></div>
+  <div class="row"><span>A週の起点</span>
+    <button class="btn" id="rsAb">A週の起点の月曜を直す</button>
+    <span class="hint" id="rsAbNow"></span></div>
+  <p class="hint" style="margin:2px 0 0">A週の起点は<b>毎年直すものではありません。</b>
+     年間行事計画表の「週」欄と1週ずれていたときだけ動かします。</p>
 </div></dialog>
 
 <dialog id="setDlg"><div class="dlg">
@@ -367,12 +381,63 @@
     <button class="btn danger" id="tpYes">出す</button></div>
 </div></dialog>
 
+<!-- 新年度の設定。**手順として出す。** 検査は「足りないもの」を名指しするだけで
+     順序を持たない。年度初めにやることは順序が要る -->
+<dialog id="nyDlg"><div class="dlg wide">
+  <h2>新しい年度の準備 <span id="nyYear" style="font-size:13px;color:var(--tx-sub)"></span></h2>
+  <p><b>上から順に、1つずつやれば終わります。</b>初めての人でも大丈夫なように作ってあります。<br>
+     できたかどうかは、ほとんど<b>この画面が自分で見て判定します</b>（あなたが押す必要はありません）。
+     画面から確かめようのない2つだけ、やり終えたら押してください。</p>
+  <p class="hint"><b>元に戻せない操作は、ぜんぶで1つだけです。</b>
+     その1つには ⚠ が付いていて、押す前に必ず突き合わせが入ります。
+     ⚠ の付いていない操作は、間違えてもやり直せます。</p>
+  <div id="nyStat" class="hint"></div>
+  <div id="nyOut"></div>
+</div></dialog>
+
+<!-- A週の起点の月曜。**設定シートのこの1行だけを画面から直す。**
+     シートのURLを誰にも渡さないまま、年度初めの手順が閉じる -->
+<dialog id="abDlg"><div class="dlg">
+  <h2>A週の起点の月曜</h2>
+  <p><b>この週がA週。</b>あとは1週ごとに入れ替わります。
+     年に1度直すものではなく、<b>年間行事計画表の「週」欄と1週ずれていたときだけ</b>
+     1週動かします。</p>
+  <div class="row"><span>起点の月曜</span>
+    <input type="date" id="abDate"><span class="hint" id="abNow"></span></div>
+  <div id="abWhy" class="tpwarn"></div>
+  <div class="end"><button class="btn" data-close="abDlg">やめる</button>
+    <button class="btn go" id="abSave">入れる</button></div>
+</div></dialog>
+
+<!-- 年間行事計画表。**画面から貼り替える。** -->
+<dialog id="evDlg"><div class="dlg wide">
+  <h2>年間行事計画表を貼り替える</h2>
+  <p>1行1日の縦長の表を、見出しの行ごとそのまま貼ります。
+     見出しは <b>日付／週／行事計画（児童）／行事計画（職員）</b> の4つ。<br>
+     <b>丸ごと入れ替わります。</b>行を足し引きすると、消したはずの行事が残るためです。<br>
+     <b>◯ 元に戻せます。</b>貼り替える前の中身は、同じファイルの中に
+     「行事取り込み（前の ◯◯）」という名前で丸ごと残します。
+     間違えて貼っても、そこから戻せます。</p>
+  <textarea id="evPaste" rows="8" placeholder="Excel やスプレッドシートから、見出しごとコピーして貼る"></textarea>
+  <div class="row"><button class="btn" id="evRead">読む</button>
+    <span class="hint" id="evStat"></span></div>
+  <div id="evWarn" class="tpwarn"></div>
+  <div id="evGrid" class="tpwrap"></div>
+  <div class="end"><button class="btn" data-close="evDlg">やめる</button>
+    <button class="btn danger" id="evGo" disabled>貼り替える</button></div>
+</div></dialog>
+
 <dialog id="adminDlg"><div class="dlg">
   <h2>管理・システム</h2>
   <p><b>担任の操作はここにありません。</b>版と置き場所を確かめるところです。<br>
      不具合を知らせるときは、下の1行をそのまま伝えると原因が早く分かります。</p>
   <table class="sys" id="sysTbl"></table>
   <p class="hint" id="sysLine"></p>
+  <hr>
+  <h3 style="margin:12px 0 4px;font-size:14px">新年度の設定</h3>
+  <p>年度初めにやることを、順に並べたもの。<b>未了のあいだは左メニューにも出ます。</b></p>
+  <div class="row"><button class="btn" id="nyOpen">新年度の設定をひらく</button>
+    <span class="hint" id="nyHint"></span></div>
   <hr>
   <h3 style="margin:12px 0 4px;font-size:14px">新年度の検査</h3>
   <p>年度の初めに1回押す。<b>足りないものだけを名指しします。</b>

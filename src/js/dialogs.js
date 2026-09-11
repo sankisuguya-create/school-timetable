@@ -199,6 +199,7 @@ function drawRoster(){
   const Yr = Y();
   $("rsFy").textContent = fy() + "年度";
   $("rsW1").value = Yr.week1 || firstMonday(fy());
+  $("rsAbNow").textContent = "いまは " + (db.settings.abAnchor || AB_ANCHOR);
   $("rsSp").value = (Yr.specials || []).map(s => s.label).join(", ");
 
   $("rsRows").innerHTML = grades().map(g =>
@@ -396,6 +397,254 @@ async function copyText(text, msg){
 function fillSelect(sel, arr, val){
   sel.innerHTML = arr.map(o => "<option value='" + escText(o.v) + "'"
     + (o.v === val ? " selected" : "") + ">" + escText(o.t) + "</option>").join("");
+}
+
+/* ── 新年度の設定 ────────────────────────────
+   **4月に開いたとき、何を、どの順でやるかを1画面で出す。**
+
+   検査（checkYear）は「足りないもの」を名指しするが、順序を持たない。
+   年度初めにやることは順序が要る ── 前年度を消す前に複製する、
+   クラスを直す前に基本時間割を入れても意味が無い。ここは手順の側。
+
+   **判定はサーバが持つ。** 画面が判定すると、判定が2か所に分かれて、
+   片方だけ直したときに画面と検査が食い違う。 */
+let nySt = null;
+
+/* 未了かどうかだけを、静かに見に行く。**立ち上がりで1回。**
+   左メニューに出すかどうかがこれで決まる（4/1 から、済むまで出す）。 */
+function pollNewYear(){
+  if(!Backend.isGas()) return;
+  Backend.yearSetup(r => { nySt = r; paintNewYear(); }, () => {});
+}
+function paintNewYear(){
+  const b = $("navNewYear");
+  if(b) b.hidden = !(nySt && !nySt.done);
+  const h = $("nyHint");
+  if(h) h.textContent = !nySt ? ""
+    : nySt.done ? fy() + "年度は、ぜんぶ済んでいます"
+                : "まだ " + nySt.ng + " 件あります";
+}
+
+function openNewYearDlg(){
+  $("nyYear").textContent = fy() + "年度";
+  if(!Backend.isGas()){
+    $("nyStat").textContent = "手元では判定できない（シートを見ないと分からない）";
+    $("nyOut").innerHTML = "";
+    $("nyDlg").showModal();
+    return;
+  }
+  $("nyStat").textContent = "読んでいます…";
+  $("nyOut").innerHTML = "";
+  $("nyDlg").showModal();
+  loadNewYear();
+}
+function loadNewYear(){
+  Backend.yearSetup(r => { nySt = r; drawNewYear(); paintNewYear(); },
+                    why => { $("nyStat").textContent = why; });
+}
+
+/* 押す先。**画面のどの窓を開くか。** 閉じて開き直させない
+   （閉じると、どこまでやったか分からなくなる） */
+const NY_ACT = {
+  admin:   {label:"年度の退避をひらく", go: () => { $("nyDlg").close(); openAdminDlg(); }},
+  roster:  {label:"学級編成をひらく",   go: () => { $("nyDlg").close(); openRosterDlg(); }},
+  base:    {label:"基本時間割をひらく", go: () => { $("nyDlg").close(); openBaseDlg(); }},
+  tanpopo: {label:"たんぽぽをひらく",   go: () => { $("nyDlg").close(); openView({kind:"tanpopo"}); }},
+  ab:      {label:"A週の起点を直す",   go: () => openAbDlg()},
+  events:  {label:"行事表を貼り替える", go: () => openEventsDlg()},
+  plan:    {label:"週案シートを作る",   go: () => makePlanSheets()}
+};
+const NY_MARK = {ok:"できている", warn:"見ておく", ng:"これから"};
+
+/* **手順は、次の一手を1つだけ大きく出す。**
+   年度初めにこれをやるのは、たいてい今年その学校へ来た人。
+   12件を並べて「どれからでもどうぞ」と出すと、どこから手を付けるかで
+   まず止まる。上から順に、いま押すものだけを開いておく。 */
+function drawNewYear(){
+  const r = nySt;
+  $("nyStat").innerHTML = r.done
+    ? "<b>ぜんぶできています。</b>左メニューの知らせは消えます。"
+    : "<b>あと " + r.ng + " つです。</b>上から順にやってください。"
+      + "ぜんぶできるまで、左メニューに出し続けます。";
+
+  const box = [];
+  /* いま押す1件を、いちばん上に大きく出す */
+  const nx = r.items.filter(x => x.key === r.next)[0];
+  if(nx){
+    const act = NY_ACT[nx.act];
+    box.push("<div class='nynext'>"
+      + "<div class='nynhd'>つぎにやること</div>"
+      + "<div class='nynttl'>" + escText(nx.label) + "</div>"
+      + "<p class='nynwhy'>" + escText(nx.why) + "</p>"
+      + (nx.detail ? "<p class='nyndet'>" + escText(nx.detail) + "</p>" : "")
+      + (nx.fix ? "<p class='nynfix'><b>やり方：</b>" + escText(nx.fix) + "</p>" : "")
+      + "<p class='nynundo'>" + nyUndo(nx.undo) + "</p>"
+      + "<div class='nynact'>"
+      + (nx.hand
+         ? "<button class='btn go nyntick' data-k='" + escText(nx.key) + "'>"
+           + "できたので、済にする</button>"
+         : "")
+      + (act ? "<button class='btn" + (nx.hand ? "" : " go") + " nygo' data-a='"
+             + escText(nx.act) + "'>" + escText(act.label) + "</button>" : "")
+      + "<span class='nynmin'>目安 " + nx.mins + " 分</span>"
+      + "</div></div>");
+  }
+
+  /* 残りは表で。**済んだものは畳んでおく。** 見るものを減らす */
+  let group = "";
+  const rows = [];
+  for(const x of r.items){
+    if(x.group !== group){
+      group = x.group;
+      rows.push("<tr class='nygrp'><th colspan='4'>" + escText(group)
+        + (x.wait ? "<i>" + escText(x.wait) + "が済んでからです</i>" : "")
+        + "</th></tr>");
+    }
+    const act = NY_ACT[x.act];
+    const now = x.key === r.next;
+    rows.push("<tr class='" + x.level + (x.wait ? " later" : "") + (now ? " now" : "") + "'>"
+      + "<td class='nybox'>"
+      + (x.hand
+         ? "<input type='checkbox' class='nytick' data-k='" + escText(x.key) + "'"
+           + (x.level === "ok" ? " checked" : "") + (x.wait ? " disabled" : "")
+           + " aria-label='" + escText(x.label) + "'>"
+         : "<span class='nyauto'>" + (x.level === "ok" ? "✓" : x.level === "warn" ? "△" : "—")
+           + "</span>")
+      + "</td>"
+      + "<th>" + (now ? "<i class='nynow'>いまここ</i>" : "") + escText(x.label)
+      + (x.hand ? "<i class='nyhand'>自分で確かめて押す</i>" : "")
+      + "<i class='nywhy'>" + escText(x.why) + "</i></th>"
+      + "<td class='nyd'><span class='lv'>" + NY_MARK[x.level] + "</span>"
+      + escText(x.detail)
+      + (x.fix ? "<span class='fix'>" + escText(x.fix) + "</span>" : "")
+      + "<span class='undo'>" + nyUndo(x.undo) + "</span></td>"
+      + "<td class='nyg'>"
+      + (act ? "<button class='btn nygo' data-a='" + escText(x.act) + "'"
+             + (x.wait ? " disabled" : "") + ">" + escText(act.label) + "</button>" : "")
+      + "</td></tr>");
+  }
+  box.push("<table class='ny'>" + rows.join("") + "</table>");
+  $("nyOut").innerHTML = box.join("");
+
+  for(const b of $("nyOut").querySelectorAll(".nygo"))
+    b.onclick = () => NY_ACT[b.dataset.a].go();
+  for(const b of $("nyOut").querySelectorAll(".nyntick"))
+    b.onclick = () => nyTick(b.dataset.k, true);
+  for(const c of $("nyOut").querySelectorAll(".nytick"))
+    c.onchange = () => nyTick(c.dataset.k, c.checked, c);
+}
+/* 戻せるか。**戻せないものだけ、赤で名指しする。** */
+function nyUndo(s){
+  const no = String(s).indexOf("元に戻せません") >= 0;
+  return "<b class='" + (no ? "nyno" : "nyyes") + "'>"
+       + (no ? "⚠ 元に戻せない" : "◯ 元に戻せる") + "</b>"
+       + escText(String(s).replace(/\*\*/g, ""));
+}
+function nyTick(key, on, el){
+  const w = Wait.begin("記録しています");
+  if(el) el.disabled = true;
+  Backend.tickYearSetup(key, on,
+    r2 => { Wait.end(w); nySt = r2; drawNewYear(); paintNewYear(); },
+    why => { Wait.end(w); if(el){ el.disabled = false; el.checked = !el.checked; } toast(why); });
+}
+
+/* 週案シートを作る。**これまではエディタからしか走らせられなかった。**
+   手順の最後がエディタ頼みだと、そこで止まる。 */
+function makePlanSheets(){
+  if(!Wait.guard()) return;
+  const w = Wait.begin("週案シートを作っています");
+  Backend.setupPlanSheets(r => {
+    Wait.end(w);
+    toast("週案シートを " + ((r && r.made && r.made.length) || 0) + " 枚作った");
+    loadNewYear();
+  }, why => { Wait.end(w); toast(why); });
+}
+
+/* ── A週の起点の月曜 ─────────────────────────
+   **設定シートのこの1行だけを画面から直す。** 画面から設定を全部いじれる
+   ようにすると、関門の例外リストまで画面から書けることになる。 */
+function openAbDlg(){
+  const now = db.settings.abAnchor || AB_ANCHOR;
+  $("abDate").value = now;
+  $("abNow").textContent = "いまは " + now;
+  $("abWhy").innerHTML = "";
+  $("abDlg").showModal();
+}
+function saveAb(){
+  const v = $("abDate").value;
+  const d = parseISO(v);
+  if(!d) return void ($("abWhy").innerHTML = "<div class='box'>日付を入れてください</div>");
+  if(d.getDay() !== 1) return void ($("abWhy").innerHTML =
+    "<div class='box'><b>月曜を入れてください。</b>月曜でない日を入れると、"
+    + "以後の週がすべて半週ずれます。</div>");
+  if(!Wait.guard()) return;
+  const w = Wait.begin("起点を入れています");
+  Backend.saveVariantOrigin(v, () => {
+    Wait.end(w); $("abDlg").close();
+    refreshWeek();
+    toast("A週の起点を " + v + " にした");
+    if($("nyDlg").open) loadNewYear(); else pollNewYear();
+  }, why => { Wait.end(w); $("abWhy").innerHTML = "<div class='box'>" + escText(why) + "</div>"; });
+}
+
+/* ── 年間行事計画表を貼り替える ───────────────── */
+let evRows = null;
+function openEventsDlg(){
+  evRows = null;
+  $("evPaste").value = "";
+  $("evStat").textContent = "";
+  $("evWarn").innerHTML = "";
+  $("evGrid").innerHTML = "";
+  $("evGo").disabled = true;
+  $("evDlg").showModal();
+}
+/* 貼られた字を表に直す。**タブ区切り。** Excel もスプレッドシートもこれで出る */
+function evParse(text){
+  const lines = String(text || "").replace(/\r/g, "").split("\n");
+  const out = [];
+  for(const ln of lines){
+    if(!ln.trim()) continue;
+    out.push(ln.split("\t"));
+  }
+  return out;
+}
+function evRead(){
+  const rows = evParse($("evPaste").value);
+  $("evGrid").innerHTML = "";
+  $("evGo").disabled = true;
+  evRows = null;
+  if(rows.length < 2)
+    return void ($("evWarn").innerHTML =
+      "<div class='box'><b>見出しと、少なくとも1行が要ります。</b>"
+      + "見出しの行ごとコピーして貼ってください。</div>");
+  const head = rows[0].map(x => String(x).replace(/[\s　]/g, ""));
+  if(!head.some(x => x.indexOf("日付") >= 0))
+    return void ($("evWarn").innerHTML =
+      "<div class='box'><b>「日付」の列が見つかりません。</b>"
+      + "見出しは 日付／週／行事計画（児童）／行事計画（職員）の4つです。</div>");
+  evRows = rows;
+  $("evWarn").innerHTML = "";
+  $("evStat").textContent = (rows.length - 1) + " 行を読んだ";
+  $("evGrid").innerHTML = "<table class='tp'>"
+    + rows.slice(0, 12).map((r, i) => "<tr>"
+        + r.map(c => "<" + (i ? "td" : "th") + ">" + escText(c)
+                   + "</" + (i ? "td" : "th") + ">").join("") + "</tr>").join("")
+    + "</table>"
+    + (rows.length > 12 ? "<p class='hint'>ほか " + (rows.length - 12) + " 行</p>" : "");
+  $("evGo").disabled = false;
+}
+function evGo(){
+  if(!evRows) return;
+  if(!Wait.guard()) return;
+  const w = Wait.begin("年間行事計画表を貼り替えています");
+  Backend.saveEvents(evRows, r => {
+    Wait.end(w);
+    $("evDlg").close();
+    toast("年間行事計画表を貼り替えた（" + r.rows + " 行）"
+        + (r.kept ? "　前の中身は「" + r.kept + "」に残してある" : ""));
+    /* 貼り替えたら、その年度をもう一度読む。**画面の行事も入れ替わる** */
+    location.reload();
+  }, why => { Wait.end(w); $("evWarn").innerHTML = "<div class='box'>" + escText(why) + "</div>"; });
 }
 
 /* ── 管理・システム ──────────────────────────

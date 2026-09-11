@@ -83,7 +83,13 @@ function refreshWeek(){
   $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
   paintArchive();                 /* 週をまたぐと年度が変わる。**そのつど見る** */
-  if(view.kind === "tanpopo"){ drawTanpopoView(); return; }
+  if(view.kind === "tanpopo"){
+    /* **待たせない。** 先に面を描いて、出す先は届いてから描き直す。
+       出す先は1回だけ読む（週を繰るたびに読みに行かない） */
+    drawTanpopoView();
+    if(tpTargets === null) loadTargets();
+    return;
+  }
   buildSheet();
   autoFit();
 }
@@ -268,6 +274,7 @@ function wire(){
       if(a === "tanpopo") return openView({kind:"tanpopo"});
       if(a === "paper")   return $("setDlg").showModal();
       if(a === "admin")   return openAdminDlg();
+      if(a === "newyear") return openNewYearDlg();
       if(a === "print")   return window.print();
     });
   for(const b of document.querySelectorAll("[data-close]"))
@@ -325,6 +332,13 @@ function wire(){
      doSave 自体は弾かない（重なりの入れ直しがコードから呼ぶ。弾くと黙って送られない） */
   on("saveBtn","click", () => { if(Wait.guard()) doSave(true); });
   on("lockBtn","click", () => setLock(!isLocked()));
+  /* 新年度の設定。**ふだんは管理・システムの中だけ。**
+     未了のあいだだけ、左メニューにも出る（結線は dialogs.js） */
+  on("nyOpen","click", () => { $("adminDlg").close(); openNewYearDlg(); });
+  on("rsAb","click", openAbDlg);
+  on("abSave","click", saveAb);
+  on("evRead","click", evRead);
+  on("evGo","click", evGo);
 
   /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */
   on("dayDlg","close", () => { dayPick = 0; });
@@ -484,6 +498,9 @@ function start(){
        捨てた週はシートに残っているので、開けば読み直される。 */
     if(pruneWeeks(KEEP_WEEKS)) save();
     if(view.kind === "gate") drawGate();
+    /* 新年度の設定が未了なら、左メニューに出す。**4/1 から、済むまで。**
+       立ち上がりの1回だけ見に行く（週を繰るたびに見に行かない） */
+    pollNewYear();
   });
 }
 

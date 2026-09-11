@@ -23,10 +23,10 @@ npm install               検査に playwright が要る（1回だけ）
 python3 build.py          src/ から dist/index.html と gas/plan.html を作る
 python3 build.py --check  生成物が src と一致するか調べる
 node tools/check.mjs      画面を動かして確かめる（287件）
-node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（206件）
-node gas/storecheck.js    シートの読み書きを確かめる（279件）
+node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（241件）
+node gas/storecheck.js    シートの読み書きを確かめる（324件）
 node gas/gatecheck.js     関門を確かめる（27件）
-node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明を見る（52件）
+node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明を見る（76件）
 ```
 
 外部AIへコードを渡し直すときは、`python3 tools/make-ai-bundle.py` を実行する。
@@ -77,6 +77,11 @@ Git管理されている正本・検査・文書を、元ファイル名つき�
 - **書き込みのあいだは、全面にかぶせて次の操作を受け付けない。**
   保存・たんぽぽ出力・年度の検査と退避。週を開く読み込みは止めない
   （止めると、開いたのに何も出ない時間ができる）
+- **たんぽぽの出す先は1本とはかぎらない。** 画面から足す・消す・変える。
+  消すのは一覧の行だけで、向こうのファイルには手を出さない
+- **新しい年度の準備は、手順として出す。** 4/1 から、ぜんぶ済むまで
+  左メニューに出る。**元に戻せない操作はぜんぶで1つだけ**（前の年度の行を消す）で、
+  そこには必ず突き合わせが入る。ほかは間違えてもやり直せる
 
 ## 児童は入れない
 

@@ -234,17 +234,22 @@ const Store = (function(){
      **校時への割り付けはしない。** 行事は日付にしか結びついていない。
      自動でコマに入れると、外れたものを毎週打ち消す作業が生まれる。
      打ち消す作業は、最初から入れない作業より必ず多い。 */
-  function eventSheet_(){
+  /* 行事表の置いてあるファイル。**本体とはかぎらない。** */
+  function eventBook_(){
     const cfg = readConfig();
     const url = String(cfg["行事ファイルID"] || "").trim();
-    if(!url) return Sheets.sheet(Sheets.EVENTS);        /* 本体のシート */
+    if(!url) return {ss: Sheets.book(), outside: false};
     let ss;
     try{ ss = SpreadsheetApp.openById(fileId(url, "行事ファイルID")); }
     catch(e){
       throw new Error("年間行事計画表のファイルを開けません（" + String(e && e.message)
         + "）。URLが正しいか、このスクリプトを置いたアカウントに共有されているかを見てください");
     }
-    return ss.getSheetByName(Sheets.EVENTS);
+    return {ss: ss, outside: true};
+  }
+  function eventSheet_(){
+    const b = eventBook_();
+    return b.outside ? b.ss.getSheetByName(Sheets.EVENTS) : Sheets.sheet(Sheets.EVENTS);
   }
   /* 日付。**Date でも「2026-11-16」でも「11/18」でも読む。**
      年の無い書き方は、その年度の中の日として当てる（4月〜12月はその年、
@@ -798,15 +803,19 @@ const Store = (function(){
      ID だけを抜いて貼るのは、知っていないとできない操作。
      知らずに URL を貼ると「Illegal spreadsheet id or key」とだけ出て、
      何が悪いのか分からない。 */
-  function fileId(v, label){
+  /* where は「どこに書いてあるものか」。**設定シートとはかぎらない。**
+     出す先は「たんぽぽ出力先」シートにも、画面が渡す値にもある。
+     場所を言わずに「読めません」とだけ言うと、どこを直せばよいか分からない */
+  function fileId(v, label, where){
+    const at = where === undefined ? "「設定」シートの" : String(where);
     const t = String(v == null ? "" : v).trim();
-    if(!t) throw new Error("「設定」シートの「" + label + "」が空です。"
+    if(!t) throw new Error(at + "「" + label + "」が空です。"
                          + "スプレッドシートのURL（またはID）を入れてください");
     const m = t.match(/\/spreadsheets\/d\/([A-Za-z0-9_-]{20,})/)
            || t.match(/[?&]id=([A-Za-z0-9_-]{20,})/);
     if(m) return m[1];
     if(/^[A-Za-z0-9_-]{20,}$/.test(t)) return t;
-    throw new Error("「設定」シートの「" + label + "」が読めません（" + t.slice(0, 40)
+    throw new Error(at + "「" + label + "」が読めません（" + t.slice(0, 40)
                   + "…）。スプレッドシートのURLをそのまま貼ってください");
   }
 
@@ -820,11 +829,96 @@ const Store = (function(){
      交流級の列が1つも見つからない。Sheets.asClass が月-日から元の字へ戻す。 */
   function tpCls(v){ return tpNorm(Sheets.asClass(v)); }
 
+  /* ── たんぽぽの出す先 ────────────────────────
+     **1本とはかぎらない。** たんぽぽ時間割が学年で分かれている学校もあるし、
+     年度でファイルを作り直す学校もある。「たんぽぽ出力先」シートに行を持つ。
+
+     行が1つも無いあいだは、今までどおり「設定」の たんぽぽファイルID を
+     1本の出す先として返す。**版を上げただけの学校が、貼った瞬間に
+     出せなくなるのを避ける。** 画面から1本でも足せば、そちらが正本になる。 */
+  function tpTargets(){
+    const rows = Sheets.readAllSoft("たんぽぽ出力先").rows;
+    const out = [];
+    for(const r of rows){
+      const url = String(r["URL"] || "").trim();
+      if(!url) continue;
+      out.push({name: String(r["名前"] || "").trim() || "（名前なし）",
+                url: url, def: !!r["既定"]});
+    }
+    if(out.length){
+      /* 既定が1つも無い／2つ以上あるときは、いちばん上を既定にする。
+         どれに出るか分からないまま押させない */
+      if(out.filter(function(x){ return x.def; }).length !== 1){
+        for(const x of out) x.def = false;
+        out[0].def = true;
+      }
+      return out;
+    }
+    const legacy = String(readConfig()["たんぽぽファイルID"] || "").trim();
+    return legacy ? [{name: "たんぽぽ時間割", url: legacy, def: true, legacy: true}] : [];
+  }
+  /* 出す先を丸ごと書き替える。**1行ずつ足さない。**
+     足す・消す・直すを別々の口にすると、消えたのに残っているつもりの
+     行が出る。画面が持っている並びを、そのまま正本にする。 */
+  function writeTargets(list){
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try{
+      const objs = [];
+      for(const x of (list || [])){
+        const url = String((x && x.url) || "").trim();
+        if(!url) continue;
+        fileId(url, "URL", "たんぽぽの出す先の");   /* 読めない URL はここで弾く */
+        objs.push({"名前": String((x && x.name) || "").trim() || "たんぽぽ時間割",
+                   "URL": url, "既定": false});
+      }
+      if(objs.length){
+        let i = 0;
+        for(let k = 0; k < (list || []).length; k++) if(list[k] && list[k].def) i = k;
+        objs[Math.min(i, objs.length - 1)]["既定"] = true;
+      }
+      const sh = Sheets.sheet("たんぽぽ出力先");
+      if(sh && sh.getLastRow() > 1)
+        sh.getRange(2, 1, sh.getLastRow() - 1, Sheets.SPEC["たんぽぽ出力先"].cols.length)
+          .clearContent();
+      if(objs.length)
+        Sheets.appendRows("たんぽぽ出力先",
+          objs.map(function(o){ return Sheets.toArray("たんぽぽ出力先", o); }));
+      SpreadsheetApp.flush();
+      return {saved: objs.length};
+    }finally{ lock.releaseLock(); }
+  }
+  /* 開けるか試す。**貼った時点で確かめる。**
+     出すときに初めて失敗すると、週案を送ったあとで止まる */
+  function testTarget(url){
+    const id = fileId(url, "URL", "たんぽぽの出す先の");
+    try{
+      const ss = SpreadsheetApp.openById(id);
+      return {ok: true, file: ss.getName(),
+              sheets: ss.getSheets().length};
+    }catch(e){
+      return {ok: false, why: "開けません。URLが正しいか、このスクリプトを置いた"
+                            + "アカウントに共有されているかを見てください"};
+    }
+  }
+
   /* たんぽぽ時間割のファイルを開く。**シートは名前で作る**ので、
-     「たんぽぽシート名」の設定はもう見ない（週ごとに名前が変わるため）。 */
-  function tpOpen(){
+     「たんぽぽシート名」の設定はもう見ない（週ごとに名前が変わるため）。
+     どの出す先かは画面が渡す。渡されなければ既定の1本。 */
+  function tpOpen(url){
     const cfg = readConfig();
-    const id = fileId(cfg["たんぽぽファイルID"], "たんぽぽファイルID");
+    let want = String(url || "").trim(), label = "たんぽぽ出力先のURL", where = "";
+    if(!want){
+      const list = tpTargets();
+      const def = list.filter(function(x){ return x.def; })[0] || list[0];
+      if(!def) throw new Error("たんぽぽ時間割の出す先が1つもありません。"
+                             + "たんぽぽの面で出す先を足してください");
+      want = def.url;
+      /* 出す先シートがまだ空で、設定の たんぽぽファイルID を見ているとき。
+         直す場所は設定シートなので、そう言う */
+      if(def.legacy){ label = "たんぽぽファイルID"; where = undefined; }
+    }
+    const id = fileId(want, label, where);
     let ss;
     try{ ss = SpreadsheetApp.openById(id); }
     catch(e){
@@ -904,8 +998,8 @@ const Store = (function(){
 
   /* titles = {クラス: {"0": {p1:"国語", …}, …}}（0〜4 は月〜金）
      cols   = [{cls, group}] の並び。**児童ごとに1列。** */
-  function exportWeek(year, mondayISO, titles, cols, slots, name){
-    const {ss, cfg} = tpOpen();
+  function exportWeek(year, mondayISO, titles, cols, slots, name, url){
+    const {ss, cfg} = tpOpen(url);
     const plan = tpColumns_(cols);
     if(!plan.length) throw new Error("交流級を1つも選んでいません");
     const list = plan.map(function(x){ return x.cls; });
@@ -1037,6 +1131,306 @@ const Store = (function(){
             wrote: wrote, empty: empty, days: 5, list: list,
             groups: plan.map(function(x){ return x.group; })};
   }
+  /* ── 新年度の設定 ────────────────────────────
+     **4月に開いたとき、何を、どの順でやるかを1画面で出す。**
+
+     checkYear は「足りないもの」を名指しするが、**順序を持たない**。
+     年度初めにやることは順序が要る（前年度を消す前に複製する、
+     クラスを直す前に基本時間割を入れても意味が無い）。ここは手順の側。
+
+     判定できるものは checkYear の結果をそのまま使う。**二重に書かない**
+     （判定を2か所に書くと、片方だけ直したときに画面が食い違う）。
+     人しか判定できない2つだけ「新年度設定」シートに記録する。 */
+
+  /* 人が押して記録する手順。ここに無いものは機械が判定する */
+  /* 見出しは「これからやること」の形に書く。**過去形にしない。**
+     「複製した」と出ていると、済んだものが並んでいるように読める。
+     押すボタンの側だけ「できたので、済にする」にする。 */
+  const HAND = {
+    "arc.copy": "ドライブで、このファイルを丸ごと複製する",
+    "specials": "専科の担当を、新しい年度の人に直す"
+  };
+
+  function ticks(year){
+    const out = {};
+    for(const r of Sheets.readAllSoft("新年度設定").rows){
+      if(String(r["年度"]).trim() !== String(year)) continue;
+      const k = String(r["項目"] || "").trim();
+      if(k) out[k] = {on: !!r["済"], by: String(r["記録した人"] || ""),
+                      at: String(r["記録した日時"] || ""), row: r.__row};
+    }
+    return out;
+  }
+  function tickYearSetup(year, key, on){
+    if(!HAND[key]) throw new Error("記録できない手順です（" + key + "）");
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try{
+      const me = Gate.check().email;
+      const when = Utilities.formatDate(new Date(), TZ, "yyyy-MM-dd HH:mm");
+      const had = ticks(year)[key];
+      const obj = {"年度": +year, "項目": key, "済": !!on,
+                   "記録した人": on ? me : "", "記録した日時": on ? when : ""};
+      if(had) Sheets.setRow("新年度設定", had.row, obj);
+      else Sheets.appendRows("新年度設定", [Sheets.toArray("新年度設定", obj)]);
+      SpreadsheetApp.flush();
+      return yearSetup(year);
+    }finally{ lock.releaseLock(); }
+  }
+
+  /* A週B週が、年間行事計画表の「週」欄と合っているか。
+     **起点は毎年直すものではない**（1週ごとに入れ替わるので、何年前の
+     起点でも交互になる）。直すのは行事表と1週ずれているときだけ。
+     ずれたまま使うと、書いた週案・たんぽぽへ出したぶん・時数が全部ずれる。 */
+  function variantFit(year){
+    const anchor = String(readConfig()["A週の起点の月曜"] || "").trim();
+    if(!anchor) return {level:"warn", detail:"起点が空", fix:"新年度の設定から入れる"};
+    const a = new Date(anchor.slice(0,4), +anchor.slice(5,7) - 1, +anchor.slice(8,10));
+    if(isNaN(a.getTime()))
+      return {level:"warn", detail:"起点「" + anchor + "」が読めない", fix:"2026-09-07 の形で入れる"};
+    let ev = null;
+    try{ ev = readEvents(year); }catch(e){ ev = {events:{}}; }
+    let same = 0, diff = 0, sample = "";
+    for(const d in ev.events){
+      const w = ev.events[d].w;
+      if(w !== "A" && w !== "B") continue;
+      const p = d.split("-");
+      const day = new Date(+p[0], +p[1] - 1, +p[2]);
+      const n = Math.round((mondayOf_(day) - mondayOf_(a)) / (7 * 86400000));
+      const mine = ((((n % 2) + 2) % 2) === 0) ? "A" : "B";
+      if(mine === w) same++;
+      else { diff++; if(!sample) sample = d + " は行事表が" + w + "週・こちらは" + mine + "週"; }
+    }
+    if(!same && !diff)
+      return {level:"warn", detail:"行事表に週の欄が無い（起点 " + anchor + "）",
+              fix:"行事表の「週」欄を入れると、ここで照合できる"};
+    if(diff > same)
+      return {level:"ng", detail:"行事表と食い違う（合 " + same + "・違 " + diff + "）。" + sample,
+              fix:"新年度の設定から、起点の月曜を1週動かす"};
+    if(diff)
+      return {level:"warn", detail:same + " 日は合い、" + diff + " 日が違う。" + sample,
+              fix:"行事表の側の書き間違いでないか見る"};
+    return {level:"ok", detail:same + " 日ぶん、行事表と合っている（起点 " + anchor + "）", fix:""};
+  }
+  function mondayOf_(d){
+    const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+    return x.getTime();
+  }
+
+  /* 起点の月曜を書く。**月曜でない日は受け取らない。**
+     火曜を入れられると、以後の週がすべて半週ずれる */
+  function writeVariantOrigin(monday){
+    const t = String(monday || "").trim();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(t))
+      throw new Error("日付は 2026-09-07 の形で入れてください");
+    const d = new Date(+t.slice(0,4), +t.slice(5,7) - 1, +t.slice(8,10));
+    if(isNaN(d.getTime())) throw new Error("読めない日付です（" + t + "）");
+    if(d.getDay() !== 1) throw new Error("月曜を入れてください（" + t + " は月曜ではありません）");
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try{
+      const {sh, at} = Sheets.head("設定");
+      const last = sh.getLastRow();
+      const v = last > 1 ? sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues() : [];
+      for(let i = 0; i < v.length; i++){
+        if(String(v[i][at["キー"]] || "").trim() === "A週の起点の月曜"){
+          sh.getRange(i + 2, at["値"] + 1).setValue(t);
+          SpreadsheetApp.flush();
+          return {saved: t};
+        }
+      }
+      Sheets.appendRows("設定", [Sheets.toArray("設定",
+        {"キー":"A週の起点の月曜", "値":t, "覚え書き":"この週がA週。あとは1週ごとに入れ替わる"})]);
+      SpreadsheetApp.flush();
+      return {saved: t};
+    }finally{ lock.releaseLock(); }
+  }
+
+  /* 年間行事計画表を貼り替える。**見出しごと、丸ごと入れ替える。**
+     行を足し引きすると、消したはずの行事が残る年が出る。
+     出す先は「行事ファイルID」があればそちら、無ければ本体の取り込みシート。 */
+  function writeEvents(rows){
+    if(!Array.isArray(rows) || rows.length < 2)
+      throw new Error("見出しと、少なくとも1行が要ります");
+    const at = eventCols_(rows[0]);
+    if(at.date === undefined)
+      throw new Error("「日付」の列が見つかりません。見出しは "
+                    + Sheets.EVENT_COLS.join("／") + " の4つです");
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try{
+      const bk = eventBook_();
+      const sh = bk.outside ? bk.ss.getSheetByName(Sheets.EVENTS) : Sheets.sheet(Sheets.EVENTS);
+      if(!sh) throw new Error("「" + Sheets.EVENTS + "」シートがありません");
+
+      /* **貼り替える前に、いまの中身を丸ごと残す。**
+         丸ごと入れ替えるので、間違った表を貼られると前年度の行事が戻せない。
+         年度初めにこれをやるのは、たいてい今年から入った人。
+         「消えて戻らない」を、この画面のどこにも作らない。
+         残すのは同じファイルの中の別シート。名前で日時が分かる。 */
+      let kept = "";
+      const had = sh.getLastRow();
+      if(had > 1){
+        const wideOld = sh.getLastColumn();
+        const old = sh.getRange(1, 1, had, wideOld).getValues();
+        const stamp = Utilities.formatDate(new Date(), TZ, "MMdd-HHmm");
+        kept = Sheets.EVENTS + "（前の " + stamp + "）";
+        let i = 2;
+        while(bk.ss.getSheetByName(kept)){
+          kept = Sheets.EVENTS + "（前の " + stamp + "-" + (i++) + "）";
+        }
+        const ks = bk.ss.insertSheet(kept);
+        Sheets.grow(ks, had, wideOld);
+        ks.getRange(1, 1, had, wideOld).setValues(old);
+      }
+
+      let wide = 0;
+      for(const r of rows) wide = Math.max(wide, r.length);
+      const grid = rows.map(function(r){
+        const out = [];
+        for(let i = 0; i < wide; i++) out.push(r[i] == null ? "" : String(r[i]));
+        return out;
+      });
+      Sheets.grow(sh, grid.length, wide);
+      if(sh.getLastRow()) sh.getRange(1, 1, sh.getLastRow(), sh.getLastColumn()).clearContent();
+      /* **日付の列を書式なしテキストにしない。** 日付として置くほうが
+         readEvents は素直に読める（evDate_ は Date も字も読む） */
+      sh.getRange(1, 1, grid.length, wide).setValues(grid);
+      SpreadsheetApp.flush();
+      /* **どこへ書いたかを返す。** 行事ファイルIDを入れてある学校では、
+         本体ではなく別のファイルへ入る。入れた先が違うと気づけない */
+      /* **どこへ書いたか・前の中身をどこへ残したかを返す。**
+         残した先を言わないと、戻したい人がどこを見ればよいか分からない */
+      return {rows: grid.length - 1, sheet: sh.getName(),
+              kept: kept, outside: bk.outside};
+    }finally{ lock.releaseLock(); }
+  }
+
+  /* 手順。**上から順にやる。** */
+  function yearSetup(year){
+    const y = +year, prev = y - 1;
+    const ck = checkYear(y);
+    const by = {};
+    for(const x of ck.items) if(!by[x.what]) by[x.what] = x;
+    const tk = ticks(y);
+    const items = [];
+    /* 1件ぶんの手順。**画面が判断しなくてよいように、ここで全部持たせる。**
+       year setup をやるのは、たいてい今年その学校へ来た人。
+       「何を」だけ出して「なぜ・どうなる・戻せるか」を出さないと、
+       押してよいのか分からないまま止まるか、分からないまま押す。
+         why  なぜ要るか（やらないと何が起きるか）
+         undo 元に戻せるか。**戻せないものはここで名指しする**
+         mins かかる目安
+         act  画面のどの窓を開くか（画面側の NY_ACT と同じ名前） */
+    const put = (key, group, label, level, detail, fix, act, why, undo, mins) =>
+      items.push({key, group, label, level, detail, fix, act,
+                  why: why || "", undo: undo || "", mins: mins || 0,
+                  hand: !!HAND[key],
+                  by: (tk[key] || {}).by || "", at: (tk[key] || {}).at || ""});
+    const from = (key, group, label, what, act, why, undo, mins) => {
+      const x = by[what] || {level:"warn", detail:"判定できなかった", fix:""};
+      put(key, group, label, x.level, x.detail, x.fix, act, why, undo, mins);
+    };
+
+    /* ① 前年度を退避する。**複製は人の手。**
+       複製をコードで書かないので、コピー漏れが原理的に起きない */
+    const done = archiveDone(prev);
+    let cnt = null;
+    try{ cnt = archiveCount(prev); }catch(e){ cnt = null; }
+    const rows = cnt ? cnt.rows : 0;
+    put("arc.count", "① 前の年度を保管する", "前の年度に、どれだけ入っているかを数える",
+        "ok", done ? prev + "年度は保管ずみ"
+                   : (rows ? prev + "年度に " + rows + " 行（" + cnt.cells + " コマ）ある"
+                           : prev + "年度の週案は1行もない。保管するものがない"),
+        "", "admin",
+        "数えた行数とコマ数を、あとで複製と突き合わせます。ここが保管の物差しです。",
+        "数えるだけ。何も変わりません。", 1);
+    const need = !done && rows > 0;
+    const cp = tk["arc.copy"];
+    put("arc.copy", "① 前の年度を保管する", HAND["arc.copy"],
+        (!need || (cp && cp.on)) ? "ok" : "ng",
+        !need ? "保管するものがない"
+              : (cp && cp.on) ? "済（" + cp.by + "　" + cp.at + "）"
+                              : "Googleドライブでこのファイルを右クリック →「コピーを作成」→ "
+                                + "名前を「週案 保存 " + prev + "年度」に直す",
+        need ? "できたら、コピーのURLを「年度の退避」の欄に貼る" : "", "admin",
+        "複製はコードで作りません。人がドライブで作るので、コピー漏れが起きません。",
+        "コピーを作るだけ。元のファイルは何も変わりません。作りすぎても消せます。", 5);
+    put("arc.verify", "① 前の年度を保管する", "複製と、いまのファイルを突き合わせる",
+        (!need || done) ? "ok" : "ng",
+        !need ? "突き合わせるものがない" : done ? "突き合わせは通っている" : "まだ突き合わせていない",
+        need ? "「年度の退避」の［照合する］を押す。1枚でも合わなければ、次へ進めません" : "", "admin",
+        "1行でも欠けた複製で次へ進むと、消したぶんが本当に消えます。ここが最後の砦です。",
+        "見比べるだけ。何も変わりません。何度でもやり直せます。", 1);
+    put("arc.purge", "① 前の年度を保管する", "いまのファイルから、前の年度の行を消す",
+        (!need || done) ? "ok" : "ng",
+        done ? "保管ずみ（" + done.at + "　" + done.by + "）"
+             : !need ? "消すものがない" : rows + " 行が、いまのファイルに残っている",
+        need ? "突き合わせが通ってから、年度を打ち込むと押せるようになります" : "", "admin",
+        "残したままでも動きますが、年々重くなって保存に時間がかかるようになります。",
+        "**ここだけは元に戻せません。**押した直後にもう一度突き合わせるので、"
+        + "そのあいだに誰かが書いた行があれば1行も消しません。"
+        + "消えるのは前の年度の週案の行だけで、複製にはそのまま残っています。", 2);
+
+    /* ② 新年度のかたちを入れる */
+    from("roster", "② 新しい年度のかたちを入れる", "クラスの数と名前を、新しい年度に直す",
+         "クラス", "roster",
+         "ここが元になって、担任が開くクラスの一覧ができます。空だと誰も開けません。",
+         "戻せます。前の年度の行はそのまま残るので、上書きにはなりません。", 10);
+    const sp = tk["specials"];
+    put("specials", "② 新しい年度のかたちを入れる", HAND["specials"],
+        (sp && sp.on) ? "ok" : "ng",
+        (sp && sp.on) ? "済（" + sp.by + "　" + sp.at + "）"
+                      : "いまの専科：" + ((by["専科"] || {}).detail || "—"),
+        "［学級編成をひらく］の「専科」で、担当のメールを新しい人に直す", "roster",
+        "担当が前の人のままだと、その先生の画面に自分の専科の週が出ません。",
+        "戻せます。書き直すだけです。", 3);
+    from("week1", "② 新しい年度のかたちを入れる", "第1週の月曜日を入れる", "年設定", "roster",
+         "時数集計表のシート名（第◯週）が、ここから決まります。",
+         "戻せます。書き直すだけです。", 1);
+    from("base", "② 新しい年度のかたちを入れる", "基本時間割を、A週・B週とも入れる",
+         "基本時間割", "base",
+         "担任が週を開いたとき、初めに出るのがこれです。空だと真っ白な紙が出ます。",
+         "戻せます。前の年度の行はそのまま残ります。", 30);
+
+    /* ③ 外とつなぐ */
+    from("events", "③ ほかの表とつなぐ", "年間行事計画表を貼り替える", "年間行事", "events",
+         "行事が入っていると、その日の見出しに行事名が出ます。",
+         "戻せます。貼り替える前の中身は、別のシートに丸ごと残します。", 5);
+    const vf = variantFit(y);
+    put("variant", "③ ほかの表とつなぐ", "A週・B週が、年間行事計画表と合っているか確かめる",
+        vf.level, vf.detail, vf.fix, "ab",
+        "1週ずれたまま使うと、書いた週案・たんぽぽへ出したぶん・時数が全部ずれます。",
+        "戻せます。合わなければ、もう一度1週動かせば元どおりです。", 2);
+    from("tanpopo", "③ ほかの表とつなぐ", "たんぽぽの交流級と、出す先を直す", "たんぽぽ", "tanpopo",
+         "たんぽぽ時間割へ出す列が、ここで決まります。",
+         "戻せます。出す先の一覧から外しても、向こうのファイルは消えません。", 5);
+
+    /* ④ 担任が開ける形にする */
+    from("plan", "④ 担任が開ける形にする", "クラスごとの週案シートを作る", "週案シート", "plan",
+         "無くても書けば自動でできますが、初めの1人が待たされます。先に作っておきます。",
+         "何度押しても同じです。あるシートには触りません。", 1);
+
+    /* **順番を飛ばせないようにする。**
+       ①を済ませる前に②へ行くと、消す前の年度の上に新しい編成を重ねることになる。
+       前の段に「まだ」が残っているあいだ、次の段は wait を立てて画面で淡くする。
+       止めるのではなく、順番でないことを言う（急ぎで飛ばす年もある）。 */
+    let blocked = "";
+    for(const x of items){
+      x.wait = blocked && x.group !== blocked ? blocked : "";
+      if(x.level === "ng" && !blocked) blocked = x.group;
+    }
+    for(const x of items) if(x.group === blocked) x.wait = "";
+
+    /* いま押すべき1件。**次の一手だけを大きく出すために返す。**
+       上から順に、最初の「まだ」。迷わせないための1件なので、複数返さない。 */
+    const next = items.filter(function(x){ return x.level === "ng"; })[0] || null;
+    const ng = items.filter(function(x){ return x.level === "ng"; }).length;
+    return {year: y, prev: prev, items: items, ng: ng, done: ng === 0,
+            next: next ? next.key : "", file: Sheets.bookName()};
+  }
+
   /* 旧・週案（1枚に全クラス）を、クラスごとのシートへ移す。
      **何度走らせても同じ。** すでに移してあるコマは上書きするだけ。
      旧シートは消さない（移し損ねたときに元を見られるように）。 */
@@ -1242,6 +1636,8 @@ const Store = (function(){
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste,
           exportWeek, weekSheetName, weekOrder, migratePlan, checkYear, readEvents,
           archiveCount, archiveVerify, archivePurge, archivedAll, ymd,
+          tpTargets, writeTargets, testTarget,
+          yearSetup, tickYearSetup, writeVariantOrigin, writeEvents,
           /* 検査から呼ぶ。**画面からは呼ばない**（形を読むための道具） */
           __tpCls: tpCls, __tpColumns: tpColumns_};
 })();
@@ -1361,7 +1757,51 @@ function apiReadPaste(){
 /* たんぽぽ時間割へ、**1週ぶんを1枚のシートとして出す**。シート名は「9月1週」。
    同じ名前のシートがあれば、消さずに名前を変えて残す。
    出す先の形をこちらが毎週作るので、「形をみる」「形を作りなおす」は要らない。 */
-function apiExportWeek(year, mondayISO, titles, cols, slots, name){
+function apiExportWeek(year, mondayISO, titles, cols, slots, name, url){
   Gate.check();
-  return Store.exportWeek(year, mondayISO, titles, cols, slots, name);
+  return Store.exportWeek(year, mondayISO, titles, cols, slots, name, url);
+}
+/* たんぽぽの出す先。**1本とはかぎらない。**
+   行が1つも無いあいだは「設定」の たんぽぽファイルID を1本として返す。 */
+function apiTpTargets(){
+  Gate.check();
+  return Store.tpTargets();
+}
+function apiWriteTpTargets(list){
+  Gate.check();
+  return Store.writeTargets(list);
+}
+function apiTestTpTarget(url){
+  Gate.check();
+  return Store.testTarget(url);
+}
+/* 新年度の設定。**手順と、いまどこまで済んでいるか。**
+   判定できるものは checkYear がシートを見て決め、人しか判定できない手順だけ
+   「新年度設定」シートに記録する。 */
+function apiYearSetup(year){
+  Gate.check();
+  return Store.yearSetup(year || new Date().getFullYear());
+}
+function apiTickYearSetup(year, key, on){
+  Gate.check();
+  return Store.tickYearSetup(year, key, on);
+}
+/* 週案シートを作る。**これまではエディタからしか走らせられなかった。**
+   新年度の手順の最後がエディタ頼みだと、そこで止まる。 */
+function apiSetupPlanSheets(year){
+  Gate.check();
+  return setupPlanSheets(year);
+}
+/* A週の起点の月曜。**「設定」シートの1行だけを画面から直す。**
+   ほかのキーは受け付けない（画面から設定を全部いじれるようにすると、
+   関門の例外リストまで画面から書けることになる）。 */
+function apiWriteVariantOrigin(monday){
+  Gate.check();
+  return Store.writeVariantOrigin(monday);
+}
+/* 年間行事計画表を貼り替える。**貼るのはシートではなく画面から。**
+   シートのURLを教員に渡さないまま、年度初めの貼り替えが閉じる。 */
+function apiWriteEvents(rows){
+  Gate.check();
+  return Store.writeEvents(rows);
 }

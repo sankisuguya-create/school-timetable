@@ -34,7 +34,135 @@ function tpSheetName(mon){
    （右のクラスを押すと、いま選んでいる組へ入る）。 */
 let tpPick = "1";              /* いま選んでいる組。押して入れるときの行き先 */
 
+/* ── 出す先 ──────────────────────────────────
+   **1本とはかぎらない。** たんぽぽ時間割が学年で分かれている学校も、
+   年度でファイルを作り直す学校もある。「たんぽぽ出力先」シートが正本で、
+   1本も無いあいだは今までどおり「設定」の たんぽぽファイルID を見る。
+
+   足す・消す・直すを別々の口にしない。**画面が持っている並びを、
+   そのままシートへ書く。** 別々にすると、消したのに残っているつもりの
+   行が出て、どちらに出たか分からなくなる。 */
+let tpTargets = null;          /* 読めていないあいだは null（読み込み中と出す） */
+let tpTgtEdit = false;         /* 直しているあいだは、出すボタンを止める */
+
+function loadTargets(after){
+  Backend.tpTargets(list => { tpTargets = list; if(after) after(); drawTanpopoView(); },
+                    why => { tpTargets = []; toast(why); drawTanpopoView(); });
+}
+const tpTargetNow = () => (tpTargets || []).filter(x => x.def)[0] || (tpTargets || [])[0] || null;
+
+function drawTargets(){
+  const box = $("tpTgt");
+  if(!box) return;
+  if(!Backend.isGas()){
+    box.innerHTML = "<div class='tptline'><b>出す先</b>"
+      + "<span class='hint'>手元では出す先を持てない（シートにつないでいない）</span></div>";
+    return;
+  }
+  if(tpTargets === null){
+    box.innerHTML = "<div class='tptline'><b>出す先</b><span class='hint'>読んでいます…</span></div>";
+    return;
+  }
+  if(!tpTgtEdit){
+    const now = tpTargetNow();
+    box.innerHTML = "<div class='tptline'><b>出す先</b>"
+      + (tpTargets.length
+         ? "<select id='tpTgtSel' aria-label='出す先のファイル'>"
+           + tpTargets.map((x, i) => "<option value='" + i + "'"
+               + (x === now ? " selected" : "") + ">" + escText(x.name) + "</option>").join("")
+           + "</select>"
+         : "<span class='hint bad'>1つもありません。足さないと出せません</span>")
+      + "<button class='btn' id='tpTgtEdit'>出す先を直す</button></div>";
+    const sel = $("tpTgtSel");
+    if(sel) sel.onchange = () => {
+      const i = +sel.value;
+      for(let k = 0; k < tpTargets.length; k++) tpTargets[k].def = (k === i);
+      putTargets(() => toast("出す先を「" + tpTargets[i].name + "」にした"));
+    };
+    $("tpTgtEdit").onclick = () => { tpTgtEdit = true; drawTanpopoView(); };
+    return;
+  }
+  /* 直しているあいだ。**行ごとに、名前・URL・試す・消すを並べる。** */
+  box.innerHTML = "<div class='tptedit'><b>出す先を直す</b>"
+    + "<p class='hint'>たんぽぽ時間割のスプレッドシートのURLを、そのまま貼ってよい。"
+    + "<b>◎を押したものが、既定の出す先</b>になる。</p>"
+    + "<table class='tpttbl'><tr><th>既定</th><th>名前</th><th>URL</th><th></th><th></th></tr>"
+    + tpTargets.map((x, i) =>
+        "<tr><td><button class='tptdef" + (x.def ? " on" : "") + "' data-i='" + i + "'"
+        + " aria-pressed='" + !!x.def + "' title='既定の出す先にする'>◎</button></td>"
+        + "<td><input type='text' class='tptname' data-i='" + i + "' value='"
+        + escText(x.name) + "' size='14'></td>"
+        + "<td><input type='text' class='tpturl' data-i='" + i + "' value='"
+        + escText(x.url) + "'></td>"
+        + "<td><button class='btn tpttest' data-i='" + i + "'>開けるか試す</button></td>"
+        + "<td><button class='btn danger tptdel' data-i='" + i + "'>消す</button></td></tr>"
+      ).join("")
+    + "</table>"
+    + "<div id='tpTgtWhy' class='tpwarn'></div>"
+    + "<div class='tptact'><button class='btn' id='tpTgtAdd'>出す先を足す</button>"
+    + "<button class='btn go' id='tpTgtSave'>直したものを入れる</button>"
+    + "<button class='btn' id='tpTgtCancel'>やめる</button></div></div>";
+
+  const read = () => {
+    for(const e of box.querySelectorAll(".tptname")) tpTargets[+e.dataset.i].name = e.value;
+    for(const e of box.querySelectorAll(".tpturl"))  tpTargets[+e.dataset.i].url  = e.value;
+  };
+  for(const b of box.querySelectorAll(".tptdef"))
+    b.onclick = () => { read(); tpTargets.forEach((x, k) => x.def = (k === +b.dataset.i));
+                        drawTanpopoView(); };
+  for(const b of box.querySelectorAll(".tptdel"))
+    b.onclick = () => {
+      read();
+      const x = tpTargets[+b.dataset.i];
+      /* **消すのはこの一覧の行だけ。** 向こうのシートには手を出さない。
+         たんぽぽ担当が書いた担当者・場所を、こちらから消せる口を作らない */
+      if(!confirm("「" + x.name + "」を出す先の一覧から外します。\n"
+                + "たんぽぽ時間割のファイルそのものは消えません。")) return;
+      tpTargets.splice(+b.dataset.i, 1);
+      if(tpTargets.length && !tpTargets.some(y => y.def)) tpTargets[0].def = true;
+      drawTanpopoView();
+    };
+  for(const b of box.querySelectorAll(".tpttest"))
+    b.onclick = () => {
+      read();
+      const x = tpTargets[+b.dataset.i];
+      $("tpTgtWhy").innerHTML = "<div class='box'>試しています…</div>";
+      Backend.testTpTarget(x.url,
+        r => $("tpTgtWhy").innerHTML = r.ok
+          ? "<div class='box ok'><b>開けました。</b>" + escText(r.file)
+            + "（シート " + r.sheets + " 枚）</div>"
+          : "<div class='box'><b>" + escText(x.name) + "：</b>" + escText(r.why) + "</div>",
+        why => $("tpTgtWhy").innerHTML = "<div class='box'>" + escText(why) + "</div>");
+    };
+  $("tpTgtAdd").onclick = () => {
+    read();
+    tpTargets.push({name:"たんぽぽ時間割", url:"", def:!tpTargets.length});
+    drawTanpopoView();
+  };
+  $("tpTgtCancel").onclick = () => { tpTgtEdit = false; loadTargets(); };
+  $("tpTgtSave").onclick = () => {
+    read();
+    const empty = tpTargets.filter(x => !String(x.url).trim());
+    if(empty.length) return void ($("tpTgtWhy").innerHTML =
+      "<div class='box'><b>URLが空の行があります。</b>入れるか、その行を消してください。</div>");
+    const w = Wait.begin("出す先を入れています");
+    Backend.saveTpTargets(tpTargets, () => {
+      Wait.end(w); tpTgtEdit = false; loadTargets();
+      toast("出す先を入れた");
+    }, why => {
+      Wait.end(w);
+      $("tpTgtWhy").innerHTML = "<div class='box'>" + escText(why) + "</div>";
+    });
+  };
+}
+function putTargets(after){
+  const w = Wait.begin("出す先を入れています");
+  Backend.saveTpTargets(tpTargets, () => { Wait.end(w); if(after) after(); drawTanpopoView(); },
+                        why => { Wait.end(w); toast(why); loadTargets(); });
+}
+
 function drawTanpopoView(){
+  drawTargets();
   const groups = tpGroups();
   if(groups.indexOf(tpPick) < 0) tpPick = groups[0];
 
@@ -102,11 +230,16 @@ function drawTanpopoView(){
   if(add) add.onclick = () => { tpAddGroup(); save(); drawTanpopoView(); };
 
   $("tpWarn").innerHTML = tpWarnBoxes().join("");
-  $("tpGo").disabled = !tpTotal();
+  /* 出す先が1つも無いあいだ、直している最中は出させない。
+     **どこへ出るか分からないまま押させない。** */
+  const tgt = tpTargetNow();
+  $("tpGo").disabled = !tpTotal() || tpTgtEdit
+                    || (Backend.isGas() && !tgt);
   $("tpCount").innerHTML = tpTotal()
     ? "出すのは <b>" + tpTotal() + " 人</b>（" + tpTotal() + " 列）・"
       + "<b>" + tpChosenHere().length + " クラス</b>　シート名 <b>"
       + escText(tpSheetName()) + "</b>"
+      + (tgt ? "　出す先 <b>" + escText(tgt.name) + "</b>" : "")
     : "";
 }
 
@@ -118,6 +251,9 @@ const tpChosenHere = () => tpChosen().filter(c => allClasses().indexOf(c) >= 0);
    止めはしない（金曜までに全担任が書き終わらない週はある）。 */
 function tpWarnBoxes(){
   const chosen = tpChosenHere();
+  if(Backend.isGas() && tpTargets !== null && !tpTargets.length)
+    return ["<div class='box'><b>出す先が1つもありません。</b>"
+          + "「出す先を直す」から、たんぽぽ時間割のURLを1つ入れてください。</div>"];
   const base  = chosen.filter(c => planState(c) === "base");
   const upper = chosen.filter(c => planState(c) === "upper");
   const gone  = tpChosen().filter(c => allClasses().indexOf(c) < 0);
@@ -171,6 +307,8 @@ function reflectTanpopo(){
   $("tpDlgName").textContent = name;
   $("tpDlgTbl").innerHTML =
       "<tr><th>週</th><td>" + md(monday) + " → " + md(addDays(monday, 4)) + "</td></tr>"
+    + "<tr><th>出す先</th><td><b>"
+      + escText((tpTargetNow() || {}).name || "（未設定）") + "</b></td></tr>"
     + "<tr><th>シート名</th><td><b>" + escText(name) + "</b></td></tr>"
     + "<tr><th>出す児童</th><td>" + tpTotal() + " 人（" + tpTotal() + " 列）</td></tr>"
     + "<tr><th>交流級</th><td>"
@@ -186,6 +324,7 @@ function doExportTanpopo(){
   if(!chosen.length) return;
   const cols = tpColumns().filter(x => allClasses().indexOf(x.cls) >= 0);
   const name = tpSheetName();
+  const tgt = tpTargetNow();
   if(!Backend.isGas()){
     $("tpWarn").innerHTML =
       "<div class='box'><b>いまは書き込まない。</b>実物のたんぽぽ時間割に"
@@ -200,6 +339,7 @@ function doExportTanpopo(){
   const w = Wait.begin("たんぽぽ時間割へ出しています");
   Backend.flush(() => {
     Backend.exportWeek(tanpopoTitles(chosen), cols, tpSlots(), name,
+      tgt ? tgt.url : "",
       r => {
         Wait.end(w);
         $("tpGo").disabled = false;

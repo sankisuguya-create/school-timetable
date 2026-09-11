@@ -664,12 +664,77 @@ const Backend = (function(){
      どのクラスのどの校時が何かを決めるのは画面（層の重ね方を知っている）。
      どんな形のシートを作るかを決めるのはシート側（実物の形を知っている）。
      cols = [{cls, group}] の並び。**並びと組をこちらで決めて渡す。** */
-  function exportWeek(titles, cols, slots, name, ok, ng){
+  function exportWeek(titles, cols, slots, name, url, ok, ng){
     if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
     google.script.run
       .withSuccessHandler(r => ok(r))
       .withFailureHandler(e => ng(String((e && e.message) || "書き込めなかった")))
-      .apiExportWeek(fy(), wkKey(), titles, cols, slots, name);
+      .apiExportWeek(fy(), wkKey(), titles, cols, slots, name, url || "");
+  }
+
+  /* ── たんぽぽの出す先 ────────────────────────
+     **1本とはかぎらない。** 手元では設定を持たないので、空で返す
+     （画面は「手元では出す先を持てない」と出す）。 */
+  function tpTargets(ok, ng){
+    if(!onGas) return ok([]);
+    google.script.run
+      .withSuccessHandler(r => ok(r || []))
+      .withFailureHandler(e => ng("出す先を読めなかった（" + (e && e.message) + "）"))
+      .apiTpTargets();
+  }
+  function saveTpTargets(list, ok, ng){
+    if(!onGas) return ng("手元では出す先を持てない（シートにつないでいない）");
+    google.script.run
+      .withSuccessHandler(r => ok(r))
+      .withFailureHandler(e => ng(String((e && e.message) || "書けなかった")))
+      .apiWriteTpTargets(list);
+  }
+  function testTpTarget(url, ok, ng){
+    if(!onGas) return ng("手元では試せない");
+    google.script.run
+      .withSuccessHandler(r => ok(r))
+      .withFailureHandler(e => ng(String((e && e.message) || "試せなかった")))
+      .apiTestTpTarget(url);
+  }
+
+  /* ── 新年度の設定 ────────────────────────────
+     手順と、いまどこまで済んでいるか。**シートを見ないと分からない。** */
+  function yearSetup(ok, ng){
+    if(!onGas) return ng("手元では分からない（シートを見ないと判定できない）");
+    google.script.run
+      .withSuccessHandler(r => ok(r))
+      .withFailureHandler(e => ng("読めなかった（" + (e && e.message) + "）"))
+      .apiYearSetup(fy());
+  }
+  function tickYearSetup(key, on, ok, ng){
+    if(!onGas) return ng("手元では記録できない");
+    google.script.run
+      .withSuccessHandler(r => ok(r))
+      .withFailureHandler(e => ng(String((e && e.message) || "記録できなかった")))
+      .apiTickYearSetup(fy(), key, !!on);
+  }
+  function setupPlanSheets(ok, ng){
+    if(!onGas) return ng("手元ではシートを作れない");
+    google.script.run
+      .withSuccessHandler(r => ok(r))
+      .withFailureHandler(e => ng(String((e && e.message) || "作れなかった")))
+      .apiSetupPlanSheets(fy());
+  }
+  /* A週の起点の月曜。**設定シートのこの1行だけを画面から直す。** */
+  function saveVariantOrigin(monday, ok, ng){
+    if(!onGas){ db.settings.abAnchor = monday; save(); return ok({saved: monday}); }
+    google.script.run
+      .withSuccessHandler(r => { db.settings.abAnchor = monday; save(); ok(r); })
+      .withFailureHandler(e => ng(String((e && e.message) || "書けなかった")))
+      .apiWriteVariantOrigin(monday);
+  }
+  /* 年間行事計画表を貼り替える。rows は見出しを含む二次元配列 */
+  function saveEvents(rows, ok, ng){
+    if(!onGas) return ng("手元では貼り替えられない（シートにつないでいない）");
+    google.script.run
+      .withSuccessHandler(r => ok(r))
+      .withFailureHandler(e => ng(String((e && e.message) || "貼り替えられなかった")))
+      .apiWriteEvents(rows);
   }
 
   /* 画面を閉じる前に、貯めたぶんを出し切る。
@@ -687,5 +752,7 @@ const Backend = (function(){
           unsaved, prefetchWeek, watch, stale, heldCells, dropHeld, reloadWeek,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
-          archiveCount, archiveVerify, archivePurge, exportWeek};
+          archiveCount, archiveVerify, archivePurge, exportWeek,
+          tpTargets, saveTpTargets, testTpTarget,
+          yearSetup, tickYearSetup, setupPlanSheets, saveVariantOrigin, saveEvents};
 })();

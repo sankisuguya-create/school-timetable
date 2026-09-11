@@ -27,6 +27,57 @@ p.on("console", m => { if(m.type() === "error") errs.push("console: " + m.text()
 /* 偽のサーバ。呼ばれたことと引数を覚え、シートらしい形を返す。 */
 await p.addInitScript(() => {
   window.__calls = [];
+  /* たんぽぽの出す先。**版を上げただけの学校の形**から始める
+     ＝出す先シートは空で、設定の たんぽぽファイルID が1本返る（legacy） */
+  window.__TPURL = "https://docs.google.com/spreadsheets/d/TPOK1234567890123456789/edit";
+  window.__targets = [{name:"たんぽぽ時間割", url:window.__TPURL, def:true, legacy:true}];
+  window.__nyTicks = {};
+  window.__nyPlan = false;
+  window.__nyEvents = false;
+  /* 新年度の設定。**本番は checkYear がシートを見て決める。**
+     ここでは、押した・貼ったが手順に効くかどうかだけを見る */
+  window.__nySetup = y => {
+    const T = window.__nyTicks || {};
+    const it = (key, group, label, level, act, hand) =>
+      ({key, group, label, level, detail:"いまの状態", fix:"こうする", act, hand:!!hand,
+        why:"やらないとこうなる、という理由", mins:3,
+        undo: key === "arc.purge"
+              ? "**ここだけは元に戻せません。**複製にはそのまま残っています。"
+              : "戻せます。やり直せます。",
+        wait:"",
+        by: hand && T[key] ? "tanaka@edu.nishi.or.jp" : "",
+        at: hand && T[key] ? "2027-04-02 09:00" : ""});
+    const items = [
+      it("arc.count",  "① 前年度を退避する", "前年度の週案の量を数える", "ok", "admin"),
+      it("arc.copy",   "① 前年度を退避する", "ドライブで、このファイルを丸ごと複製する",
+         T["arc.copy"] ? "ok" : "ng", "admin", true),
+      it("arc.verify", "① 前年度を退避する", "複製と本体を照合する", "ok", "admin"),
+      it("arc.purge",  "① 前年度を退避する", "本体から前年度の行を消す", "ok", "admin"),
+      it("roster",   "② 新年度のかたちを入れる", "学級編成を新年度に直す", "ok", "roster"),
+      it("specials", "② 新年度のかたちを入れる", "専科の担当を新年度の人に直した",
+         T["specials"] ? "ok" : "ng", "roster", true),
+      it("week1",    "② 新年度のかたちを入れる", "第1週の月曜を入れる", "ok", "roster"),
+      it("base",     "② 新年度のかたちを入れる", "基本時間割をA週B週とも入れる", "ok", "base"),
+      it("events",   "③ 外とつなぐ", "年間行事計画表を貼り替える",
+         window.__nyEvents ? "ok" : "ng", "events"),
+      it("variant",  "③ 外とつなぐ", "A週B週が年間行事と合っているか確かめる", "ok", "ab"),
+      it("tanpopo",  "③ 外とつなぐ", "たんぽぽの交流級と出す先を直す", "ok", "tanpopo"),
+      it("plan",     "④ 担任が開ける形にする", "週案シートを作る",
+         window.__nyPlan ? "ok" : "ng", "plan")
+    ];
+    /* **順番を飛ばせないようにする。** 前の段に「まだ」が残っているあいだ、
+       次の段は wait を立てる（本番の Store.yearSetup と同じ決まり） */
+    let blocked = "";
+    for(const x of items){
+      x.wait = blocked && x.group !== blocked ? blocked : "";
+      if(x.level === "ng" && !blocked) blocked = x.group;
+    }
+    for(const x of items) if(x.group === blocked) x.wait = "";
+    const ng = items.filter(x => x.level === "ng").length;
+    const next = items.filter(x => x.level === "ng")[0];
+    return {year:y, prev:y - 1, items, ng, done: ng === 0,
+            next: next ? next.key : "", file:"週案 2026（高木北）"};
+  };
   const DATA = {
     boot: {
       me: "tanaka@edu.nishi.or.jp",
@@ -182,6 +233,53 @@ await p.addInitScript(() => {
                                ms:120, waitMs:40}), wlag);
       },
       apiWriteRoster(y, c, s, w, tp){ call("apiWriteRoster", [y, c, s, w, tp]); setTimeout(() => okFn({}), 0); },
+      /* たんぽぽの出す先。**1本とはかぎらない。** */
+      apiTpTargets(){
+        call("apiTpTargets", []);
+        const r = window.__targets || [];
+        setTimeout(() => okFn(r.map(x => Object.assign({}, x))), 0);
+      },
+      apiWriteTpTargets(list){
+        call("apiWriteTpTargets", [list]);
+        if((list || []).some(x => !/spreadsheets\/d\/[A-Za-z0-9_-]{20,}/.test(String(x.url || ""))
+                                  && !/^[A-Za-z0-9_-]{20,}$/.test(String(x.url || ""))))
+          return void setTimeout(() => ngFn(new Error("「URL」が読めません")), 0);
+        window.__targets = (list || []).map(x => Object.assign({}, x));
+        setTimeout(() => okFn({saved:(list || []).length}), 0);
+      },
+      apiTestTpTarget(url){
+        call("apiTestTpTarget", [url]);
+        setTimeout(() => okFn(/TPOK/.test(String(url))
+          ? {ok:true, file:"たんぽぽ時間割", sheets:3}
+          : {ok:false, why:"開けません"}), 0);
+      },
+      /* 新年度の設定。**手順と、いまどこまで済んでいるか。** */
+      apiYearSetup(y){
+        call("apiYearSetup", [y]);
+        setTimeout(() => okFn(window.__nySetup(y)), 0);
+      },
+      apiTickYearSetup(y, key, on){
+        call("apiTickYearSetup", [y, key, on]);
+        if(["arc.copy", "specials"].indexOf(key) < 0)
+          return void setTimeout(() => ngFn(new Error("記録できない手順です")), 0);
+        (window.__nyTicks || (window.__nyTicks = {}))[key] = !!on;
+        setTimeout(() => okFn(window.__nySetup(y)), 0);
+      },
+      apiSetupPlanSheets(y){
+        call("apiSetupPlanSheets", [y]);
+        window.__nyPlan = true;
+        setTimeout(() => okFn({made:["週案 全校", "週案 5-1"]}), 0);
+      },
+      apiWriteVariantOrigin(m){
+        call("apiWriteVariantOrigin", [m]);
+        setTimeout(() => okFn({saved:m}), 0);
+      },
+      apiWriteEvents(rows){
+        call("apiWriteEvents", [rows]);
+        window.__nyEvents = true;
+        setTimeout(() => okFn({rows:(rows || []).length - 1, sheet:"行事取り込み",
+                               stash:"行事取り込み 前の 2026-09-10"}), 0);
+      },
       apiWriteBase(y, c, v, bank){ call("apiWriteBase", [y, c, v, bank]); setTimeout(() => okFn(true), 0); },
       apiWriteBaseAll(y, table){
         call("apiWriteBaseAll", [y, table]);
@@ -1227,6 +1325,161 @@ ok("まだ送っていないコマがあるときは、何も捨てない", awai
      delete W["2000-01-03"];
      return n === 0 && kept;
    }) === true);
+
+console.log("\n■ たんぽぽの出す先は、画面から足す・消す・変える");
+await p.evaluate(() => {
+  for(const d of document.querySelectorAll("dialog")) if(d.open) d.close();
+});
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".master[data-go='tanpopo']").click();
+await p.waitForTimeout(600);
+ok("出す先が、たんぽぽの面に出る", await p.locator("#tpTgt").isVisible() === true);
+ok("版を上げただけの学校は、設定の1本がそのまま出す先になる",
+   (await p.locator("#tpTgt").innerText()).indexOf("たんぽぽ時間割") >= 0,
+   await p.locator("#tpTgt").innerText());
+
+await p.locator("#tpTgtEdit").click(); await p.waitForTimeout(200);
+ok("直しているあいだは出せない（どこへ出るか決まっていない）",
+   await p.locator("#tpGo").isDisabled() === true);
+await p.locator("#tpTgtAdd").click(); await p.waitForTimeout(200);
+ok("足すと行が増える", await p.locator(".tpturl").count() === 2,
+   await p.locator(".tpturl").count());
+/* URL が空のまま入れさせない。**出すときに初めて失敗させない** */
+await p.locator("#tpTgtSave").click(); await p.waitForTimeout(200);
+ok("URLが空の行があれば、入れさせない",
+   (await p.locator("#tpTgtWhy").innerText()).indexOf("URLが空") >= 0,
+   await p.locator("#tpTgtWhy").innerText());
+await p.locator(".tpturl").nth(1).fill("https://docs.google.com/spreadsheets/d/TPOK9999999999999999999/edit");
+await p.locator(".tptname").nth(1).fill("ひまわり時間割");
+await p.locator(".tpttest").nth(1).click(); await p.waitForTimeout(200);
+ok("貼った時点で、開けるか試せる",
+   (await p.locator("#tpTgtWhy").innerText()).indexOf("開けました") >= 0,
+   await p.locator("#tpTgtWhy").innerText());
+await p.locator("#tpTgtSave").click(); await p.waitForTimeout(400);
+const tw = await lastCall("apiWriteTpTargets");
+ok("入れると、並びをまるごと送る（足す・消すを別々の口にしない）",
+   !!tw && tw.args[0].length === 2, tw && tw.args[0]);
+ok("入れたあとは、また出せる", await p.locator("#tpGo").isDisabled() === false);
+
+/* 既定を変えると、出す先が変わる */
+await p.locator("#tpTgtSel").selectOption("1"); await p.waitForTimeout(400);
+ok("選んだものが、出す先になる",
+   (await p.locator("#tpCount").innerText()).indexOf("ひまわり") >= 0,
+   await p.locator("#tpCount").innerText());
+/* 消す。**向こうのファイルには手を出さない** */
+p.once("dialog", d => d.accept());
+await p.locator("#tpTgtEdit").click(); await p.waitForTimeout(200);
+await p.locator(".tptdel").nth(1).click(); await p.waitForTimeout(300);
+ok("消すと、一覧から消える", await p.locator(".tpturl").count() === 1,
+   await p.locator(".tpturl").count());
+await p.locator("#tpTgtSave").click(); await p.waitForTimeout(400);
+ok("出す先を消しても、向こうのファイルは消さない（一覧から外すだけ）",
+   (await calls()).indexOf("apiDeleteTpFile") < 0);
+
+console.log("\n■ 新しい年度の準備は、順に1つずつ");
+await p.evaluate(() => {
+  window.__nyTicks = {}; window.__nyPlan = false; window.__nyEvents = false;
+  for(const d of document.querySelectorAll("dialog")) if(d.open) d.close();
+  pollNewYear();
+});
+await p.waitForTimeout(400);
+ok("未了のあいだは、左メニューに出る",
+   await p.locator("#navNewYear").isVisible() === true);
+ok("色だけに頼らない（「未了」の字を添える）",
+   (await p.locator("#navNewYear").innerText()).indexOf("未了") >= 0,
+   await p.locator("#navNewYear").innerText());
+await p.locator("#navNewYear").click(); await p.waitForTimeout(500);
+ok("押すと、準備の画面が開く", await p.locator("#nyDlg").evaluate(e => e.open) === true);
+ok("つぎにやることを1つだけ大きく出す（迷わせない）",
+   await p.locator(".nynext").count() === 1, await p.locator(".nynext").count());
+ok("そのやることに、なぜ要るかが添えてある",
+   (await p.locator(".nynwhy").innerText()).length > 5,
+   await p.locator(".nynwhy").innerText());
+ok("元に戻せるかを、必ず出す", await p.locator(".nynundo").count() === 1);
+ok("戻せない手順には ⚠ を付ける（表の中）",
+   await p.locator("table.ny .nyno").count() === 1,
+   await p.locator("table.ny .nyno").count());
+ok("戻せる手順には ◯ を付ける", await p.locator("table.ny .nyyes").count() > 1);
+ok("いまやる行に「いまここ」を出す", await p.locator("table.ny .nynow").count() === 1);
+ok("まだ順番でない段は、順番でないと言う",
+   await p.locator("table.ny tr.later").count() > 0,
+   await p.locator("table.ny tr.later").count());
+ok("まだ順番でない段のボタンは押せない",
+   await p.locator("table.ny tr.later .nygo").first().isDisabled() === true);
+ok("機械が判定する手順は、チェックボックスを出さない",
+   await p.locator("table.ny tr").filter({hasText:"基本時間割"}).locator(".nytick").count() === 0);
+
+/* 人しか判定できない手順を、押して記録する */
+await p.locator(".nyntick").click(); await p.waitForTimeout(500);
+const tk = await lastCall("apiTickYearSetup");
+ok("押すと、誰がいつ押したかをサーバへ記録する",
+   !!tk && tk.args[1] === "arc.copy" && tk.args[2] === true, tk && tk.args);
+ok("押すと、つぎにやることが次の手順へ進む",
+   (await p.locator(".nynttl").innerText()).indexOf("複製") < 0,
+   await p.locator(".nynttl").innerText());
+
+/* 週案シートを作る。**これまではエディタからしか走らせられなかった。**
+   ①②③が済むまで④は順番でないので、そこまで進めた形にしてから押す */
+await p.evaluate(() => {
+  window.__nyTicks = {"arc.copy":true, "specials":true};
+  window.__nyEvents = true;
+  loadNewYear();
+});
+await p.waitForTimeout(400);
+ok("前の段が済むと、次の段のボタンが押せるようになる",
+   await p.locator("table.ny .nygo").filter({hasText:"週案シートを作る"}).isDisabled() === false);
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator("table.ny .nygo").filter({hasText:"週案シートを作る"}).click();
+await p.waitForTimeout(500);
+ok("週案シートを、画面から作れる",
+   (await calls()).indexOf("apiSetupPlanSheets") >= 0, await calls());
+
+/* ぜんぶ済めば、左メニューから消える */
+await p.evaluate(() => {
+  window.__nyTicks = {"arc.copy":true, "specials":true};
+  window.__nyPlan = true; window.__nyEvents = true;
+  loadNewYear();
+});
+await p.waitForTimeout(400);
+ok("ぜんぶ済むと、左メニューの知らせが消える",
+   await p.locator("#navNewYear").isHidden() === true);
+ok("済んだことを言う",
+   (await p.locator("#nyStat").innerText()).indexOf("ぜんぶできています") >= 0,
+   await p.locator("#nyStat").innerText());
+
+console.log("\n■ A週の起点と年間行事は、シートを開かずに直せる");
+await p.evaluate(() => { for(const d of document.querySelectorAll("dialog")) if(d.open) d.close(); });
+await p.evaluate(() => openAbDlg());
+await p.waitForTimeout(200);
+/* **月曜しか受け取らない。** 火曜を入れると以後の週が半週ずれる */
+await p.locator("#abDate").fill("2026-09-08");
+await p.locator("#abSave").click(); await p.waitForTimeout(200);
+ok("月曜でない日は、押しても入らない",
+   (await p.locator("#abWhy").innerText()).indexOf("月曜") >= 0,
+   await p.locator("#abWhy").innerText());
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator("#abDate").fill("2026-09-07");
+await p.locator("#abSave").click(); await p.waitForTimeout(500);
+ok("月曜なら、設定シートのその1行だけを書く",
+   (await calls()).indexOf("apiWriteVariantOrigin") >= 0, await calls());
+
+await p.evaluate(() => { for(const d of document.querySelectorAll("dialog")) if(d.open) d.close(); });
+await p.evaluate(() => openEventsDlg());
+await p.waitForTimeout(200);
+await p.locator("#evPaste").fill("ねんげつ\tなにか\nx\ty");
+await p.locator("#evRead").click(); await p.waitForTimeout(200);
+ok("日付の列が無ければ、貼り替えさせない",
+   (await p.locator("#evWarn").innerText()).indexOf("日付") >= 0
+   && await p.locator("#evGo").isDisabled() === true,
+   await p.locator("#evWarn").innerText());
+await p.locator("#evPaste").fill(
+  "日付\t週\t行事計画（児童）\t行事計画（職員）\n2027-04-08\tA\t始業式\t職員会議");
+await p.locator("#evRead").click(); await p.waitForTimeout(200);
+ok("読むと、貼る前に中身が見える", await p.locator("#evGrid table tr").count() === 2,
+   await p.locator("#evGrid table tr").count());
+ok("見てから押せる（読まずには押せない）", await p.locator("#evGo").isDisabled() === false);
+ok("貼り替える前に、元へ戻せることを画面に出す",
+   (await p.locator("#evDlg").innerText()).indexOf("元に戻せます") >= 0);
 
 console.log("\n■ 書いているあいだは、全面にかぶせて次の操作を受け付けない");
 /* 残りを片づけ、5-1 を開いた素の状態から始める。

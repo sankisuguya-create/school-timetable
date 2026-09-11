@@ -285,10 +285,10 @@ const Sheets_asClass = v => ev("Sheets.asClass")(v);
 /* ── シートを作る ─────────────────────────────── */
 console.log("■ シートを作る");
 let made = ev("Sheets.setup()");
-ok("9枚＋取り込み用の2枚ができる", made.made.length === 11, made.made);
+ok("11枚＋取り込み用の2枚ができる", made.made.length === 13, made.made);
 made = ev("Sheets.setup()");
 ok("2回目は何も作らない（何度走らせても同じ）",
-   made.made.length === 0 && made.kept.length === 9, made);
+   made.made.length === 0 && made.kept.length === 11, made);
 ok("列は名前で引ける", Object.keys(ev('Sheets.head("週案").at')).length >= 11);
 
 console.log("\n■ 既定値の読み取り");
@@ -1398,6 +1398,217 @@ ok("1組だけ入れても、残りが空なら ng のまま",
 ok("空のクラス名を並べる",
    chk.items.find(x => x.what === "基本時間割").detail.indexOf("1-2") >= 0,
    chk.items.find(x => x.what === "基本時間割").detail);
+
+console.log("\n■ たんぽぽの出す先は、1本とはかぎらない");
+(function(){
+  const at = ev('Sheets.head("設定").at');
+  const put = v => { for(const row of SHEETS["設定"])
+    if(String(row[at["キー"]]) === "たんぽぽファイルID") row[at["値"]] = v; };
+  const url = "https://docs.google.com/spreadsheets/d/" + TPID + "/edit";
+
+  /* 出す先シートが空のあいだは、今までどおり設定の1本を見る。
+     **版を上げただけの学校が、貼った瞬間に出せなくなってはいけない** */
+  put(url);
+  let list = ev("Store.tpTargets()");
+  ok("出す先シートが空なら、設定の たんぽぽファイルID を1本として返す",
+     list.length === 1 && list[0].def === true && list[0].legacy === true, list);
+
+  /* 足す */
+  ev("Store.writeTargets(" + JSON.stringify(
+      [{name:"たんぽぽ時間割", url:url, def:true},
+       {name:"ひまわり時間割", url:url, def:false}]) + ")");
+  list = ev("Store.tpTargets()");
+  ok("足すと、そちらが正本になる（設定はもう見ない）",
+     list.length === 2 && !list[0].legacy, list);
+  ok("既定はちょうど1本", list.filter(x => x.def).length === 1, list);
+
+  /* 変える */
+  ev("Store.writeTargets(" + JSON.stringify(
+      [{name:"たんぽぽ時間割（新）", url:url, def:false},
+       {name:"ひまわり時間割", url:url, def:true}]) + ")");
+  list = ev("Store.tpTargets()");
+  ok("名前を変えられる", list[0].name === "たんぽぽ時間割（新）", list);
+  ok("既定を付け替えられる", list[1].def === true && list[0].def === false, list);
+
+  /* 消す。**丸ごと書き替えるので、消し残りが出ない** */
+  ev("Store.writeTargets(" + JSON.stringify([{name:"ひまわり時間割", url:url, def:true}]) + ")");
+  list = ev("Store.tpTargets()");
+  ok("消すと消える（丸ごと書き替えるので消し残りが出ない）", list.length === 1, list);
+
+  /* 既定が1つも無い形を渡されても、どれに出るか分からないままにしない */
+  ev("Store.writeTargets(" + JSON.stringify(
+      [{name:"あ", url:url, def:false}, {name:"い", url:url, def:false}]) + ")");
+  list = ev("Store.tpTargets()");
+  ok("既定が無ければ、いちばん上を既定にする",
+     list.filter(x => x.def).length === 1 && list[0].def === true, list);
+
+  /* 読めない URL は、貼った時点で弾く。**出すときに初めて失敗させない** */
+  let why = "";
+  try{ ev("Store.writeTargets(" + JSON.stringify([{name:"だめ", url:"これはURLではない"}]) + ")"); }
+  catch(e){ why = String(e && e.message); }
+  ok("読めない URL は、貼った時点で弾く",
+     why.indexOf("読めません") >= 0 && why.indexOf("設定") < 0, why);
+
+  const tst = ev('Store.testTarget("' + url + '")');
+  ok("開けるか、その場で試せる", tst.ok === true && !!tst.file, tst);
+  ok("開けないファイルは、開けないと言う",
+     ev('Store.testTarget("https://docs.google.com/spreadsheets/d/'
+        + "1ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ" + '/edit")').ok === false);
+
+  /* 出す先を名指しして出せる */
+  ev("Store.writeTargets(" + JSON.stringify([{name:"たんぽぽ時間割", url:url, def:true}]) + ")");
+  let r = ev("Store.exportWeek(2026, '2026-11-16', " + JSON.stringify(titles)
+      + ", " + JSON.stringify(cols2) + ", " + JSON.stringify(SLOT6) + ", '', '" + url + "')");
+  ok("出す先を名指しして出せる", r.sheet === "11月3週", r);
+  put(url);
+})();
+
+console.log("\n■ 新年度の設定は、手順として出す");
+(function(){
+  const y = 2026;
+  let s = ev("Store.yearSetup(" + y + ")");
+  ok("手順が順に並ぶ（①退避 → ②かたち → ③外 → ④担任）",
+     s.items[0].group.indexOf("①") === 0
+     && s.items[s.items.length - 1].group.indexOf("④") === 0,
+     s.items.map(x => x.group + "/" + x.key));
+  ok("退避は4段に開く（複製が人の手だと分かる）",
+     s.items.filter(x => x.group.indexOf("①") === 0).length === 4,
+     s.items.filter(x => x.group.indexOf("①") === 0).map(x => x.label));
+  ok("ドライブでの複製は、人が押して記録する手順",
+     (s.items.find(x => x.key === "arc.copy") || {}).hand === true);
+  ok("機械が判定できる手順は、人に押させない",
+     (s.items.find(x => x.key === "base") || {}).hand === false);
+  ok("いらない手順は並べない（担任のメール・教務必携・児童アカウント）",
+     !s.items.some(x => /担任のメール|教務必携|児童アカウント/.test(x.label)),
+     s.items.map(x => x.label));
+  ok("押す先を持つ（画面を開いて直せる）",
+     s.items.every(x => !!x.act), s.items.filter(x => !x.act));
+
+  /* 判定は checkYear と同じものを見ている。**二重に書かない** */
+  const ck = ev("Store.checkYear(" + y + ")");
+  ok("基本時間割の判定は、検査と同じ結果になる",
+     (s.items.find(x => x.key === "base") || {}).level
+       === (ck.items.find(x => x.what === "基本時間割") || {}).level);
+
+  /* 人が押した記録は、シートに残って誰が押したかが見える */
+  s = ev('Store.tickYearSetup(' + y + ', "arc.copy", true)');
+  const cp = s.items.find(x => x.key === "arc.copy");
+  ok("押すと、済になる", cp.level === "ok", cp);
+  ok("誰がいつ押したかが残る", cp.by === EMAIL && !!cp.at, cp);
+  s = ev('Store.tickYearSetup(' + y + ', "arc.copy", false)');
+  ok("外すと、外れる（記録も消える）",
+     s.items.find(x => x.key === "arc.copy").by === "",
+     s.items.find(x => x.key === "arc.copy"));
+  let why = "";
+  try{ ev('Store.tickYearSetup(' + y + ', "base", true)'); }
+  catch(e){ why = String(e && e.message); }
+  ok("機械が判定する手順は、人が押して済にできない", why.indexOf("記録できない") >= 0, why);
+
+  ok("未了が1件でもあれば done は立たない",
+     ev("Store.yearSetup(" + y + ")").done === (ev("Store.yearSetup(" + y + ")").ng === 0));
+
+  /* **新任教諭でも、回復不能なミスをせずに済むこと。**
+     年度初めにこれをやるのは、たいてい今年その学校へ来た人。
+     「何を」だけ出して「なぜ・戻せるか」を出さないと、押してよいのか
+     分からないまま止まるか、分からないまま押す。 */
+  s = ev("Store.yearSetup(" + y + ")");
+  ok("どの手順にも、なぜ要るかが書いてある",
+     s.items.every(x => x.why && x.why.length > 10),
+     s.items.filter(x => !x.why).map(x => x.key));
+  ok("どの手順にも、元に戻せるかが書いてある",
+     s.items.every(x => x.undo && x.undo.length > 5),
+     s.items.filter(x => !x.undo).map(x => x.key));
+  ok("かかる目安が入っている", s.items.every(x => x.mins > 0),
+     s.items.filter(x => !x.mins).map(x => x.key));
+  /* 戻せないのは1つだけ。**そこだけを名指しする** */
+  const noundo = s.items.filter(x => x.undo.indexOf("元に戻せません") >= 0);
+  ok("元に戻せない手順は、前の年度の行を消す1つだけ",
+     noundo.length === 1 && noundo[0].key === "arc.purge",
+     noundo.map(x => x.key));
+  ok("戻せない手順には、消えるものと残るものが書いてある",
+     noundo[0].undo.indexOf("複製にはそのまま残っています") >= 0, noundo[0].undo);
+
+  /* **順番を飛ばせないようにする。** ①が済む前に②へ行くと、
+     消す前の年度の上に新しい編成を重ねることになる */
+  ok("次の一手を1つだけ返す（迷わせない）", typeof s.next === "string", s.next);
+  ok("次の一手は、上から見て最初の「まだ」",
+     s.next === (s.items.filter(x => x.level === "ng")[0] || {}).key, s.next);
+  const g1 = s.items.filter(x => x.group.indexOf("①") === 0);
+  if(g1.some(x => x.level === "ng")){
+    ok("①に「まだ」が残っていれば、②以降は順番でないと言う",
+       s.items.filter(x => x.group.indexOf("②") === 0).every(x => x.wait === g1[0].group),
+       s.items.filter(x => x.group.indexOf("②") === 0).map(x => x.wait));
+    ok("いま順番の段には、順番でないとは言わない",
+       g1.every(x => x.wait === ""), g1.map(x => x.wait));
+  }
+})();
+
+console.log("\n■ A週の起点は、月曜しか受け取らない");
+(function(){
+  ok("月曜なら入る", ev('Store.writeVariantOrigin("2026-09-07")').saved === "2026-09-07");
+  ok("設定シートに書かれる",
+     ev('Store.readConfig()["A週の起点の月曜"]') === "2026-09-07");
+  const bad = d => { try{ ev('Store.writeVariantOrigin("' + d + '")'); return ""; }
+                     catch(e){ return String(e && e.message); } };
+  ok("火曜は受け取らない（以後の週が半週ずれる）",
+     bad("2026-09-08").indexOf("月曜") >= 0, bad("2026-09-08"));
+  ok("形が違えば受け取らない", bad("2026/9/7").indexOf("形") >= 0, bad("2026/9/7"));
+})();
+
+console.log("\n■ 年間行事計画表は、画面から貼り替える");
+(function(){
+  const head = ["日付", "週", "行事計画（児童）", "行事計画（職員）"];
+  let r = ev("Store.writeEvents(" + JSON.stringify([head,
+      ["2026-09-07", "A", "始業式", "職員会議"],
+      ["2026-09-08", "A", "身体測定", ""]]) + ")");
+  ok("貼ると入る", r.rows === 2, r);
+  ok("入れたものが読み直せる",
+     ev("Store.readEvents(2026).events['2026-09-07'].c") === "始業式");
+  /* **丸ごと入れ替える。** 行を足し引きすると、消したはずの行事が残る */
+  r = ev("Store.writeEvents(" + JSON.stringify([head,
+      ["2026-09-07", "A", "始業式（変更）", ""]]) + ")");
+  ok("貼り替えると、前のぶんは残らない",
+     ev("Store.readEvents(2026).events['2026-09-08']") === undefined
+     && ev("Store.readEvents(2026).events['2026-09-07'].c") === "始業式（変更）");
+  /* **間違った表を貼られても、前の中身は戻せる。**
+     年度初めにこれをやるのは、たいてい今年から入った人。
+     消えて戻らないものを、この画面のどこにも作らない */
+  ok("貼り替える前に、いまの中身を丸ごと別シートへ残す", !!r.kept, r);
+  ok("残した先の名前を返す（どこを見れば戻せるか）",
+     r.kept.indexOf("行事取り込み（前の") === 0, r.kept);
+  ok("残したシートに、前の中身がそのまま入っている",
+     SHEETS[r.kept].some(row => String(row[2]).indexOf("始業式") >= 0)
+     && SHEETS[r.kept].some(row => String(row[0]).indexOf("2026-09-08") >= 0),
+     SHEETS[r.kept]);
+  /* 2回貼り替えても、前の退避を上書きしない */
+  const r2 = ev("Store.writeEvents(" + JSON.stringify([head,
+      ["2026-09-07", "A", "三度目", ""]]) + ")");
+  ok("続けて貼り替えても、前の退避を潰さない",
+     r2.kept !== r.kept && !!SHEETS[r.kept], [r.kept, r2.kept]);
+  let why = "";
+  try{ ev("Store.writeEvents(" + JSON.stringify([["ねんげつ", "なにか"], ["x", "y"]]) + ")"); }
+  catch(e){ why = String(e && e.message); }
+  ok("日付の列が無ければ受け取らない", why.indexOf("日付") >= 0, why);
+})();
+
+console.log("\n■ A週B週が、年間行事と合っているかを見る");
+(function(){
+  const head = ["日付", "週", "行事計画（児童）", "行事計画（職員）"];
+  ev('Store.writeVariantOrigin("2026-09-07")');
+  ev("Store.writeEvents(" + JSON.stringify([head,
+      ["2026-09-07", "A", "あ", ""], ["2026-09-14", "B", "い", ""],
+      ["2026-09-21", "A", "う", ""]]) + ")");
+  let s = ev("Store.yearSetup(2026)");
+  ok("合っていれば ok", s.items.find(x => x.key === "variant").level === "ok",
+     s.items.find(x => x.key === "variant"));
+  /* 起点を1週動かすと、行事表と全部食い違う */
+  ev('Store.writeVariantOrigin("2026-09-14")');
+  s = ev("Store.yearSetup(2026)");
+  const v = s.items.find(x => x.key === "variant");
+  ok("1週ずれていれば名指しする", v.level === "ng", v);
+  ok("どの日で食い違うかを言う", v.detail.indexOf("2026-09-") >= 0, v.detail);
+  ev('Store.writeVariantOrigin("2026-09-07")');
+})();
 
 console.log("\n■ ロック");
 ok("書き込みのあとロックは残らない", locks.held === 0, locks.held);
