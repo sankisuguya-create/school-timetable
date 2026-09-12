@@ -1463,13 +1463,17 @@ await p.evaluate(() => { week().tpSub = {"1-1":{at:"x",by:"y"}}; save(); drawTan
 await p.locator("#tpLockBtn").click(); await p.waitForTimeout(300);
 ok("ロック中は、出すボタンが押せない", await p.locator("#tpGo").isDisabled() === true);
 ok("押せない理由をボタンの隣に出す",
-   (await p.locator("#tpGoWhy").innerText()) === "ロック中です");
+   (await p.locator("#tpGoWhy").innerText()) === "ロックを外してください");
 ok("押せない間は、提出済みでも緑にしない",
    await p.evaluate(() => $("tpGo").classList.contains("ready")) === false);
 ok("押せないボタンは見た目でも区別できる", await p.evaluate(() => {
      const s = getComputedStyle($("tpGo"));
      return s.cursor === "not-allowed" && s.backgroundColor !== "rgb(47, 110, 78)";
    }) === true);
+/* 空の面をロックした場合も、実行できない「組へ入れる」より先にロック解除を案内する */
+await p.evaluate(() => { Y().tanpopo = {}; save(); drawTanpopoView(); });
+ok("押せない理由が重なれば、まず可能にする操作を案内する",
+   (await p.locator("#tpGoWhy").innerText()) === "ロックを外してください");
 await p.locator(".tpchip").first().click(); await p.waitForTimeout(300);
 ok("ロック中は、組に入れられない",
    await p.evaluate(() => tpCount("1-1")) === 1,
