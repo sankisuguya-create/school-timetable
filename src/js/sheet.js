@@ -39,6 +39,9 @@ function buildSheet(into, mon){
 }
 function buildSheet_(sh){
   sh.textContent = "";
+  const cm = view.kind === "class" ? ((Y().chipModes || {})[view.cls] || "screen") : "off";
+  sh.classList.toggle("chips-screen", cm !== "off");
+  sh.classList.toggle("chips-output", cm === "output");
   sh.style.gridTemplateRows = "auto 1fr auto";      /* 見出し／本体／週メモ */
 
   const put = (node, col, row) => {
@@ -260,6 +263,8 @@ function paintSheet(one, root){
     if(n && n !== typing && n.innerHTML !== wantN) n.innerHTML = wantN;
 
     e.dataset.layer = c.layer;
+    e.dataset.subject = c.subject || "";
+    e.classList.toggle("has-sub", !!c.subject);
     e.classList.toggle("from-base", c.layer === "base");
     e.classList.toggle("upper", RANK[c.layer] > RANK[mine] && !c.clash);
     e.classList.toggle("clash", !!c.clash);

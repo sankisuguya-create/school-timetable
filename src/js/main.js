@@ -345,6 +345,8 @@ function wire(){
       if(a === "newyear") return openNewYearDlg();
       if(a === "month")   return openMonth();
       if(a === "print")   return window.print();
+      if(a === "settings")return openSettings();
+      if(a === "outweek") return openWeekOutput();
     });
   for(const b of document.querySelectorAll("[data-close]"))
     b.addEventListener("click", () => $(b.dataset.close).close());
@@ -375,6 +377,8 @@ function wire(){
   on("stPaper","change", e => { db.settings.paper = e.target.value; save(); applyPaper(); });
   on("stMg","input",  e => { db.settings.margin = +e.target.value; save(); applyPaper(); });
   on("stK","input",   e => { db.settings.k = +e.target.value; save(); applyPaper(); });
+  on("stTitle","input", e => { db.settings.titlePt=+e.target.value; save(); applyPaper(); buildSheet(); });
+  on("stNote","input", e => { db.settings.notePt=+e.target.value; save(); applyPaper(); buildSheet(); });
   on("fitChk","change", e => { db.settings.fit = e.target.checked; save(); autoFit(); });
   on("vz","input", e => {
     db.settings.fit = false; db.settings.vz = +e.target.value; save(); applyZoom();
@@ -419,6 +423,11 @@ function wire(){
   on("mNext","click",  () => { mMonday = addDays(mMonday,  7 * MONTH_WEEKS); drawMonth(); });
   on("mClose","click", () => showMonth(false));
   on("mPrint","click", printMonth);
+  on("mImage","click", async () => {
+    try{ await nodePng($("mPaper"), outputName("4週_B4")+".png"); toast("4週の画像を保存した"); }
+    catch(e){ toast("画像を作れなかった（"+escText(e.message||e)+"）"); }
+  });
+  on("mSheet","click", exportMonthSheet);
   addEventListener("resize", () => { if(!$("monthView").hidden) fitMonth(); });
   /* 新年度の設定。**ふだんは管理・システムの中だけ。**
      未了のあいだだけ、左メニューにも出る（結線は dialogs.js） */
@@ -427,6 +436,31 @@ function wire(){
   on("abSave","click", saveAb);
   on("evRead","click", evRead);
   on("evGo","click", evGo);
+  on("setBase","click", () => { $("settingsDlg").close(); openBaseDlg(); });
+  on("setRoster","click", () => { $("settingsDlg").close(); openRosterDlg(); });
+  on("setTanpopo","click", () => { $("settingsDlg").close(); openView({kind:"tanpopo"}); });
+  on("setPaper","click", () => { $("settingsDlg").close(); applyPaper(); $("setDlg").showModal(); });
+  on("setNewYear","click", () => { $("settingsDlg").close(); openNewYearDlg(); });
+  on("outPrint","click", () => { $("outDlg").close(); window.print(); });
+  on("outImage","click", async () => {
+    try{ await nodePng($("sheet"), outputName("B5")+".png"); $("outStat").textContent="画像を保存しました。Google Chatへ添付できます。"; }
+    catch(e){ $("outStat").textContent="画像を作れませんでした（"+(e.message||e)+"）"; }
+  });
+  on("outSheet","click", exportWeekSheet);
+  on("chipOpen","click", () => {
+    if(view.kind!=="class") return;
+    $("chipClass").textContent=view.cls;
+    const mode=(Y().chipModes||{})[view.cls]||"screen";
+    const radio=document.querySelector("input[name=chipMode][value='"+mode+"']"); if(radio) radio.checked=true;
+    $("chipDlg").showModal();
+  });
+  on("chipSave","click", () => {
+    if(view.kind!=="class") return;
+    const radio=document.querySelector("input[name=chipMode]:checked");
+    (Y().chipModes||(Y().chipModes={}))[view.cls]=radio?radio.value:"screen";
+    save(); $("chipDlg").close(); buildSheet(); drawPalette();
+    toast(view.cls+" の教科チップを変更した");
+  });
 
   /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */
   on("dayDlg","close", () => { dayPick = 0; });

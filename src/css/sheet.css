@@ -122,6 +122,22 @@
   align-items:center;justify-content:center;text-align:center;
   font-weight:600;line-height:1.15;
   font-size:calc(var(--fs-t)*var(--k)*var(--fit,1))}
+/* 教科チップはタイトルの字を消さず、形と淡い色を足す。紙へ出すかはクラス設定。 */
+.sheet.chips-screen .cell.has-sub .t{width:max-content;max-width:94%;height:auto;min-height:60%;
+  align-self:center;margin:auto;padding-left:calc(1.8mm*var(--k));padding-right:calc(1.8mm*var(--k));
+  border:1px solid var(--rule);border-radius:99px}
+.sheet.chips-screen .cell[data-subject=kokugo] .t{background:var(--sub-kokugo)}
+.sheet.chips-screen .cell[data-subject=shakai] .t{background:var(--sub-shakai)}
+.sheet.chips-screen .cell[data-subject=sansu] .t{background:var(--sub-sansu)}
+.sheet.chips-screen .cell[data-subject=rika] .t{background:var(--sub-rika)}
+.sheet.chips-screen .cell[data-subject=seikatsu] .t,.sheet.chips-screen .cell[data-subject=sogo] .t{background:var(--sub-seikatsu)}
+.sheet.chips-screen .cell[data-subject=ongaku] .t{background:var(--sub-ongaku)}
+.sheet.chips-screen .cell[data-subject=zuko] .t{background:var(--sub-zuko)}
+.sheet.chips-screen .cell[data-subject=katei] .t{background:var(--sub-katei)}
+.sheet.chips-screen .cell[data-subject=taiiku] .t{background:var(--sub-taiiku)}
+.sheet.chips-screen .cell[data-subject=doutoku] .t{background:var(--sub-doutoku)}
+.sheet.chips-screen .cell[data-subject=gaikoku] .t{background:var(--sub-gaikoku)}
+.sheet.chips-screen .cell[data-subject=gakkatsu] .t{background:var(--sub-gakkatsu)}
 .cell.brk .t{height:100%;font-weight:400;
   font-size:calc(var(--fs-b)*var(--k)*var(--fit,1))}
 .cell .n{flex:1;font-size:calc(var(--fs-n)*var(--k));color:var(--ink-sub);
@@ -201,6 +217,9 @@
   .hd.pick{background:transparent!important;cursor:default}
   .hd .pk{display:none!important}          /* 押せる印は画面だけのもの */
   .cell .t:focus,.cell .n:focus{background:transparent;box-shadow:none}
+  .sheet.chips-screen:not(.chips-output) .cell.has-sub .t{width:auto;max-width:none;height:calc(var(--h-title)*var(--k));
+    min-height:0;margin:0;padding-left:calc(1.4mm*var(--k));padding-right:calc(1.4mm*var(--k));
+    border:0;border-radius:0;background:transparent}
   /* **紙の外の入れ物に、高さを持たせない。** html,body が height:100% なので、
      そのままだと本文の高さが画面の高さになり、紙が1枚に収まっていても
      2ページ目が出る（白紙が必ず1枚ついてくる） */
