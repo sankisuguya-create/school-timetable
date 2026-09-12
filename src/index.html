@@ -173,7 +173,9 @@
         <h2>たんぽぽ
           <!-- 出すボタンは、見出しの右。**この面でいちばん大きく動く操作。**
                下に置いていたころは、組を並べ終えてから目で探しに行っていた -->
-          <button class="btn go tpgo" id="tpGo">たんぽぽ時間割へ出す</button>
+          <button class="btn go tpgo" id="tpGo" aria-describedby="tpGoWhy">たんぽぽ時間割へ出す</button>
+          <!-- 押せない理由を hover の title だけに隠さない。初めての人にもその場で示す -->
+          <span class="tpwhy" id="tpGoWhy" aria-live="polite" hidden></span>
           <span class="tpweek" id="tpWeek"></span>
           <span class="grow"></span>
           <!-- ソフトロック。**この面からの書き込みを止める。**

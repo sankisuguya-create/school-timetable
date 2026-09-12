@@ -1406,6 +1406,11 @@ await p.waitForTimeout(300);
 ok("「この面ですること」の折りたたみは置かない",
    await p.locator(".tphead details").count() === 0);
 ok("説明は ？ から読める", await p.locator(".tphead .helpq").count() === 1);
+ok("？ とロックは重ならない", await p.evaluate(() => {
+     const a = document.querySelector(".tphead .helpq").getBoundingClientRect();
+     const b = document.getElementById("tpLockBtn").getBoundingClientRect();
+     return a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top;
+   }) === true);
 /* **出す週を、ボタンのとなりにもう一度出す。** 左メニューの週とは離れている */
 ok("出す週を、ボタンのとなりに出す",
    /\d+\/\d+\s*→\s*\d+\/\d+/.test(await p.locator("#tpWeek").innerText()),
@@ -1454,8 +1459,17 @@ ok("交流級は畳んである", await p.locator(".tpfromb").evaluate(e => e.hi
 await p.locator("#tpFromQ").click(); await p.waitForTimeout(300);
 ok("押すと開く", await p.locator(".tpfromb").evaluate(e => e.hidden) === false
    && await p.locator(".tpchip").count() > 0);
+await p.evaluate(() => { week().tpSub = {"1-1":{at:"x",by:"y"}}; save(); drawTanpopoView(); });
 await p.locator("#tpLockBtn").click(); await p.waitForTimeout(300);
 ok("ロック中は、出すボタンが押せない", await p.locator("#tpGo").isDisabled() === true);
+ok("押せない理由をボタンの隣に出す",
+   (await p.locator("#tpGoWhy").innerText()) === "ロック中です");
+ok("押せない間は、提出済みでも緑にしない",
+   await p.evaluate(() => $("tpGo").classList.contains("ready")) === false);
+ok("押せないボタンは見た目でも区別できる", await p.evaluate(() => {
+     const s = getComputedStyle($("tpGo"));
+     return s.cursor === "not-allowed" && s.backgroundColor !== "rgb(47, 110, 78)";
+   }) === true);
 await p.locator(".tpchip").first().click(); await p.waitForTimeout(300);
 ok("ロック中は、組に入れられない",
    await p.evaluate(() => tpCount("1-1")) === 1,
