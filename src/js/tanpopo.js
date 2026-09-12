@@ -311,19 +311,27 @@ function drawTanpopoView(){
      **どこへ出るか分からないまま押させない。** */
   const tgt = tpTargetNow();
   const chosen = tpChosenHere();
-  $("tpGo").disabled = !tpTotal() || tpTgtEdit
-                    || (typeof isLocked === "function" && isLocked())
-                    || (Backend.isGas() && !tgt);
+  const lockedNow = typeof isLocked === "function" && isLocked();
+  const noTarget = Backend.isGas() && !tgt;
+  const why = !tpTotal() ? "先に交流級を組へ入れてください"
+            : tpTgtEdit ? "出す先の編集を終えてください"
+            : lockedNow ? "ロック中です"
+            : noTarget ? "出す先を設定してください" : "";
+  $("tpGo").disabled = !!why;
+  $("tpGoWhy").hidden = !why;
+  $("tpGoWhy").textContent = why;
   /* **全クラスが出していれば、出すボタンを緑にする。**
      ただし色だけに頼らない ── 緑と青は3型で ΔE 7.3（閾値18）と潰れるので、
      ✓ と字を必ず添える（色を外しても、出してよい週かが分かる）。 */
   const yet = chosen.filter(c => !tpSubmitted(c));
+  /* 緑は「提出済み」に加えて、いま実際に押せるときだけ。 */
   const allIn = chosen.length > 0 && !yet.length;
-  $("tpGo").classList.toggle("ready", allIn);
+  const ready = allIn && !why;
+  $("tpGo").classList.toggle("ready", ready);
   $("tpGo").textContent = allIn ? "✓ たんぽぽ時間割へ出す" : "たんぽぽ時間割へ出す";
-  $("tpGo").title = !chosen.length ? "先に交流級を組へ入れる"
+  $("tpGo").title = why || (!chosen.length ? "先に交流級を組へ入れる"
     : allIn ? "入れている " + chosen.length + " クラスは、ぜんぶ提出ずみ"
-            : "まだ " + yet.length + " クラスが提出していない（" + yet.join("・") + "）";
+            : "まだ " + yet.length + " クラスが提出していない（" + yet.join("・") + "）");
   /* **出す週を、ボタンのとなりにもう一度出す。** 左メニューの週とは離れていて、
      組を並べているうちに「どの週を出すのか」が目から外れる */
   $("tpWeek").innerHTML = "<b>" + md(monday) + " → " + md(addDays(monday, 4)) + "</b>"

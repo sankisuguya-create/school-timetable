@@ -19,6 +19,10 @@ const ok = (name, cond, got) => {
 const b = await chromium.launch(exe ? {executablePath: exe} : {});
 const ctx = await b.newContext({viewport:{width:1500, height:950}});
 const p = await ctx.newPage();
+/* 通常の検査中に初回案内を重ねない。案内そのものは末尾で明示的に開いて調べる。 */
+await p.addInitScript(() => {
+  try{ localStorage.setItem("school-timetable/tour-v1", "done"); }catch(_){}
+});
 const errs = [];
 p.on("pageerror", e => errs.push("pageerror: " + e.message));
 p.on("console", m => { if(m.type() === "error") errs.push("console: " + m.text()); });
@@ -1406,6 +1410,11 @@ await p.waitForTimeout(300);
 ok("「この面ですること」の折りたたみは置かない",
    await p.locator(".tphead details").count() === 0);
 ok("説明は ？ から読める", await p.locator(".tphead .helpq").count() === 1);
+ok("？ とロックは重ならない", await p.evaluate(() => {
+     const a = document.querySelector(".tphead .helpq").getBoundingClientRect();
+     const b = document.getElementById("tpLockBtn").getBoundingClientRect();
+     return a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top;
+   }) === true);
 /* **出す週を、ボタンのとなりにもう一度出す。** 左メニューの週とは離れている */
 ok("出す週を、ボタンのとなりに出す",
    /\d+\/\d+\s*→\s*\d+\/\d+/.test(await p.locator("#tpWeek").innerText()),
@@ -1454,8 +1463,17 @@ ok("交流級は畳んである", await p.locator(".tpfromb").evaluate(e => e.hi
 await p.locator("#tpFromQ").click(); await p.waitForTimeout(300);
 ok("押すと開く", await p.locator(".tpfromb").evaluate(e => e.hidden) === false
    && await p.locator(".tpchip").count() > 0);
+await p.evaluate(() => { week().tpSub = {"1-1":{at:"x",by:"y"}}; save(); drawTanpopoView(); });
 await p.locator("#tpLockBtn").click(); await p.waitForTimeout(300);
 ok("ロック中は、出すボタンが押せない", await p.locator("#tpGo").isDisabled() === true);
+ok("押せない理由をボタンの隣に出す",
+   (await p.locator("#tpGoWhy").innerText()) === "ロック中です");
+ok("押せない間は、提出済みでも緑にしない",
+   await p.evaluate(() => $("tpGo").classList.contains("ready")) === false);
+ok("押せないボタンは見た目でも区別できる", await p.evaluate(() => {
+     const s = getComputedStyle($("tpGo"));
+     return s.cursor === "not-allowed" && s.backgroundColor !== "rgb(47, 110, 78)";
+   }) === true);
 await p.locator(".tpchip").first().click(); await p.waitForTimeout(300);
 ok("ロック中は、組に入れられない",
    await p.evaluate(() => tpCount("1-1")) === 1,
@@ -1710,8 +1728,8 @@ ok("「？」を押しても、その項目そのものは開かない",
 ok("説明は、何が起きるかを字で書いてある",
    (await p.locator("#helpBody").innerText()).length > 40,
    (await p.locator("#helpBody").innerText()).length);
-ok("はじめての人がつまずくところを添える",
-   (await p.locator("#helpBody").innerText()).indexOf("はじめの人がつまずくところ") >= 0);
+ok("各説明に「つまずくところ」を置かない", await p.evaluate(() =>
+   Object.values(HELP).every(h => h.b.join("").indexOf("つまずくところ") < 0)) === true);
 await p.locator("#helpDlg .dlgx").click(); await p.waitForTimeout(250);
 ok("説明の窓は ✕ で閉じる",
    await p.locator("#helpDlg").evaluate(d => d.open) === false);
@@ -1797,6 +1815,35 @@ ok("手元では検査できないと言い、押せなくする",
    await p.locator("#ckStat").innerText());
 await p.locator("#adminDlg .dlgx").click();
 await p.waitForTimeout(200);
+
+console.log("\n■ 初めて開いた人への案内");
+await p.evaluate(() => {
+  localStorage.removeItem(TOUR_KEY);
+  tourStarted = false; tourAt = 0; tourPanelReady = false;
+  showGate(); startFirstTour(true);
+});
+await p.waitForTimeout(300);
+ok("初回は吹き出しの案内が開く", await p.locator("#tour").isVisible() === true);
+ok("説明は1〜2行ほどの短さ", await p.evaluate(() =>
+   TOUR_STEPS.every(s => s[2].length <= 45)) === true);
+ok("案内する場所を枠で示す", await p.evaluate(() => {
+     const r = $("tourFocus").getBoundingClientRect();
+     return r.width > 20 && r.height > 20;
+   }) === true);
+await p.locator("#tourBubble").click({position:{x:20,y:50}});
+await p.waitForTimeout(200);
+ok("吹き出しをクリックすると次へ進む",
+   await p.evaluate(() => tourAt) === 1, await p.evaluate(() => tourAt));
+await p.evaluate(() => { tourAt = 9; showTourStep(); });
+await p.locator("#tourNext").click();
+await p.waitForTimeout(500);
+ok("左メニューの次は1-1を開く",
+   await p.evaluate(() => view.kind === "class" && view.cls === "1-1") === true);
+ok("1-1の右メニューへ案内が続く",
+   (await p.locator("#tourTitle").innerText()) === "1年1組を開きました");
+await p.locator("#tourSkip").click();
+ok("説明を終えると、次回は開かない", await p.evaluate(() =>
+   localStorage.getItem(TOUR_KEY) === "done" && $("tour").hidden) === true);
 
 console.log("\n■ 手元だけで使っているときは、古い週を捨てない");
 ok("本番につないでいないときは間引かない", await p.evaluate(() => {

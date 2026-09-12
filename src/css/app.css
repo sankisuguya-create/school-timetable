@@ -209,18 +209,23 @@ button,select,input,textarea{font:inherit;color:inherit}
 .tpfromq:hover{background:var(--hover);border-color:var(--ink-link);color:var(--ink-link)}
 .tpfromq span{color:var(--tx-sub);font-weight:400}
 .tpfromb{margin-top:10px;display:flex;flex-direction:column;gap:8px}
-/* 見出しの行。出すボタン・出す週・ロックを、見出しの右へ並べる */
-.tphead{position:relative}
-.tphead h2{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+/* 見出しの行。出すボタン・出す週・ロック・説明を、重ならないflexの中で並べる */
+.tphead{display:flex;align-items:flex-start;gap:10px}
+.tphead h2{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1;min-width:0}
 .tphead h2 .lock{font-size:12px;padding:5px 10px}
 .tphead h2 .grow{flex:1}
-.tphead>.helpq{position:absolute;top:4px;right:0;margin:0;opacity:1}
+.tphead>.helpq{margin:4px 0 0;opacity:1}
 /* 出すボタン。**この面でいちばん大きく動く操作。** 見出しのとなりに置く */
 .tpgo{font-size:13px;padding:8px 16px}
 /* 全クラスが出していれば緑。**色だけに頼らない** ── 緑と青は3型で潰れるので、
    ✓ と、となりの字（ぜんぶ提出ずみ）を必ず添える */
 .btn.tpgo.ready{background:var(--ok,#2F6E4E);border-color:var(--ok,#2F6E4E);color:#fff}
 .btn.tpgo.ready:hover{filter:brightness(1.08)}
+/* 押せないときは、完了の緑や hover を見せない。理由もボタンのすぐ隣に字で出す */
+.btn.tpgo:disabled{background:var(--bg);border-color:var(--line);color:var(--tx-sub);
+  cursor:not-allowed;filter:none}
+.btn.tpgo:disabled:hover{background:var(--bg);border-color:var(--line);filter:none}
+.tpwhy{font-size:11.5px;font-weight:600;color:var(--ink-alert);white-space:nowrap}
 /* 出す週。**左メニューの週とは離れているので、ここにもう一度出す** */
 .tpweek{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;
   color:var(--tx-sub);padding:5px 11px;border:1px solid var(--line);
@@ -732,6 +737,27 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   font-size:13px;box-shadow:0 8px 28px var(--shade-2);max-width:min(74ch,90vw);
   line-height:1.6}
 .toast b{color:#FFC9BC}
+
+/* 初回案内。画面全体を暗くせず、見る場所だけを枠と吹き出しで示す。 */
+.tour{position:fixed;inset:0;z-index:100;background:rgba(24,26,30,.32)}
+.tourfocus{position:fixed;border:3px solid #fff;border-radius:10px;
+  box-shadow:0 0 0 3px var(--ink-link),0 6px 24px rgba(0,0,0,.28);
+  pointer-events:none;transition:inset .16s ease,width .16s ease,height .16s ease}
+.tourbubble{position:fixed;width:min(300px,calc(100vw - 28px));padding:15px 17px;
+  border:0;border-radius:14px;background:var(--card);color:var(--tx);
+  box-shadow:0 12px 38px rgba(0,0,0,.3);cursor:pointer}
+.tourbubble::before{content:"";position:absolute;width:14px;height:14px;
+  background:var(--card);transform:rotate(45deg)}
+.tourbubble[data-side="right"]::before{left:-7px;top:24px}
+.tourbubble[data-side="left"]::before{right:-7px;top:24px}
+.tourbubble[data-side="bottom"]::before{top:-7px;left:26px}
+.tourbubble small{display:block;color:var(--tx-sub);font-size:11px;margin-bottom:2px}
+.tourbubble>b{display:block;font-size:16px;line-height:1.5}
+.tourbubble p{margin:5px 0 12px;font-size:13px;line-height:1.65}
+.tourbuttons{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tourskip{border:0;background:none;color:var(--tx-sub);font-size:11.5px;
+  padding:5px 0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+@media (prefers-reduced-motion:reduce){.tourfocus{transition:none}}
 
 /* 管理・システムの表。読むだけの1列。数字は等幅で縦に揃える */
 .sys{border-collapse:collapse;width:100%;font-size:13px;margin:4px 0 10px}

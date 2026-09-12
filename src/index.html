@@ -173,7 +173,9 @@
         <h2>たんぽぽ
           <!-- 出すボタンは、見出しの右。**この面でいちばん大きく動く操作。**
                下に置いていたころは、組を並べ終えてから目で探しに行っていた -->
-          <button class="btn go tpgo" id="tpGo">たんぽぽ時間割へ出す</button>
+          <button class="btn go tpgo" id="tpGo" aria-describedby="tpGoWhy">たんぽぽ時間割へ出す</button>
+          <!-- 押せない理由を hover の title だけに隠さない。初めての人にもその場で示す -->
+          <span class="tpwhy" id="tpGoWhy" aria-live="polite" hidden></span>
           <span class="tpweek" id="tpWeek"></span>
           <span class="grow"></span>
           <!-- ソフトロック。**この面からの書き込みを止める。**
@@ -273,6 +275,21 @@
 </div>
 
 <div class="toast" id="toast" hidden></div>
+
+<!-- 初回だけの案内。対象を囲み、吹き出しをクリックして順に進む。 -->
+<div class="tour" id="tour" hidden>
+  <div class="tourfocus" id="tourFocus" aria-hidden="true"></div>
+  <section class="tourbubble" id="tourBubble" role="dialog" aria-modal="true"
+           aria-labelledby="tourTitle" aria-describedby="tourText">
+    <small id="tourStep"></small>
+    <b id="tourTitle"></b>
+    <p id="tourText"></p>
+    <div class="tourbuttons">
+      <button type="button" class="tourskip" id="tourSkip">説明を終える</button>
+      <button type="button" class="btn go" id="tourNext">次へ</button>
+    </div>
+  </section>
+</div>
 
 <!-- 処理中。**全面にかぶせて、次の操作を受け付けない。**
      窓が開いているあいだも上に乗るよう <dialog> にしてある（js/wait.js） -->

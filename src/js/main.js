@@ -557,6 +557,9 @@ function wire(){
 
 /* ── 起動 ────────────────────────────────────── */
 function start(){
+  /* 既存の利用者へ突然出さない。本当に保存データが無い初回だけ案内する。 */
+  let firstVisit = false;
+  try{ firstVisit = !localStorage.getItem(KEY); }catch(_){}
   loadDb();
   onStoreError = why => toast("<b>保存できていない</b>　" + escText(why));
   Backend.setNotifier(why => toast("<b>" + why + "</b>"));
@@ -576,6 +579,8 @@ function start(){
   if(!Backend.isGas()) save();
   applyPaper();
   showGate();
+  /* 初めて開いた端末だけ、左メニューから入力欄までを短く案内する。 */
+  if(firstVisit) setTimeout(startFirstTour, 250);
 
   /* 設定・時程・教科・その年度は、立ち上がりの1回でまとめてもらう。
      別々に取りに行くと、その回数だけ待つことになる。 */
