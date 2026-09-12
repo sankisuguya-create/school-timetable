@@ -313,9 +313,11 @@ function drawTanpopoView(){
   const chosen = tpChosenHere();
   const lockedNow = typeof isLocked === "function" && isLocked();
   const noTarget = Backend.isGas() && !tgt;
-  const why = !tpTotal() ? "先に交流級を組へ入れてください"
+  /* 複数の理由が重なったら、先に解消しなければ何も直せないものを出す。
+     空のままロックした画面で「組へ入れて」と案内しても、その操作自体ができない。 */
+  const why = lockedNow ? "ロックを外してください"
             : tpTgtEdit ? "出す先の編集を終えてください"
-            : lockedNow ? "ロック中です"
+            : !tpTotal() ? "先に交流級を組へ入れてください"
             : noTarget ? "出す先を設定してください" : "";
   $("tpGo").disabled = !!why;
   $("tpGoWhy").hidden = !why;
