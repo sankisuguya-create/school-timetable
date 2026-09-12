@@ -17,7 +17,7 @@ const KEY = "school-timetable/v3";
 const blankDb = () => ({
   v: 3,
   settings: {
-    paper:"B5", margin:8, k:1, vz:100, fit:true,
+    paper:"B5", margin:8, k:1, vz:100, fit:true, titlePt:16, notePt:12,
     /* A週の起点の月曜。**この週がA週で、以後1週ごとに入れ替わる**（config.js） */
     abAnchor: AB_ANCHOR,
     tally:{ anchor:"C2", classes:"3-1,3-2,3-3", block:10,
@@ -119,6 +119,8 @@ function newYear(y){
     /* クラス編成と専科は前年度から引き継ぐ（学年ごとのクラス数は年で変わらない）。
        基本時間割は引き継がない。**毎年変わるものを黙って持ち越さない。** */
     classes:  prev ? clone(prev.classes)  : clone(DEFAULT_CLASSES),
+    /* クラスごとの教科チップ。off／screen／output。既定は画面だけ。 */
+    chipModes: prev ? clone(prev.chipModes || {}) : {},
     specials: prev ? clone(prev.specials) : clone(DEFAULT_SPECIALS),
     base:{}, weeks:{}, week1: firstMonday(y),
     /* 年間行事計画表から読んだもの。**日付にしか結びついていない**
@@ -138,6 +140,7 @@ function Y(){
   let Yr = db.years[y];
   if(!Yr){ Yr = db.years[y] = newYear(+y); }
   if(!Yr.classes)  Yr.classes  = clone(DEFAULT_CLASSES);
+  if(!Yr.chipModes || typeof Yr.chipModes !== "object") Yr.chipModes = {};
   if(!Yr.specials) Yr.specials = clone(DEFAULT_SPECIALS);
   if(!Yr.base)  Yr.base  = {};
   if(!Yr.weeks) Yr.weeks = {};

@@ -32,6 +32,12 @@ function drawPalette(){
     : "コマへ<b>引っぱって入れる</b>。コマを選んでから押しても入る。"
       + (canClear ? "<br><b>リセット</b>を落とすと、そのコマをここから取り消す"
                   + "（各クラスの予定が出るようになる）。" : "");
+  const chip = $("chipOpen");
+  chip.hidden = view.kind !== "class";
+  if(view.kind === "class"){
+    const mode = (Y().chipModes || {})[view.cls] || "screen";
+    $("chipNow").textContent = mode === "off" ? "使わない" : mode === "output" ? "画面と出力" : "画面だけ";
+  }
 
   for(const b of $("pals").querySelectorAll(".pal")){
     b.addEventListener("dragstart", ev => {

@@ -72,6 +72,8 @@ function applyConfig(cfg){
   put("印刷用紙",        v => db.settings.paper  = String(v).trim());
   put("印刷余白mm",      v => db.settings.margin = +v || 8);
   put("印刷倍率",        v => db.settings.k      = +v || 1);
+  put("タイトル文字pt",  v => db.settings.titlePt = +v || 16);
+  put("詳細文字pt",      v => db.settings.notePt  = +v || 12);
   put("時数_貼る先",     v => t.anchor  = String(v).trim());
   put("時数_クラスの順", v => t.classes = String(v));
   put("時数_1日の行数",  v => t.block   = +v || 10);

@@ -388,6 +388,29 @@ button,select,input,textarea{font:inherit;color:inherit}
 .pal.off{background:var(--sub-none)}
 .pal:hover{border-color:var(--ink-link);box-shadow:inset 0 0 0 1px var(--ink-link)}
 .pal:active{cursor:grabbing}
+/* 基本時間割にも、教科を探す補助として同じ淡い色を使う。字は必ず残す。 */
+.basesub{font-weight:600}
+.basesub[data-subject=kokugo]{background:var(--sub-kokugo)}
+.basesub[data-subject=shakai]{background:var(--sub-shakai)}
+.basesub[data-subject=sansu]{background:var(--sub-sansu)}
+.basesub[data-subject=rika]{background:var(--sub-rika)}
+.basesub[data-subject=seikatsu],.basesub[data-subject=sogo]{background:var(--sub-seikatsu)}
+.basesub[data-subject=ongaku]{background:var(--sub-ongaku)}
+.basesub[data-subject=zuko]{background:var(--sub-zuko)}
+.basesub[data-subject=katei]{background:var(--sub-katei)}
+.basesub[data-subject=taiiku]{background:var(--sub-taiiku)}
+.basesub[data-subject=doutoku]{background:var(--sub-doutoku)}
+.basesub[data-subject=gaikoku]{background:var(--sub-gaikoku)}
+.basesub[data-subject=gakkatsu]{background:var(--sub-gakkatsu)}
+.settingcards,.outchoices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.settingcard{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:12px;
+  border:1px solid var(--line);border-radius:var(--r);background:var(--card);cursor:pointer;text-align:left}
+.settingcard:hover{border-color:var(--ink-link);background:var(--tint)}
+.settingcard b{font-size:14px}.settingcard span{font-size:11.5px;color:var(--tx-sub)}
+.subttl{font-size:12px;color:var(--tx-sub)}
+.radios{display:flex;flex-direction:column;gap:9px}.radios label{font-size:13px}
+.chipset{margin-top:8px;border:0;background:none;color:var(--ink-link);font:inherit;font-size:11.5px;
+  padding:0;text-decoration:underline;cursor:pointer}
 /* リセット。**入れるものではないと、押す前に分かる形にする。**
    教科の並びの中にあるので、色だけでなく枠の形でも分ける */
 .pal.clear{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff;

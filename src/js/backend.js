@@ -783,6 +783,13 @@ const Backend = (function(){
       .withFailureHandler(e => ng(String((e && e.message) || "貼り替えられなかった")))
       .apiWriteEvents(rows);
   }
+  /* 週案を共有用の新しい Google Sheet にする。公開範囲は勝手に変えない。 */
+  function exportPlanSheet(name, sheets, ok, ng){
+    if(!onGas) return ng("手元ではGoogle Sheetを作れない");
+    google.script.run.withSuccessHandler(ok)
+      .withFailureHandler(e => ng(String((e && e.message) || "Sheetを作れなかった")))
+      .apiExportPlanSheet(name, sheets);
+  }
 
   /* 画面を閉じる前に、貯めたぶんを出し切る。
      出し切れないうちに閉じられそうなときは、引き止める。 */
@@ -801,5 +808,6 @@ const Backend = (function(){
           saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,
           tpTargets, saveTpTargets, testTpTarget, tpSubmit,
-          yearSetup, tickYearSetup, setupPlanSheets, saveVariantOrigin, saveEvents};
+          yearSetup, tickYearSetup, setupPlanSheets, saveVariantOrigin, saveEvents,
+          exportPlanSheet};
 })();

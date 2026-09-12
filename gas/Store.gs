@@ -1686,13 +1686,32 @@ const Store = (function(){
     return Sheets.readGrid(Sheets.PASTE);
   }
 
+  /* ChatへURLを貼って共有できる週案。権限は作成者のDrive設定のままにし、
+     リンク公開へ勝手に変えない。 */
+  function exportPlanSheet(name, sheets){
+    if(!Array.isArray(sheets) || !sheets.length) throw new Error("出す週がありません");
+    const book = SpreadsheetApp.create(String(name || "週案"));
+    sheets.forEach((part, i) => {
+      const sh = i ? book.insertSheet() : book.getSheets()[0];
+      sh.setName(String(part.name || (i + 1)).slice(0, 99));
+      const values = part.values || [];
+      if(values.length){
+        const cols = Math.max.apply(null, values.map(r => r.length));
+        const rect = values.map(r => { const x = r.slice(); while(x.length < cols) x.push(""); return x; });
+        sh.getRange(1, 1, rect.length, cols).setValues(rect).setWrap(true).setVerticalAlignment("middle");
+        sh.setFrozenRows(1); sh.setFrozenColumns(1);
+      }
+    });
+    return {name:book.getName(), url:book.getUrl()};
+  }
+
   function addDays_(isoStr, n){
     const p = String(isoStr).split("-");
     return new Date(+p[0], +p[1] - 1, +p[2] + n);
   }
 
   return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects,
-          writeCells, writeRoster, writeBase, writeBaseAll, readPaste,
+          writeCells, writeRoster, writeBase, writeBaseAll, readPaste, exportPlanSheet,
           exportWeek, weekSheetName, weekOrder, migratePlan, checkYear, readEvents,
           archiveCount, archiveVerify, archivePurge, archivedAll, ymd,
           tpTargets, writeTargets, testTarget, tpSubmits, tpSubmit,
@@ -1869,4 +1888,8 @@ function apiWriteVariantOrigin(monday){
 function apiWriteEvents(rows){
   Gate.check();
   return Store.writeEvents(rows);
+}
+function apiExportPlanSheet(name, sheets){
+  Gate.check();
+  return Store.exportPlanSheet(name, sheets);
 }

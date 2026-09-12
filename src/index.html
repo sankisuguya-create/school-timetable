@@ -101,13 +101,13 @@
         <svg width="17" height="17"><use href="#i-layers"/></svg><span>ほかの週案を開く</span></button>
 
       <hr>
-      <h3>この週から出す</h3>
-      <button class="nav" data-act="print" data-help="print">
-        <svg width="17" height="17"><use href="#i-print"/></svg><span>印刷（B5）</span></button>
+      <h3>週案を出す</h3>
+      <button class="nav" data-act="outweek" data-help="print">
+        <svg width="17" height="17"><use href="#i-print"/></svg><span>教務必携用（B5）</span></button>
       <button class="nav" data-act="tally" data-help="tally">
         <svg width="17" height="17"><use href="#i-copy"/></svg><span>時数をコピー</span></button>
       <button class="nav" data-act="month" data-help="month">
-        <svg width="17" height="17"><use href="#i-grid"/></svg><span>月で見る（B4）</span></button>
+        <svg width="17" height="17"><use href="#i-grid"/></svg><span>4週まとめて（B4）</span></button>
 
       <!-- 新年度の設定が未了のあいだだけ出る。**ふだんは管理・システムの中だけ。**
            4/1 から、全部が済むまで出し続ける（消えると忘れる） -->
@@ -116,23 +116,8 @@
         <span>新年度設定<b>未了</b></span></button>
 
       <hr>
-      <h3>もとになるもの</h3>
-      <button class="nav" data-act="base" data-help="base">
-        <svg width="17" height="17"><use href="#i-cal"/></svg><span>基本時間割</span></button>
-      <button class="nav" data-act="roster" data-help="roster">
-        <svg width="17" height="17"><use href="#i-users"/></svg><span>学級編成</span></button>
-      <button class="nav" data-act="paper" data-help="paper">
-        <svg width="17" height="17"><use href="#i-gear"/></svg><span>用紙・印刷</span></button>
-
-      <hr>
-      <h3>紙の上の見え方</h3>
-      <div class="legend" data-help="legend">
-        <span><i class="up"></i>上位から降りてきた</span>
-        <span><i class="cl"></i>2つ以上入っている</span>
-        <span><i class="bs"></i>基本時間割のまま</span>
-      </div>
-      <p class="foot-note">白い紙に出ているものだけが刷られる。<br>
-        文字を選んでリンクを付けると、紙の上でその文字を押して開ける。</p>
+      <button class="nav" data-act="settings" data-help="settings">
+        <svg width="17" height="17"><use href="#i-gear"/></svg><span>設定</span></button>
 
       <!-- 管理。**担任は使わない。** 学校で3人だけが押す。
            目立たせない代わりに、隠しもしない（探して見つからないほうが困る） -->
@@ -157,7 +142,9 @@
           <b id="mTitle"></b>
           <button class="btn" id="mNext">次の4週 ▶</button>
           <span class="grow"></span>
-          <button class="btn go" id="mPrint">印刷（B4・よこ）</button>
+          <button class="btn go" id="mPrint">印刷</button>
+          <button class="btn" id="mImage">画像</button>
+          <button class="btn" id="mSheet">Google Sheet</button>
           <button class="btn" id="mClose">週の紙へ戻る</button>
         </div>
         <p class="hint" id="mHint"></p>
@@ -218,6 +205,7 @@
         <h3>教科・行事</h3>
         <div class="pals" id="pals"></div>
         <p class="hint" id="palHint" style="margin-top:8px"></p>
+        <button class="chipset" id="chipOpen" hidden>教科チップ：<span id="chipNow">画面だけ</span></button>
       </div>
 
       <div class="empty" id="noSel">コマを選ぶと、ここで中身とリンクを直せる。</div>
@@ -299,6 +287,41 @@
   <div id="baseGrid"></div>
 </div></dialog>
 
+<!-- 日常の左メニューを増やさず、年に数回の設定をここへ集める -->
+<dialog id="settingsDlg"><div class="dlg wide">
+  <h2>設定 <span class="subttl" id="settingsFy"></span></h2>
+  <p>学校全体や年度のもとになるものを変更します。週ごとの印刷・画像・Sheetは左メニューの「週案を出す」から行います。</p>
+  <div class="settingcards">
+    <button class="settingcard" id="setBase"><b>基本時間割</b><span>A週・B週の、毎週のもと</span></button>
+    <button class="settingcard" id="setRoster"><b>学年・クラス</b><span>何年が何組まであるか、専科</span></button>
+    <button class="settingcard" id="setTanpopo"><b>たんぽぽ組分け</b><span>交流級と人数を組へ分ける</span></button>
+    <button class="settingcard" id="setPaper"><b>印刷と文字</b><span id="setPaperNow">用紙・文字の大きさ</span></button>
+    <button class="settingcard" id="setNewYear"><b>新年度の準備</b><span>4月1日から、上から順に確認</span></button>
+  </div>
+</div></dialog>
+
+<dialog id="outDlg"><div class="dlg">
+  <h2>教務必携用（B5）</h2>
+  <p id="outWho"></p>
+  <div class="outchoices">
+    <button class="settingcard" id="outPrint"><b>印刷</b><span>B5の紙に印刷する</span></button>
+    <button class="settingcard" id="outImage"><b>画像</b><span>Google Chatで共有できるPNG</span></button>
+    <button class="settingcard" id="outSheet"><b>Google Sheet</b><span>編集・共有できる表を作る</span></button>
+  </div>
+  <p class="hint" id="outStat"></p>
+</div></dialog>
+
+<dialog id="chipDlg"><div class="dlg">
+  <h2><span id="chipClass"></span> の教科チップ</h2>
+  <p>教科名の形と淡い色を、タイトル欄のどこまでに出すか選びます。色がなくても教科名で分かります。</p>
+  <div class="radios">
+    <label><input type="radio" name="chipMode" value="off"> 使わない</label>
+    <label><input type="radio" name="chipMode" value="screen"> 画面だけ</label>
+    <label><input type="radio" name="chipMode" value="output"> 画面と印刷・画像・Sheet</label>
+  </div>
+  <div class="end"><button class="btn go" id="chipSave">保存</button></div>
+</div></dialog>
+
 <dialog id="impDlg"><div class="dlg">
   <h2>固定時間割を取り込む</h2>
   <p>学校の<b>固定時間割表</b>（1行1クラス・横に月〜金の各校時・各校時が<b>A週とB週の2列</b>）を、
@@ -358,6 +381,10 @@
     <span id="stMgV"></span> mm</div>
   <div class="row"><span>印刷の倍率</span><input type="range" id="stK" min="0.7" max="1.15" step="0.01">
     <span id="stKV"></span></div>
+  <div class="row"><span>タイトルの文字</span><input type="range" id="stTitle" min="12" max="20" step="0.5">
+    <span id="stTitleV"></span> pt</div>
+  <div class="row"><span>詳細・備考の文字</span><input type="range" id="stNote" min="8" max="14" step="0.5">
+    <span id="stNoteV"></span> pt</div>
   <hr>
   <div class="row"><span>画面の大きさ</span>
     <label style="display:flex;align-items:center;gap:7px;font-size:13px">

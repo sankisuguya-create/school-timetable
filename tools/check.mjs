@@ -738,7 +738,8 @@ ok("「ー」は読めない字として知らせない（授業なしと分か�
 console.log("\n■ 固定時間割の取り込み");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(300);
-await p.locator("[data-act='base']").click(); await p.waitForTimeout(250);
+await p.locator("[data-act='settings']").click(); await p.waitForTimeout(150);
+await p.locator("#setBase").click(); await p.waitForTimeout(250);
 await p.locator("#baseImp").click(); await p.waitForTimeout(250);
 ok("「表から取り込む」で窓が出る", await p.locator("#impDlg").evaluate(d => d.open) === true);
 ok("読む前は入れられない", await p.locator("#impGo").isDisabled() === true);
@@ -1709,6 +1710,19 @@ ok("入口の下は、閉じるボタンだけ",
    await p.locator(".gate > p.note").innerText());
 
 console.log("\n■ 左の並びには「？」があり、押すと説明が出る");
+ok("左に「もとになるもの」は置かない",
+   (await p.locator(".side").innerText()).indexOf("もとになるもの") < 0);
+ok("左に「紙の上の見え方」は置かない",
+   (await p.locator(".side").innerText()).indexOf("紙の上の見え方") < 0);
+ok("B5・B4・時数コピーは左に残す", await p.evaluate(() => {
+     const t=document.querySelector(".side").innerText;
+     return t.includes("教務必携用（B5）") && t.includes("4週まとめて（B4）") && t.includes("時数をコピー");
+   }) === true);
+ok("基本時間割は設定から開く", await (async () => {
+     await p.locator("[data-act=settings]").click(); await p.waitForTimeout(100);
+     const open=await p.locator("#settingsDlg").evaluate(d=>d.open);
+     await p.locator("#settingsDlg .dlgx").click(); return open && await p.locator("#setBase").count()===1;
+   })() === true);
 ok("左の主な項目ぜんぶに「？」がある",
    await p.locator(".side .helpq").count() >= 10,
    await p.locator(".side .helpq").count());
@@ -1719,12 +1733,12 @@ ok("「？」に説明の中身がある（空の窓を開かない）",
      .filter(e => !HELP[e.dataset.help]).map(e => e.dataset.help)));
 /* **？を押しても、親の画面は切り替わらない。**
    読もうとしただけの人が、開く気のない週案を開いてしまう */
-await p.locator(".nav[data-help='base'] .helpq").click();
+await p.locator(".nav[data-help='settings'] .helpq").click();
 await p.waitForTimeout(300);
 ok("「？」を押すと説明の窓が開く",
    await p.locator("#helpDlg").evaluate(d => d.open) === true);
 ok("「？」を押しても、その項目そのものは開かない",
-   await p.locator("#baseDlg").evaluate(d => d.open) === false);
+   await p.locator("#settingsDlg").evaluate(d => d.open) === false);
 ok("説明は、何が起きるかを字で書いてある",
    (await p.locator("#helpBody").innerText()).length > 40,
    (await p.locator("#helpBody").innerText()).length);
@@ -1733,10 +1747,17 @@ ok("はじめての人がつまずくところを添える",
 await p.locator("#helpDlg .dlgx").click(); await p.waitForTimeout(250);
 ok("説明の窓は ✕ で閉じる",
    await p.locator("#helpDlg").evaluate(d => d.open) === false);
+ok("文字サイズはタイトルと詳細を別々に設定できる",
+   await p.locator("#stTitle").count()===1 && await p.locator("#stNote").count()===1);
+ok("B5出力には印刷・画像・Google Sheetがある",
+   await p.locator("#outPrint,#outImage,#outSheet").count()===3);
+ok("B4出力にも印刷・画像・Google Sheetがある",
+   await p.locator("#mPrint,#mImage,#mSheet").count()===3);
+ok("教科チップは3段階から選べる",
+   await p.locator("input[name=chipMode]").count()===3);
 
 console.log("\n■ 窓を閉じるところは、窓枠の右上");
-for(const [act, dlg] of [["base","baseDlg"], ["roster","rosterDlg"],
-                         ["paper","setDlg"], ["admin","adminDlg"]]){
+for(const [act, dlg] of [["settings","settingsDlg"], ["admin","adminDlg"]]){
   await p.locator("[data-act='" + act + "']").click(); await p.waitForTimeout(250);
   const x = p.locator("#" + dlg + " .dlgx");
   ok(dlg + " に ✕ がある", await x.count() === 1);

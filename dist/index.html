@@ -495,6 +495,29 @@ button,select,input,textarea{font:inherit;color:inherit}
 .pal.off{background:var(--sub-none)}
 .pal:hover{border-color:var(--ink-link);box-shadow:inset 0 0 0 1px var(--ink-link)}
 .pal:active{cursor:grabbing}
+/* 基本時間割にも、教科を探す補助として同じ淡い色を使う。字は必ず残す。 */
+.basesub{font-weight:600}
+.basesub[data-subject=kokugo]{background:var(--sub-kokugo)}
+.basesub[data-subject=shakai]{background:var(--sub-shakai)}
+.basesub[data-subject=sansu]{background:var(--sub-sansu)}
+.basesub[data-subject=rika]{background:var(--sub-rika)}
+.basesub[data-subject=seikatsu],.basesub[data-subject=sogo]{background:var(--sub-seikatsu)}
+.basesub[data-subject=ongaku]{background:var(--sub-ongaku)}
+.basesub[data-subject=zuko]{background:var(--sub-zuko)}
+.basesub[data-subject=katei]{background:var(--sub-katei)}
+.basesub[data-subject=taiiku]{background:var(--sub-taiiku)}
+.basesub[data-subject=doutoku]{background:var(--sub-doutoku)}
+.basesub[data-subject=gaikoku]{background:var(--sub-gaikoku)}
+.basesub[data-subject=gakkatsu]{background:var(--sub-gakkatsu)}
+.settingcards,.outchoices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.settingcard{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:12px;
+  border:1px solid var(--line);border-radius:var(--r);background:var(--card);cursor:pointer;text-align:left}
+.settingcard:hover{border-color:var(--ink-link);background:var(--tint)}
+.settingcard b{font-size:14px}.settingcard span{font-size:11.5px;color:var(--tx-sub)}
+.subttl{font-size:12px;color:var(--tx-sub)}
+.radios{display:flex;flex-direction:column;gap:9px}.radios label{font-size:13px}
+.chipset{margin-top:8px;border:0;background:none;color:var(--ink-link);font:inherit;font-size:11.5px;
+  padding:0;text-decoration:underline;cursor:pointer}
 /* リセット。**入れるものではないと、押す前に分かる形にする。**
    教科の並びの中にあるので、色だけでなく枠の形でも分ける */
 .pal.clear{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff;
@@ -1000,6 +1023,22 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   align-items:center;justify-content:center;text-align:center;
   font-weight:600;line-height:1.15;
   font-size:calc(var(--fs-t)*var(--k)*var(--fit,1))}
+/* 教科チップはタイトルの字を消さず、形と淡い色を足す。紙へ出すかはクラス設定。 */
+.sheet.chips-screen .cell.has-sub .t{width:max-content;max-width:94%;height:auto;min-height:60%;
+  align-self:center;margin:auto;padding-left:calc(1.8mm*var(--k));padding-right:calc(1.8mm*var(--k));
+  border:1px solid var(--rule);border-radius:99px}
+.sheet.chips-screen .cell[data-subject=kokugo] .t{background:var(--sub-kokugo)}
+.sheet.chips-screen .cell[data-subject=shakai] .t{background:var(--sub-shakai)}
+.sheet.chips-screen .cell[data-subject=sansu] .t{background:var(--sub-sansu)}
+.sheet.chips-screen .cell[data-subject=rika] .t{background:var(--sub-rika)}
+.sheet.chips-screen .cell[data-subject=seikatsu] .t,.sheet.chips-screen .cell[data-subject=sogo] .t{background:var(--sub-seikatsu)}
+.sheet.chips-screen .cell[data-subject=ongaku] .t{background:var(--sub-ongaku)}
+.sheet.chips-screen .cell[data-subject=zuko] .t{background:var(--sub-zuko)}
+.sheet.chips-screen .cell[data-subject=katei] .t{background:var(--sub-katei)}
+.sheet.chips-screen .cell[data-subject=taiiku] .t{background:var(--sub-taiiku)}
+.sheet.chips-screen .cell[data-subject=doutoku] .t{background:var(--sub-doutoku)}
+.sheet.chips-screen .cell[data-subject=gaikoku] .t{background:var(--sub-gaikoku)}
+.sheet.chips-screen .cell[data-subject=gakkatsu] .t{background:var(--sub-gakkatsu)}
 .cell.brk .t{height:100%;font-weight:400;
   font-size:calc(var(--fs-b)*var(--k)*var(--fit,1))}
 .cell .n{flex:1;font-size:calc(var(--fs-n)*var(--k));color:var(--ink-sub);
@@ -1079,6 +1118,9 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   .hd.pick{background:transparent!important;cursor:default}
   .hd .pk{display:none!important}          /* 押せる印は画面だけのもの */
   .cell .t:focus,.cell .n:focus{background:transparent;box-shadow:none}
+  .sheet.chips-screen:not(.chips-output) .cell.has-sub .t{width:auto;max-width:none;height:calc(var(--h-title)*var(--k));
+    min-height:0;margin:0;padding-left:calc(1.4mm*var(--k));padding-right:calc(1.4mm*var(--k));
+    border:0;border-radius:0;background:transparent}
   /* **紙の外の入れ物に、高さを持たせない。** html,body が height:100% なので、
      そのままだと本文の高さが画面の高さになり、紙が1枚に収まっていても
      2ページ目が出る（白紙が必ず1枚ついてくる） */
@@ -1192,13 +1234,13 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
         <svg width="17" height="17"><use href="#i-layers"/></svg><span>ほかの週案を開く</span></button>
 
       <hr>
-      <h3>この週から出す</h3>
-      <button class="nav" data-act="print" data-help="print">
-        <svg width="17" height="17"><use href="#i-print"/></svg><span>印刷（B5）</span></button>
+      <h3>週案を出す</h3>
+      <button class="nav" data-act="outweek" data-help="print">
+        <svg width="17" height="17"><use href="#i-print"/></svg><span>教務必携用（B5）</span></button>
       <button class="nav" data-act="tally" data-help="tally">
         <svg width="17" height="17"><use href="#i-copy"/></svg><span>時数をコピー</span></button>
       <button class="nav" data-act="month" data-help="month">
-        <svg width="17" height="17"><use href="#i-grid"/></svg><span>月で見る（B4）</span></button>
+        <svg width="17" height="17"><use href="#i-grid"/></svg><span>4週まとめて（B4）</span></button>
 
       <!-- 新年度の設定が未了のあいだだけ出る。**ふだんは管理・システムの中だけ。**
            4/1 から、全部が済むまで出し続ける（消えると忘れる） -->
@@ -1207,23 +1249,8 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
         <span>新年度設定<b>未了</b></span></button>
 
       <hr>
-      <h3>もとになるもの</h3>
-      <button class="nav" data-act="base" data-help="base">
-        <svg width="17" height="17"><use href="#i-cal"/></svg><span>基本時間割</span></button>
-      <button class="nav" data-act="roster" data-help="roster">
-        <svg width="17" height="17"><use href="#i-users"/></svg><span>学級編成</span></button>
-      <button class="nav" data-act="paper" data-help="paper">
-        <svg width="17" height="17"><use href="#i-gear"/></svg><span>用紙・印刷</span></button>
-
-      <hr>
-      <h3>紙の上の見え方</h3>
-      <div class="legend" data-help="legend">
-        <span><i class="up"></i>上位から降りてきた</span>
-        <span><i class="cl"></i>2つ以上入っている</span>
-        <span><i class="bs"></i>基本時間割のまま</span>
-      </div>
-      <p class="foot-note">白い紙に出ているものだけが刷られる。<br>
-        文字を選んでリンクを付けると、紙の上でその文字を押して開ける。</p>
+      <button class="nav" data-act="settings" data-help="settings">
+        <svg width="17" height="17"><use href="#i-gear"/></svg><span>設定</span></button>
 
       <!-- 管理。**担任は使わない。** 学校で3人だけが押す。
            目立たせない代わりに、隠しもしない（探して見つからないほうが困る） -->
@@ -1248,7 +1275,9 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
           <b id="mTitle"></b>
           <button class="btn" id="mNext">次の4週 ▶</button>
           <span class="grow"></span>
-          <button class="btn go" id="mPrint">印刷（B4・よこ）</button>
+          <button class="btn go" id="mPrint">印刷</button>
+          <button class="btn" id="mImage">画像</button>
+          <button class="btn" id="mSheet">Google Sheet</button>
           <button class="btn" id="mClose">週の紙へ戻る</button>
         </div>
         <p class="hint" id="mHint"></p>
@@ -1309,6 +1338,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
         <h3>教科・行事</h3>
         <div class="pals" id="pals"></div>
         <p class="hint" id="palHint" style="margin-top:8px"></p>
+        <button class="chipset" id="chipOpen" hidden>教科チップ：<span id="chipNow">画面だけ</span></button>
       </div>
 
       <div class="empty" id="noSel">コマを選ぶと、ここで中身とリンクを直せる。</div>
@@ -1390,6 +1420,41 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   <div id="baseGrid"></div>
 </div></dialog>
 
+<!-- 日常の左メニューを増やさず、年に数回の設定をここへ集める -->
+<dialog id="settingsDlg"><div class="dlg wide">
+  <h2>設定 <span class="subttl" id="settingsFy"></span></h2>
+  <p>学校全体や年度のもとになるものを変更します。週ごとの印刷・画像・Sheetは左メニューの「週案を出す」から行います。</p>
+  <div class="settingcards">
+    <button class="settingcard" id="setBase"><b>基本時間割</b><span>A週・B週の、毎週のもと</span></button>
+    <button class="settingcard" id="setRoster"><b>学年・クラス</b><span>何年が何組まであるか、専科</span></button>
+    <button class="settingcard" id="setTanpopo"><b>たんぽぽ組分け</b><span>交流級と人数を組へ分ける</span></button>
+    <button class="settingcard" id="setPaper"><b>印刷と文字</b><span id="setPaperNow">用紙・文字の大きさ</span></button>
+    <button class="settingcard" id="setNewYear"><b>新年度の準備</b><span>4月1日から、上から順に確認</span></button>
+  </div>
+</div></dialog>
+
+<dialog id="outDlg"><div class="dlg">
+  <h2>教務必携用（B5）</h2>
+  <p id="outWho"></p>
+  <div class="outchoices">
+    <button class="settingcard" id="outPrint"><b>印刷</b><span>B5の紙に印刷する</span></button>
+    <button class="settingcard" id="outImage"><b>画像</b><span>Google Chatで共有できるPNG</span></button>
+    <button class="settingcard" id="outSheet"><b>Google Sheet</b><span>編集・共有できる表を作る</span></button>
+  </div>
+  <p class="hint" id="outStat"></p>
+</div></dialog>
+
+<dialog id="chipDlg"><div class="dlg">
+  <h2><span id="chipClass"></span> の教科チップ</h2>
+  <p>教科名の形と淡い色を、タイトル欄のどこまでに出すか選びます。色がなくても教科名で分かります。</p>
+  <div class="radios">
+    <label><input type="radio" name="chipMode" value="off"> 使わない</label>
+    <label><input type="radio" name="chipMode" value="screen"> 画面だけ</label>
+    <label><input type="radio" name="chipMode" value="output"> 画面と印刷・画像・Sheet</label>
+  </div>
+  <div class="end"><button class="btn go" id="chipSave">保存</button></div>
+</div></dialog>
+
 <dialog id="impDlg"><div class="dlg">
   <h2>固定時間割を取り込む</h2>
   <p>学校の<b>固定時間割表</b>（1行1クラス・横に月〜金の各校時・各校時が<b>A週とB週の2列</b>）を、
@@ -1449,6 +1514,10 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
     <span id="stMgV"></span> mm</div>
   <div class="row"><span>印刷の倍率</span><input type="range" id="stK" min="0.7" max="1.15" step="0.01">
     <span id="stKV"></span></div>
+  <div class="row"><span>タイトルの文字</span><input type="range" id="stTitle" min="12" max="20" step="0.5">
+    <span id="stTitleV"></span> pt</div>
+  <div class="row"><span>詳細・備考の文字</span><input type="range" id="stNote" min="8" max="14" step="0.5">
+    <span id="stNoteV"></span> pt</div>
   <hr>
   <div class="row"><span>画面の大きさ</span>
     <label style="display:flex;align-items:center;gap:7px;font-size:13px">
@@ -1682,8 +1751,8 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.16.0";
-let BUILD_DATE  = "2026-09-11";
+let APP_VERSION = "1.17.0";
+let BUILD_DATE  = "2026-09-12";
 
 /* 時程。行を固定しない（学校ごとに違う）。
    tally = 時数集計表のどの列に当たるか。chips = 教科を選べるか。
@@ -1750,6 +1819,8 @@ function applyConfig(cfg){
   put("印刷用紙",        v => db.settings.paper  = String(v).trim());
   put("印刷余白mm",      v => db.settings.margin = +v || 8);
   put("印刷倍率",        v => db.settings.k      = +v || 1);
+  put("タイトル文字pt",  v => db.settings.titlePt = +v || 16);
+  put("詳細文字pt",      v => db.settings.notePt  = +v || 12);
   put("時数_貼る先",     v => t.anchor  = String(v).trim());
   put("時数_クラスの順", v => t.classes = String(v));
   put("時数_1日の行数",  v => t.block   = +v || 10);
@@ -2037,7 +2108,7 @@ const KEY = "school-timetable/v3";
 const blankDb = () => ({
   v: 3,
   settings: {
-    paper:"B5", margin:8, k:1, vz:100, fit:true,
+    paper:"B5", margin:8, k:1, vz:100, fit:true, titlePt:16, notePt:12,
     /* A週の起点の月曜。**この週がA週で、以後1週ごとに入れ替わる**（config.js） */
     abAnchor: AB_ANCHOR,
     tally:{ anchor:"C2", classes:"3-1,3-2,3-3", block:10,
@@ -2139,6 +2210,8 @@ function newYear(y){
     /* クラス編成と専科は前年度から引き継ぐ（学年ごとのクラス数は年で変わらない）。
        基本時間割は引き継がない。**毎年変わるものを黙って持ち越さない。** */
     classes:  prev ? clone(prev.classes)  : clone(DEFAULT_CLASSES),
+    /* クラスごとの教科チップ。off／screen／output。既定は画面だけ。 */
+    chipModes: prev ? clone(prev.chipModes || {}) : {},
     specials: prev ? clone(prev.specials) : clone(DEFAULT_SPECIALS),
     base:{}, weeks:{}, week1: firstMonday(y),
     /* 年間行事計画表から読んだもの。**日付にしか結びついていない**
@@ -2158,6 +2231,7 @@ function Y(){
   let Yr = db.years[y];
   if(!Yr){ Yr = db.years[y] = newYear(+y); }
   if(!Yr.classes)  Yr.classes  = clone(DEFAULT_CLASSES);
+  if(!Yr.chipModes || typeof Yr.chipModes !== "object") Yr.chipModes = {};
   if(!Yr.specials) Yr.specials = clone(DEFAULT_SPECIALS);
   if(!Yr.base)  Yr.base  = {};
   if(!Yr.weeks) Yr.weeks = {};
@@ -3084,6 +3158,13 @@ const Backend = (function(){
       .withFailureHandler(e => ng(String((e && e.message) || "貼り替えられなかった")))
       .apiWriteEvents(rows);
   }
+  /* 週案を共有用の新しい Google Sheet にする。公開範囲は勝手に変えない。 */
+  function exportPlanSheet(name, sheets, ok, ng){
+    if(!onGas) return ng("手元ではGoogle Sheetを作れない");
+    google.script.run.withSuccessHandler(ok)
+      .withFailureHandler(e => ng(String((e && e.message) || "Sheetを作れなかった")))
+      .apiExportPlanSheet(name, sheets);
+  }
 
   /* 画面を閉じる前に、貯めたぶんを出し切る。
      出し切れないうちに閉じられそうなときは、引き止める。 */
@@ -3102,7 +3183,8 @@ const Backend = (function(){
           saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,
           tpTargets, saveTpTargets, testTpTarget, tpSubmit,
-          yearSetup, tickYearSetup, setupPlanSheets, saveVariantOrigin, saveEvents};
+          yearSetup, tickYearSetup, setupPlanSheets, saveVariantOrigin, saveEvents,
+          exportPlanSheet};
 })();
 /* ▲ src/js/backend.js ▲ */
 /* ▼ src/js/fixed.js ▼ */
@@ -3937,6 +4019,9 @@ function buildSheet(into, mon){
 }
 function buildSheet_(sh){
   sh.textContent = "";
+  const cm = view.kind === "class" ? ((Y().chipModes || {})[view.cls] || "screen") : "off";
+  sh.classList.toggle("chips-screen", cm !== "off");
+  sh.classList.toggle("chips-output", cm === "output");
   sh.style.gridTemplateRows = "auto 1fr auto";      /* 見出し／本体／週メモ */
 
   const put = (node, col, row) => {
@@ -4158,6 +4243,8 @@ function paintSheet(one, root){
     if(n && n !== typing && n.innerHTML !== wantN) n.innerHTML = wantN;
 
     e.dataset.layer = c.layer;
+    e.dataset.subject = c.subject || "";
+    e.classList.toggle("has-sub", !!c.subject);
     e.classList.toggle("from-base", c.layer === "base");
     e.classList.toggle("upper", RANK[c.layer] > RANK[mine] && !c.clash);
     e.classList.toggle("clash", !!c.clash);
@@ -4345,6 +4432,12 @@ function drawPalette(){
     : "コマへ<b>引っぱって入れる</b>。コマを選んでから押しても入る。"
       + (canClear ? "<br><b>リセット</b>を落とすと、そのコマをここから取り消す"
                   + "（各クラスの予定が出るようになる）。" : "");
+  const chip = $("chipOpen");
+  chip.hidden = view.kind !== "class";
+  if(view.kind === "class"){
+    const mode = (Y().chipModes || {})[view.cls] || "screen";
+    $("chipNow").textContent = mode === "off" ? "使わない" : mode === "output" ? "画面と出力" : "画面だけ";
+  }
 
   for(const b of $("pals").querySelectorAll(".pal")){
     b.addEventListener("dragstart", ev => {
@@ -5244,6 +5337,77 @@ function onTargetChange(v){
 
 let baseVar = "A";
 
+function openSettings(){
+  $("settingsFy").textContent = fy() + "年度";
+  $("setPaperNow").textContent = db.settings.paper + "・タイトル"
+    + (+db.settings.titlePt || 16) + "pt・詳細" + (+db.settings.notePt || 12) + "pt";
+  $("settingsDlg").showModal();
+}
+
+function openWeekOutput(){
+  if(view.kind === "gate" || view.kind === "tanpopo") return toast("先に週案を開いてください");
+  $("outWho").innerHTML = "<b>" + escText(viewName()) + "</b>　" + md(monday)
+    + " → " + md(addDays(monday, 4)) + " の週";
+  $("outStat").textContent = "";
+  $("outDlg").showModal();
+}
+
+function planValues(mon){
+  const keep = monday; monday = mon;
+  try{
+    const out = [[viewName(), md(mon) + " → " + md(addDays(mon, 4))]
+      .concat(DOW.slice(0, WEEKDAYS))];
+    for(const s of SLOTS){
+      const row = [s.name, s.time || ""];
+      for(let d=0; d<WEEKDAYS; d++){
+        const c = cellFor(d, s.id), title = plain(c.title || ""), note = plain(c.note || "");
+        row.push(title + (note ? "\n" + note : ""));
+      }
+      out.push(row);
+    }
+    return out;
+  } finally { monday = keep; }
+}
+function planParts(start, count){
+  const out = [];
+  for(let i=0; i<count; i++){
+    const mon = addDays(start, i*7);
+    out.push({name:(mon.getMonth()+1) + "月" + Math.ceil(mon.getDate()/7) + "週", values:planValues(mon)});
+  }
+  return out;
+}
+function downloadBlob(blob, name){
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+/* 紙面をそのままPNGへする。外部サービスへ週案を送らない。 */
+async function nodePng(node, name){
+  const r = node.getBoundingClientRect(), css = [...document.styleSheets].map(s => {
+    try{return [...s.cssRules].map(x => x.cssText).join("\n");}catch(_){return "";}
+  }).join("\n");
+  const xml = new XMLSerializer().serializeToString(node.cloneNode(true));
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${r.width}" height="${r.height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml"><style>${css}</style>${xml}</div></foreignObject></svg>`;
+  const url = URL.createObjectURL(new Blob([svg], {type:"image/svg+xml"}));
+  try{
+    const img = new Image(); await new Promise((ok, ng) => { img.onload=ok; img.onerror=ng; img.src=url; });
+    const scale=2, cv=document.createElement("canvas"); cv.width=Math.ceil(r.width*scale); cv.height=Math.ceil(r.height*scale);
+    const cx=cv.getContext("2d"); cx.scale(scale,scale); cx.fillStyle="#fff"; cx.fillRect(0,0,r.width,r.height); cx.drawImage(img,0,0);
+    const blob=await new Promise(ok => cv.toBlob(ok,"image/png")); downloadBlob(blob,name);
+  } finally { URL.revokeObjectURL(url); }
+}
+const outputName = suffix => viewName().replace(/[^\w\-ぁ-んァ-ヶ一-龠]/g,"_") + "_" + iso(monday) + "_" + suffix;
+function exportWeekSheet(){
+  $("outStat").textContent="Google Sheetを作っています…";
+  Backend.exportPlanSheet(outputName("週案"), planParts(monday,1), r => {
+    $("outStat").innerHTML="<b>Sheetを作りました。</b> <a target='_blank' rel='noopener' href='"+escText(r.url)+"'>Google Sheetを開く</a>";
+  }, why => $("outStat").textContent=why);
+}
+function exportMonthSheet(){
+  Backend.exportPlanSheet(outputName("4週"), planParts(mMonday,4), r => {
+    toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>4週のGoogle Sheetを開く</a>");
+  }, why => toast(escText(why)));
+}
+
 function openBaseDlg(){
   const list = allClasses();
   fillSelect($("baseCls"), list.map(c => ({v:c, t:c})),
@@ -5265,7 +5429,7 @@ function drawBaseGrid(){
     for(let d = 0; d < WEEKDAYS; d++){
       const v = bank[ck(d, s.id)] || {};
       rows.push("<td>" + (s.kind === "lesson"
-        ? "<select data-k='" + ck(d, s.id) + "'><option value=''>—</option>"
+        ? "<select class='basesub' data-subject='" + escText(v.subject || "") + "' data-k='" + ck(d, s.id) + "'><option value=''>—</option>"
           + SUBJECTS.map(x => "<option value='" + x.code + "'"
             + (v.subject === x.code ? " selected" : "") + ">" + x.name + "</option>").join("")
           + "</select>"
@@ -5278,6 +5442,7 @@ function drawBaseGrid(){
 
   for(const e of $("baseGrid").querySelectorAll("select")) e.onchange = () => {
     const s = SUB_BY_CODE[e.value];
+    e.dataset.subject = s ? s.code : "";
     if(s) bank[e.dataset.k] = {title:s.name, subject:s.code};
     else delete bank[e.dataset.k];
     save(); Backend.saveBase(c, baseVar);
@@ -5563,6 +5728,9 @@ function applyPaper(){
   sh.style.setProperty("--ph", h);
   sh.style.setProperty("--pm", s.margin + "mm");
   sh.style.setProperty("--k", s.k);
+  sh.style.setProperty("--fs-t", (+s.titlePt || 16) + "pt");
+  sh.style.setProperty("--fs-n", (+s.notePt || 12) + "pt");
+  sh.style.setProperty("--fs-a", (+s.notePt || 12) * .92 + "pt");
   let st = $("pagecss");
   if(!st){ st = el("style"); st.id = "pagecss"; document.head.appendChild(st); }
   /* **`size:B5` と書かない。** CSS の B5 は ISO B5（176×250mm）で、
@@ -5573,6 +5741,8 @@ function applyPaper(){
   $("stPaper").value = s.paper;
   $("stMg").value = s.margin;  $("stMgV").textContent = s.margin;
   $("stK").value  = s.k;       $("stKV").textContent  = (+s.k).toFixed(2);
+  $("stTitle").value = +s.titlePt || 16; $("stTitleV").textContent = +s.titlePt || 16;
+  $("stNote").value = +s.notePt || 12; $("stNoteV").textContent = +s.notePt || 12;
   autoFit();
 }
 
@@ -5738,6 +5908,10 @@ const HELP = {
        "A週・B週の2種類を持てます。学校の固定時間割表を、表ごと貼って取り込むこともできます。",
        "<i>はじめの人がつまずくところ：</i>1週だけ変えたいときは、ここではなく"
        + "その週の紙の上で直してください。"]},
+  settings: {t:"設定",
+    b:["<b>学校全体と年度のもとになる設定をまとめた画面です。</b>",
+       "基本時間割、学年・クラス、たんぽぽ組分け、印刷と文字、新年度の準備をここから開けます。",
+       "<i>はじめの人がつまずくところ：</i>週ごとの印刷・画像・Sheetは、左の「週案を出す」から行います。"]},
   roster: {t:"学級編成",
     b:["<b>学年とクラスの並び、専科の先生、たんぽぽの交流級を決めます。</b>",
        "ここで決めたものが、そのまま「ほかの週案をひらく」の表になります。",
@@ -6694,6 +6868,8 @@ function wire(){
       if(a === "newyear") return openNewYearDlg();
       if(a === "month")   return openMonth();
       if(a === "print")   return window.print();
+      if(a === "settings")return openSettings();
+      if(a === "outweek") return openWeekOutput();
     });
   for(const b of document.querySelectorAll("[data-close]"))
     b.addEventListener("click", () => $(b.dataset.close).close());
@@ -6724,6 +6900,8 @@ function wire(){
   on("stPaper","change", e => { db.settings.paper = e.target.value; save(); applyPaper(); });
   on("stMg","input",  e => { db.settings.margin = +e.target.value; save(); applyPaper(); });
   on("stK","input",   e => { db.settings.k = +e.target.value; save(); applyPaper(); });
+  on("stTitle","input", e => { db.settings.titlePt=+e.target.value; save(); applyPaper(); buildSheet(); });
+  on("stNote","input", e => { db.settings.notePt=+e.target.value; save(); applyPaper(); buildSheet(); });
   on("fitChk","change", e => { db.settings.fit = e.target.checked; save(); autoFit(); });
   on("vz","input", e => {
     db.settings.fit = false; db.settings.vz = +e.target.value; save(); applyZoom();
@@ -6768,6 +6946,11 @@ function wire(){
   on("mNext","click",  () => { mMonday = addDays(mMonday,  7 * MONTH_WEEKS); drawMonth(); });
   on("mClose","click", () => showMonth(false));
   on("mPrint","click", printMonth);
+  on("mImage","click", async () => {
+    try{ await nodePng($("mPaper"), outputName("4週_B4")+".png"); toast("4週の画像を保存した"); }
+    catch(e){ toast("画像を作れなかった（"+escText(e.message||e)+"）"); }
+  });
+  on("mSheet","click", exportMonthSheet);
   addEventListener("resize", () => { if(!$("monthView").hidden) fitMonth(); });
   /* 新年度の設定。**ふだんは管理・システムの中だけ。**
      未了のあいだだけ、左メニューにも出る（結線は dialogs.js） */
@@ -6776,6 +6959,31 @@ function wire(){
   on("abSave","click", saveAb);
   on("evRead","click", evRead);
   on("evGo","click", evGo);
+  on("setBase","click", () => { $("settingsDlg").close(); openBaseDlg(); });
+  on("setRoster","click", () => { $("settingsDlg").close(); openRosterDlg(); });
+  on("setTanpopo","click", () => { $("settingsDlg").close(); openView({kind:"tanpopo"}); });
+  on("setPaper","click", () => { $("settingsDlg").close(); applyPaper(); $("setDlg").showModal(); });
+  on("setNewYear","click", () => { $("settingsDlg").close(); openNewYearDlg(); });
+  on("outPrint","click", () => { $("outDlg").close(); window.print(); });
+  on("outImage","click", async () => {
+    try{ await nodePng($("sheet"), outputName("B5")+".png"); $("outStat").textContent="画像を保存しました。Google Chatへ添付できます。"; }
+    catch(e){ $("outStat").textContent="画像を作れませんでした（"+(e.message||e)+"）"; }
+  });
+  on("outSheet","click", exportWeekSheet);
+  on("chipOpen","click", () => {
+    if(view.kind!=="class") return;
+    $("chipClass").textContent=view.cls;
+    const mode=(Y().chipModes||{})[view.cls]||"screen";
+    const radio=document.querySelector("input[name=chipMode][value='"+mode+"']"); if(radio) radio.checked=true;
+    $("chipDlg").showModal();
+  });
+  on("chipSave","click", () => {
+    if(view.kind!=="class") return;
+    const radio=document.querySelector("input[name=chipMode]:checked");
+    (Y().chipModes||(Y().chipModes={}))[view.cls]=radio?radio.value:"screen";
+    save(); $("chipDlg").close(); buildSheet(); drawPalette();
+    toast(view.cls+" の教科チップを変更した");
+  });
 
   /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */
   on("dayDlg","close", () => { dayPick = 0; });
