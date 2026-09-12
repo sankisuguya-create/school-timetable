@@ -6,6 +6,77 @@
 
 let baseVar = "A";
 
+function openSettings(){
+  $("settingsFy").textContent = fy() + "年度";
+  $("setPaperNow").textContent = db.settings.paper + "・タイトル"
+    + (+db.settings.titlePt || 16) + "pt・詳細" + (+db.settings.notePt || 12) + "pt";
+  $("settingsDlg").showModal();
+}
+
+function openWeekOutput(){
+  if(view.kind === "gate" || view.kind === "tanpopo") return toast("先に週案を開いてください");
+  $("outWho").innerHTML = "<b>" + escText(viewName()) + "</b>　" + md(monday)
+    + " → " + md(addDays(monday, 4)) + " の週";
+  $("outStat").textContent = "";
+  $("outDlg").showModal();
+}
+
+function planValues(mon){
+  const keep = monday; monday = mon;
+  try{
+    const out = [[viewName(), md(mon) + " → " + md(addDays(mon, 4))]
+      .concat(DOW.slice(0, WEEKDAYS))];
+    for(const s of SLOTS){
+      const row = [s.name, s.time || ""];
+      for(let d=0; d<WEEKDAYS; d++){
+        const c = cellFor(d, s.id), title = plain(c.title || ""), note = plain(c.note || "");
+        row.push(title + (note ? "\n" + note : ""));
+      }
+      out.push(row);
+    }
+    return out;
+  } finally { monday = keep; }
+}
+function planParts(start, count){
+  const out = [];
+  for(let i=0; i<count; i++){
+    const mon = addDays(start, i*7);
+    out.push({name:(mon.getMonth()+1) + "月" + Math.ceil(mon.getDate()/7) + "週", values:planValues(mon)});
+  }
+  return out;
+}
+function downloadBlob(blob, name){
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+/* 紙面をそのままPNGへする。外部サービスへ週案を送らない。 */
+async function nodePng(node, name){
+  const r = node.getBoundingClientRect(), css = [...document.styleSheets].map(s => {
+    try{return [...s.cssRules].map(x => x.cssText).join("\n");}catch(_){return "";}
+  }).join("\n");
+  const xml = new XMLSerializer().serializeToString(node.cloneNode(true));
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${r.width}" height="${r.height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml"><style>${css}</style>${xml}</div></foreignObject></svg>`;
+  const url = URL.createObjectURL(new Blob([svg], {type:"image/svg+xml"}));
+  try{
+    const img = new Image(); await new Promise((ok, ng) => { img.onload=ok; img.onerror=ng; img.src=url; });
+    const scale=2, cv=document.createElement("canvas"); cv.width=Math.ceil(r.width*scale); cv.height=Math.ceil(r.height*scale);
+    const cx=cv.getContext("2d"); cx.scale(scale,scale); cx.fillStyle="#fff"; cx.fillRect(0,0,r.width,r.height); cx.drawImage(img,0,0);
+    const blob=await new Promise(ok => cv.toBlob(ok,"image/png")); downloadBlob(blob,name);
+  } finally { URL.revokeObjectURL(url); }
+}
+const outputName = suffix => viewName().replace(/[^\w\-ぁ-んァ-ヶ一-龠]/g,"_") + "_" + iso(monday) + "_" + suffix;
+function exportWeekSheet(){
+  $("outStat").textContent="Google Sheetを作っています…";
+  Backend.exportPlanSheet(outputName("週案"), planParts(monday,1), r => {
+    $("outStat").innerHTML="<b>Sheetを作りました。</b> <a target='_blank' rel='noopener' href='"+escText(r.url)+"'>Google Sheetを開く</a>";
+  }, why => $("outStat").textContent=why);
+}
+function exportMonthSheet(){
+  Backend.exportPlanSheet(outputName("4週"), planParts(mMonday,4), r => {
+    toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>4週のGoogle Sheetを開く</a>");
+  }, why => toast(escText(why)));
+}
+
 function openBaseDlg(){
   const list = allClasses();
   fillSelect($("baseCls"), list.map(c => ({v:c, t:c})),
@@ -27,7 +98,7 @@ function drawBaseGrid(){
     for(let d = 0; d < WEEKDAYS; d++){
       const v = bank[ck(d, s.id)] || {};
       rows.push("<td>" + (s.kind === "lesson"
-        ? "<select data-k='" + ck(d, s.id) + "'><option value=''>—</option>"
+        ? "<select class='basesub' data-subject='" + escText(v.subject || "") + "' data-k='" + ck(d, s.id) + "'><option value=''>—</option>"
           + SUBJECTS.map(x => "<option value='" + x.code + "'"
             + (v.subject === x.code ? " selected" : "") + ">" + x.name + "</option>").join("")
           + "</select>"
@@ -40,6 +111,7 @@ function drawBaseGrid(){
 
   for(const e of $("baseGrid").querySelectorAll("select")) e.onchange = () => {
     const s = SUB_BY_CODE[e.value];
+    e.dataset.subject = s ? s.code : "";
     if(s) bank[e.dataset.k] = {title:s.name, subject:s.code};
     else delete bank[e.dataset.k];
     save(); Backend.saveBase(c, baseVar);
@@ -325,6 +397,9 @@ function applyPaper(){
   sh.style.setProperty("--ph", h);
   sh.style.setProperty("--pm", s.margin + "mm");
   sh.style.setProperty("--k", s.k);
+  sh.style.setProperty("--fs-t", (+s.titlePt || 16) + "pt");
+  sh.style.setProperty("--fs-n", (+s.notePt || 12) + "pt");
+  sh.style.setProperty("--fs-a", (+s.notePt || 12) * .92 + "pt");
   let st = $("pagecss");
   if(!st){ st = el("style"); st.id = "pagecss"; document.head.appendChild(st); }
   /* **`size:B5` と書かない。** CSS の B5 は ISO B5（176×250mm）で、
@@ -335,6 +410,8 @@ function applyPaper(){
   $("stPaper").value = s.paper;
   $("stMg").value = s.margin;  $("stMgV").textContent = s.margin;
   $("stK").value  = s.k;       $("stKV").textContent  = (+s.k).toFixed(2);
+  $("stTitle").value = +s.titlePt || 16; $("stTitleV").textContent = +s.titlePt || 16;
+  $("stNote").value = +s.notePt || 12; $("stNoteV").textContent = +s.notePt || 12;
   autoFit();
 }
 
@@ -500,6 +577,10 @@ const HELP = {
        "A週・B週の2種類を持てます。学校の固定時間割表を、表ごと貼って取り込むこともできます。",
        "<i>はじめの人がつまずくところ：</i>1週だけ変えたいときは、ここではなく"
        + "その週の紙の上で直してください。"]},
+  settings: {t:"設定",
+    b:["<b>学校全体と年度のもとになる設定をまとめた画面です。</b>",
+       "基本時間割、学年・クラス、たんぽぽ組分け、印刷と文字、新年度の準備をここから開けます。",
+       "<i>はじめの人がつまずくところ：</i>週ごとの印刷・画像・Sheetは、左の「週案を出す」から行います。"]},
   roster: {t:"学級編成",
     b:["<b>学年とクラスの並び、専科の先生、たんぽぽの交流級を決めます。</b>",
        "ここで決めたものが、そのまま「ほかの週案をひらく」の表になります。",
