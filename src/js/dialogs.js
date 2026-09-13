@@ -632,6 +632,97 @@ function openHelp(k){
   $("helpDlg").showModal();
 }
 
+/* ── 初めて開いた人への案内 ───────────────────
+   長い説明を先に読ませず、いま見る場所だけを短く示す。 */
+const TOUR_KEY = "school-timetable/tour-v1";
+const TOUR_STEPS = [
+  [".side .wk", "週を選ぶ", "矢印で週を移動できます。下の欄では、見る週案を選べます。"],
+  [".nav[data-act='gate']", "週案を開く", "クラス・学年・専科から、書きたい週案を開きます。"],
+  [".nav[data-act='outweek']", "週案を出す", "印刷・画像・Google Sheetの形で週案を出せます。"],
+  [".nav[data-act='tally']", "時数をコピー", "この週の授業を、Excelへ貼れる形でコピーします。"],
+  [".nav[data-act='month']", "4週を見渡す", "4週間分を並べて確認し、B4横1枚に印刷できます。"],
+  [".nav[data-act='settings']", "設定", "基本時間割・学級編成・用紙設定は、ここにまとまっています。"],
+  [".admin", "管理・システム", "新年度の準備や接続先の確認は、管理担当がここで行います。"],
+  [".phead", "学級の週案", "学級を開きました。右側から時間割を入力できます。", "panel"],
+  [".phead .pbtns", "ロックと保存", "見るだけならロックできます。変更後は保存状態を確認できます。"],
+  ["#pals", "教科・行事", "紙のコマを選び、ここから教科や行事を入れます。"],
+  ["#pTitleWrap", "教科名・行事名", "選んだコマの名前を、直接入力して直すこともできます。"],
+  ["#pNoteWrap", "詳細・備考", "持ち物や場所など、授業名に添える内容を書けます。"]
+];
+let tourAt = 0, tourStarted = false, tourPanelReady = false;
+
+function tourSeen(){
+  try{ return localStorage.getItem(TOUR_KEY) === "done"; }catch(_){ return true; }
+}
+function finishTour(){
+  $("tour").hidden = true;
+  document.removeEventListener("keydown", tourKey);
+  try{ localStorage.setItem(TOUR_KEY, "done"); }catch(_){}
+}
+function tourKey(ev){
+  if(ev.key === "Escape") finishTour();
+}
+function prepareTourPanel(done){
+  const cls = allClasses().indexOf("1-1") >= 0 ? "1-1" : allClasses()[0];
+  if(!cls){ finishTour(); return; }
+  openView({kind:"class", cls});
+  setTimeout(() => {
+    const slot = SLOTS.find(s => s.kind === "lesson");
+    if(slot) selectCell(0, slot.id, cellAt(0, slot.id));
+    tourPanelReady = true;
+    done();
+  }, 250);
+}
+function positionTour(target){
+  target.scrollIntoView({block:"center", inline:"nearest"});
+  requestAnimationFrame(() => {
+    const r = target.getBoundingClientRect(), pad = 5;
+    const f = $("tourFocus"), bubble = $("tourBubble");
+    f.style.left = Math.max(2, r.left - pad) + "px";
+    f.style.top = Math.max(2, r.top - pad) + "px";
+    f.style.width = Math.max(1, r.width + pad * 2) + "px";
+    f.style.height = Math.max(1, r.height + pad * 2) + "px";
+    const bw = bubble.offsetWidth, bh = bubble.offsetHeight, gap = 17;
+    let side, left, top;
+    if(r.right + gap + bw <= innerWidth){
+      side = "right"; left = r.right + gap; top = r.top;
+    }else if(r.left - gap - bw >= 0){
+      side = "left"; left = r.left - gap - bw; top = r.top;
+    }else{
+      side = "bottom"; left = r.left; top = r.bottom + gap;
+    }
+    bubble.dataset.side = side;
+    bubble.style.left = Math.max(14, Math.min(left, innerWidth - bw - 14)) + "px";
+    bubble.style.top = Math.max(14, Math.min(top, innerHeight - bh - 14)) + "px";
+  });
+}
+function showTourStep(){
+  if(tourAt >= TOUR_STEPS.length) return finishTour();
+  const step = TOUR_STEPS[tourAt];
+  if(step[3] === "panel" && !tourPanelReady) return prepareTourPanel(showTourStep);
+  const target = document.querySelector(step[0]);
+  if(!target || target.hidden || !target.getClientRects().length){
+    tourAt++; return showTourStep();
+  }
+  $("tourStep").textContent = (tourAt + 1) + " / " + TOUR_STEPS.length;
+  $("tourTitle").textContent = step[1];
+  $("tourText").textContent = step[2];
+  $("tourNext").textContent = tourAt === TOUR_STEPS.length - 1 ? "わかった" : "次へ";
+  positionTour(target);
+  $("tourNext").focus();
+}
+function nextTour(){ tourAt++; showTourStep(); }
+function startFirstTour(force){
+  if(tourStarted || (!force && tourSeen())) return;
+  tourStarted = true;
+  $("tour").hidden = false;
+  $("tourNext").onclick = nextTour;
+  $("tourSkip").onclick = finishTour;
+  document.addEventListener("keydown", tourKey);
+  addEventListener("resize", () => { if(!$("tour").hidden) showTourStep(); });
+  showTourStep();
+}
+
 /* ── 新年度の設定 ────────────────────────────
    **4月に開いたとき、何を、どの順でやるかを1画面で出す。**
 

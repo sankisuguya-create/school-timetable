@@ -371,6 +371,21 @@ const Backend = (function(){
   const archivedYear = y => (bootInfo.archived || {})[String(y)] || null;
   function boot(after){
     if(!onGas){ booted = true; return after(); }
+    let finished = false;
+    const finish = () => {
+      if(finished) return;
+      finished = true;
+      clearTimeout(timer);
+      booted = true;
+      after();
+      while(waiters.length) waiters.shift()();
+    };
+    /* google.script.run は回線断で成功・失敗のどちらも返らないことがある。
+       入口と週移動を永久に待たせず、端末の控えで開ける状態へ戻す。 */
+    const timer = setTimeout(() => {
+      notify("最初の読み込みに時間がかかっている。<b>端末の控えで開いた</b>。回線を確かめて再読み込みしてください");
+      finish();
+    }, 15000);
     google.script.run
       .withSuccessHandler(b => {
         bootInfo = {me: b.me || "", file: b.file || "", archived: b.archived || {}};
@@ -380,16 +395,12 @@ const Backend = (function(){
         if(b.year) applyYear(String(b.year), b);
         /* **週を読み直す前に、持ち越しを送る。** */
         sendPending(() => {
-          booted = true;
-          after();
-          while(waiters.length) waiters.shift()();
+          finish();
         });
       })
       .withFailureHandler(e => {
-        booted = true;             /* 開けなくても止めない。手元の控えで続ける */
         notify("開けなかった（" + escText(String(e && e.message)) + "）");
-        after();
-        while(waiters.length) waiters.shift()();
+        finish();                   /* 開けなくても止めない。手元の控えで続ける */
       })
       .apiBoot(fy());
   }
@@ -436,19 +447,30 @@ const Backend = (function(){
     const y = String(fy());
     Y();                                   /* その年度の入れ物を用意しておく */
     if(loadedYear[y]) return after();
+    let finished = false;
+    const finish = () => {
+      if(finished) return;
+      finished = true;
+      clearTimeout(timer);
+      after();
+    };
+    const timer = setTimeout(() => {
+      notify("年度の設定の読み込みに時間がかかっている。端末の控えで続ける");
+      finish();
+    }, 15000);
     google.script.run
       .withSuccessHandler(r => {
         /* たんぽぽ交流級は空も答えのうち（全部外した年度がある）。
            有無ではなく、配列が返ってきたかどうかで見る（applyYear の中） */
         applyYear(y, r);
-        after();
+        finish();
       })
       /* **読めなくても先へ進む。** 進まないと、開いたつもりの画面が出ないまま
          前の画面が残り、どこを見ているのか分からなくなる。
          中身は手元の控えのまま。読めなかったことは帯で言う。 */
       .withFailureHandler(e => {
         notify("年度の設定を読めなかった（" + escText(String(e && e.message)) + "）");
-        after();
+        finish();
       })
       .apiReadYear(+y);
   }
@@ -465,15 +487,26 @@ const Backend = (function(){
        いま見ている週へ入れてしまうと、その週の中身が消える。
        校内の回線では返事の順序が入れ替わる（古い週の返事があとから届く）。 */
     const year = fy(), mon = wkKey();
+    let finished = false;
+    const finish = () => {
+      if(finished) return;
+      finished = true;
+      clearTimeout(timer);
+      after();
+    };
+    const timer = setTimeout(() => {
+      notify("この週の読み込みに時間がかかっている。<b>端末の控えで開いた</b>");
+      finish();
+    }, 15000);
     google.script.run
       .withSuccessHandler(w => {
         mergeWeek(want, w, year, mon);   /* 頼んだぶんだけ入れ替える。控えは残す */
-        after();
+        finish();
       })
       .withFailureHandler(e => {
         notify("この週を読めなかった（" + escText(String(e && e.message))
              + "）。<b>この週はまだ書かない</b>");
-        after();
+        finish();
       })
       .apiReadWeek(year, mon, want);
   }

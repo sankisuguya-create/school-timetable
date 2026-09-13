@@ -450,14 +450,14 @@ function wire(){
   on("chipOpen","click", () => {
     if(view.kind!=="class") return;
     $("chipClass").textContent=view.cls;
-    const mode=(Y().chipModes||{})[view.cls]||"screen";
+    const mode=(Y().chipModes||{})[view.cls]||"off";
     const radio=document.querySelector("input[name=chipMode][value='"+mode+"']"); if(radio) radio.checked=true;
     $("chipDlg").showModal();
   });
   on("chipSave","click", () => {
     if(view.kind!=="class") return;
     const radio=document.querySelector("input[name=chipMode]:checked");
-    (Y().chipModes||(Y().chipModes={}))[view.cls]=radio?radio.value:"screen";
+    (Y().chipModes||(Y().chipModes={}))[view.cls]=radio?radio.value:"off";
     save(); $("chipDlg").close(); buildSheet(); drawPalette();
     toast(view.cls+" の教科チップを変更した");
   });
@@ -610,6 +610,8 @@ function start(){
   if(!Backend.isGas()) save();
   applyPaper();
   showGate();
+  /* この案内をまだ見ていない端末では1回だけ出す。既存データの有無とは分ける。 */
+  setTimeout(startFirstTour, 250);
 
   /* 設定・時程・教科・その年度は、立ち上がりの1回でまとめてもらう。
      別々に取りに行くと、その回数だけ待つことになる。 */

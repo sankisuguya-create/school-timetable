@@ -868,6 +868,27 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   line-height:1.6}
 .toast b{color:#FFC9BC}
 
+/* 初回案内。画面全体を暗くし、いま見る場所だけを枠で示す。 */
+.tour{position:fixed;inset:0;z-index:100;background:rgba(24,26,30,.32)}
+.tourfocus{position:fixed;border:3px solid #fff;border-radius:10px;
+  box-shadow:0 0 0 3px var(--ink-link),0 6px 24px rgba(0,0,0,.28);
+  pointer-events:none;transition:inset .16s ease,width .16s ease,height .16s ease}
+.tourbubble{position:fixed;width:min(300px,calc(100vw - 28px));padding:15px 17px;
+  border:0;border-radius:14px;background:var(--card);color:var(--tx);
+  box-shadow:0 12px 38px rgba(0,0,0,.3)}
+.tourbubble::before{content:"";position:absolute;width:14px;height:14px;
+  background:var(--card);transform:rotate(45deg)}
+.tourbubble[data-side="right"]::before{left:-7px;top:24px}
+.tourbubble[data-side="left"]::before{right:-7px;top:24px}
+.tourbubble[data-side="bottom"]::before{top:-7px;left:26px}
+.tourbubble small{display:block;color:var(--tx-sub);font-size:11px;margin-bottom:2px}
+.tourbubble>b{display:block;font-size:16px;line-height:1.5}
+.tourbubble p{margin:5px 0 12px;font-size:13px;line-height:1.65}
+.tourbuttons{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tourskip{border:0;background:none;color:var(--tx-sub);font-size:11.5px;
+  padding:5px 0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+@media (prefers-reduced-motion:reduce){.tourfocus{transition:none}}
+
 /* 管理・システムの表。読むだけの1列。数字は等幅で縦に揃える */
 .sys{border-collapse:collapse;width:100%;font-size:13px;margin:4px 0 10px}
 .sys th,.sys td{border-bottom:1px solid var(--rule-soft);padding:7px 8px;text-align:left;
@@ -1396,6 +1417,21 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 </div>
 
 <div class="toast" id="toast" hidden></div>
+
+<!-- 初めて開いた端末だけに出す短い案内。 -->
+<div class="tour" id="tour" hidden>
+  <div class="tourfocus" id="tourFocus" aria-hidden="true"></div>
+  <section class="tourbubble" id="tourBubble" role="dialog" aria-modal="true"
+           aria-labelledby="tourTitle" aria-describedby="tourText">
+    <small id="tourStep"></small>
+    <b id="tourTitle"></b>
+    <p id="tourText"></p>
+    <div class="tourbuttons">
+      <button type="button" class="tourskip" id="tourSkip">説明を終える</button>
+      <button type="button" class="btn go" id="tourNext">次へ</button>
+    </div>
+  </section>
+</div>
 
 <!-- 処理中。**全面にかぶせて、次の操作を受け付けない。**
      窓が開いているあいだも上に乗るよう <dialog> にしてある（js/wait.js） -->
@@ -2210,7 +2246,7 @@ function newYear(y){
     /* クラス編成と専科は前年度から引き継ぐ（学年ごとのクラス数は年で変わらない）。
        基本時間割は引き継がない。**毎年変わるものを黙って持ち越さない。** */
     classes:  prev ? clone(prev.classes)  : clone(DEFAULT_CLASSES),
-    /* クラスごとの教科チップ。off／screen／output。既定は画面だけ。 */
+    /* クラスごとの教科チップ。off／screen／output。既定は使わない。 */
     chipModes: prev ? clone(prev.chipModes || {}) : {},
     specials: prev ? clone(prev.specials) : clone(DEFAULT_SPECIALS),
     base:{}, weeks:{}, week1: firstMonday(y),
@@ -2746,6 +2782,21 @@ const Backend = (function(){
   const archivedYear = y => (bootInfo.archived || {})[String(y)] || null;
   function boot(after){
     if(!onGas){ booted = true; return after(); }
+    let finished = false;
+    const finish = () => {
+      if(finished) return;
+      finished = true;
+      clearTimeout(timer);
+      booted = true;
+      after();
+      while(waiters.length) waiters.shift()();
+    };
+    /* google.script.run は回線断で成功・失敗のどちらも返らないことがある。
+       入口と週移動を永久に待たせず、端末の控えで開ける状態へ戻す。 */
+    const timer = setTimeout(() => {
+      notify("最初の読み込みに時間がかかっている。<b>端末の控えで開いた</b>。回線を確かめて再読み込みしてください");
+      finish();
+    }, 15000);
     google.script.run
       .withSuccessHandler(b => {
         bootInfo = {me: b.me || "", file: b.file || "", archived: b.archived || {}};
@@ -2755,16 +2806,12 @@ const Backend = (function(){
         if(b.year) applyYear(String(b.year), b);
         /* **週を読み直す前に、持ち越しを送る。** */
         sendPending(() => {
-          booted = true;
-          after();
-          while(waiters.length) waiters.shift()();
+          finish();
         });
       })
       .withFailureHandler(e => {
-        booted = true;             /* 開けなくても止めない。手元の控えで続ける */
         notify("開けなかった（" + escText(String(e && e.message)) + "）");
-        after();
-        while(waiters.length) waiters.shift()();
+        finish();                   /* 開けなくても止めない。手元の控えで続ける */
       })
       .apiBoot(fy());
   }
@@ -2811,19 +2858,30 @@ const Backend = (function(){
     const y = String(fy());
     Y();                                   /* その年度の入れ物を用意しておく */
     if(loadedYear[y]) return after();
+    let finished = false;
+    const finish = () => {
+      if(finished) return;
+      finished = true;
+      clearTimeout(timer);
+      after();
+    };
+    const timer = setTimeout(() => {
+      notify("年度の設定の読み込みに時間がかかっている。端末の控えで続ける");
+      finish();
+    }, 15000);
     google.script.run
       .withSuccessHandler(r => {
         /* たんぽぽ交流級は空も答えのうち（全部外した年度がある）。
            有無ではなく、配列が返ってきたかどうかで見る（applyYear の中） */
         applyYear(y, r);
-        after();
+        finish();
       })
       /* **読めなくても先へ進む。** 進まないと、開いたつもりの画面が出ないまま
          前の画面が残り、どこを見ているのか分からなくなる。
          中身は手元の控えのまま。読めなかったことは帯で言う。 */
       .withFailureHandler(e => {
         notify("年度の設定を読めなかった（" + escText(String(e && e.message)) + "）");
-        after();
+        finish();
       })
       .apiReadYear(+y);
   }
@@ -2840,15 +2898,26 @@ const Backend = (function(){
        いま見ている週へ入れてしまうと、その週の中身が消える。
        校内の回線では返事の順序が入れ替わる（古い週の返事があとから届く）。 */
     const year = fy(), mon = wkKey();
+    let finished = false;
+    const finish = () => {
+      if(finished) return;
+      finished = true;
+      clearTimeout(timer);
+      after();
+    };
+    const timer = setTimeout(() => {
+      notify("この週の読み込みに時間がかかっている。<b>端末の控えで開いた</b>");
+      finish();
+    }, 15000);
     google.script.run
       .withSuccessHandler(w => {
         mergeWeek(want, w, year, mon);   /* 頼んだぶんだけ入れ替える。控えは残す */
-        after();
+        finish();
       })
       .withFailureHandler(e => {
         notify("この週を読めなかった（" + escText(String(e && e.message))
              + "）。<b>この週はまだ書かない</b>");
-        after();
+        finish();
       })
       .apiReadWeek(year, mon, want);
   }
@@ -4019,7 +4088,7 @@ function buildSheet(into, mon){
 }
 function buildSheet_(sh){
   sh.textContent = "";
-  const cm = view.kind === "class" ? ((Y().chipModes || {})[view.cls] || "screen") : "off";
+  const cm = view.kind === "class" ? ((Y().chipModes || {})[view.cls] || "off") : "off";
   sh.classList.toggle("chips-screen", cm !== "off");
   sh.classList.toggle("chips-output", cm === "output");
   sh.style.gridTemplateRows = "auto 1fr auto";      /* 見出し／本体／週メモ */
@@ -4435,7 +4504,7 @@ function drawPalette(){
   const chip = $("chipOpen");
   chip.hidden = view.kind !== "class";
   if(view.kind === "class"){
-    const mode = (Y().chipModes || {})[view.cls] || "screen";
+    const mode = (Y().chipModes || {})[view.cls] || "off";
     $("chipNow").textContent = mode === "off" ? "使わない" : mode === "output" ? "画面と出力" : "画面だけ";
   }
 
@@ -5963,6 +6032,97 @@ function openHelp(k){
   $("helpDlg").showModal();
 }
 
+/* ── 初めて開いた人への案内 ───────────────────
+   長い説明を先に読ませず、いま見る場所だけを短く示す。 */
+const TOUR_KEY = "school-timetable/tour-v1";
+const TOUR_STEPS = [
+  [".side .wk", "週を選ぶ", "矢印で週を移動できます。下の欄では、見る週案を選べます。"],
+  [".nav[data-act='gate']", "週案を開く", "クラス・学年・専科から、書きたい週案を開きます。"],
+  [".nav[data-act='outweek']", "週案を出す", "印刷・画像・Google Sheetの形で週案を出せます。"],
+  [".nav[data-act='tally']", "時数をコピー", "この週の授業を、Excelへ貼れる形でコピーします。"],
+  [".nav[data-act='month']", "4週を見渡す", "4週間分を並べて確認し、B4横1枚に印刷できます。"],
+  [".nav[data-act='settings']", "設定", "基本時間割・学級編成・用紙設定は、ここにまとまっています。"],
+  [".admin", "管理・システム", "新年度の準備や接続先の確認は、管理担当がここで行います。"],
+  [".phead", "学級の週案", "学級を開きました。右側から時間割を入力できます。", "panel"],
+  [".phead .pbtns", "ロックと保存", "見るだけならロックできます。変更後は保存状態を確認できます。"],
+  ["#pals", "教科・行事", "紙のコマを選び、ここから教科や行事を入れます。"],
+  ["#pTitleWrap", "教科名・行事名", "選んだコマの名前を、直接入力して直すこともできます。"],
+  ["#pNoteWrap", "詳細・備考", "持ち物や場所など、授業名に添える内容を書けます。"]
+];
+let tourAt = 0, tourStarted = false, tourPanelReady = false;
+
+function tourSeen(){
+  try{ return localStorage.getItem(TOUR_KEY) === "done"; }catch(_){ return true; }
+}
+function finishTour(){
+  $("tour").hidden = true;
+  document.removeEventListener("keydown", tourKey);
+  try{ localStorage.setItem(TOUR_KEY, "done"); }catch(_){}
+}
+function tourKey(ev){
+  if(ev.key === "Escape") finishTour();
+}
+function prepareTourPanel(done){
+  const cls = allClasses().indexOf("1-1") >= 0 ? "1-1" : allClasses()[0];
+  if(!cls){ finishTour(); return; }
+  openView({kind:"class", cls});
+  setTimeout(() => {
+    const slot = SLOTS.find(s => s.kind === "lesson");
+    if(slot) selectCell(0, slot.id, cellAt(0, slot.id));
+    tourPanelReady = true;
+    done();
+  }, 250);
+}
+function positionTour(target){
+  target.scrollIntoView({block:"center", inline:"nearest"});
+  requestAnimationFrame(() => {
+    const r = target.getBoundingClientRect(), pad = 5;
+    const f = $("tourFocus"), bubble = $("tourBubble");
+    f.style.left = Math.max(2, r.left - pad) + "px";
+    f.style.top = Math.max(2, r.top - pad) + "px";
+    f.style.width = Math.max(1, r.width + pad * 2) + "px";
+    f.style.height = Math.max(1, r.height + pad * 2) + "px";
+    const bw = bubble.offsetWidth, bh = bubble.offsetHeight, gap = 17;
+    let side, left, top;
+    if(r.right + gap + bw <= innerWidth){
+      side = "right"; left = r.right + gap; top = r.top;
+    }else if(r.left - gap - bw >= 0){
+      side = "left"; left = r.left - gap - bw; top = r.top;
+    }else{
+      side = "bottom"; left = r.left; top = r.bottom + gap;
+    }
+    bubble.dataset.side = side;
+    bubble.style.left = Math.max(14, Math.min(left, innerWidth - bw - 14)) + "px";
+    bubble.style.top = Math.max(14, Math.min(top, innerHeight - bh - 14)) + "px";
+  });
+}
+function showTourStep(){
+  if(tourAt >= TOUR_STEPS.length) return finishTour();
+  const step = TOUR_STEPS[tourAt];
+  if(step[3] === "panel" && !tourPanelReady) return prepareTourPanel(showTourStep);
+  const target = document.querySelector(step[0]);
+  if(!target || target.hidden || !target.getClientRects().length){
+    tourAt++; return showTourStep();
+  }
+  $("tourStep").textContent = (tourAt + 1) + " / " + TOUR_STEPS.length;
+  $("tourTitle").textContent = step[1];
+  $("tourText").textContent = step[2];
+  $("tourNext").textContent = tourAt === TOUR_STEPS.length - 1 ? "わかった" : "次へ";
+  positionTour(target);
+  $("tourNext").focus();
+}
+function nextTour(){ tourAt++; showTourStep(); }
+function startFirstTour(force){
+  if(tourStarted || (!force && tourSeen())) return;
+  tourStarted = true;
+  $("tour").hidden = false;
+  $("tourNext").onclick = nextTour;
+  $("tourSkip").onclick = finishTour;
+  document.addEventListener("keydown", tourKey);
+  addEventListener("resize", () => { if(!$("tour").hidden) showTourStep(); });
+  showTourStep();
+}
+
 /* ── 新年度の設定 ────────────────────────────
    **4月に開いたとき、何を、どの順でやるかを1画面で出す。**
 
@@ -6973,14 +7133,14 @@ function wire(){
   on("chipOpen","click", () => {
     if(view.kind!=="class") return;
     $("chipClass").textContent=view.cls;
-    const mode=(Y().chipModes||{})[view.cls]||"screen";
+    const mode=(Y().chipModes||{})[view.cls]||"off";
     const radio=document.querySelector("input[name=chipMode][value='"+mode+"']"); if(radio) radio.checked=true;
     $("chipDlg").showModal();
   });
   on("chipSave","click", () => {
     if(view.kind!=="class") return;
     const radio=document.querySelector("input[name=chipMode]:checked");
-    (Y().chipModes||(Y().chipModes={}))[view.cls]=radio?radio.value:"screen";
+    (Y().chipModes||(Y().chipModes={}))[view.cls]=radio?radio.value:"off";
     save(); $("chipDlg").close(); buildSheet(); drawPalette();
     toast(view.cls+" の教科チップを変更した");
   });
@@ -7133,6 +7293,8 @@ function start(){
   if(!Backend.isGas()) save();
   applyPaper();
   showGate();
+  /* この案内をまだ見ていない端末では1回だけ出す。既存データの有無とは分ける。 */
+  setTimeout(startFirstTour, 250);
 
   /* 設定・時程・教科・その年度は、立ち上がりの1回でまとめてもらう。
      別々に取りに行くと、その回数だけ待つことになる。 */

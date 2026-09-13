@@ -119,7 +119,7 @@ function newYear(y){
     /* クラス編成と専科は前年度から引き継ぐ（学年ごとのクラス数は年で変わらない）。
        基本時間割は引き継がない。**毎年変わるものを黙って持ち越さない。** */
     classes:  prev ? clone(prev.classes)  : clone(DEFAULT_CLASSES),
-    /* クラスごとの教科チップ。off／screen／output。既定は画面だけ。 */
+    /* クラスごとの教科チップ。off／screen／output。既定は使わない。 */
     chipModes: prev ? clone(prev.chipModes || {}) : {},
     specials: prev ? clone(prev.specials) : clone(DEFAULT_SPECIALS),
     base:{}, weeks:{}, week1: firstMonday(y),

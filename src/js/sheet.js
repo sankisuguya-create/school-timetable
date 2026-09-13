@@ -39,7 +39,7 @@ function buildSheet(into, mon){
 }
 function buildSheet_(sh){
   sh.textContent = "";
-  const cm = view.kind === "class" ? ((Y().chipModes || {})[view.cls] || "screen") : "off";
+  const cm = view.kind === "class" ? ((Y().chipModes || {})[view.cls] || "off") : "off";
   sh.classList.toggle("chips-screen", cm !== "off");
   sh.classList.toggle("chips-output", cm === "output");
   sh.style.gridTemplateRows = "auto 1fr auto";      /* 見出し／本体／週メモ */

@@ -761,6 +761,27 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   line-height:1.6}
 .toast b{color:#FFC9BC}
 
+/* 初回案内。画面全体を暗くし、いま見る場所だけを枠で示す。 */
+.tour{position:fixed;inset:0;z-index:100;background:rgba(24,26,30,.32)}
+.tourfocus{position:fixed;border:3px solid #fff;border-radius:10px;
+  box-shadow:0 0 0 3px var(--ink-link),0 6px 24px rgba(0,0,0,.28);
+  pointer-events:none;transition:inset .16s ease,width .16s ease,height .16s ease}
+.tourbubble{position:fixed;width:min(300px,calc(100vw - 28px));padding:15px 17px;
+  border:0;border-radius:14px;background:var(--card);color:var(--tx);
+  box-shadow:0 12px 38px rgba(0,0,0,.3)}
+.tourbubble::before{content:"";position:absolute;width:14px;height:14px;
+  background:var(--card);transform:rotate(45deg)}
+.tourbubble[data-side="right"]::before{left:-7px;top:24px}
+.tourbubble[data-side="left"]::before{right:-7px;top:24px}
+.tourbubble[data-side="bottom"]::before{top:-7px;left:26px}
+.tourbubble small{display:block;color:var(--tx-sub);font-size:11px;margin-bottom:2px}
+.tourbubble>b{display:block;font-size:16px;line-height:1.5}
+.tourbubble p{margin:5px 0 12px;font-size:13px;line-height:1.65}
+.tourbuttons{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.tourskip{border:0;background:none;color:var(--tx-sub);font-size:11.5px;
+  padding:5px 0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+@media (prefers-reduced-motion:reduce){.tourfocus{transition:none}}
+
 /* 管理・システムの表。読むだけの1列。数字は等幅で縦に揃える */
 .sys{border-collapse:collapse;width:100%;font-size:13px;margin:4px 0 10px}
 .sys th,.sys td{border-bottom:1px solid var(--rule-soft);padding:7px 8px;text-align:left;
