@@ -610,8 +610,12 @@ function start(){
   if(!Backend.isGas()) save();
   applyPaper();
   showGate();
-  /* この案内をまだ見ていない端末では1回だけ出す。既存データの有無とは分ける。 */
-  setTimeout(startFirstTour, 250);
+  /* GAS の埋め込み画面では、最初の同期描画がレイアウト前に捨てられることがある。
+     次週ボタンを押さなくても出るよう、次の描画フレームでも入口を確定する。 */
+  requestAnimationFrame(() => {
+    if(view.kind !== "gate") return;
+    drawGate(); paintHeader();
+  });
 
   /* 設定・時程・教科・その年度は、立ち上がりの1回でまとめてもらう。
      別々に取りに行くと、その回数だけ待つことになる。 */

@@ -205,7 +205,7 @@
         <h3>教科・行事</h3>
         <div class="pals" id="pals"></div>
         <p class="hint" id="palHint" style="margin-top:8px"></p>
-        <button class="chipset" id="chipOpen" hidden>教科チップ：<span id="chipNow">画面だけ</span></button>
+        <button class="chipset" id="chipOpen" hidden>週案のチップ表示：<span id="chipNow">使わない</span></button>
       </div>
 
       <div class="empty" id="noSel">コマを選ぶと、ここで中身とリンクを直せる。</div>
@@ -264,21 +264,6 @@
 
 <div class="toast" id="toast" hidden></div>
 
-<!-- 初めて開いた端末だけに出す短い案内。 -->
-<div class="tour" id="tour" hidden>
-  <div class="tourfocus" id="tourFocus" aria-hidden="true"></div>
-  <section class="tourbubble" id="tourBubble" role="dialog" aria-modal="true"
-           aria-labelledby="tourTitle" aria-describedby="tourText">
-    <small id="tourStep"></small>
-    <b id="tourTitle"></b>
-    <p id="tourText"></p>
-    <div class="tourbuttons">
-      <button type="button" class="tourskip" id="tourSkip">説明を終える</button>
-      <button type="button" class="btn go" id="tourNext">次へ</button>
-    </div>
-  </section>
-</div>
-
 <!-- 処理中。**全面にかぶせて、次の操作を受け付けない。**
      窓が開いているあいだも上に乗るよう <dialog> にしてある（js/wait.js） -->
 <dialog id="wait" class="wait">
@@ -327,8 +312,8 @@
 </div></dialog>
 
 <dialog id="chipDlg"><div class="dlg">
-  <h2><span id="chipClass"></span> の教科チップ</h2>
-  <p>教科名の形と淡い色を、タイトル欄のどこまでに出すか選びます。色がなくても教科名で分かります。</p>
+  <h2><span id="chipClass"></span> の週案チップ表示</h2>
+  <p>右の授業チップは常に表示します。ここでは、週案のマスにも形と淡い色を出すか選びます。</p>
   <div class="radios">
     <label><input type="radio" name="chipMode" value="off"> 使わない</label>
     <label><input type="radio" name="chipMode" value="screen"> 画面だけ</label>
