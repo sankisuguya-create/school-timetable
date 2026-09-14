@@ -6,6 +6,31 @@
 
 let lastTarget = null;   /* 直前に開いていたもの。「今週の週案」で戻る先 */
 
+/* 出力操作の表示はここだけで管理する。HTML側は同じ data-plan-output を持つ。 */
+function showPlanOutputs(on){
+  for(const button of document.querySelectorAll('[data-plan-output]')) button.hidden = !on;
+}
+
+/* 同期で返った読み込みが、他の操作の待機数を減らさないよう所有権を閉じ込める。 */
+function loadAndDraw(draw, message, after){
+  let drawn = false, landed = false, waiting = false;
+  const finish = () => {
+    landed = true;
+    if(!drawn) return;
+    if(waiting){ setBusy(false); waiting = false; }
+    draw();
+    if(after) after();
+  };
+  Backend.ready(finish);
+  if(!landed){ setBusy(true, message); waiting = true; }
+  try{ draw(); }catch(e){
+    if(waiting){ setBusy(false); waiting = false; }
+    throw e;
+  }
+  drawn = true;
+  if(landed && after) after();
+}
+
 function drawGate(){
   /* 途中で例外が起きても「閉じる」だけが中央に残らないよう、先に初期状態を作る。 */
   $("gClose").hidden = !lastTarget;
@@ -83,8 +108,7 @@ function openView(v){
     document.querySelector(".panel").hidden = tp;
     document.querySelector(".work").classList.toggle("no-panel", tp);
     /* たんぽぽの面には紙が無い。紙から出す操作（印刷・時数）は伏せる */
-    for(const a of ["print", "tally"])
-      document.querySelector("[data-act='" + a + "']").hidden = tp;
+    showPlanOutputs(!tp);
     paintHeader();
     if(!tp) drawPalette();
     refreshWeek();
@@ -93,27 +117,17 @@ function openView(v){
     paintArchive();               /* 退避ずみの年度なら、そう言う */
   };
 
-  let landed = false, drawn = false;
-  Backend.ready(() => {
-    landed = true;
-    if(!drawn) return;            /* すぐ返った（手元・読み込みずみ）。下で1回描く */
-    setBusy(false);
+  loadAndDraw(draw, viewName() + " をひらいています", () => {
     markOpening(null);
-    draw();
     Backend.prefetchWeek();       /* 次のクラスは待たせない */
   });
-  if(!landed) setBusy(true, viewName() + " をひらいています");
-  draw();
-  drawn = true;
-  if(landed){ setBusy(false); markOpening(null); }
 }
 function showGate(){
   Backend.flush();
   view = {kind:"gate"};
   selCell = null;
   $("gate").hidden = false;
-  for(const a of ["print", "tally"])
-    document.querySelector("[data-act='" + a + "']").hidden = false;
+  showPlanOutputs(true);
   drawGate();
   paintHeader();
   paintArchive();
