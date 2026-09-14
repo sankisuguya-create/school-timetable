@@ -500,7 +500,7 @@ function wire(){
   on("evGo","click", evGo);
   on("setBase","click", () => { $("settingsDlg").close(); openBaseDlg(); });
   on("setRoster","click", () => { $("settingsDlg").close(); openRosterDlg(); });
-  on("setTanpopo","click", () => { $("settingsDlg").close(); openView({kind:"tanpopo"}); });
+  on("setTanpopo","click", () => { $("settingsDlg").close(); openTpGroupDlg(); });
   on("setPaper","click", () => { $("settingsDlg").close(); applyPaper(); $("setDlg").showModal(); });
   on("setNewYear","click", () => { $("settingsDlg").close(); openNewYearDlg(); });
   on("outPrint","click", () => { $("outDlg").close(); window.print(); });
@@ -528,6 +528,20 @@ function wire(){
   on("dayDlg","close", () => { dayPick = 0; });
 
   /* たんぽぽ。**確認の窓は既定「出さない」。** 閉じ方が何であれ出さない側に落ちる */
+  /* 組分けの窓。**面のロック中は開かない。** ロックが守るのは出す先と組分けで、
+     「たんぽぽ時間割へ出す」だけはロックしたままでも押せる */
+  /* 閉じたら中身を捨てる。**開くたびに組み直す。**
+     残しておくと、閉じた窓の写しが DOM に残って、面の並びと二重に見つかる */
+  /* close は非同期に届く。閉じてすぐ開き直したとき（設定からの開き直し）は、
+     もう開いているので捨てない ── 捨てると、開いた窓が空になる */
+  on("tpGrpDlg","close", () => { if(!$("tpGrpDlg").open) $("tpGrpBody").innerHTML = ""; });
+
+  on("tpGrpOpen","click", () => {
+    if(typeof isLocked === "function" && isLocked())
+      return toast("この面はロックしてある。<b>直すには、上のロックを押す</b>");
+    openTpGroupDlg();
+  });
+
   on("tpNo","click",  () => $("tpDlg").close());
   on("tpYes","click", () => { $("tpDlg").close(); doExportTanpopo(); });
   on("baseImp","click", openImpDlg);

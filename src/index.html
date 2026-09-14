@@ -166,10 +166,14 @@
           <span class="tpwhy" id="tpGoWhy" aria-live="polite" hidden></span>
           <span class="tpweek" id="tpWeek"></span>
           <span class="grow"></span>
-          <!-- ソフトロック。**この面からの書き込みを止める。**
-               週案の紙と同じ作りで、この端末にだけ残る -->
+          <!-- 組分けは**年度の初めと転入・転出のときだけ**の操作なので、
+               毎週の面には置かず、窓へ出す（設定からも同じ窓が開く） -->
+          <button class="btn" id="tpGrpOpen">組分けを直す</button>
+          <!-- ソフトロック。**出す先と組分けを直せなくする。**
+               「たんぽぽ時間割へ出す」は止めない ── 見るだけのつもりで開いた面で
+               設定が変わることを防ぐのが役目で、毎週の出力を止める理由は無い -->
           <button class="lock" id="tpLockBtn" aria-pressed="false"
-                  title="この面からの書き込みを止める">
+                  title="出す先と組分けを直せなくする（出すのは止めない）">
             <svg width="15" height="15"><use href="#i-lock"/></svg>
             <span id="tpLockTxt">ロック</span></button></h2>
       </div>
@@ -314,6 +318,18 @@
     <button class="settingcard" id="setPaper"><b>印刷と文字</b><span id="setPaperNow">用紙・文字の大きさ</span></button>
     <button class="settingcard" id="setNewYear"><b>新年度の準備</b><span>4月1日から、上から順に確認</span></button>
   </div>
+</div></dialog>
+
+<!-- たんぽぽ組分け。**設定と、たんぽぽの面の「組分けを直す」から開く。**
+     毎週の面から外してあるのは、直すのが年度の初めと転入・転出のときだけだから。
+     開いたままだと、毎週その20クラスを越えないと組に手が届かない -->
+<dialog id="tpGrpDlg"><div class="dlg wide">
+  <h2>たんぽぽ組分け <span class="subttl" id="tpGrpFy"></span></h2>
+  <p>たんぽぽの組へ、交流級を入れます。<b>1回入れると児童1人＝たんぽぽ時間割の1列。</b>
+     同じ組へ2回入れれば2人です。引っぱっても、押しても入ります。<br>
+     直すのは<b>年度の初めと、転入・転出のとき</b>。週ごとの操作ではありません。</p>
+  <div class="tpsel" id="tpGrpBody"></div>
+  <p class="hint" id="tpGrpCount"></p>
 </div></dialog>
 
 <dialog id="outDlg"><div class="dlg">

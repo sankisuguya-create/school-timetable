@@ -32,6 +32,25 @@ try{
   assert.equal(await p.locator('.tpin.st-changed em').evaluate(e=>getComputedStyle(e).color),'rgb(105, 65, 137)');
   await p.evaluate(()=>{const s=tpSubmitInfo('5-1');s.exports['123456789012345678901234567890']=s.at;drawTanpopoView();});
   assert.equal(await p.locator('.tpin.st-ok em').innerText(),'済');
+  /* たんぽぽの面。**ロックは出すことだけは止めない。** 組分けは窓の中にある */
+  await p.evaluate(()=>{openView({kind:'tanpopo'});if(isLocked())setLock(false);});
+  assert.equal(await p.locator('#tpSel .tpchip').count(),0,'面に交流級の並びは出さない');
+  assert.equal(await p.locator('#tpGo').isDisabled(),false);
+  await p.evaluate(()=>setLock(true));
+  assert.equal(await p.locator('#tpGo').isDisabled(),false,'ロック中でも出せる');
+  await p.locator('#tpGrpOpen').click();
+  assert.equal(await p.locator('#tpGrpDlg').evaluate(d=>d.open),false,'ロック中は組分けを開かない');
+  await p.evaluate(()=>setLock(false));
+  await p.locator('#tpGrpOpen').click();
+  assert.ok(await p.locator('#tpGrpDlg').evaluate(d=>d.open));
+  const tpBefore=await p.evaluate(()=>tpTotal());
+  const tpAdded=await p.locator('#tpGrpBody .tpchip').first().getAttribute('data-c');
+  await p.locator('#tpGrpBody .tpchip').first().click();
+  assert.equal(await p.evaluate(()=>tpTotal()),tpBefore+1,'窓から組へ入る');
+  await p.evaluate(c=>{tpDrop(tpPick,c);save();drawTpGroupDlg();},tpAdded);
+  assert.equal(await p.evaluate(()=>tpTotal()),tpBefore);
+  await p.evaluate(()=>$('tpGrpDlg').close());
+
   for(const kind of ['grade','school']){
     await p.evaluate(kind=>openView({kind,grade:'5'}),kind);
     assert.equal(await p.locator('body').getAttribute('data-scope'),kind);
