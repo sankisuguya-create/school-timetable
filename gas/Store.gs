@@ -1055,11 +1055,20 @@ const Store = (function(){
     if(!plan.length) throw new Error("交流級を1つも選んでいません");
     const list = plan.map(function(x){ return x.cls; });
     const sheetName = String(name || "").trim() || weekSheetName(mondayISO);
+    if(sheetName === "教師わりあて")
+      throw new Error("出力シート名に「教師わりあて」は使えません。週の名前を指定してください");
     const staff = String(cfg["たんぽぽ支援員"] || "").split(/[,、\s]+/)
       .map(function(x){ return x.trim(); }).filter(Boolean);
 
     const width = 1 + list.length + staff.length;
     const ids = (slots && slots.length === 6) ? slots : ["p1","p2","p3","p4","p5","p6"];
+    /* 退避・新規作成の前に読む。出力先ごとの同座標を、数式ではなく表示文字で転記する。 */
+    const assignment = ss.getSheetByName("教師わりあて");
+    if(!assignment)
+      throw new Error("出力先に「教師わりあて」シートがありません。週時間割と同じ配置で作成してください");
+    const teachers = assignment.getRange(1, 1,
+      Math.min(81, assignment.getMaxRows()), Math.min(width, assignment.getMaxColumns()))
+      .getDisplayValues();
 
     /* 中身を組む。**先に全部の値を作ってから1回で書く。**
        1コマずつ書くと、26列×5日で百回以上の往復になる。 */
@@ -1075,10 +1084,15 @@ const Store = (function(){
       const body = lab.map(function(t){
         return [t].concat(new Array(width - 1).fill(""));
       });
-      /* 授業名の行に、その日のコマを入れる。担当者・場所の行は空のまま
-         （たんぽぽ担当が書くところ。こちらは触らない） */
+      /* 授業名と、その直下の担当者を別々に入れる。担当者は出力後も手で編集できる。 */
       for(let i = 0; i < TP_TITLE_OFF.length; i++){
         const r = body[TP_TITLE_OFF[i] - 1];          /* body は +1 から始まる */
+        const source = teachers[rows.length + TP_TITLE_OFF[i]] || [];
+        for(let c = 1; c < width; c++){
+          const text = source[c] || "";
+          // setValues が「=」から始まる表示文字を数式として再評価しないようにする。
+          body[TP_TITLE_OFF[i]][c] = text.charAt(0) === "=" ? "'" + text : text;
+        }
         for(let c = 0; c < list.length; c++){
           const v = ((titles[list[c]] || {})[String(d)] || {})[ids[i]];
           const t = (v === undefined || v === null) ? "" : String(v);
