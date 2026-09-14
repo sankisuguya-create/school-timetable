@@ -199,6 +199,9 @@
             <span id="tpSubTxt">たんぽぽに提出</span></button>
         </div>
       </div>
+      <!-- 学年・全学年の面（と、学級で入れる先を広げたとき）にだけ出る。
+           **押す前に、どこへ出るかを字で言う。** 色と背景だけに持たせない -->
+      <p class="applymsg" id="applyMsg" hidden></p>
       <p class="tpchanged" id="tpChanged" role="status" hidden>未提出の変更あり！　保存後に、たんぽぽへ再提出してください。</p>
       <p class="lockmsg" id="lockMsg" hidden>
         <b>この画面はロック中。</b>直すには右上の「ロック中」を押す。</p>
@@ -583,6 +586,19 @@
 <!-- 上書きの窓。**既定は「変更しない」。**
      ブラウザの confirm は Enter で「はい」に落ちる。打鍵の勢いのまま
      他人の予定が消える。編集そのものは止めない（誰でもどのコマでも直せる） -->
+<!-- 学年・全学年からの保存。**効くのは押した人の学級ではない。**
+     既定は「反映しない」。Esc も、窓枠の ✕ も同じ -->
+<dialog id="apDlg"><div class="dlg">
+  <h2>この保存で、ほかの学級の週案にも出ます</h2>
+  <p id="apWhere"></p>
+  <p class="hint"><b id="apWeek"></b>のぶんです。<br>
+     入れたコマは、その学級の紙に「学年」「全体」の印つきで出ます。
+     <b>戻すときは、赤い「リセット」を同じコマに落とす。</b></p>
+  <div class="end">
+    <button class="btn go" id="apNo">反映しない</button>
+    <button class="btn apply" id="apYes">反映する</button></div>
+</div></dialog>
+
 <dialog id="swDlg"><div class="dlg">
   <h2>ほかの人が入れた予定です</h2>
   <p><b id="swWhen"></b> を「<b id="swTo"></b>」に変えます。<br>

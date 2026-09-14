@@ -309,14 +309,33 @@ function targetStore(){
    **専科もここを通す。** 前は専科だけ素通りしていたので、音楽専科が
    2-1 の担任の「国語」を潰しても、書く側には何も出なかった
    （された側の担任には次に開いたときに出るので、片肺になっていた）。 */
+/* **いま書くと、どのクラスの紙に出るか。** 上書きの見張りと、
+   保存の前の確認窓が、同じここを読む（判定を2か所に持たない）。
+   上の scopeClasses（マスターの面が持つクラス）とは別もので、
+   こちらは**学級を開いたまま入れる先を広げたとき**も入る。 */
+function writeClasses(forCls){
+  return view.kind === "special" ? (forCls ? [forCls] : [])
+       : view.kind === "class" && scope === "self"  ? [view.cls]
+       : view.kind === "class" && scope === "grade" ? classesOfGrade(gradeOf(view.cls))
+       : view.kind === "class" ? allClasses()
+       : view.kind === "grade" ? classesOfGrade(view.grade)
+       : view.kind === "school" ? allClasses()
+       : [];
+}
+
+/* **効く先が、自分の学級より広い面か。**
+   学年・全学年を開いているときと、学級を開いたまま入れる先を
+   学年・全校にしているときが当たる。ここが真のあいだは、
+   保存が「保存・反映」になり、押したときに1回だけ聞く。 */
+function broadScope(){
+  const k = (typeof view === "object" && view && view.kind) || "";
+  if(k === "grade" || k === "school") return true;
+  return k === "class" && scope !== "self";
+}
+
 function wouldOverwrite(d, s, forCls){
   const hit = [], layer = layerOfStore(), target = targetOfStore();
-  const list = view.kind === "special" ? (forCls ? [forCls] : [])
-             : view.kind === "class" && scope === "self" ? [view.cls]
-             : view.kind === "class" && scope === "grade" ? classesOfGrade(gradeOf(view.cls))
-             : view.kind === "class" ? allClasses()
-             : view.kind === "grade" ? classesOfGrade(view.grade)
-             : allClasses();
+  const list = writeClasses(forCls);
   for(const c of list){
     if(allClasses().indexOf(c) < 0) continue;          /* 編成に無いクラス */
     const cur = compose(c, d, s);

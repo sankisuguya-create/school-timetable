@@ -136,25 +136,56 @@ button,select,input,textarea{font:inherit;color:inherit}
 .stage{overflow:auto;padding:10px;display:flex;justify-content:center;
   align-items:flex-start;min-height:0;min-width:0}
 .stage[hidden]{display:none!important}
-/* 状態と入力範囲。静的なCSSだけで描き、紙面・印刷の背景には載せない。 */
-body.is-saved{--bg:#dce1e5}
-body.is-saved .stage{box-shadow:inset 0 0 0 1px #b9c2cb}
+/* 状態と入力範囲。静的なCSSだけで描き、紙面・印刷の背景には載せない。
+
+   **学級・専科の面**：保存できたときだけ、外の地を硬い灰にする。
+   **学年・全学年の面**：向きを逆にする。まだシートに入っていないあいだを
+   くすませ、入ったら本来の空へ戻す。ここは書いた先が自分の学級ではない面で、
+   出たか出ていないかが押した本人からいちばん見えにくいので、面ぜんぶで言う。
+
+   **色だけに持たせない。** 同じことを、保存ボタンの字（「保存・反映（3）」／
+   「保存ずみ」）と、その下の1行が言っている。ここの手がかりは**明度差**で作る
+   ── 色相が潰れても残るのは明度差だけ。
+
+   実測（color-coding の check-palette.mjs、強度2色覚・全型）
+     空   #9FB8CA ↔ #9DA1A5  明度比 1.3     雲 #FFFFFF ↔ #E9EAEB
+     夜空 #141C27 ↔ #2C3036  明度比 1.3     星 #E0E6ED ↔ #9EA1A5  明度比 2.1
+   値を変えたら測り直す。 */
+body.is-saved:not([data-scope="grade"]):not([data-scope="school"]){--bg:#dce1e5}
+body.is-saved:not([data-scope="grade"]):not([data-scope="school"]) .stage{
+  box-shadow:inset 0 0 0 1px #b9c2cb}
+
+/* 学年＝青空。**保存できているときが、この晴れた側。** */
 body[data-scope="grade"] .stage{
-  background:radial-gradient(ellipse 72px 23px at 1% 25%,#ffffff88 50%,#ffffff00 85%),
-    radial-gradient(ellipse 35px 27px at 2% 23%,#ffffff66 45%,#ffffff00 85%),
-    radial-gradient(ellipse 90px 24px at 99% 44%,#ffffff88 50%,#ffffff00 85%),
-    radial-gradient(ellipse 38px 28px at 98% 42%,#ffffff66 45%,#ffffff00 85%),
-    linear-gradient(155deg,#9fb8ca,#d7e2e9 65%,#c1d0db);
+  --sky-1:#9FB8CA; --sky-2:#D7E2E9; --sky-3:#C1D0DB;
+  --cloud-a:#ffffff88; --cloud-b:#ffffff66; --cloud-0:#ffffff00;
+  background:radial-gradient(ellipse 72px 23px at 1% 25%,var(--cloud-a) 50%,var(--cloud-0) 85%),
+    radial-gradient(ellipse 35px 27px at 2% 23%,var(--cloud-b) 45%,var(--cloud-0) 85%),
+    radial-gradient(ellipse 90px 24px at 99% 44%,var(--cloud-a) 50%,var(--cloud-0) 85%),
+    radial-gradient(ellipse 38px 28px at 98% 42%,var(--cloud-b) 45%,var(--cloud-0) 85%),
+    linear-gradient(155deg,var(--sky-1),var(--sky-2) 65%,var(--sky-3));
 }
+/* 未保存＝くもり。色を抜いて、ひとつ暗くする */
+body:not(.is-saved)[data-scope="grade"] .stage{
+  --sky-1:#9DA1A5; --sky-2:#C4C6C8; --sky-3:#AFB2B5;
+  --cloud-a:#E9EAEBcc; --cloud-b:#E9EAEB99; --cloud-0:#E9EAEB00;
+}
+
+/* 全学年＝夜空。**保存できているときが、星の見える側。** */
 body[data-scope="school"] .stage{
-  background:radial-gradient(circle at 12% 18%,#e0e6edb3 0 1px,transparent 1.8px),
-    radial-gradient(circle at 82% 28%,#cbd9ecb3 0 1px,transparent 1.8px),
-    radial-gradient(circle at 28% 78%,#e0e6ed80 0 .8px,transparent 1.6px),
-    radial-gradient(ellipse at 65% 15%,#293747,transparent 65%),#141c27;
+  --star-a:#e0e6edb3; --star-b:#cbd9ecb3; --star-c:#e0e6ed80;
+  --night-1:#293747; --night-2:#141c27;
+  background:radial-gradient(circle at 12% 18%,var(--star-a) 0 1px,transparent 1.8px),
+    radial-gradient(circle at 82% 28%,var(--star-b) 0 1px,transparent 1.8px),
+    radial-gradient(circle at 28% 78%,var(--star-c) 0 .8px,transparent 1.6px),
+    radial-gradient(ellipse at 65% 15%,var(--night-1),transparent 65%),var(--night-2);
   background-size:193px 173px,277px 229px,331px 307px,100% 100%,auto;
 }
-body.is-saved[data-scope="grade"] .stage{background-color:#aebdca;background-blend-mode:multiply}
-body.is-saved[data-scope="school"] .stage{background-color:#202a36;box-shadow:inset 0 0 0 2px #576575}
+/* 未保存＝くもった夜。星が沈み、地が白ちゃける */
+body:not(.is-saved)[data-scope="school"] .stage{
+  --star-a:#9ea1a599; --star-b:#93969a99; --star-c:#9ea1a566;
+  --night-1:#464B52; --night-2:#2C3036;
+}
 
 /* 月の面。**4週ぶんを 2×2 に並べる。** 紙と入れ替えて出す。
    転がさずに1画面へ収める（収まらなければ紙にもならない）。 */
@@ -361,6 +392,17 @@ body.is-saved[data-scope="school"] .stage{background-color:#202a36;box-shadow:in
 .save.dirty{background:var(--ink-link);border-color:var(--ink-link);color:#fff}
 .save.dirty:hover{filter:brightness(1.06)}
 .save.bad{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff}
+/* **効く先が広い面では、色と字の両方を変える。**（学年・全学年、および
+   学級で入れる先を学年・全校にしているとき）。保存の青のままだと、
+   自分の学級へ書くのと同じ手つきで20学級へ出る。
+   #A85800 は白字 5.2:1、保存の青 #0F5EA8 とは全色覚型で ΔE00 47.8〜73.4。 */
+.save.apply{border-color:var(--apply);color:var(--apply)}
+.save.apply.dirty{background:var(--apply);border-color:var(--apply);color:#fff}
+.save.apply.bad{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff}
+/* 押す前に、どこへ出るかを字で言う1行 */
+.applymsg{margin:0;padding:7px 10px;border-left:3px solid var(--apply);
+  background:#FDF2E6;color:#6B3A05;font-size:12px;line-height:1.7}
+.applymsg b{color:#6B3A05}
 /* たんぽぽへの提出。**保存の右隣。** たんぽぽの児童がいるクラスだけに出る。
    色は既にある専科の茶（--cat-special）。保存の青とも、ロックの赤とも
    混ざらない。**押す前は塗って、押したあとは淡くする**——
@@ -476,6 +518,10 @@ body.is-saved[data-scope="school"] .stage{background-color:#202a36;box-shadow:in
 .btn.go:hover{filter:brightness(1.09)}
 .btn.wide{width:100%;justify-content:center;text-align:center}
 .btn.danger{color:var(--ink-alert)}
+/* 反映の窓の「反映する」。**押したボタンと同じ色**にして、続きだと分かるようにする。
+   赤（危ない・取り消せない）は使わない ── 保存そのものは壊す操作ではない */
+.btn.apply{background:var(--apply);border-color:var(--apply);color:#fff;font-weight:600}
+.btn.apply:hover{filter:brightness(1.09)}
 .row-btn{display:flex;flex-direction:column;gap:7px}
 
 /* ── 入口（どの週案を開くか）───────────────────

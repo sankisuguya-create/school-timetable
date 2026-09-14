@@ -138,6 +138,9 @@ function showGate(){
    言っていて、同じものを2か所に置くと、どちらを見ればよいかを毎回考える。 */
 function paintHeader(){
   document.body.dataset.scope = view.kind === 'class' ? scope : view.kind;
+  /* 面と入れる先が変わると、保存が「保存・反映」に変わる。**ここで一緒に塗る**
+     （面を開いたときと、入れる先を選び直したときの両方がここを通る） */
+  if(typeof paintSave === "function") paintSave();
   const open = view.kind !== "gate";
   for(const b of document.querySelectorAll(".nav[data-screen]"))
     b.setAttribute("aria-current", String(b.dataset.screen === (open ? "plan" : "gate")));
