@@ -41,6 +41,21 @@ ok("学年マスターが6つ＋全学年", await p.locator(".master:not(.tp)").
 ok("専科が4つ（音楽・図工・理科・外国語）",
    await p.locator(".tile.sp").count() === 4,
    await p.locator(".tile.sp").count());
+ok("古い形の端末キャッシュでも、初回から入口を描ける", await p.evaluate(() => {
+  const yr = Y(), keep = {classes:clone(yr.classes), specials:clone(yr.specials),
+                          tanpopo:clone(yr.tanpopo)};
+  yr.classes = ["1-1", "2-1"];
+  yr.specials = ["音楽"];
+  yr.tanpopo = {"1":"1-1"};
+  try{
+    drawGate();
+    return document.querySelectorAll("#grid .tile.cls").length === 2
+      && $("weekLabel").textContent.length > 0 && $("gClose").hidden;
+  }finally{
+    yr.classes = keep.classes; yr.specials = keep.specials; yr.tanpopo = keep.tanpopo;
+    drawGate();
+  }
+}) === true);
 
 console.log("\n■ 入口には週の表示を置かない（左のメニューにある）");
 ok("入口の帯は無い", await p.locator("#gate .head").count() === 0);
