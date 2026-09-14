@@ -35,7 +35,7 @@ function drawPalette(){
   const chip = $("chipOpen");
   chip.hidden = view.kind !== "class";
   if(view.kind === "class"){
-    const mode = (Y().chipModes || {})[view.cls] || "screen";
+    const mode = (Y().chipModes || {})[view.cls] || "off";
     $("chipNow").textContent = mode === "off" ? "使わない" : mode === "output" ? "画面と出力" : "画面だけ";
   }
 

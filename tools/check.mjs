@@ -19,6 +19,10 @@ const ok = (name, cond, got) => {
 const b = await chromium.launch(exe ? {executablePath: exe} : {});
 const ctx = await b.newContext({viewport:{width:1500, height:950}});
 const p = await ctx.newPage();
+/* 通常の検査中は初回案内を重ねない。案内自体は末尾で明示的に検査する。 */
+await p.addInitScript(() => {
+  try{ localStorage.setItem("school-timetable/tour-v1", "done"); }catch(_){}
+});
 const errs = [];
 p.on("pageerror", e => errs.push("pageerror: " + e.message));
 p.on("console", m => { if(m.type() === "error") errs.push("console: " + m.text()); });
@@ -1554,6 +1558,9 @@ ok("戻ると、いつもの週の紙に戻る",
 console.log("\n■ 教科チップの色は、字が運んでいるものを二重にするだけ");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
 await p.locator(".tile[data-c='1-1']").click(); await p.waitForTimeout(500);
+ok("教科チップの色は既定で使わない",
+   await p.evaluate(() => !$('sheet').classList.contains('chips-screen')
+     && $('chipNow').textContent === '使わない') === true);
 ok("教科ごとに地の色がある",
    await p.evaluate(() => new Set([...document.querySelectorAll(".pal")]
      .map(x => getComputedStyle(x).backgroundColor)).size) >= 12,
@@ -1755,6 +1762,22 @@ ok("B4出力にも印刷・画像・Google Sheetがある",
    await p.locator("#mPrint,#mImage,#mSheet").count()===3);
 ok("教科チップは3段階から選べる",
    await p.locator("input[name=chipMode]").count()===3);
+
+console.log("\n■ 初めて開いた人への案内");
+await p.evaluate(() => {
+  localStorage.removeItem(TOUR_KEY);
+  tourStarted = false; tourAt = 0; tourPanelReady = false;
+  showGate(); startFirstTour();
+});
+await p.waitForTimeout(300);
+ok("未完了の端末では初回案内が開く", await p.locator("#tour").isVisible() === true);
+ok("案内する場所を枠で示す", await p.evaluate(() => {
+     const r = $("tourFocus").getBoundingClientRect();
+     return r.width > 20 && r.height > 20;
+   }) === true);
+await p.locator("#tourSkip").click();
+ok("案内を終えると次回は開かない", await p.evaluate(() =>
+   localStorage.getItem(TOUR_KEY) === "done" && $("tour").hidden) === true);
 
 console.log("\n■ 窓を閉じるところは、窓枠の右上");
 for(const [act, dlg] of [["settings","settingsDlg"], ["admin","adminDlg"]]){
