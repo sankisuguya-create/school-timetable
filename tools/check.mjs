@@ -4,6 +4,7 @@
 import { chromium } from "playwright";
 import { fileURLToPath } from "url";
 import path from "path";
+import {schoolWeek} from './test-clock.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const PAGE = "file://" + path.join(ROOT, "dist", "index.html");
@@ -19,6 +20,7 @@ const ok = (name, cond, got) => {
 const b = await chromium.launch(exe ? {executablePath: exe} : {});
 const ctx = await b.newContext({viewport:{width:1500, height:950}});
 const p = await ctx.newPage();
+await schoolWeek(p);
 /* 通常の検査中は初回案内を重ねない。案内自体は末尾で明示的に検査する。 */
 await p.addInitScript(() => {
   try{ localStorage.setItem("school-timetable/guide-v2", "done"); }catch(_){}
@@ -275,7 +277,8 @@ await p.evaluate(() => { for(let i=0;i<40;i++) goWeek(-7); });
 await p.waitForTimeout(300);
 
 console.log("\n■ 学級編成（表から読む）");
-await p.locator("[data-act='roster']").click(); await p.waitForTimeout(250);
+await p.locator("[data-act='settings']").click();
+await p.locator('#setRoster').click(); await p.waitForTimeout(250);
 await p.locator("#rsRows input[data-g='4']").fill("4-1, 4-2, 4-3, 4-4");
 await p.locator("#rsRows input[data-g='4']").press("Enter");
 await p.waitForTimeout(300);
@@ -530,7 +533,7 @@ ok("たんぽぽの面が出る", await p.locator("#tpView").isVisible() === tru
 ok("週案の紙は引っこむ", await p.locator("#stage").isHidden() === true);
 ok("入力パネルも引っこむ", await p.locator(".panel").isHidden() === true);
 ok("紙から出す操作（印刷・時数）も伏せる",
-   await p.locator("[data-act='print']").isHidden() === true
+   await p.locator("[data-act='outweek']").isHidden() === true
    && await p.locator("[data-act='tally']").isHidden() === true);
 ok("交流級はすべての学級から選べる",
    await p.locator("#tpSel .tpchip").count()
@@ -1496,9 +1499,10 @@ ok("押せない理由が重なれば、まず可能にする操作を案内す�
    (await p.locator("#tpGoWhy").innerText()) === "ロックを外してください");
 await p.locator(".tpchip").first().click(); await p.waitForTimeout(300);
 ok("ロック中は、組に入れられない",
-   await p.evaluate(() => tpCount("1-1")) === 1,
+   await p.evaluate(() => tpCount("1-1")) === 0,
    await p.evaluate(() => tpCount("1-1")));
 await p.locator("#tpLockBtn").click(); await p.waitForTimeout(300);
+await p.locator('.tpchip').first().click(); await p.waitForTimeout(200);
 ok("外すと、また入れられる", await p.locator("#tpGo").isDisabled() === false);
 
 console.log("\n■ いま見ている週は、転がしても左上に残る");
@@ -1625,11 +1629,10 @@ ok("提出ボタンは、保存の右隣にある", await p.evaluate(() => {
      const b2 = document.getElementById("tpSubBtn").getBoundingClientRect();
      return b2.left >= s.right - 2 && Math.abs(b2.top - s.top) < 12;
    }) === true);
-ok("押す前は塗ってある（押していないほうを目立たせる）", await p.evaluate(() => {
+ok("提出前は白地（提出後だけオレンジ）", await p.evaluate(() => {
      const b2 = document.getElementById("tpSubBtn");
      const bg = getComputedStyle(b2).backgroundColor;
-     return !b2.classList.contains("on") && bg !== "rgba(0, 0, 0, 0)"
-         && !/255, 255, 255/.test(bg);
+     return !b2.classList.contains("on") && /255, 255, 255/.test(bg);
    }) === true, await p.evaluate(() => getComputedStyle($("tpSubBtn")).backgroundColor));
 await p.locator("#tpSubBtn").click(); await p.waitForTimeout(400);
 ok("押すと、提出ずみになる",
@@ -1746,7 +1749,8 @@ ok("基本時間割は設定から開く", await (async () => {
      await p.locator("#settingsDlg .dlgx").click(); return open && await p.locator("#setBase").count()===1;
    })() === true);
 ok("左の主な項目ぜんぶに「？」がある",
-   await p.locator(".side .helpq").count() >= 10,
+   await p.evaluate(() => [...document.querySelectorAll('.side [data-help]')]
+     .every(e => !!e.querySelector(':scope > .helpq'))) === true,
    await p.locator(".side .helpq").count());
 ok("「？」に説明の中身がある（空の窓を開かない）",
    await p.evaluate(() => [...document.querySelectorAll("[data-help]")]
@@ -1874,6 +1878,7 @@ console.log("\n■ 初回案内は閉じて再表示でき、画面を勝手に�
 await p.evaluate(() => {localStorage.removeItem('school-timetable/guide-v2');openGuide(true);});
 ok("初回案内が開く", await p.locator('#guideDlg').isVisible());
 await p.keyboard.press('Escape');
+await p.waitForFunction(() => localStorage.getItem('school-timetable/guide-v2') === 'done');
 ok("Escapeで閉じる", await p.locator('#guideDlg').isVisible() === false);
 ok("案内完了を保存", await p.evaluate(() => localStorage.getItem('school-timetable/guide-v2')) === 'done');
 await p.evaluate(() => openGuide(true));

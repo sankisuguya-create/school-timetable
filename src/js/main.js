@@ -20,6 +20,8 @@ function paintSave(){
   const b = $("saveBtn"), t = $("saveTxt");
   if(!b) return;
   const {n, err, busy} = saveState;
+  document.body.classList.toggle('is-saved', !n && !err && !busy && Backend.saved());
+  paintTpSub();
   b.classList.toggle("dirty", !!n && !err);
   b.classList.toggle("bad", !!err);
   b.disabled = busy;
@@ -46,12 +48,16 @@ function paintTpSub(){
   const cls = view.kind === "class" ? view.cls : "";
   const show = !!cls && tpCount(cls) > 0;
   b.hidden = !show;
+  $("tpChanged").hidden = true;
   if(!show) return;
   const on = tpSubmitted(cls);
   const info = tpSubmitInfo(cls);
-  b.classList.toggle("on", on);
+  const changed = !!(info && info.dirty || (week().tpEdited || {})[cls]);
+  $("tpChanged").hidden = !changed;
+  $("tpChanged").textContent = "未提出の変更あり！　保存後に、たんぽぽへ" + (info ? "再提出" : "提出") + "してください。";
+  b.classList.toggle("on", on && !changed);
   b.setAttribute("aria-pressed", String(on));
-  tx.textContent = on ? "たんぽぽに提出ずみ" : "たんぽぽに提出";
+  tx.textContent = changed && info ? "たんぽぽに再提出" : on ? "たんぽぽに提出ずみ" : "たんぽぽに提出";
   b.title = on
     ? "提出ずみ" + (info && info.at ? "（" + info.at + "）" : "")
       + "　押すと取り消せる。週が変わればまた未に戻る"
@@ -60,18 +66,21 @@ function paintTpSub(){
 function toggleTpSub(){
   const cls = view.kind === "class" ? view.cls : "";
   if(!cls || !Wait.guard()) return;
-  const on = !tpSubmitted(cls);
+  const on = !tpSubmitted(cls) || !!(week().tpEdited || {})[cls];
   const w = Wait.begin(on ? "たんぽぽへ提出しています" : "提出を取り消しています");
-  Backend.tpSubmit(cls, on, () => {
+  Backend.flush(saved => {
+    if(!saved){ Wait.end(w); return toast("保存・競合の解決を終えてから提出してください"); }
+    Backend.tpSubmit(cls, on, () => {
     Wait.end(w); paintTpSub();
     if(view.kind === "tanpopo") drawTanpopoView();
     toast(on ? "<b>たんぽぽに提出した</b>　週が変わると、また未に戻る"
              : "提出を取り消した");
   }, why => { Wait.end(w); toast(why); });
+  });
 }
 
 function doSave(loud){
-  if(!Backend.isGas()){ save(); if(loud) toast("この端末に保存した（本番ではシートへ）"); return; }
+  if(!Backend.isGas()){ save(); Backend.flush(() => paintSave()); if(loud) toast("この端末に保存した（本番ではシートへ）"); return; }
   saveState.busy = true; paintSave();
   const w = Wait.begin("シートに保存しています");
   Backend.flush(okAll => {

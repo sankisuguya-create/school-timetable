@@ -137,6 +137,7 @@ function showGate(){
    **「いま：◯年◯組」の行は置かない。** すぐ上の行き先の欄が同じことを
    言っていて、同じものを2か所に置くと、どちらを見ればよいかを毎回考える。 */
 function paintHeader(){
+  document.body.dataset.scope = view.kind === 'class' ? scope : view.kind;
   const open = view.kind !== "gate";
   for(const b of document.querySelectorAll(".nav[data-screen]"))
     b.setAttribute("aria-current", String(b.dataset.screen === (open ? "plan" : "gate")));

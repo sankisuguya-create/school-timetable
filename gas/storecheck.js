@@ -229,6 +229,7 @@ const sandbox = {
       };
       if(id !== TPID) throw new Error("そんなファイルは無い: " + id);
       return {
+        getId: () => TPID,
         getName: () => TPFILE.name,
         getSheets: () => tpNames().map(tpSheet),
         getSheetByName: n => (n in TPFILE.sheets) ? tpSheet(n) : null,
@@ -286,10 +287,10 @@ const Sheets_asClass = v => ev("Sheets.asClass")(v);
 /* ── シートを作る ─────────────────────────────── */
 console.log("■ シートを作る");
 let made = ev("Sheets.setup()");
-ok("12枚＋取り込み用の2枚ができる", made.made.length === 14, made.made);
+ok("13枚＋取り込み用の2枚ができる", made.made.length === 15, made.made);
 made = ev("Sheets.setup()");
 ok("2回目は何も作らない（何度走らせても同じ）",
-   made.made.length === 0 && made.kept.length === 12, made);
+   made.made.length === 0 && made.kept.length === 13, made);
 ok("列は名前で引ける", Object.keys(ev('Sheets.head("週案").at')).length >= 11);
 
 console.log("\n■ 既定値の読み取り");
@@ -1570,6 +1571,39 @@ console.log("\n■ 新年度の設定は、手順として出す");
 })();
 
 console.log("\n■ たんぽぽへの提出は、担任が立てる印");
+console.log("\n■ 提出後の変更と、出力先ごとの提出版");
+(function(){
+  const mon = '2026-12-14', cls = '5-1';
+  const submit = () => ev(`Store.tpSubmit(2026, '${mon}', '${cls}', true)`);
+  const read = () => ev(`Store.tpSubmits(2026, '${mon}')`);
+  const output = snapshot => ev(`Store.exportWeek(2026, '${mon}', ${JSON.stringify({[cls]:titles[cls]})},
+    ${JSON.stringify([{cls,group:1}])}, ${JSON.stringify(SLOT6)}, '', '${TPID}', ${JSON.stringify(snapshot)})`);
+  let s = submit();
+  ok('初回提出には出力記録がない', !s[cls].dirty && !Object.keys(s[cls].exports).length);
+  output(s);
+  const first = read()[cls];
+  ok('出力した提出だけをファイルID別に記録', first.exports[TPID] === first.at && !first.exports.other);
+  ev(`Store.writeCells(2026, [{date:'${mon}',slot:'p1',layer:'home',target:'${cls}',title:'変更後',expectedAt:0}])`);
+  ok('提出後の編集が別端末の読み取りでも分かる', read()[cls].dirty === true);
+  let why = '';
+  try{ output(s); }catch(e){ why = e.message; }
+  ok('再提出前の変更を出力しない', why.includes('提出状態'));
+  s = submit();
+  ok('再提出は新しい版となり、以前の出力との差が残る', !s[cls].dirty && s[cls].at !== first.at && s[cls].exports[TPID] === first.at);
+  let stale = '';
+  try{ output({[cls]:first}); }catch(e){ stale = e.message; }
+  ok('古い提出を見ている端末から出力できない', stale.includes('提出状態'));
+  const assignment = TPFILE.sheets['教師わりあて']; delete TPFILE.sheets['教師わりあて'];
+  try{ output(s); }catch(_){} finally{ TPFILE.sheets['教師わりあて'] = assignment; }
+  ok('出力失敗で提出版を反映済みにしない', read()[cls].exports[TPID] === first.at);
+  output(s);
+  ok('再出力成功で最新の提出版に追いつく', read()[cls].exports[TPID] === s[cls].at);
+  ev(`Store.writeCells(2026, [{date:'${mon}',slot:'p2',layer:'grade',target:'5',title:'学年行事',expectedAt:0}])`);
+  ok('学年からの変更も再提出が必要', read()[cls].dirty);
+  submit();
+  ev(`Store.writeCells(2026, [{date:'${mon}',slot:'p3',layer:'school',target:'',title:'全校行事',expectedAt:0}])`);
+  ok('全校からの変更も再提出が必要', read()[cls].dirty);
+})();
 (function(){
   const mon = "2026-11-16";
   ok("初めは、誰も提出していない",
@@ -1585,7 +1619,7 @@ console.log("\n■ たんぽぽへの提出は、担任が立てる印");
   ev('Store.tpSubmit(2026, "' + mon + '", "5-1", true)');
   ev('Store.tpSubmit(2026, "' + mon + '", "5-1", true)');
   ok("2回立てても、行は増えない",
-     SHEETS["たんぽぽ提出"].filter(r => String(r[2]) === "5-1").length === 1,
+     SHEETS["たんぽぽ提出"].filter(r => String(r[2]) === "5-1" && String(r[1]) === mon).length === 1,
      SHEETS["たんぽぽ提出"]);
   /* **週ごとに立て直す。** 前の週の印が残っていると、たんぽぽ担当が
      組んだあとで予定が変わる */

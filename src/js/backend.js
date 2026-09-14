@@ -26,6 +26,9 @@ const Backend = (function(){
   let flightId = 0;
   let timer = 0;
   let sending = false;
+  let editEpoch = 0;
+  let acknowledged = false;
+  const flushWaiters = [];
   let notify = () => {};
   let onDirty = () => {};   /* 未保存の数が変わったら画面に知らせる */
   let lastErr = "";
@@ -54,6 +57,9 @@ const Backend = (function(){
      競合したぶんを入れ直すときは、別の週のコマかもしれない。
      いまの週として覚えると、別の週のコマを書き替えてしまう。 */
   function cellChanged(layer, target, d, slotId, baseAt, where){
+    acknowledged = false;
+    editEpoch++;
+    if(typeof markTpEdited === "function") markTpEdited(layer, target, where);
     if(!onGas) return;
     const yr = where ? String(where.year) : fy();
     const mo = where ? where.monday : wkKey();
@@ -99,10 +105,14 @@ const Backend = (function(){
       if(!loc) continue;                          /* 日付が読めない。捨てずに飛ばす */
       held.push({c, q: (sent || {})[cfKey(c)] || null, loc});
     }
+    persistPending();
     onConflict(held.slice());
   }
   const heldCells = () => held.slice();
-  const dropHeld  = () => { held = []; };
+  const dropHeld = list => {
+    held = list ? held.filter(h => !list.includes(h)) : [];
+    persistPending(); onDirty(unsaved(), lastErr);
+  };
 
   /* **競合したあとは、その週を必ず読み直す。**
      読み直さずに送り直すと、見ていない変更をもう一度潰しにいくことになる。 */
@@ -145,8 +155,17 @@ const Backend = (function(){
 
   /* 貯めたぶんを送る。after は送り終わってから呼ぶ（押した手ごたえを返すため）。 */
   function flush(after){
-    if(!onGas || !dirtyN){ lastErr = ""; onDirty(0, ""); return after && after(true); }
-    if(sending){ retry(900); return after && after(false); }
+    if(after) flushWaiters.push(after);
+    if(sending) return;
+    const finishFlush = (ok, record = true) => {
+      if(record) acknowledged = ok;
+      onDirty(unsaved(), lastErr);
+      for(const fn of flushWaiters.splice(0)) fn(ok);
+    };
+    if(!onGas || !dirtyN){
+      lastErr = "";
+      return finishFlush(!held.length, acknowledged || flushWaiters.length > 0);
+    }
     const batch = dirty;
     dirty = {}; dirtyN = 0; sending = true;
     /* **どのコマを、どの中身で送ったかを覚えておく。**
@@ -171,6 +190,7 @@ const Backend = (function(){
       persistPending();
       google.script.run
         .withSuccessHandler(res => {
+          editEpoch++;
           delete inflight[id];            /* シートに入った。控えから外してよい */
           noteTime(res, Date.now() - t0);
           applyServerTimes(res && res.at);
@@ -178,7 +198,10 @@ const Backend = (function(){
           if(!--left){ sending = false; lastErr = bad ? lastErr : ""; }
           onDirty(unsaved(), lastErr);
           persistPending();
-          if(!left) after && after(!bad);
+          if(!left){
+            if(!bad && dirtyN) flush();
+            else finishFlush(!bad && !unsaved());
+          }
         })
         .withFailureHandler(err => {
           bad = true;
@@ -192,7 +215,7 @@ const Backend = (function(){
           if(!--left) sending = false;
           onDirty(unsaved(), lastErr);
           persistPending();
-          if(!left) after && after(false);
+          if(!left) finishFlush(false);
         })
         .apiWriteCells(+y, byYear[y]);
     }
@@ -208,6 +231,7 @@ const Backend = (function(){
      だから、まだ送っていないコマは**中身ごと**この端末に控えておき、
      次に開いたときに送り直す。送れたら控えを捨てる。 */
   const PEND = KEY + "/pending";
+  const HELD = KEY + "/conflicts";
   let pendT = 0;
 
   /* 控えに書く中身。**まだ送っていないぶんと、送っている途中のぶんの両方。**
@@ -228,6 +252,8 @@ const Backend = (function(){
     if(!onGas) return;
     try{
       const list = pendingNow();
+      if(held.length) localStorage.setItem(HELD, JSON.stringify(held));
+      else localStorage.removeItem(HELD);
       if(list.length) localStorage.setItem(PEND, JSON.stringify(list));
       else localStorage.removeItem(PEND);
     }catch(e){}                 /* 控えられなくても、いまの保存は止めない */
@@ -260,6 +286,7 @@ const Backend = (function(){
       try{
         if(leftOver.length) localStorage.setItem(PEND, JSON.stringify(leftOver));
         else localStorage.removeItem(PEND);
+        if(held.length) localStorage.setItem(HELD, JSON.stringify(held));
       }catch(e){}
       after();
     };
@@ -303,7 +330,7 @@ const Backend = (function(){
      数えないと、押した直後に「保存ずみ」と出てしまい、
      そこで閉じた人は入ったと思ってしまう。 */
   const unsaved = () => {
-    let n = dirtyN;
+    let n = dirtyN + held.length;
     for(const id in inflight) n += inflight[id].length;
     return n;
   };
@@ -314,12 +341,16 @@ const Backend = (function(){
      教師それぞれの PC の時計で勝ち負けを決めると、時計が進んでいる人が always 勝つ。 */
   function applyServerTimes(at){
     if(!at) return;
-    const w = week();
     for(const k in at){
       const p = k.split("|");            /* 日付|時程|層|対象 */
-      const day = Math.round((parseISO(p[0]) - monday) / 86400000);
-      if(day < 0 || day > 6) continue;
-      const key = ck(day, p[1]);
+      for(const m of Object.values(dirty)){
+        const q = patchOf(m);
+        if(cfKey(q) === k) m.baseAt = at[k];
+      }
+      const loc = locOf(p[0]);
+      const w = loc && ((db.years[String(loc.year)] || {}).weeks || {})[loc.monday];
+      if(!w) continue;
+      const key = ck(loc.d, p[1]);
       const bank = p[2] === "school" ? w.school
                  : p[2] === "grade"  ? w.grade[p[3]]
                  : p[2] === "special"? w.special[p[3]]
@@ -371,6 +402,8 @@ const Backend = (function(){
   const archivedYear = y => (bootInfo.archived || {})[String(y)] || null;
   function boot(after){
     if(!onGas){ booted = true; return after(); }
+    try{ held = JSON.parse(localStorage.getItem(HELD) || '[]'); if(!Array.isArray(held)) held = []; }catch(_){ held = []; }
+    if(held.length){ onConflict(held.slice()); onDirty(unsaved(), lastErr); }
     let finished = false;
     const finish = () => {
       if(finished) return;
@@ -486,7 +519,7 @@ const Backend = (function(){
        返事が来るころには、もう別の週を見ているかもしれない。
        いま見ている週へ入れてしまうと、その週の中身が消える。
        校内の回線では返事の順序が入れ替わる（古い週の返事があとから届く）。 */
-    const year = fy(), mon = wkKey();
+    const year = fy(), mon = wkKey(), epoch = editEpoch;
     let finished = false;
     const finish = () => {
       if(finished) return;
@@ -500,7 +533,7 @@ const Backend = (function(){
     }, 15000);
     google.script.run
       .withSuccessHandler(w => {
-        mergeWeek(want, w, year, mon);   /* 頼んだぶんだけ入れ替える。控えは残す */
+        mergeWeek(want, w, year, mon, epoch);
         finish();
       })
       .withFailureHandler(e => {
@@ -516,7 +549,7 @@ const Backend = (function(){
   function readWeeks(mons, after){
     if(!onGas) return after();
     const want = targetsForView();
-    const year = fy();
+    const year = fy(), epoch = editEpoch;
     const todo = (mons || []).filter(m => want.some(t => !fresh_(weekTag(t, year, m))));
     if(!todo.length || !want.length) return after();
     let left = todo.length;
@@ -524,7 +557,7 @@ const Backend = (function(){
     for(const m of todo){
       google.script.run
         .withSuccessHandler((function(mm){
-          return w => { mergeWeek(want, w, year, mm); done(); };
+          return w => { mergeWeek(want, w, year, mm, epoch); done(); };
         })(m))
         /* **読めなくても先へ進む。** 進まないと、開いたつもりの面が出ない */
         .withFailureHandler(() => done())
@@ -537,12 +570,16 @@ const Backend = (function(){
 
   /* まだ送っていないコマがある対象は、読み直しで上書きしない。
      **上書きすると、書いたのに消えたように見える。** */
-  function hasPending(layer, target){
+  function hasPending(layer, target, year, mon){
+    const matches = m => m.layer === layer && m.target === (target || "")
+      || layer === "home" && m.layer === "special" && m.target === target;
     for(const k in dirty){
       const m = dirty[k];
-      if(m.layer === layer && m.target === (target || "")) return true;
-      /* 専科のコマはクラスのシートに入る。クラスを読み直すときは専科も見る */
-      if(layer === "home" && m.layer === "special" && m.target === target) return true;
+      if(String(m.year) === String(year) && m.monday === mon && matches(m)) return true;
+    }
+    for(const batch of Object.values(inflight)) for(const q of batch){
+      const loc = locOf(q.date);
+      if(loc && String(loc.year) === String(year) && loc.monday === mon && matches(q)) return true;
     }
     return false;
   }
@@ -559,9 +596,9 @@ const Backend = (function(){
          先読みすると、開いてもいないクラスのために毎分読みに行くことになる */
       const want = allTargets().filter(t => !loadedWeek[weekTag(t)]);
       if(!want.length || sending) return;
-      const year = fy(), mon = wkKey();
+      const year = fy(), mon = wkKey(), epoch = editEpoch;
       google.script.run
-        .withSuccessHandler(w => mergeWeek(want, w, year, mon))
+        .withSuccessHandler(w => mergeWeek(want, w, year, mon, epoch))
         .withFailureHandler(() => {})     /* 先読みが失敗しても、開くときに読み直す */
         .apiReadWeek(year, mon, want);
     }, 1200);
@@ -576,7 +613,8 @@ const Backend = (function(){
   /* year/mon は「頼んだときの年度と週」。渡されなければ、いまの年度と週。
      **頼んだ先の週へ入れる。** いま見ている週へ入れると、
      返事が遅れたぶんだけ別の週の中身が消える。 */
-  function mergeWeek(want, w, year, mon){
+  function mergeWeek(want, w, year, mon, epoch){
+    if(epoch !== undefined && epoch !== editEpoch) return;
     const y = (year === undefined) ? fy() : year;
     const m = (mon  === undefined) ? wkKey() : mon;
     const Yr = db.years[String(y)];
@@ -594,7 +632,7 @@ const Backend = (function(){
     };
     for(const t of want){
       /* まだ送っていないコマがある対象は触らない */
-      if(hasPending(t.layer, t.target)) continue;
+      if(hasPending(t.layer, t.target, y, m)) continue;
       if(t.layer === "school")     cur.school = stamp(w.school);
       else if(t.layer === "grade") cur.grade[t.target]  = stamp((w.grade || {})[t.target]);
       else {
@@ -605,7 +643,15 @@ const Backend = (function(){
     }
     /* **提出の印は、対象にかかわらず載せ替える。**
        週ごとの持ちもので、どのクラスを読んだかとは関係しない */
-    if(w && w.submits) cur.tpSub = w.submits;
+    if(w && w.submits){
+      for(const c of Object.keys(w.submits)){
+        if(hasPending('home', c, y, m) || hasPending('grade', gradeOf(c), y, m)
+           || hasPending('school', '', y, m)) w.submits[c].dirty = true;
+        if(!w.submits[c].dirty && cur.tpEdited) delete cur.tpEdited[c];
+      }
+      cur.tpSub = w.submits;
+      if(typeof paintTpSub === 'function') paintTpSub();
+    }
   }
   /* **開きっぱなしの画面を、たまに読み直す。**
      木曜の夕方に30人が同じ週を触る運用で、開いたまま置いている担任に
@@ -620,7 +666,10 @@ const Backend = (function(){
     watchT = setInterval(() => {
       if(document.hidden || sending) return;
       if(typeof view === "undefined" || view.kind === "gate") return;
-      ensureWeek(() => { if(typeof paintSheet === "function" && view.kind !== "tanpopo") paintSheet(); });
+      ensureWeek(() => {
+        if(view.kind === 'tanpopo') drawTanpopoView();
+        else if(typeof paintSheet === "function") paintSheet();
+      });
     }, WATCH_MS);
   }
   /* いま開いている画面の控えを「古い」ことにする。次に読むときに読み直す。
@@ -723,10 +772,11 @@ const Backend = (function(){
      cols = [{cls, group}] の並び。**並びと組をこちらで決めて渡す。** */
   function exportWeek(titles, cols, slots, name, url, ok, ng){
     if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
+    const w = week(), year = fy(), mon = wkKey();
     google.script.run
-      .withSuccessHandler(r => ok(r))
+      .withSuccessHandler(r => { if(r.submits) w.tpSub = r.submits; save(); ok(r); })
       .withFailureHandler(e => ng(String((e && e.message) || "書き込めなかった")))
-      .apiExportWeek(fy(), wkKey(), titles, cols, slots, name, url || "");
+      .apiExportWeek(year, mon, titles, cols, slots, name, url || "", w.tpSub || {});
   }
 
   /* ── たんぽぽへの提出 ────────────────────────
@@ -734,19 +784,23 @@ const Backend = (function(){
      手元では、この端末の中だけに持つ（シートにつないでいない）。 */
   function tpSubmit(cls, on, ok, ng){
     const w = week();
+    const seq = (w.tpEditSeq || {})[cls] || 0;
     if(!onGas){
       if(!w.tpSub) w.tpSub = {};
-      if(on) w.tpSub[cls] = {at:"（手元）", by:"（手元）"};
+      if(on) w.tpSub[cls] = {at:String(Date.now()), by:"（手元）", dirty:false, exports:(w.tpSub[cls] || {}).exports || {}};
       else delete w.tpSub[cls];
+      if(w.tpEdited) delete w.tpEdited[cls];
       save();
       return ok(w.tpSub);
     }
     google.script.run
       .withSuccessHandler(r => {
-        const cw = week();
-        cw.tpSub = r || {};
+        w.tpSub = r || {};
+        if(seq === ((w.tpEditSeq || {})[cls] || 0)){
+          if(w.tpEdited) delete w.tpEdited[cls];
+        }else if(w.tpSub[cls]) w.tpSub[cls].dirty = true;
         save();
-        ok(cw.tpSub);
+        ok(w.tpSub);
       })
       .withFailureHandler(e => ng(String((e && e.message) || "立てられなかった")))
       .apiTpSubmit(fy(), wkKey(), cls, !!on);
@@ -835,7 +889,7 @@ const Backend = (function(){
     }
   });
 
-  return {isGas, info, setNotifier, setDirtyWatcher, setConflictWatcher,
+  return {isGas, info, saved: () => acknowledged && !unsaved() && !sending, setNotifier, setDirtyWatcher, setConflictWatcher,
           unsaved, prefetchWeek, readWeeks, watch, stale, heldCells, dropHeld, reloadWeek,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
