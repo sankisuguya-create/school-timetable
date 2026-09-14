@@ -134,6 +134,7 @@ function fakeSheetOn(grid0, name){
         getValues(){ const out = [];
           for(let i = 0; i < nr; i++) out.push(grid[r - 1 + i].slice(c - 1, c - 1 + nc));
           return out; },
+        getDisplayValues(){ return this.getValues().map(row => row.map(v => String(v == null ? "" : v))); },
         setValues(v){ for(let i = 0; i < nr; i++) for(let j = 0; j < nc; j++)
             grid[r - 1 + i][c - 1 + j] = v[i][j];
           return this; },
@@ -676,6 +677,13 @@ for(let d = 0; d < 5; d++){
 }
 const SLOT6 = ["p1","p2","p3","p4","p5","p6"];
 const cols2 = [{cls:"3-3", group:1}, {cls:"5-1", group:2}];
+TPFILE.sheets["教師わりあて"] = [];
+const assignments = tpSheet("教師わりあて");
+assignments.getRange(4, 2).setValue("田中");
+assignments.getRange(20, 3).setValue("支援員\n佐藤");
+assignments.getRange(81, 2).setValue("金曜6校時");
+assignments.getRange(3, 2).setValue("授業行は転記しない");
+TPFILE.sheets["教師わりあて"].max = {rows:81, cols:3}; // 出力より小さい参照範囲でも読める。
 const ex = ev("Store.exportWeek(2026, '2026-11-16', " + JSON.stringify(titles)
             + ", " + JSON.stringify(cols2) + ", " + JSON.stringify(SLOT6) + ")");
 const SH = () => TPFILE.sheets[ex.sheet];
@@ -703,9 +711,25 @@ ok("6校時は +14 行目", SH()[15][1] === "総合", SH()[15].slice(0,3));
 ok("骨は +5 中休み・+10 給食・+11 昼休み",
    SH()[6][0] === "中休み" && SH()[11][0] === "給食" && SH()[12][0] === "昼休み",
    [SH()[6][0], SH()[11][0], SH()[12][0]]);
-ok("担当者・場所の行には書かない（空のまま）",
-   SH()[3][1] === "" && SH()[5][1] === "" && SH()[16][1] === "",
-   [SH()[3][1], SH()[5][1], SH()[16][1]]);
+ok("授業直下の同座標を転記し、空欄と改行を保つ",
+   SH()[3][1] === "田中" && SH()[5][1] === "" && SH()[19][2] === "支援員\n佐藤"
+   && SH()[80][1] === "金曜6校時");
+ok("参照シートがないと既存週を変更せず止まる", (() => {
+  const keep = TPFILE.sheets["教師わりあて"], before = SH(), names = Object.keys(TPFILE.sheets).join();
+  delete TPFILE.sheets["教師わりあて"];
+  let why = "";
+  try { ev("Store.exportWeek(2026, '2026-11-16', {}, " + JSON.stringify(cols2) + ")"); }
+  catch(e) { why = e.message; }
+  TPFILE.sheets["教師わりあて"] = keep;
+  return why.includes("教師わりあて") && SH() === before && Object.keys(TPFILE.sheets).sort().join() === names.split(',').sort().join();
+})());
+ok("参照シートを出力名に指定しても壊さない", (() => {
+  const before = TPFILE.sheets["教師わりあて"];
+  let why = "";
+  try { ev("Store.exportWeek(2026, '2026-11-16', {}, " + JSON.stringify(cols2) + ", null, '教師わりあて')"); }
+  catch(e) { why = e.message; }
+  return why.includes("使えません") && TPFILE.sheets["教師わりあて"] === before;
+})());
 ok("日ごとに授業名が変わる", SH()[18][1] === "国語1" && SH()[34][1] === "国語2",
    [SH()[18][1], SH()[34][1]]);
 ok("選んだクラスは全部入る", SH()[2][2] === "5年", SH()[2].slice(0,3));
@@ -733,7 +757,7 @@ ok("列の幅は設定シートから動かせる", (function(){
 console.log("\n■ 週シートは、週の順に右へ並べる");
 (function(){
   /* **いちばん左に入れ続けるとタブが逆順になる。** 4月 → 翌3月の順に並べる */
-  TPFILE.sheets = {}; TPFILE.order = [];
+  TPFILE.sheets = {"教師わりあて": TPFILE.sheets["教師わりあて"]}; TPFILE.order = ["教師わりあて"];
   const t = {"3-3":{}};
   for(let d = 0; d < 5; d++)
     t["3-3"][String(d)] = {p1:"国語", p2:"", p3:"", p4:"", p5:"", p6:""};
@@ -747,7 +771,7 @@ console.log("\n■ 週シートは、週の順に右へ並べる");
   put("2027-01-11");     /* 1月2週 → 年度では11月より後 */
   put("2026-04-06");     /* 4月1週 → いちばん前 */
   ok("出した順ではなく、週の順に並ぶ",
-     JSON.stringify(tpNames()) === JSON.stringify(["4月1週","9月1週","9月2週","11月3週","1月2週"]),
+     JSON.stringify(tpNames().filter(n => n !== "教師わりあて")) === JSON.stringify(["4月1週","9月1週","9月2週","11月3週","1月2週"]),
      tpNames());
   ok("年度は4月からで、1月は11月より後ろ",
      tpNames().indexOf("1月2週") > tpNames().indexOf("11月3週"), tpNames());
@@ -776,16 +800,18 @@ console.log("\n■ 週シートは、週の順に右へ並べる");
 console.log("\n■ 同じ名前のシートは、消さずに名前を変えて残す");
 (function(){
   const before = TPFILE.sheets[ex.sheet];
-  before[3][1] = "たんぽぽ担当が書いた";              /* 残っていてほしい値 */
+  before[3][1] = "た:田中";              /* 転記した文字に手入力で追記できる */
   const again = ev("Store.exportWeek(2026, '2026-11-16', " + JSON.stringify(titles)
                + ", " + JSON.stringify(cols2) + ", " + JSON.stringify(SLOT6) + ")");
   ok("前のシートは名前を変えて残る", !!again.backup && again.backup.indexOf("前の") >= 0, again);
   ok("残したシートに、前の中身がある",
      !!TPFILE.sheets[again.backup]
-     && TPFILE.sheets[again.backup][3][1] === "たんぽぽ担当が書いた",
+     && TPFILE.sheets[again.backup][3][1] === "た:田中",
      again.backup);
   ok("新しいシートは同じ名前で作り直される",
      !!TPFILE.sheets[again.sheet] && again.sheet === ex.sheet, Object.keys(TPFILE.sheets));
+  ok("再出力は元の名前に戻り、参照元には手入力を戻さない",
+     TPFILE.sheets[again.sheet][3][1] === "田中" && TPFILE.sheets["教師わりあて"][3][1] === "田中");
 })();
 
 console.log("\n■ 出す先の列は、組ごとに並べる");
