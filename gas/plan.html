@@ -243,6 +243,25 @@ button,select,input,textarea{font:inherit;color:inherit}
 .stage{overflow:auto;padding:10px;display:flex;justify-content:center;
   align-items:flex-start;min-height:0;min-width:0}
 .stage[hidden]{display:none!important}
+/* 状態と入力範囲。静的なCSSだけで描き、紙面・印刷の背景には載せない。 */
+body.is-saved{--bg:#dce1e5}
+body.is-saved .stage{box-shadow:inset 0 0 0 1px #b9c2cb}
+body[data-scope="grade"] .stage{
+  background:radial-gradient(ellipse 72px 23px at 1% 25%,#ffffff88 50%,#ffffff00 85%),
+    radial-gradient(ellipse 35px 27px at 2% 23%,#ffffff66 45%,#ffffff00 85%),
+    radial-gradient(ellipse 90px 24px at 99% 44%,#ffffff88 50%,#ffffff00 85%),
+    radial-gradient(ellipse 38px 28px at 98% 42%,#ffffff66 45%,#ffffff00 85%),
+    linear-gradient(155deg,#9fb8ca,#d7e2e9 65%,#c1d0db);
+}
+body[data-scope="school"] .stage{
+  background:radial-gradient(circle at 12% 18%,#e0e6edb3 0 1px,transparent 1.8px),
+    radial-gradient(circle at 82% 28%,#cbd9ecb3 0 1px,transparent 1.8px),
+    radial-gradient(circle at 28% 78%,#e0e6ed80 0 .8px,transparent 1.6px),
+    radial-gradient(ellipse at 65% 15%,#293747,transparent 65%),#141c27;
+  background-size:193px 173px,277px 229px,331px 307px,100% 100%,auto;
+}
+body.is-saved[data-scope="grade"] .stage{background-color:#aebdca;background-blend-mode:multiply}
+body.is-saved[data-scope="school"] .stage{background-color:#202a36;box-shadow:inset 0 0 0 2px #576575}
 
 /* 月の面。**4週ぶんを 2×2 に並べる。** 紙と入れ替えて出す。
    転がさずに1画面へ収める（収まらなければ紙にもならない）。 */
@@ -419,8 +438,11 @@ button,select,input,textarea{font:inherit;color:inherit}
 .panel h2{margin:0;font-size:15px;font-weight:700}
 /* 入力パネルの頭。**保存はいちばん目立つところに1つだけ置く。**
    打つたびに送らない作りなので、押す場所が分からないと書いたものが宙に浮く */
-.phead{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.pbtns{display:flex;align-items:center;gap:7px}
+.phead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.pbtns{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-left:auto}
+.pbtns button{flex-shrink:0}
+.tpchanged{margin:0;padding:8px 10px;border-left:3px solid var(--cat-special);
+  background:#fff4eb;color:#7e3b13;font-size:12px;line-height:1.7}
 /* ロック。**押すまで、この画面からは直せない。**
    見るだけのつもりで開いたクラスに、うっかり字を入れてしまうのを止める。
    かかっているかどうかが、押す前から分かる形にする（塗りと字の両方） */
@@ -456,8 +478,12 @@ button,select,input,textarea{font:inherit;color:inherit}
   border:1px solid var(--cat-special);background:var(--cat-special);color:#fff;
   font-family:inherit}
 .tpsub:hover{filter:brightness(1.08)}
-.tpsub.on{background:var(--card);color:var(--cat-special);font-weight:600}
-.tpsub.on:hover{background:var(--hover);filter:none}
+.tpsub{background:var(--card);color:var(--cat-special)}
+.tpsub.on{background:var(--cat-special);color:#fff;font-weight:700}
+.tpsub.on:hover{filter:brightness(1.08)}
+.tpin.st-changed{background:#f0eaf6}
+.tpin.st-changed::before,.tpleg .st-changed i{background:#78539b}
+.tpin.st-changed em{color:#694189}
 .tpsub:focus-visible{outline:2px solid var(--ink-link);outline-offset:2px}
 
 /* 左の「週案」の右。入口へ1押しで戻れる */
@@ -1333,6 +1359,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
             <span id="tpSubTxt">たんぽぽに提出</span></button>
         </div>
       </div>
+      <p class="tpchanged" id="tpChanged" role="status" hidden>未提出の変更あり！　保存後に、たんぽぽへ再提出してください。</p>
       <p class="lockmsg" id="lockMsg" hidden>
         <b>この画面はロック中。</b>直すには右上の「ロック中」を押す。</p>
 
@@ -1764,7 +1791,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.18.0";
+let APP_VERSION = "1.19.0";
 let BUILD_DATE  = "2026-09-14";
 
 /* 時程。行を固定しない（学校ごとに違う）。
@@ -2343,8 +2370,27 @@ function tpGroups(){
 const tpIn = g => (Y().tanpopo || {})[String(g)] || [];
 /* たんぽぽへの提出。**担任が「今週ぶんは書き終えた」と言った印。**
    週ごとの持ちもので、月曜が変われば、また未に戻る。 */
-const tpSubmitted = cls => !!(week().tpSub || {})[String(cls)];
+const tpSubmitted = cls => { const s = tpSubmitInfo(cls); return !!s && !s.dirty; };
 const tpSubmitInfo = cls => (week().tpSub || {})[String(cls)] || null;
+/* 提出後の変更は、保存済みでも再提出するまで残す。サーバにも同じ状態を記録する。 */
+function markTpEdited(layer, target, where){
+  const w = where ? ((db.years[String(where.year)] || {}).weeks || {})[where.monday] : week();
+  if(w){
+    const pending = w.tpEdited || (w.tpEdited = {});
+    const seq = w.tpEditSeq || (w.tpEditSeq = {});
+    for(const c of allClasses())
+      if(layer === 'school' || layer === 'grade' && String(gradeOf(c)) === String(target)
+         || (layer === 'home' || layer === 'special') && c === target){
+        pending[c] = true; seq[c] = (seq[c] || 0) + 1;
+      }
+  }
+  for(const c of Object.keys((w || {}).tpSub || {})){
+    if(layer === 'school' || layer === 'grade' && String(gradeOf(c)) === String(target)
+       || (layer === 'home' || layer === 'special') && c === target) w.tpSub[c].dirty = true;
+  }
+  if(typeof paintTpSub === 'function') paintTpSub();
+  if(typeof paintSave === 'function') paintSave();
+}
 /* 1人足す／1人減らす。**同じ交流級を2つ入れれば2人（＝2列）。** */
 function tpAdd(g, cls){
   const t = Y().tanpopo, k = String(g);
@@ -2458,6 +2504,9 @@ const Backend = (function(){
   let flightId = 0;
   let timer = 0;
   let sending = false;
+  let editEpoch = 0;
+  let acknowledged = false;
+  const flushWaiters = [];
   let notify = () => {};
   let onDirty = () => {};   /* 未保存の数が変わったら画面に知らせる */
   let lastErr = "";
@@ -2486,6 +2535,9 @@ const Backend = (function(){
      競合したぶんを入れ直すときは、別の週のコマかもしれない。
      いまの週として覚えると、別の週のコマを書き替えてしまう。 */
   function cellChanged(layer, target, d, slotId, baseAt, where){
+    acknowledged = false;
+    editEpoch++;
+    if(typeof markTpEdited === "function") markTpEdited(layer, target, where);
     if(!onGas) return;
     const yr = where ? String(where.year) : fy();
     const mo = where ? where.monday : wkKey();
@@ -2531,10 +2583,14 @@ const Backend = (function(){
       if(!loc) continue;                          /* 日付が読めない。捨てずに飛ばす */
       held.push({c, q: (sent || {})[cfKey(c)] || null, loc});
     }
+    persistPending();
     onConflict(held.slice());
   }
   const heldCells = () => held.slice();
-  const dropHeld  = () => { held = []; };
+  const dropHeld = list => {
+    held = list ? held.filter(h => !list.includes(h)) : [];
+    persistPending(); onDirty(unsaved(), lastErr);
+  };
 
   /* **競合したあとは、その週を必ず読み直す。**
      読み直さずに送り直すと、見ていない変更をもう一度潰しにいくことになる。 */
@@ -2577,8 +2633,17 @@ const Backend = (function(){
 
   /* 貯めたぶんを送る。after は送り終わってから呼ぶ（押した手ごたえを返すため）。 */
   function flush(after){
-    if(!onGas || !dirtyN){ lastErr = ""; onDirty(0, ""); return after && after(true); }
-    if(sending){ retry(900); return after && after(false); }
+    if(after) flushWaiters.push(after);
+    if(sending) return;
+    const finishFlush = (ok, record = true) => {
+      if(record) acknowledged = ok;
+      onDirty(unsaved(), lastErr);
+      for(const fn of flushWaiters.splice(0)) fn(ok);
+    };
+    if(!onGas || !dirtyN){
+      lastErr = "";
+      return finishFlush(!held.length, acknowledged || flushWaiters.length > 0);
+    }
     const batch = dirty;
     dirty = {}; dirtyN = 0; sending = true;
     /* **どのコマを、どの中身で送ったかを覚えておく。**
@@ -2603,6 +2668,7 @@ const Backend = (function(){
       persistPending();
       google.script.run
         .withSuccessHandler(res => {
+          editEpoch++;
           delete inflight[id];            /* シートに入った。控えから外してよい */
           noteTime(res, Date.now() - t0);
           applyServerTimes(res && res.at);
@@ -2610,7 +2676,10 @@ const Backend = (function(){
           if(!--left){ sending = false; lastErr = bad ? lastErr : ""; }
           onDirty(unsaved(), lastErr);
           persistPending();
-          if(!left) after && after(!bad);
+          if(!left){
+            if(!bad && dirtyN) flush();
+            else finishFlush(!bad && !unsaved());
+          }
         })
         .withFailureHandler(err => {
           bad = true;
@@ -2624,7 +2693,7 @@ const Backend = (function(){
           if(!--left) sending = false;
           onDirty(unsaved(), lastErr);
           persistPending();
-          if(!left) after && after(false);
+          if(!left) finishFlush(false);
         })
         .apiWriteCells(+y, byYear[y]);
     }
@@ -2640,6 +2709,7 @@ const Backend = (function(){
      だから、まだ送っていないコマは**中身ごと**この端末に控えておき、
      次に開いたときに送り直す。送れたら控えを捨てる。 */
   const PEND = KEY + "/pending";
+  const HELD = KEY + "/conflicts";
   let pendT = 0;
 
   /* 控えに書く中身。**まだ送っていないぶんと、送っている途中のぶんの両方。**
@@ -2660,6 +2730,8 @@ const Backend = (function(){
     if(!onGas) return;
     try{
       const list = pendingNow();
+      if(held.length) localStorage.setItem(HELD, JSON.stringify(held));
+      else localStorage.removeItem(HELD);
       if(list.length) localStorage.setItem(PEND, JSON.stringify(list));
       else localStorage.removeItem(PEND);
     }catch(e){}                 /* 控えられなくても、いまの保存は止めない */
@@ -2692,6 +2764,7 @@ const Backend = (function(){
       try{
         if(leftOver.length) localStorage.setItem(PEND, JSON.stringify(leftOver));
         else localStorage.removeItem(PEND);
+        if(held.length) localStorage.setItem(HELD, JSON.stringify(held));
       }catch(e){}
       after();
     };
@@ -2735,7 +2808,7 @@ const Backend = (function(){
      数えないと、押した直後に「保存ずみ」と出てしまい、
      そこで閉じた人は入ったと思ってしまう。 */
   const unsaved = () => {
-    let n = dirtyN;
+    let n = dirtyN + held.length;
     for(const id in inflight) n += inflight[id].length;
     return n;
   };
@@ -2746,12 +2819,16 @@ const Backend = (function(){
      教師それぞれの PC の時計で勝ち負けを決めると、時計が進んでいる人が always 勝つ。 */
   function applyServerTimes(at){
     if(!at) return;
-    const w = week();
     for(const k in at){
       const p = k.split("|");            /* 日付|時程|層|対象 */
-      const day = Math.round((parseISO(p[0]) - monday) / 86400000);
-      if(day < 0 || day > 6) continue;
-      const key = ck(day, p[1]);
+      for(const m of Object.values(dirty)){
+        const q = patchOf(m);
+        if(cfKey(q) === k) m.baseAt = at[k];
+      }
+      const loc = locOf(p[0]);
+      const w = loc && ((db.years[String(loc.year)] || {}).weeks || {})[loc.monday];
+      if(!w) continue;
+      const key = ck(loc.d, p[1]);
       const bank = p[2] === "school" ? w.school
                  : p[2] === "grade"  ? w.grade[p[3]]
                  : p[2] === "special"? w.special[p[3]]
@@ -2803,6 +2880,8 @@ const Backend = (function(){
   const archivedYear = y => (bootInfo.archived || {})[String(y)] || null;
   function boot(after){
     if(!onGas){ booted = true; return after(); }
+    try{ held = JSON.parse(localStorage.getItem(HELD) || '[]'); if(!Array.isArray(held)) held = []; }catch(_){ held = []; }
+    if(held.length){ onConflict(held.slice()); onDirty(unsaved(), lastErr); }
     let finished = false;
     const finish = () => {
       if(finished) return;
@@ -2918,7 +2997,7 @@ const Backend = (function(){
        返事が来るころには、もう別の週を見ているかもしれない。
        いま見ている週へ入れてしまうと、その週の中身が消える。
        校内の回線では返事の順序が入れ替わる（古い週の返事があとから届く）。 */
-    const year = fy(), mon = wkKey();
+    const year = fy(), mon = wkKey(), epoch = editEpoch;
     let finished = false;
     const finish = () => {
       if(finished) return;
@@ -2932,7 +3011,7 @@ const Backend = (function(){
     }, 15000);
     google.script.run
       .withSuccessHandler(w => {
-        mergeWeek(want, w, year, mon);   /* 頼んだぶんだけ入れ替える。控えは残す */
+        mergeWeek(want, w, year, mon, epoch);
         finish();
       })
       .withFailureHandler(e => {
@@ -2948,7 +3027,7 @@ const Backend = (function(){
   function readWeeks(mons, after){
     if(!onGas) return after();
     const want = targetsForView();
-    const year = fy();
+    const year = fy(), epoch = editEpoch;
     const todo = (mons || []).filter(m => want.some(t => !fresh_(weekTag(t, year, m))));
     if(!todo.length || !want.length) return after();
     let left = todo.length;
@@ -2956,7 +3035,7 @@ const Backend = (function(){
     for(const m of todo){
       google.script.run
         .withSuccessHandler((function(mm){
-          return w => { mergeWeek(want, w, year, mm); done(); };
+          return w => { mergeWeek(want, w, year, mm, epoch); done(); };
         })(m))
         /* **読めなくても先へ進む。** 進まないと、開いたつもりの面が出ない */
         .withFailureHandler(() => done())
@@ -2969,12 +3048,16 @@ const Backend = (function(){
 
   /* まだ送っていないコマがある対象は、読み直しで上書きしない。
      **上書きすると、書いたのに消えたように見える。** */
-  function hasPending(layer, target){
+  function hasPending(layer, target, year, mon){
+    const matches = m => m.layer === layer && m.target === (target || "")
+      || layer === "home" && m.layer === "special" && m.target === target;
     for(const k in dirty){
       const m = dirty[k];
-      if(m.layer === layer && m.target === (target || "")) return true;
-      /* 専科のコマはクラスのシートに入る。クラスを読み直すときは専科も見る */
-      if(layer === "home" && m.layer === "special" && m.target === target) return true;
+      if(String(m.year) === String(year) && m.monday === mon && matches(m)) return true;
+    }
+    for(const batch of Object.values(inflight)) for(const q of batch){
+      const loc = locOf(q.date);
+      if(loc && String(loc.year) === String(year) && loc.monday === mon && matches(q)) return true;
     }
     return false;
   }
@@ -2991,9 +3074,9 @@ const Backend = (function(){
          先読みすると、開いてもいないクラスのために毎分読みに行くことになる */
       const want = allTargets().filter(t => !loadedWeek[weekTag(t)]);
       if(!want.length || sending) return;
-      const year = fy(), mon = wkKey();
+      const year = fy(), mon = wkKey(), epoch = editEpoch;
       google.script.run
-        .withSuccessHandler(w => mergeWeek(want, w, year, mon))
+        .withSuccessHandler(w => mergeWeek(want, w, year, mon, epoch))
         .withFailureHandler(() => {})     /* 先読みが失敗しても、開くときに読み直す */
         .apiReadWeek(year, mon, want);
     }, 1200);
@@ -3008,7 +3091,8 @@ const Backend = (function(){
   /* year/mon は「頼んだときの年度と週」。渡されなければ、いまの年度と週。
      **頼んだ先の週へ入れる。** いま見ている週へ入れると、
      返事が遅れたぶんだけ別の週の中身が消える。 */
-  function mergeWeek(want, w, year, mon){
+  function mergeWeek(want, w, year, mon, epoch){
+    if(epoch !== undefined && epoch !== editEpoch) return;
     const y = (year === undefined) ? fy() : year;
     const m = (mon  === undefined) ? wkKey() : mon;
     const Yr = db.years[String(y)];
@@ -3026,7 +3110,7 @@ const Backend = (function(){
     };
     for(const t of want){
       /* まだ送っていないコマがある対象は触らない */
-      if(hasPending(t.layer, t.target)) continue;
+      if(hasPending(t.layer, t.target, y, m)) continue;
       if(t.layer === "school")     cur.school = stamp(w.school);
       else if(t.layer === "grade") cur.grade[t.target]  = stamp((w.grade || {})[t.target]);
       else {
@@ -3037,7 +3121,15 @@ const Backend = (function(){
     }
     /* **提出の印は、対象にかかわらず載せ替える。**
        週ごとの持ちもので、どのクラスを読んだかとは関係しない */
-    if(w && w.submits) cur.tpSub = w.submits;
+    if(w && w.submits){
+      for(const c of Object.keys(w.submits)){
+        if(hasPending('home', c, y, m) || hasPending('grade', gradeOf(c), y, m)
+           || hasPending('school', '', y, m)) w.submits[c].dirty = true;
+        if(!w.submits[c].dirty && cur.tpEdited) delete cur.tpEdited[c];
+      }
+      cur.tpSub = w.submits;
+      if(typeof paintTpSub === 'function') paintTpSub();
+    }
   }
   /* **開きっぱなしの画面を、たまに読み直す。**
      木曜の夕方に30人が同じ週を触る運用で、開いたまま置いている担任に
@@ -3052,7 +3144,10 @@ const Backend = (function(){
     watchT = setInterval(() => {
       if(document.hidden || sending) return;
       if(typeof view === "undefined" || view.kind === "gate") return;
-      ensureWeek(() => { if(typeof paintSheet === "function" && view.kind !== "tanpopo") paintSheet(); });
+      ensureWeek(() => {
+        if(view.kind === 'tanpopo') drawTanpopoView();
+        else if(typeof paintSheet === "function") paintSheet();
+      });
     }, WATCH_MS);
   }
   /* いま開いている画面の控えを「古い」ことにする。次に読むときに読み直す。
@@ -3155,10 +3250,11 @@ const Backend = (function(){
      cols = [{cls, group}] の並び。**並びと組をこちらで決めて渡す。** */
   function exportWeek(titles, cols, slots, name, url, ok, ng){
     if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
+    const w = week(), year = fy(), mon = wkKey();
     google.script.run
-      .withSuccessHandler(r => ok(r))
+      .withSuccessHandler(r => { if(r.submits) w.tpSub = r.submits; save(); ok(r); })
       .withFailureHandler(e => ng(String((e && e.message) || "書き込めなかった")))
-      .apiExportWeek(fy(), wkKey(), titles, cols, slots, name, url || "");
+      .apiExportWeek(year, mon, titles, cols, slots, name, url || "", w.tpSub || {});
   }
 
   /* ── たんぽぽへの提出 ────────────────────────
@@ -3166,19 +3262,23 @@ const Backend = (function(){
      手元では、この端末の中だけに持つ（シートにつないでいない）。 */
   function tpSubmit(cls, on, ok, ng){
     const w = week();
+    const seq = (w.tpEditSeq || {})[cls] || 0;
     if(!onGas){
       if(!w.tpSub) w.tpSub = {};
-      if(on) w.tpSub[cls] = {at:"（手元）", by:"（手元）"};
+      if(on) w.tpSub[cls] = {at:String(Date.now()), by:"（手元）", dirty:false, exports:(w.tpSub[cls] || {}).exports || {}};
       else delete w.tpSub[cls];
+      if(w.tpEdited) delete w.tpEdited[cls];
       save();
       return ok(w.tpSub);
     }
     google.script.run
       .withSuccessHandler(r => {
-        const cw = week();
-        cw.tpSub = r || {};
+        w.tpSub = r || {};
+        if(seq === ((w.tpEditSeq || {})[cls] || 0)){
+          if(w.tpEdited) delete w.tpEdited[cls];
+        }else if(w.tpSub[cls]) w.tpSub[cls].dirty = true;
         save();
-        ok(cw.tpSub);
+        ok(w.tpSub);
       })
       .withFailureHandler(e => ng(String((e && e.message) || "立てられなかった")))
       .apiTpSubmit(fy(), wkKey(), cls, !!on);
@@ -3267,7 +3367,7 @@ const Backend = (function(){
     }
   });
 
-  return {isGas, info, setNotifier, setDirtyWatcher, setConflictWatcher,
+  return {isGas, info, saved: () => acknowledged && !unsaved() && !sending, setNotifier, setDirtyWatcher, setConflictWatcher,
           unsaved, prefetchWeek, readWeeks, watch, stale, heldCells, dropHeld, reloadWeek,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
@@ -4639,6 +4739,7 @@ function selectCell(d, sid, e){
   if(e) e.classList.add("sel");
   selCell = {d, s:sid};
   scope = "self";        /* 選ぶたびに戻す。持ち越すと黙って全校へ広がる */
+  paintHeader();
   fillPanel();
 }
 function clearSelection(){
@@ -4732,7 +4833,7 @@ function fillPanel(){
     ].map(([v, label]) =>
       "<label><input type='radio' name='sc' value='" + v + "'"
       + (scope === v ? " checked" : "") + "> " + escText(label) + "</label>").join("");
-    for(const r of $("pScope").querySelectorAll("input")) r.onchange = () => { scope = r.value; };
+    for(const r of $("pScope").querySelectorAll("input")) r.onchange = () => { scope = r.value; paintHeader(); };
   }
 
   $("pAll").hidden    = slot.kind !== "brk";
@@ -4812,12 +4913,19 @@ let tpFromOpen = false;
    **色だけに頼らない。** 短い字と左端の太い線を必ず添える。 */
 const TP_ST = {
   ok:   {mark:"済", why:"担任が「今週ぶんは書き終えた」と出している"},
+  changed: {mark:"変", why:"再提出された変更が、この出力先にまだ反映されていない"},
   base: {mark:"未", why:"担任がまだ出していない"}
 };
 /* **1コマでも書いてあれば済、にはしない。**
    ちょっと触っただけの週と、出してよい週を、たんぽぽ担当が見分けられない。
    担任がクラスの画面で「たんぽぽに提出」を押したものだけを済にする。 */
-const tpState = cls => tpSubmitted(cls) ? "ok" : "base";
+const tpState = cls => {
+  const s = tpSubmitInfo(cls);
+  if(!s || s.dirty) return 'base';
+  const target = tpTargetNow(), key = target ? (String(target.url).match(/[-\w]{25,}/) || [target.url])[0] : '';
+  const done = (s.exports || {})[key];
+  return done && done !== s.at ? 'changed' : 'ok';
+};
 
 /* ── 出す先 ──────────────────────────────────
    **1本とはかぎらない。** たんぽぽ時間割が学年で分かれている学校も、
@@ -5022,7 +5130,7 @@ function drawTanpopoView(){
   $("tpSel").innerHTML =
     "<div class='tpplace" + (open ? "" : " shut") + "'><div class='tpto'>"
     + "<div class='tpleg'><b>今週の提出</b>"
-    + ["ok","base"].map(k =>
+    + ["ok","base","changed"].map(k =>
         "<span class='st-" + k + "'><i></i>" + TP_ST[k].mark + "</span>").join("")
     + "</div>"
     + left
@@ -5220,7 +5328,12 @@ function doExportTanpopo(){
   $("tpGo").disabled = true;
   $("tpCount").innerHTML = "たんぽぽ時間割へ書いている…";
   const w = Wait.begin("たんぽぽ時間割へ出しています");
-  Backend.flush(() => {
+  Backend.flush(saved => {
+    if(!saved){
+      Wait.end(w); $("tpGo").disabled = false;
+      $("tpCount").textContent = "保存・競合の解決を終えてから出力してください";
+      return;
+    }
     Backend.exportWeek(tanpopoTitles(chosen), cols, tpSlots(), name,
       tgt ? tgt.url : "",
       r => {
@@ -5399,6 +5512,7 @@ function showGate(){
    **「いま：◯年◯組」の行は置かない。** すぐ上の行き先の欄が同じことを
    言っていて、同じものを2か所に置くと、どちらを見ればよいかを毎回考える。 */
 function paintHeader(){
+  document.body.dataset.scope = view.kind === 'class' ? scope : view.kind;
   const open = view.kind !== "gate";
   for(const b of document.querySelectorAll(".nav[data-screen]"))
     b.setAttribute("aria-current", String(b.dataset.screen === (open ? "plan" : "gate")));
@@ -6582,7 +6696,7 @@ function cfAnswer(mine){
   const list = cfAsk;
   cfAsk = null;
   if(!list) return;
-  Backend.dropHeld();               /* 控えはここで引き取る。二重に出さない */
+  if(!mine) Backend.dropHeld(list);  /* 最新を採用したときだけ、自分の控えを破棄する。 */
   setBusy(true, "最新の内容を読んでいます");
   Backend.reloadWeek(list, () => {
     setBusy(false);
@@ -6599,6 +6713,7 @@ function applyHeld(list){
   let i = 0, put = 0, miss = 0;
   const next = () => {
     if(i >= list.length){
+      if(!miss) Backend.dropHeld(list);
       save(); refreshWeek();
       if(miss) toast("<b>" + miss + " コマは入れ直せなかった</b>　その週を開いて打ち直す");
       if(put) doSave(true); else if(!miss) toast("入れ直さなかった");
@@ -6665,6 +6780,8 @@ function paintSave(){
   const b = $("saveBtn"), t = $("saveTxt");
   if(!b) return;
   const {n, err, busy} = saveState;
+  document.body.classList.toggle('is-saved', !n && !err && !busy && Backend.saved());
+  paintTpSub();
   b.classList.toggle("dirty", !!n && !err);
   b.classList.toggle("bad", !!err);
   b.disabled = busy;
@@ -6691,12 +6808,16 @@ function paintTpSub(){
   const cls = view.kind === "class" ? view.cls : "";
   const show = !!cls && tpCount(cls) > 0;
   b.hidden = !show;
+  $("tpChanged").hidden = true;
   if(!show) return;
   const on = tpSubmitted(cls);
   const info = tpSubmitInfo(cls);
-  b.classList.toggle("on", on);
+  const changed = !!(info && info.dirty || (week().tpEdited || {})[cls]);
+  $("tpChanged").hidden = !changed;
+  $("tpChanged").textContent = "未提出の変更あり！　保存後に、たんぽぽへ" + (info ? "再提出" : "提出") + "してください。";
+  b.classList.toggle("on", on && !changed);
   b.setAttribute("aria-pressed", String(on));
-  tx.textContent = on ? "たんぽぽに提出ずみ" : "たんぽぽに提出";
+  tx.textContent = changed && info ? "たんぽぽに再提出" : on ? "たんぽぽに提出ずみ" : "たんぽぽに提出";
   b.title = on
     ? "提出ずみ" + (info && info.at ? "（" + info.at + "）" : "")
       + "　押すと取り消せる。週が変わればまた未に戻る"
@@ -6705,18 +6826,21 @@ function paintTpSub(){
 function toggleTpSub(){
   const cls = view.kind === "class" ? view.cls : "";
   if(!cls || !Wait.guard()) return;
-  const on = !tpSubmitted(cls);
+  const on = !tpSubmitted(cls) || !!(week().tpEdited || {})[cls];
   const w = Wait.begin(on ? "たんぽぽへ提出しています" : "提出を取り消しています");
-  Backend.tpSubmit(cls, on, () => {
+  Backend.flush(saved => {
+    if(!saved){ Wait.end(w); return toast("保存・競合の解決を終えてから提出してください"); }
+    Backend.tpSubmit(cls, on, () => {
     Wait.end(w); paintTpSub();
     if(view.kind === "tanpopo") drawTanpopoView();
     toast(on ? "<b>たんぽぽに提出した</b>　週が変わると、また未に戻る"
              : "提出を取り消した");
   }, why => { Wait.end(w); toast(why); });
+  });
 }
 
 function doSave(loud){
-  if(!Backend.isGas()){ save(); if(loud) toast("この端末に保存した（本番ではシートへ）"); return; }
+  if(!Backend.isGas()){ save(); Backend.flush(() => paintSave()); if(loud) toast("この端末に保存した（本番ではシートへ）"); return; }
   saveState.busy = true; paintSave();
   const w = Wait.begin("シートに保存しています");
   Backend.flush(okAll => {

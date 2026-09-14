@@ -136,6 +136,25 @@ button,select,input,textarea{font:inherit;color:inherit}
 .stage{overflow:auto;padding:10px;display:flex;justify-content:center;
   align-items:flex-start;min-height:0;min-width:0}
 .stage[hidden]{display:none!important}
+/* 状態と入力範囲。静的なCSSだけで描き、紙面・印刷の背景には載せない。 */
+body.is-saved{--bg:#dce1e5}
+body.is-saved .stage{box-shadow:inset 0 0 0 1px #b9c2cb}
+body[data-scope="grade"] .stage{
+  background:radial-gradient(ellipse 72px 23px at 1% 25%,#ffffff88 50%,#ffffff00 85%),
+    radial-gradient(ellipse 35px 27px at 2% 23%,#ffffff66 45%,#ffffff00 85%),
+    radial-gradient(ellipse 90px 24px at 99% 44%,#ffffff88 50%,#ffffff00 85%),
+    radial-gradient(ellipse 38px 28px at 98% 42%,#ffffff66 45%,#ffffff00 85%),
+    linear-gradient(155deg,#9fb8ca,#d7e2e9 65%,#c1d0db);
+}
+body[data-scope="school"] .stage{
+  background:radial-gradient(circle at 12% 18%,#e0e6edb3 0 1px,transparent 1.8px),
+    radial-gradient(circle at 82% 28%,#cbd9ecb3 0 1px,transparent 1.8px),
+    radial-gradient(circle at 28% 78%,#e0e6ed80 0 .8px,transparent 1.6px),
+    radial-gradient(ellipse at 65% 15%,#293747,transparent 65%),#141c27;
+  background-size:193px 173px,277px 229px,331px 307px,100% 100%,auto;
+}
+body.is-saved[data-scope="grade"] .stage{background-color:#aebdca;background-blend-mode:multiply}
+body.is-saved[data-scope="school"] .stage{background-color:#202a36;box-shadow:inset 0 0 0 2px #576575}
 
 /* 月の面。**4週ぶんを 2×2 に並べる。** 紙と入れ替えて出す。
    転がさずに1画面へ収める（収まらなければ紙にもならない）。 */
@@ -312,8 +331,11 @@ button,select,input,textarea{font:inherit;color:inherit}
 .panel h2{margin:0;font-size:15px;font-weight:700}
 /* 入力パネルの頭。**保存はいちばん目立つところに1つだけ置く。**
    打つたびに送らない作りなので、押す場所が分からないと書いたものが宙に浮く */
-.phead{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.pbtns{display:flex;align-items:center;gap:7px}
+.phead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.pbtns{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-left:auto}
+.pbtns button{flex-shrink:0}
+.tpchanged{margin:0;padding:8px 10px;border-left:3px solid var(--cat-special);
+  background:#fff4eb;color:#7e3b13;font-size:12px;line-height:1.7}
 /* ロック。**押すまで、この画面からは直せない。**
    見るだけのつもりで開いたクラスに、うっかり字を入れてしまうのを止める。
    かかっているかどうかが、押す前から分かる形にする（塗りと字の両方） */
@@ -349,8 +371,12 @@ button,select,input,textarea{font:inherit;color:inherit}
   border:1px solid var(--cat-special);background:var(--cat-special);color:#fff;
   font-family:inherit}
 .tpsub:hover{filter:brightness(1.08)}
-.tpsub.on{background:var(--card);color:var(--cat-special);font-weight:600}
-.tpsub.on:hover{background:var(--hover);filter:none}
+.tpsub{background:var(--card);color:var(--cat-special)}
+.tpsub.on{background:var(--cat-special);color:#fff;font-weight:700}
+.tpsub.on:hover{filter:brightness(1.08)}
+.tpin.st-changed{background:#f0eaf6}
+.tpin.st-changed::before,.tpleg .st-changed i{background:#78539b}
+.tpin.st-changed em{color:#694189}
 .tpsub:focus-visible{outline:2px solid var(--ink-link);outline-offset:2px}
 
 /* 左の「週案」の右。入口へ1押しで戻れる */

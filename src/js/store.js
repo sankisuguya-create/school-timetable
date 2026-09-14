@@ -239,8 +239,27 @@ function tpGroups(){
 const tpIn = g => (Y().tanpopo || {})[String(g)] || [];
 /* たんぽぽへの提出。**担任が「今週ぶんは書き終えた」と言った印。**
    週ごとの持ちもので、月曜が変われば、また未に戻る。 */
-const tpSubmitted = cls => !!(week().tpSub || {})[String(cls)];
+const tpSubmitted = cls => { const s = tpSubmitInfo(cls); return !!s && !s.dirty; };
 const tpSubmitInfo = cls => (week().tpSub || {})[String(cls)] || null;
+/* 提出後の変更は、保存済みでも再提出するまで残す。サーバにも同じ状態を記録する。 */
+function markTpEdited(layer, target, where){
+  const w = where ? ((db.years[String(where.year)] || {}).weeks || {})[where.monday] : week();
+  if(w){
+    const pending = w.tpEdited || (w.tpEdited = {});
+    const seq = w.tpEditSeq || (w.tpEditSeq = {});
+    for(const c of allClasses())
+      if(layer === 'school' || layer === 'grade' && String(gradeOf(c)) === String(target)
+         || (layer === 'home' || layer === 'special') && c === target){
+        pending[c] = true; seq[c] = (seq[c] || 0) + 1;
+      }
+  }
+  for(const c of Object.keys((w || {}).tpSub || {})){
+    if(layer === 'school' || layer === 'grade' && String(gradeOf(c)) === String(target)
+       || (layer === 'home' || layer === 'special') && c === target) w.tpSub[c].dirty = true;
+  }
+  if(typeof paintTpSub === 'function') paintTpSub();
+  if(typeof paintSave === 'function') paintSave();
+}
 /* 1人足す／1人減らす。**同じ交流級を2つ入れれば2人（＝2列）。** */
 function tpAdd(g, cls){
   const t = Y().tanpopo, k = String(g);

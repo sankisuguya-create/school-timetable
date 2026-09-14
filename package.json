@@ -5,8 +5,9 @@
   "description": "週案（時間割共同編集）。検査に playwright が要る。npm install は1回だけ。",
   "scripts": {
     "build": "python3 build.py",
-    "check:core": "python3 build.py --check && node tools/startupcheck.cjs && node tools/domcheck.cjs && node gas/storecheck.js && node gas/gatecheck.js && node gas/apicheck.js",
-    "check": "npm run check:core && node tools/check.mjs && node tools/wirecheck.mjs",
+    "check:state": "node tools/statecheck.mjs",
+    "check:core": "python3 build.py --check && node tools/startupcheck.cjs && node tools/savecheck.cjs && node tools/domcheck.cjs && node gas/storecheck.js && node gas/gatecheck.js && node gas/apicheck.js",
+    "check": "npm run check:core && node tools/statecheck.mjs && node tools/check.mjs && node tools/wirecheck.mjs",
     "test": "npm run check"
   },
   "devDependencies": {

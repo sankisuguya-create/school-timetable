@@ -6,6 +6,7 @@
 import { chromium } from "playwright";
 import { fileURLToPath } from "url";
 import path from "path";
+import {schoolWeek} from './test-clock.mjs';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const PAGE = "file://" + path.join(ROOT, "dist", "index.html");
@@ -20,6 +21,7 @@ const ok = (name, cond, got) => {
 
 const b = await chromium.launch(exe ? {executablePath: exe} : {});
 const p = await (await b.newContext({viewport:{width:1500, height:950}})).newPage();
+await schoolWeek(p);
 const errs = [];
 p.on("pageerror", e => errs.push("pageerror: " + e.message));
 p.on("console", m => { if(m.type() === "error") errs.push("console: " + m.text()); });
@@ -631,7 +633,8 @@ ok("画面は自分の内容になる",
 
 console.log("\n■ 学級編成を直すとシートへ書く");
 await p.evaluate(() => { window.__calls.length = 0; });
-await p.locator("[data-act='roster']").click();
+await p.locator("[data-act='settings']").click();
+await p.locator('#setRoster').click();
 await p.waitForTimeout(250);
 await p.locator("#rsRows input[data-g='1']").fill("1-1, 1-2, 1-3");
 await p.locator("#rsRows input[data-g='1']").press("Enter");
@@ -644,7 +647,8 @@ await p.locator("#rosterDlg .dlgx").click(); await p.waitForTimeout(200);
 
 console.log("\n■ 固定時間割の取り込み");
 await p.evaluate(() => { window.__calls.length = 0; });
-await p.locator("[data-act='base']").click(); await p.waitForTimeout(250);
+await p.locator("[data-act='settings']").click();
+await p.locator('#setBase').click(); await p.waitForTimeout(250);
 await p.locator("#baseImp").click(); await p.waitForTimeout(250);
 await p.locator("#impSrc button[data-s='sheet']").click(); await p.waitForTimeout(150);
 await p.locator("#impRead").click(); await p.waitForTimeout(400);

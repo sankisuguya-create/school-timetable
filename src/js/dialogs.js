@@ -1144,7 +1144,7 @@ function cfAnswer(mine){
   const list = cfAsk;
   cfAsk = null;
   if(!list) return;
-  Backend.dropHeld();               /* 控えはここで引き取る。二重に出さない */
+  if(!mine) Backend.dropHeld(list);  /* 最新を採用したときだけ、自分の控えを破棄する。 */
   setBusy(true, "最新の内容を読んでいます");
   Backend.reloadWeek(list, () => {
     setBusy(false);
@@ -1161,6 +1161,7 @@ function applyHeld(list){
   let i = 0, put = 0, miss = 0;
   const next = () => {
     if(i >= list.length){
+      if(!miss) Backend.dropHeld(list);
       save(); refreshWeek();
       if(miss) toast("<b>" + miss + " コマは入れ直せなかった</b>　その週を開いて打ち直す");
       if(put) doSave(true); else if(!miss) toast("入れ直さなかった");

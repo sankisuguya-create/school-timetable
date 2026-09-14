@@ -149,6 +149,7 @@ function selectCell(d, sid, e){
   if(e) e.classList.add("sel");
   selCell = {d, s:sid};
   scope = "self";        /* 選ぶたびに戻す。持ち越すと黙って全校へ広がる */
+  paintHeader();
   fillPanel();
 }
 function clearSelection(){
@@ -242,7 +243,7 @@ function fillPanel(){
     ].map(([v, label]) =>
       "<label><input type='radio' name='sc' value='" + v + "'"
       + (scope === v ? " checked" : "") + "> " + escText(label) + "</label>").join("");
-    for(const r of $("pScope").querySelectorAll("input")) r.onchange = () => { scope = r.value; };
+    for(const r of $("pScope").querySelectorAll("input")) r.onchange = () => { scope = r.value; paintHeader(); };
   }
 
   $("pAll").hidden    = slot.kind !== "brk";

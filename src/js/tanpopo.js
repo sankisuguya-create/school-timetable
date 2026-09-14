@@ -42,12 +42,19 @@ let tpFromOpen = false;
    **色だけに頼らない。** 短い字と左端の太い線を必ず添える。 */
 const TP_ST = {
   ok:   {mark:"済", why:"担任が「今週ぶんは書き終えた」と出している"},
+  changed: {mark:"変", why:"再提出された変更が、この出力先にまだ反映されていない"},
   base: {mark:"未", why:"担任がまだ出していない"}
 };
 /* **1コマでも書いてあれば済、にはしない。**
    ちょっと触っただけの週と、出してよい週を、たんぽぽ担当が見分けられない。
    担任がクラスの画面で「たんぽぽに提出」を押したものだけを済にする。 */
-const tpState = cls => tpSubmitted(cls) ? "ok" : "base";
+const tpState = cls => {
+  const s = tpSubmitInfo(cls);
+  if(!s || s.dirty) return 'base';
+  const target = tpTargetNow(), key = target ? (String(target.url).match(/[-\w]{25,}/) || [target.url])[0] : '';
+  const done = (s.exports || {})[key];
+  return done && done !== s.at ? 'changed' : 'ok';
+};
 
 /* ── 出す先 ──────────────────────────────────
    **1本とはかぎらない。** たんぽぽ時間割が学年で分かれている学校も、
@@ -252,7 +259,7 @@ function drawTanpopoView(){
   $("tpSel").innerHTML =
     "<div class='tpplace" + (open ? "" : " shut") + "'><div class='tpto'>"
     + "<div class='tpleg'><b>今週の提出</b>"
-    + ["ok","base"].map(k =>
+    + ["ok","base","changed"].map(k =>
         "<span class='st-" + k + "'><i></i>" + TP_ST[k].mark + "</span>").join("")
     + "</div>"
     + left
@@ -450,7 +457,12 @@ function doExportTanpopo(){
   $("tpGo").disabled = true;
   $("tpCount").innerHTML = "たんぽぽ時間割へ書いている…";
   const w = Wait.begin("たんぽぽ時間割へ出しています");
-  Backend.flush(() => {
+  Backend.flush(saved => {
+    if(!saved){
+      Wait.end(w); $("tpGo").disabled = false;
+      $("tpCount").textContent = "保存・競合の解決を終えてから出力してください";
+      return;
+    }
     Backend.exportWeek(tanpopoTitles(chosen), cols, tpSlots(), name,
       tgt ? tgt.url : "",
       r => {

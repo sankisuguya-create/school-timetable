@@ -44,6 +44,8 @@ const Store = (function(){
   }
 
   function readWeek(year, mondayISO, targets){
+    /* 本文を読む前の提出版を返す。読込中に再提出されても、古い本文に新しい版を付けない。 */
+    const submits = tpSubmits(year, mondayISO);
     const start = mondayISO, end = ymd(addDays_(mondayISO, 6));
     const w = {school:{}, grade:{}, special:{}, home:{}};
     const names = {};
@@ -90,7 +92,7 @@ const Store = (function(){
     }
     /* **提出の印も一緒に返す。** 別に取りに行くと、その回数だけ待つ。
        週の読みは週ごとに1回来るので、ここに載せるのがいちばん安い */
-    w.submits = tpSubmits(year, mondayISO);
+    w.submits = submits;
     return w;
   }
 
@@ -764,6 +766,8 @@ const Store = (function(){
           const rx = rank[String(x["時程"])], ry = rank[String(y["時程"])];
           return (rx === undefined ? 99 : rx) - (ry === undefined ? 99 : ry);
         });
+        markTpChanges_(year, byName[name].filter(p =>
+          Object.prototype.hasOwnProperty.call(at, [ymd(p.date), p.slot, p.layer, Sheets.asClass(p.target)].join("|"))));
         Sheets.writePlan(name, keep);
       }
       SpreadsheetApp.flush();
@@ -842,13 +846,52 @@ const Store = (function(){
      前の週の印が残っていると、組んだあとで予定が変わる。 */
   function tpSubmits(year, mondayISO){
     const out = {};
+    const states = tpStates_(year, mondayISO);
     for(const r of Sheets.readAllSoft("たんぽぽ提出").rows){
       if(String(r["年度"]).trim() !== String(year)) continue;
       if(ymd(r["月曜"]) !== String(mondayISO)) continue;
       const c = Sheets.asClass(r["クラス"]);
-      if(c) out[c] = {at: String(r["提出日時"] || ""), by: String(r["提出者"] || "")};
+      if(c){
+        const state = states[c] || {};
+        let exports = {}; try{ exports = JSON.parse(state["出力記録"] || '{}'); }catch(_){}
+        out[c] = {at: String(r["提出日時"] || ""), by: String(r["提出者"] || ""),
+                  dirty: String(state["変更あり"]) === '1', exports: exports};
+      }
     }
     return out;
+  }
+  function tpStates_(year, mon){
+    const out = {};
+    for(const r of Sheets.readAllSoft('たんぽぽ状態').rows)
+      if(String(r['年度']) === String(year) && ymd(r['月曜']) === String(mon)) out[Sheets.asClass(r['クラス'])] = r;
+    return out;
+  }
+  /* 呼び出し元は同じScriptLockを保持する。既存の提出シートの列は変更しない。 */
+  function putTpState_(year, mon, cls, state){
+    if(!Sheets.sheet('たんぽぽ状態')) Sheets.setup();
+    const obj = Object.assign({}, state, {'年度':year, '月曜':mon, 'クラス':cls});
+    if(state.__row) Sheets.setRow('たんぽぽ状態', state.__row, obj);
+    else Sheets.appendRows('たんぽぽ状態', [Sheets.toArray('たんぽぽ状態', obj)]);
+  }
+  function markTpChanges_(year, patches){
+    if(!patches.length) return;
+    const months = {};
+    for(const p of patches){
+      const dt = new Date(ymd(p.date) + 'T00:00:00');
+      const mon = ymd(addDays_(ymd(p.date), -((dt.getDay() + 6) % 7)));
+      (months[mon] || (months[mon] = [])).push(p);
+    }
+    for(const mon in months){
+      const states = tpStates_(year, mon), submits = tpSubmits(year, mon);
+      for(const c in submits){
+        if(!months[mon].some(p => p.layer === 'school'
+          || p.layer === 'grade' && c.split('-')[0] === String(p.target)
+          || (p.layer === 'home' || p.layer === 'special') && Sheets.asClass(p.target) === c)) continue;
+        const state = states[c] || {};
+        state['変更あり'] = '1';
+        putTpState_(year, mon, c, state);
+      }
+    }
   }
   /* 立てる／外す。**外せるようにしておく。**
      押し間違いを直せないと、押すこと自体が怖くなる。 */
@@ -867,11 +910,17 @@ const Store = (function(){
            && ymd(r["月曜"]) === String(mondayISO)
            && Sheets.asClass(r["クラス"]) === c){ row = r.__row; break; }
       if(on){
-        const when = Utilities.formatDate(new Date(), TZ, "yyyy-MM-dd HH:mm");
+        const previous = tpSubmits(year, mondayISO)[c];
+        const when = new Date(Math.max(Date.now(), (Date.parse(previous && previous.at) || 0) + 1)).toISOString();
+        const sh = Sheets.sheet('たんぽぽ提出');
+        sh.getRange(row || sh.getLastRow() + 1, 4).setNumberFormat('@');
         const obj = {"年度": +year, "月曜": String(mondayISO), "クラス": c,
                      "提出日時": when, "提出者": me};
         if(row) Sheets.setRow("たんぽぽ提出", row, obj);
         else Sheets.appendRows("たんぽぽ提出", [Sheets.toArray("たんぽぽ提出", obj)]);
+        const state = tpStates_(year, mondayISO)[c] || {};
+        state['変更あり'] = '';
+        putTpState_(year, mondayISO, c, state);
       }else if(row){
         Sheets.blankRow("たんぽぽ提出", row);
       }
@@ -1049,8 +1098,21 @@ const Store = (function(){
 
   /* titles = {クラス: {"0": {p1:"国語", …}, …}}（0〜4 は月〜金）
      cols   = [{cls, group}] の並び。**児童ごとに1列。** */
-  function exportWeek(year, mondayISO, titles, cols, slots, name, url){
+  function exportWeek(year, mondayISO, titles, cols, slots, name, url, submitted){
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try{ return exportWeek_(year, mondayISO, titles, cols, slots, name, url, submitted); }
+    finally{ lock.releaseLock(); }
+  }
+  function exportWeek_(year, mondayISO, titles, cols, slots, name, url, submitted){
     const {ss, cfg} = tpOpen(url);
+    const current = tpSubmits(year, mondayISO);
+    if(submitted !== undefined){
+      for(const c of Object.keys(titles || {})){
+        if((current[c] || {}).dirty || ((current[c] || {}).at || '') !== ((submitted[c] || {}).at || ''))
+          throw new Error(c + ' の提出状態が変わりました。週を読み直し、再提出を確認してください');
+      }
+    }
     const plan = tpColumns_(cols);
     if(!plan.length) throw new Error("交流級を1つも選んでいません");
     const list = plan.map(function(x){ return x.cls; });
@@ -1191,10 +1253,22 @@ const Store = (function(){
 
     nw.setConditionalFormatRules(rules);
     SpreadsheetApp.flush();
+    if(submitted !== undefined){
+      const states = tpStates_(year, mondayISO);
+      const target = ss.getId();
+      for(const c of Object.keys(titles || {})){
+        if(!current[c]) continue;
+        const state = states[c] || {}, exports = current[c].exports || {};
+        exports[target] = current[c].at;
+        state['出力記録'] = JSON.stringify(exports);
+        putTpState_(year, mondayISO, c, state);
+      }
+      SpreadsheetApp.flush();
+    }
     return {file: ss.getName(), sheet: sheetName, cols: list.length,
             staff: staff.length, rows: rows.length, backup: backup, colW: colW,
             wrote: wrote, empty: empty, days: 5, list: list,
-            groups: plan.map(function(x){ return x.group; })};
+            groups: plan.map(function(x){ return x.group; }), submits: tpSubmits(year, mondayISO)};
   }
   /* ── 新年度の設定 ────────────────────────────
      **4月に開いたとき、何を、どの順でやるかを1画面で出す。**
@@ -1849,9 +1923,9 @@ function apiReadPaste(){
 /* たんぽぽ時間割へ、**1週ぶんを1枚のシートとして出す**。シート名は「9月1週」。
    同じ名前のシートがあれば、消さずに名前を変えて残す。
    出す先の形をこちらが毎週作るので、「形をみる」「形を作りなおす」は要らない。 */
-function apiExportWeek(year, mondayISO, titles, cols, slots, name, url){
+function apiExportWeek(year, mondayISO, titles, cols, slots, name, url, submitted){
   Gate.check();
-  return Store.exportWeek(year, mondayISO, titles, cols, slots, name, url);
+  return Store.exportWeek(year, mondayISO, titles, cols, slots, name, url, submitted);
 }
 /* たんぽぽの出す先。**1本とはかぎらない。**
    行が1つも無いあいだは「設定」の たんぽぽファイルID を1本として返す。 */
