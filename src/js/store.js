@@ -139,9 +139,9 @@ function Y(){
   const y = String(fy());
   let Yr = db.years[y];
   if(!Yr){ Yr = db.years[y] = newYear(+y); }
-  if(!Yr.classes)  Yr.classes  = clone(DEFAULT_CLASSES);
+  Yr.classes = normClasses_(Yr.classes);
   if(!Yr.chipModes || typeof Yr.chipModes !== "object") Yr.chipModes = {};
-  if(!Yr.specials) Yr.specials = clone(DEFAULT_SPECIALS);
+  Yr.specials = normSpecials_(Yr.specials);
   if(!Yr.base)  Yr.base  = {};
   if(!Yr.weeks) Yr.weeks = {};
   if(!Yr.week1) Yr.week1 = firstMonday(+y);
@@ -152,6 +152,45 @@ function Y(){
      || Object.keys(Yr.tanpopo).some(k => !Array.isArray(Yr.tanpopo[k])))
     Yr.tanpopo = tpNorm_(Yr.tanpopo);
   return Yr;
+}
+
+/* 古い端末キャッシュは、学級を配列1本やカンマ区切りで持つ版があった。
+   サーバが返る前の最初の1画面でも落ちないよう、読んだ時点で現在形へそろえる。 */
+function normClasses_(v){
+  const out = {};
+  const put = (g, c) => {
+    const cls = String(c == null ? "" : c).trim();
+    if(!cls) return;
+    const grade = String(g || ((cls.match(/^(\d+)/) || [])[1]) || "").trim();
+    if(!grade) return;
+    const a = out[grade] || (out[grade] = []);
+    if(a.indexOf(cls) < 0) a.push(cls);
+  };
+  if(Array.isArray(v)){
+    for(const c of v) put("", c);
+  }else if(v && typeof v === "object"){
+    for(const g of Object.keys(v)){
+      const a = Array.isArray(v[g]) ? v[g]
+              : typeof v[g] === "string" ? v[g].split(/[,、\s]+/) : [];
+      for(const c of a) put(g, c);
+    }
+  }
+  return Object.keys(out).length ? out : clone(DEFAULT_CLASSES);
+}
+function normSpecials_(v){
+  if(!Array.isArray(v)) return clone(DEFAULT_SPECIALS);
+  const out = [], seen = {};
+  for(let i = 0; i < v.length; i++){
+    const raw = v[i];
+    const label = String(raw && typeof raw === "object" ? raw.label : raw || "").trim();
+    if(!label || seen[label]) continue;
+    seen[label] = 1;
+    const known = SUB_BY_NAME[label];
+    const code = String(raw && typeof raw === "object" && raw.code
+      ? raw.code : known ? known.code : "sp_" + i);
+    out.push({code, label});
+  }
+  return out.length ? out : clone(DEFAULT_SPECIALS);
 }
 /* たんぽぽの組。**既定は4組。** 学校によって数が違うので増やせる。 */
 const TP_GROUPS = 4;

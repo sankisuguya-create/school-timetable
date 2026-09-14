@@ -7,6 +7,11 @@
 let lastTarget = null;   /* 直前に開いていたもの。「今週の週案」で戻る先 */
 
 function drawGate(){
+  /* 途中で例外が起きても「閉じる」だけが中央に残らないよう、先に初期状態を作る。 */
+  $("gClose").hidden = !lastTarget;
+  $("weekLabel").textContent = md(monday) + " → " + md(addDays(monday, 4));
+  const n = weekNo();
+  $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   const cols = Math.max.apply(null,
     grades().map(g => classesOfGrade(g).length).concat([specials().length, 1]));
   const g = $("grid");
@@ -32,7 +37,9 @@ function drawGate(){
       : "<span class='tile none'></span>");
   /* いちばん下にたんぽぽ。ここで交流級を選び、ここからだけ出す */
   out.push("<button class='master tp' data-go='tanpopo'><i></i>たんぽぽ</button>");
-  const tpCs = tpChosen().filter(c => allClasses().indexOf(c) >= 0);
+  let tpCs = [];
+  try{ tpCs = tpChosen().filter(c => allClasses().indexOf(c) >= 0); }
+  catch(_){ /* 交流級の旧キャッシュだけが壊れていても、学級の入口は表示する */ }
   const tpP  = tpCs.reduce((a, c) => a + tpCount(c), 0);
   out.push("<span class='tile note' style='grid-column:span " + cols + "'>"
     + (tpCs.length ? "交流級 " + tpCs.length + " クラス・児童 " + tpP + " 人"
@@ -52,11 +59,7 @@ function drawGate(){
     };
   }
   /* 週・年度・A週B週は**左のメニューだけが持つ。** ここには出さない */
-  const n = weekNo();
-  $("weekLabel").textContent = md(monday) + " → " + md(addDays(monday, 4));
-  $("weekNo").textContent    = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
-  $("gClose").hidden = !lastTarget;   /* まだ何も開いていなければ戻る先が無い */
 }
 
 /* **待たせない。** シートが届くのを待ってから描くと、押してから紙が出るまで
