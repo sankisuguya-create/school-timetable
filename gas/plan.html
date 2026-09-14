@@ -252,22 +252,28 @@ button,select,input,textarea{font:inherit;color:inherit}
 .stage[hidden]{display:none!important}
 /* 状態と入力範囲。静的なCSSだけで描き、紙面・印刷の背景には載せない。
 
-   **学級・専科の面**：保存できたときだけ、外の地を硬い灰にする。
-   **学年・全学年の面**：向きを逆にする。まだシートに入っていないあいだを
-   くすませ、入ったら本来の空へ戻す。ここは書いた先が自分の学級ではない面で、
-   出たか出ていないかが押した本人からいちばん見えにくいので、面ぜんぶで言う。
+   **どの面でも向きは同じ。くすんでいたら、まだシートに入っていない。**
+   覚えることを1つにするため、学級・専科・たんぽぽ・入口もこの向きにそろえた。
+   保存できた状態がふだんの見え方で、書いたとたんに沈む。
+
+   *「開いただけ」は沈めない。* 合図は Backend.touched（書いたかどうか）が持つ。
+   保存できたかどうか（acknowledged）は立ち上がりが false なので、
+   そちらで塗ると、開いた瞬間から全員の画面がくすむ。読まれない警告になる。
 
    **色だけに持たせない。** 同じことを、保存ボタンの字（「保存・反映（3）」／
    「保存ずみ」）と、その下の1行が言っている。ここの手がかりは**明度差**で作る
    ── 色相が潰れても残るのは明度差だけ。
 
    実測（color-coding の check-palette.mjs、強度2色覚・全型）
+     地   #F2F4F7 ↔ #D8DADC  明度比 1.3     学級・専科・たんぽぽ・入口
      空   #9FB8CA ↔ #9DA1A5  明度比 1.3     雲 #FFFFFF ↔ #E9EAEB
      夜空 #141C27 ↔ #2C3036  明度比 1.3     星 #E0E6ED ↔ #9EA1A5  明度比 2.1
    値を変えたら測り直す。 */
-body.is-saved:not([data-scope="grade"]):not([data-scope="school"]){--bg:#dce1e5}
-body.is-saved:not([data-scope="grade"]):not([data-scope="school"]) .stage{
-  box-shadow:inset 0 0 0 1px #b9c2cb}
+/* 学級・専科・たんぽぽ・入口。地はふだんの #F2F4F7 のまま、
+   書いたのに入っていないあいだだけ沈める（明度比 1.3・全型で同じ差）。
+   枠の内側に1本入れて、色のほかに**形**でも言う。 */
+body.is-unsaved{--bg:#D8DADC}
+body.is-unsaved .stage{box-shadow:inset 0 0 0 1px #B7BABD}
 
 /* 学年＝青空。**保存できているときが、この晴れた側。** */
 body[data-scope="grade"] .stage{
@@ -280,7 +286,7 @@ body[data-scope="grade"] .stage{
     linear-gradient(155deg,var(--sky-1),var(--sky-2) 65%,var(--sky-3));
 }
 /* 未保存＝くもり。色を抜いて、ひとつ暗くする */
-body:not(.is-saved)[data-scope="grade"] .stage{
+body.is-unsaved[data-scope="grade"] .stage{
   --sky-1:#9DA1A5; --sky-2:#C4C6C8; --sky-3:#AFB2B5;
   --cloud-a:#E9EAEBcc; --cloud-b:#E9EAEB99; --cloud-0:#E9EAEB00;
 }
@@ -296,7 +302,7 @@ body[data-scope="school"] .stage{
   background-size:193px 173px,277px 229px,331px 307px,100% 100%,auto;
 }
 /* 未保存＝くもった夜。星が沈み、地が白ちゃける */
-body:not(.is-saved)[data-scope="school"] .stage{
+body.is-unsaved[data-scope="school"] .stage{
   --star-a:#9ea1a599; --star-b:#93969a99; --star-c:#9ea1a566;
   --night-1:#464B52; --night-2:#2C3036;
 }
@@ -2575,6 +2581,12 @@ const Backend = (function(){
   let sending = false;
   let editEpoch = 0;
   let acknowledged = false;
+  /* **この画面で1コマでも書いて、まだ入っていないか。**
+     開いただけの人を「未保存」にしないために、acknowledged とは別に持つ
+     （acknowledged は立ち上がりが false なので、開いた瞬間から未保存に見える）。
+     手元でも本番でも同じに動く ── 未保存の数はシートへ送るぶんしか数えないので、
+     手元では always 0 になり、画面の合図に使えない。 */
+  let touched = false;
   const flushWaiters = [];
   let notify = () => {};
   let onDirty = () => {};   /* 未保存の数が変わったら画面に知らせる */
@@ -2605,6 +2617,7 @@ const Backend = (function(){
      いまの週として覚えると、別の週のコマを書き替えてしまう。 */
   function cellChanged(layer, target, d, slotId, baseAt, where){
     acknowledged = false;
+    touched = true;
     editEpoch++;
     if(typeof markTpEdited === "function") markTpEdited(layer, target, where);
     if(!onGas) return;
@@ -2705,7 +2718,7 @@ const Backend = (function(){
     if(after) flushWaiters.push(after);
     if(sending) return;
     const finishFlush = (ok, record = true) => {
-      if(record) acknowledged = ok;
+      if(record){ acknowledged = ok; if(ok) touched = false; }
       onDirty(unsaved(), lastErr);
       for(const fn of flushWaiters.splice(0)) fn(ok);
     };
@@ -3436,7 +3449,9 @@ const Backend = (function(){
     }
   });
 
-  return {isGas, info, saved: () => acknowledged && !unsaved() && !sending, setNotifier, setDirtyWatcher, setConflictWatcher,
+  return {isGas, info, saved: () => acknowledged && !unsaved() && !sending,
+          /* 書いたのに、まだシートに入っていない。画面の地の色はこれで決める */
+          touched: () => touched || !!lastErr, setNotifier, setDirtyWatcher, setConflictWatcher,
           unsaved, prefetchWeek, readWeeks, watch, stale, heldCells, dropHeld, reloadWeek,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
@@ -6872,6 +6887,10 @@ function paintSave(){
   if(!b) return;
   const {n, err, busy} = saveState;
   document.body.classList.toggle('is-saved', !n && !err && !busy && Backend.saved());
+  /* **書いたのに、まだシートに入っていない。** 面ぜんぶの地をくすませる合図。
+     「開いただけ」はここに入らない（Backend.touched が、書いたかどうかを持つ）。
+     前に閉じたとき送れなかったぶんは n が拾う。 */
+  document.body.classList.toggle('is-unsaved', !!n || !!err || Backend.touched());
   paintTpSub();
   /* **効く先が広い面では、ボタンの字と色を変える。**
      押した人の学級ではなく、学年ぜんぶ・全校ぜんぶの紙に出る操作なので、

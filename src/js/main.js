@@ -21,6 +21,10 @@ function paintSave(){
   if(!b) return;
   const {n, err, busy} = saveState;
   document.body.classList.toggle('is-saved', !n && !err && !busy && Backend.saved());
+  /* **書いたのに、まだシートに入っていない。** 面ぜんぶの地をくすませる合図。
+     「開いただけ」はここに入らない（Backend.touched が、書いたかどうかを持つ）。
+     前に閉じたとき送れなかったぶんは n が拾う。 */
+  document.body.classList.toggle('is-unsaved', !!n || !!err || Backend.touched());
   paintTpSub();
   /* **効く先が広い面では、ボタンの字と色を変える。**
      押した人の学級ではなく、学年ぜんぶ・全校ぜんぶの紙に出る操作なので、
