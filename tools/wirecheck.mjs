@@ -26,6 +26,7 @@ p.on("console", m => { if(m.type() === "error") errs.push("console: " + m.text()
 
 /* 偽のサーバ。呼ばれたことと引数を覚え、シートらしい形を返す。 */
 await p.addInitScript(() => {
+  localStorage.setItem('school-timetable/guide-v2', 'done');
   window.__calls = [];
   /* たんぽぽの出す先。**版を上げただけの学校の形**から始める
      ＝出す先シートは空で、設定の たんぽぽファイルID が1本返る（legacy） */

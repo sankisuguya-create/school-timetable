@@ -157,6 +157,9 @@ function Y(){
 /* 古い端末キャッシュは、学級を配列1本やカンマ区切りで持つ版があった。
    サーバが返る前の最初の1画面でも落ちないよう、読んだ時点で現在形へそろえる。 */
 function normClasses_(v){
+  if(v && !Array.isArray(v) && typeof v === 'object'
+     && Object.values(v).every(a => Array.isArray(a) && a.every(c => typeof c === 'string')))
+    return v; // 正常な編集中の配列・空学年の参照を壊さない。
   const out = {};
   const put = (g, c) => {
     const cls = String(c == null ? "" : c).trim();
@@ -178,6 +181,8 @@ function normClasses_(v){
   return Object.keys(out).length ? out : clone(DEFAULT_CLASSES);
 }
 function normSpecials_(v){
+  if(Array.isArray(v) && v.every(s => s && typeof s.code === 'string' && typeof s.label === 'string'))
+    return v;
   if(!Array.isArray(v)) return clone(DEFAULT_SPECIALS);
   const out = [], seen = {};
   for(let i = 0; i < v.length; i++){

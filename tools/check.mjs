@@ -21,7 +21,7 @@ const ctx = await b.newContext({viewport:{width:1500, height:950}});
 const p = await ctx.newPage();
 /* 通常の検査中は初回案内を重ねない。案内自体は末尾で明示的に検査する。 */
 await p.addInitScript(() => {
-  try{ localStorage.setItem("school-timetable/tour-v1", "done"); }catch(_){}
+  try{ localStorage.setItem("school-timetable/guide-v2", "done"); }catch(_){}
 });
 const errs = [];
 p.on("pageerror", e => errs.push("pageerror: " + e.message));
@@ -1778,21 +1778,6 @@ ok("B4出力にも印刷・画像・Google Sheetがある",
 ok("教科チップは3段階から選べる",
    await p.locator("input[name=chipMode]").count()===3);
 
-console.log("\n■ 初めて開いた人への案内");
-await p.evaluate(() => {
-  localStorage.removeItem(TOUR_KEY);
-  tourStarted = false; tourAt = 0; tourPanelReady = false;
-  showGate(); startFirstTour();
-});
-await p.waitForTimeout(300);
-ok("未完了の端末では初回案内が開く", await p.locator("#tour").isVisible() === true);
-ok("案内する場所を枠で示す", await p.evaluate(() => {
-     const r = $("tourFocus").getBoundingClientRect();
-     return r.width > 20 && r.height > 20;
-   }) === true);
-await p.locator("#tourSkip").click();
-ok("案内を終えると次回は開かない", await p.evaluate(() =>
-   localStorage.getItem(TOUR_KEY) === "done" && $("tour").hidden) === true);
 
 console.log("\n■ 窓を閉じるところは、窓枠の右上");
 for(const [act, dlg] of [["settings","settingsDlg"], ["admin","adminDlg"]]){
@@ -1884,6 +1869,18 @@ ok("本番につないでいないときは間引かない", await p.evaluate(()
      delete db.years[y].weeks["2000-01-03"];
      return n === 0 && kept;
    }) === true);
+
+console.log("\n■ 初回案内は閉じて再表示でき、画面を勝手に移動しない");
+await p.evaluate(() => {localStorage.removeItem('school-timetable/guide-v2');openGuide(true);});
+ok("初回案内が開く", await p.locator('#guideDlg').isVisible());
+await p.keyboard.press('Escape');
+ok("Escapeで閉じる", await p.locator('#guideDlg').isVisible() === false);
+ok("案内完了を保存", await p.evaluate(() => localStorage.getItem('school-timetable/guide-v2')) === 'done');
+await p.evaluate(() => openGuide(true));
+ok("既読なら自動表示しない", await p.locator('#guideDlg').isVisible() === false);
+await p.locator('#guideOpen').click();
+ok("使い方から再表示", await p.locator('#guideDlg').isVisible());
+await p.locator('[data-close="guideDlg"]').click();
 
 console.log(errs.length ? "\n【エラー】\n" + errs.join("\n") : "\nJSエラーなし");
 if(errs.length) ng += errs.length;

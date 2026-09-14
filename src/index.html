@@ -102,11 +102,11 @@
 
       <hr>
       <h3>週案を出す</h3>
-      <button class="nav" data-act="outweek" data-help="print">
+      <button class="nav" data-act="outweek" data-help="print" data-plan-output>
         <svg width="17" height="17"><use href="#i-print"/></svg><span>教務必携用（B5）</span></button>
-      <button class="nav" data-act="tally" data-help="tally">
+      <button class="nav" data-act="tally" data-help="tally" data-plan-output>
         <svg width="17" height="17"><use href="#i-copy"/></svg><span>時数をコピー</span></button>
-      <button class="nav" data-act="month" data-help="month">
+      <button class="nav" data-act="month" data-help="month" data-plan-output>
         <svg width="17" height="17"><use href="#i-grid"/></svg><span>4週まとめて（B4）</span></button>
 
       <!-- 新年度の設定が未了のあいだだけ出る。**ふだんは管理・システムの中だけ。**
@@ -116,6 +116,7 @@
         <span>新年度設定<b>未了</b></span></button>
 
       <hr>
+      <button class="nav" id="guideOpen">使い方</button>
       <button class="nav" data-act="settings" data-help="settings">
         <svg width="17" height="17"><use href="#i-gear"/></svg><span>設定</span></button>
 
@@ -205,7 +206,7 @@
         <h3>教科・行事</h3>
         <div class="pals" id="pals"></div>
         <p class="hint" id="palHint" style="margin-top:8px"></p>
-        <button class="chipset" id="chipOpen" hidden>教科チップ：<span id="chipNow">画面だけ</span></button>
+        <button class="chipset" id="chipOpen" hidden>週案のチップ表示：<span id="chipNow">使わない</span></button>
       </div>
 
       <div class="empty" id="noSel">コマを選ぶと、ここで中身とリンクを直せる。</div>
@@ -263,21 +264,17 @@
 </div>
 
 <div class="toast" id="toast" hidden></div>
+<dialog id="guideDlg" aria-labelledby="guideTitle"><div class="dlg">
+  <h2 id="guideTitle">週案の使い方</h2>
+  <p>① 左上で週を確認し、中央から自分の学級を開きます。</p>
+  <p>② コマを選び、右の授業チップで教科を入れます。詳細・備考も書けます。</p>
+  <p>③ 変更後は右上の保存状態を確認します。保存ボタンでも保存できます。</p>
+  <p>学年・全学年を開いて入力すると、その範囲の全クラスに反映されます。</p>
+  <p>右の授業チップは常に使えます。週案のマスを色付きにする設定は、右の「週案のチップ表示」です。</p>
+  <p>この説明は左の「使い方」から、いつでも開けます。</p>
+  <div class="end"><button class="btn go" data-close="guideDlg">始める</button></div>
+</div></dialog>
 
-<!-- 初めて開いた端末だけに出す短い案内。 -->
-<div class="tour" id="tour" hidden>
-  <div class="tourfocus" id="tourFocus" aria-hidden="true"></div>
-  <section class="tourbubble" id="tourBubble" role="dialog" aria-modal="true"
-           aria-labelledby="tourTitle" aria-describedby="tourText">
-    <small id="tourStep"></small>
-    <b id="tourTitle"></b>
-    <p id="tourText"></p>
-    <div class="tourbuttons">
-      <button type="button" class="tourskip" id="tourSkip">説明を終える</button>
-      <button type="button" class="btn go" id="tourNext">次へ</button>
-    </div>
-  </section>
-</div>
 
 <!-- 処理中。**全面にかぶせて、次の操作を受け付けない。**
      窓が開いているあいだも上に乗るよう <dialog> にしてある（js/wait.js） -->

@@ -143,17 +143,7 @@ function goWeek(n){
     if(view.kind === "gate") drawGate(); else refreshWeek();
     if(fresh) save();             /* 新しい年度をその場で1回だけ書き出す */
   };
-  let landed = false, drawn = false;
-  Backend.ready(() => {
-    landed = true;
-    if(!drawn) return;
-    setBusy(false);
-    draw();
-  });
-  if(!landed) setBusy(true, "週をひらいています");
-  draw();
-  drawn = true;
-  if(landed) setBusy(false);
+  loadAndDraw(draw, "週をひらいています");
 }
 
 /* ── 入力ロック ──────────────────────────────
@@ -298,6 +288,8 @@ document.addEventListener("selectionchange", () => {
 /* ── 結線 ────────────────────────────────────── */
 function wire(){
   const on = (id, ev, fn) => { const e = $(id); if(e) e.addEventListener(ev, fn); };
+  on('guideOpen', 'click', () => openGuide(false));
+  on('guideDlg', 'close', finishGuide);
 
 
   on("prevWk","click", () => goWeek(-7));
@@ -610,8 +602,6 @@ function start(){
   if(!Backend.isGas()) save();
   applyPaper();
   showGate();
-  /* この案内をまだ見ていない端末では1回だけ出す。既存データの有無とは分ける。 */
-  setTimeout(startFirstTour, 250);
 
   /* 設定・時程・教科・その年度は、立ち上がりの1回でまとめてもらう。
      別々に取りに行くと、その回数だけ待つことになる。 */
@@ -626,6 +616,8 @@ function start(){
        立ち上がりの1回だけ見に行く（週を繰るたびに見に行かない） */
     pollNewYear();
   });
+  // 案内の有無でデータ初期化の成否を変えない。
+  setTimeout(() => openGuide(true), 250);
 }
 
 /* 手元で見せる基本時間割。**同梱の固定時間割の写しを入れる。**
