@@ -28,13 +28,13 @@ function tpSheetName(mon){
 }
 
 /* ── たんぽぽの面 ────────────────────────────
-   **たんぽぽの組へ、交流級を引っぱって入れる。**
-   1回入れると児童1人＝出す先の1列。同じ組へ2回入れれば2人。
-   引っぱれない端末のために、押しても入るようにしてある
-   （右のクラスを押すと、いま選んでいる組へ入る）。 */
-let tpPick = "1";              /* いま選んでいる組。押して入れるときの行き先 */
-/* 右の交流級を開いているか。**ふだんは畳む**（入れ替えは年度の初めだけ） */
-let tpFromOpen = false;
+   **面ですることは2つ。組の並びを見ることと、出すこと。**
+
+   組分け（どの交流級を、どの組へ、何人ぶん入れるか）はここに置かない。
+   直すのは年度の初めと転入・転出のときだけなのに、毎週の面に置くと、
+   出しに来た人が毎回その20クラスを越えないと組に手が届かない。
+   「組分けを直す」の窓（設定からも開く）へ移してある。 */
+let tpPick = "1";              /* 窓でいま選んでいる組。押して入れるときの行き先 */
 
 /* 交流級の着手／未着手。**組の中のチップそのものに出す。**
    下に字でまとめて出していたころは、組の並びと読み合わせないと
@@ -213,13 +213,12 @@ function putTargets(after){
                         why => { Wait.end(w); toast(why); loadTargets(); });
 }
 
-function drawTanpopoView(){
-  drawTargets();
+/* 組の並び。**面と窓で同じものを出す**（片方だけ直した版が出ないように）。
+   edit=false のときは読むだけ ── ×も、引っぱって入れる案内も出さない。 */
+function tpGroupList(edit){
   const groups = tpGroups();
   if(groups.indexOf(tpPick) < 0) tpPick = groups[0];
-
-  /* 左：たんぽぽの組。**出す列の並びがそのまま見えている。** */
-  const left = groups.map(g =>
+  return groups.map(g =>
     "<div class='tpgrp" + (g === tpPick ? " pick" : "") + (+g % 2 === 0 ? " even" : "")
     + "' data-g='" + escText(g) + "'>"
     + "<button class='tpghead' data-g='" + escText(g) + "'>"
@@ -230,16 +229,21 @@ function drawTanpopoView(){
            /* **どのクラスが今週まだ書いていないかを、その場で見せる。**
               下に字でまとめて出していたころは、組の並びと読み合わせる必要があった */
            const st = tpState(c);
-           return "<button class='tpin st-" + st + "' data-g='" + escText(g) + "'"
-             + " data-i='" + i + "' title='" + escText(c + "：" + TP_ST[st].why)
-             + "。押すと、この1人を外す'>"
-             + escText(c) + "<em>" + TP_ST[st].mark + "</em><u>×</u></button>";
+           return "<" + (edit ? "button" : "span") + " class='tpin st-" + st + "'"
+             + " data-g='" + escText(g) + "' data-i='" + i + "'"
+             + " title='" + escText(c + "：" + TP_ST[st].why)
+             + (edit ? "。押すと、この1人を外す" : "") + "'>"
+             + escText(c) + "<em>" + TP_ST[st].mark + "</em>"
+             + (edit ? "<u>×</u>" : "")
+             + "</" + (edit ? "button" : "span") + ">";
          }).join("")
-       : "<i>ここへ引っぱって入れる</i>")
+       : "<i>" + (edit ? "ここへ引っぱって入れる" : "まだ入れていない") + "</i>")
     + "</div></div>").join("");
+}
 
-  /* 右：交流級。**どの組に入れてあるかを字で添える**（色だけに頼らない） */
-  const right = grades().map(g =>
+/* 交流級の並び（窓だけ）。**どの組に入れてあるかを字で添える**（色だけに頼らない） */
+function tpFromList(){
+  return grades().map(g =>
     "<div class='tprow'><span>" + escText(g) + "年</span><div class='tpchips'>"
     + classesOfGrade(g).map(c => {
         const gs = tpGroupsOf(c), n = tpCount(c), st = planState(c);
@@ -251,80 +255,95 @@ function drawTanpopoView(){
              + "</button>";
       }).join("")
     + "</div></div>").join("");
+}
 
-  /* **右の交流級は畳んでおく。** 入れ替えるのは年度の初めだけで、
-     ふだん見たいのは左の組の並び（出す列そのもの）。
-     開いたままにすると、毎週その20個を越えないと組に手が届かない。 */
-  const open = !!tpFromOpen;
-  $("tpSel").innerHTML =
-    "<div class='tpplace" + (open ? "" : " shut") + "'><div class='tpto'>"
+/* ── 組分けの窓 ──────────────────────────────
+   **設定の「たんぽぽ組分け」と、面の「組分けを直す」から開く。**
+   ここにロックは効かない（面のロックは、見るだけのつもりで開いた面を守るもので、
+   自分から組分けを開いた人を止める理由が無い）。 */
+function openTpGroupDlg(){
+  $("tpGrpFy").textContent = fy() + "年度";
+  drawTpGroupDlg();
+  $("tpGrpDlg").showModal();
+}
+
+function drawTpGroupDlg(){
+  const box = $("tpGrpBody");
+  if(!box) return;
+  box.innerHTML =
+    "<div class='tpplace'><div class='tpto'>"
     + "<div class='tpleg'><b>今週の提出</b>"
     + ["ok","base","changed"].map(k =>
         "<span class='st-" + k + "'><i></i>" + TP_ST[k].mark + "</span>").join("")
     + "</div>"
-    + left
+    + tpGroupList(true)
     + "<button class='btn tpaddg' id='tpAddG'>組を足す</button></div>"
     + "<div class='tpfrom'>"
-    + "<button class='tpfromq' id='tpFromQ' aria-expanded='" + open + "'>"
-    + (open ? "▾" : "▸") + " 交流級から入れる"
-    + "<span>" + allClasses().length + " クラス</span></button>"
-    + "<div class='tpfromb'" + (open ? "" : " hidden") + ">" + right + "</div>"
+    + "<div class='tpfromh'><b>交流級から入れる</b><span>"
+    + allClasses().length + " クラス</span></div>"
+    + "<div class='tpfromb'>" + tpFromList() + "</div>"
     + "</div></div>";
 
-  const q = $("tpFromQ");
-  if(q) q.onclick = () => { tpFromOpen = !tpFromOpen; drawTanpopoView(); };
-
-  /* 入れる／外す。**押しても引っぱっても同じことが起きる。**
-     ロック中は入れない（見るだけのつもりで開いた面で、出す列がずれる） */
-  const redraw = () => { save(); Backend.saveRoster(); drawTanpopoView(); };
-  const locked = () => {
-    if(typeof isLocked === "function" && isLocked()){
-      toast("この面はロックしてある。<b>直すには、上のロックを押す</b>");
-      return true;
-    }
-    return false;
+  /* 入れる／外す。**押しても引っぱっても同じことが起きる。** */
+  const redraw = () => {
+    save(); Backend.saveRoster(); drawTpGroupDlg();
+    if(view.kind === "tanpopo") drawTanpopoView();   /* 後ろの面も合わせる */
   };
-  for(const b of $("tpSel").querySelectorAll(".tpchip")){
+  for(const b of box.querySelectorAll(".tpchip")){
     b.addEventListener("dragstart", ev => {
       ev.dataTransfer.setData("text/x-tanpopo", b.dataset.c);
       ev.dataTransfer.effectAllowed = "copy";
       b.classList.add("drag");
     });
     b.addEventListener("dragend", () => b.classList.remove("drag"));
-    b.onclick = () => { if(locked()) return; tpAdd(tpPick, b.dataset.c); redraw(); };
+    b.onclick = () => { tpAdd(tpPick, b.dataset.c); redraw(); };
   }
-  for(const h of $("tpSel").querySelectorAll(".tpghead"))
-    h.onclick = () => { tpPick = h.dataset.g; drawTanpopoView(); };
-  for(const x of $("tpSel").querySelectorAll(".tpin"))
-    x.onclick = () => { if(locked()) return;
-                        tpDrop(x.dataset.g, tpIn(x.dataset.g)[+x.dataset.i]); redraw(); };
-  for(const box of $("tpSel").querySelectorAll(".tpgrp")){
-    box.addEventListener("dragover", ev => {
+  for(const h of box.querySelectorAll(".tpghead"))
+    h.onclick = () => { tpPick = h.dataset.g; drawTpGroupDlg(); };
+  for(const x of box.querySelectorAll(".tpin"))
+    x.onclick = () => { tpDrop(x.dataset.g, tpIn(x.dataset.g)[+x.dataset.i]); redraw(); };
+  for(const grp of box.querySelectorAll(".tpgrp")){
+    grp.addEventListener("dragover", ev => {
       if(ev.dataTransfer.types.indexOf("text/x-tanpopo") < 0) return;
-      ev.preventDefault(); box.classList.add("over");
+      ev.preventDefault(); grp.classList.add("over");
     });
-    box.addEventListener("dragleave", () => box.classList.remove("over"));
-    box.addEventListener("drop", ev => {
-      ev.preventDefault(); box.classList.remove("over");
+    grp.addEventListener("dragleave", () => grp.classList.remove("over"));
+    grp.addEventListener("drop", ev => {
+      ev.preventDefault(); grp.classList.remove("over");
       const c = ev.dataTransfer.getData("text/x-tanpopo");
-      if(c){ if(locked()) return; tpPick = box.dataset.g; tpAdd(box.dataset.g, c); redraw(); }
+      if(c){ tpPick = grp.dataset.g; tpAdd(grp.dataset.g, c); redraw(); }
     });
   }
   const add = $("tpAddG");
-  if(add) add.onclick = () => { if(locked()) return; tpAddGroup(); save(); drawTanpopoView(); };
+  if(add) add.onclick = () => { tpAddGroup(); save(); drawTpGroupDlg(); };
+  $("tpGrpCount").innerHTML = tpTotal()
+    ? "いま <b>" + tpTotal() + " 人</b>（" + tpTotal() + " 列）・<b>"
+      + tpChosenHere().length + " クラス</b>を入れている"
+    : "まだ1人も入れていない";
+}
+
+/* ── 面 ──────────────────────────────────── */
+function drawTanpopoView(){
+  drawTargets();
+
+  /* 組の並びだけを出す。**読むだけ。** 直すのは「組分けを直す」の窓 */
+  $("tpSel").innerHTML =
+    "<div class='tpleg'><b>今週の提出</b>"
+    + ["ok","base","changed"].map(k =>
+        "<span class='st-" + k + "'><i></i>" + TP_ST[k].mark + "</span>").join("")
+    + "</div><div class='tponly'>" + tpGroupList(false) + "</div>";
 
   $("tpWarn").innerHTML = tpWarnBoxes().join("");
   /* 出す先が1つも無いあいだ、直している最中は出させない。
      **どこへ出るか分からないまま押させない。** */
   const tgt = tpTargetNow();
   const chosen = tpChosenHere();
-  const lockedNow = typeof isLocked === "function" && isLocked();
   const noTarget = Backend.isGas() && !tgt;
-  /* 複数の理由が重なったら、先に解消しなければ何も直せないものを出す。
-     空のままロックした画面で「組へ入れて」と案内しても、その操作自体ができない。 */
-  const why = lockedNow ? "ロックを外してください"
-            : tpTgtEdit ? "出す先の編集を終えてください"
-            : !tpTotal() ? "先に交流級を組へ入れてください"
+  /* **ロックでは止めない。** ロックが守るのは出す先と組分けで、
+     毎週の出力はロックしたまま押してよい（むしろ、触らずに出したい人の面）。
+     複数の理由が重なったら、先に解消しないと先へ進めないものを出す。 */
+  const why = tpTgtEdit ? "出す先の編集を終えてください"
+            : !tpTotal() ? "先に組分けで交流級を入れてください"
             : noTarget ? "出す先を設定してください" : "";
   $("tpGo").disabled = !!why;
   $("tpGoWhy").hidden = !why;
@@ -338,7 +357,7 @@ function drawTanpopoView(){
   const ready = allIn && !why;
   $("tpGo").classList.toggle("ready", ready);
   $("tpGo").textContent = allIn ? "✓ たんぽぽ時間割へ出す" : "たんぽぽ時間割へ出す";
-  $("tpGo").title = why || (!chosen.length ? "先に交流級を組へ入れる"
+  $("tpGo").title = why || (!chosen.length ? "先に「組分けを直す」から交流級を入れる"
     : allIn ? "入れている " + chosen.length + " クラスは、ぜんぶ提出ずみ"
             : "まだ " + yet.length + " クラスが提出していない（" + yet.join("・") + "）");
   /* **出す週を、ボタンのとなりにもう一度出す。** 左メニューの週とは離れていて、
@@ -373,10 +392,11 @@ function tpWarnBoxes(){
      分からない）。ここに残すのは、組から外さないと直らないものだけ。 */
   if(gone.length)
     boxes.push("<div class='box'><b>" + gone.map(escText).join("・")
-      + "</b> は<b>いまの学級編成にありません</b>。組から外してください。</div>");
+      + "</b> は<b>いまの学級編成にありません</b>。"
+      + "「組分けを直す」から組の外へ出してください。</div>");
   if(!chosen.length)
     boxes.push("<div class='box ok'>まだ誰も入れていません。"
-      + "右のクラスを、左のたんぽぽの組へ引っぱってください。</div>");
+      + "右上の<b>「組分けを直す」</b>から、交流級を組へ入れてください。</div>");
   return boxes;
 }
 
@@ -416,7 +436,7 @@ function tanpopoTitles(list){
    操作を、いちばん弱い止め方にしない（1コマの上書きと同じ作りにそろえる）。 */
 function reflectTanpopo(){
   const chosen = tpChosenHere();
-  if(!chosen.length) return toast("先に交流級を選ぶ");
+  if(!chosen.length) return toast("先に<b>「組分けを直す」</b>から交流級を入れる");
   const name = tpSheetName();
   $("tpDlgName").textContent = name;
   $("tpDlgTbl").innerHTML =

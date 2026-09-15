@@ -28,6 +28,12 @@ const Backend = (function(){
   let sending = false;
   let editEpoch = 0;
   let acknowledged = false;
+  /* **この画面で1コマでも書いて、まだ入っていないか。**
+     開いただけの人を「未保存」にしないために、acknowledged とは別に持つ
+     （acknowledged は立ち上がりが false なので、開いた瞬間から未保存に見える）。
+     手元でも本番でも同じに動く ── 未保存の数はシートへ送るぶんしか数えないので、
+     手元では always 0 になり、画面の合図に使えない。 */
+  let touched = false;
   const flushWaiters = [];
   let notify = () => {};
   let onDirty = () => {};   /* 未保存の数が変わったら画面に知らせる */
@@ -58,6 +64,7 @@ const Backend = (function(){
      いまの週として覚えると、別の週のコマを書き替えてしまう。 */
   function cellChanged(layer, target, d, slotId, baseAt, where){
     acknowledged = false;
+    touched = true;
     editEpoch++;
     if(typeof markTpEdited === "function") markTpEdited(layer, target, where);
     if(!onGas) return;
@@ -158,7 +165,7 @@ const Backend = (function(){
     if(after) flushWaiters.push(after);
     if(sending) return;
     const finishFlush = (ok, record = true) => {
-      if(record) acknowledged = ok;
+      if(record){ acknowledged = ok; if(ok) touched = false; }
       onDirty(unsaved(), lastErr);
       for(const fn of flushWaiters.splice(0)) fn(ok);
     };
@@ -889,7 +896,9 @@ const Backend = (function(){
     }
   });
 
-  return {isGas, info, saved: () => acknowledged && !unsaved() && !sending, setNotifier, setDirtyWatcher, setConflictWatcher,
+  return {isGas, info, saved: () => acknowledged && !unsaved() && !sending,
+          /* 書いたのに、まだシートに入っていない。画面の地の色はこれで決める */
+          touched: () => touched || !!lastErr, setNotifier, setDirtyWatcher, setConflictWatcher,
           unsaved, prefetchWeek, readWeeks, watch, stale, heldCells, dropHeld, reloadWeek,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,

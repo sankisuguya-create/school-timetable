@@ -675,27 +675,26 @@ ok("シートの組がそのまま画面の組になる",
 await p.evaluate(() => { window.__calls.length = 0; });
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".master.tp").click(); await p.waitForTimeout(400);
-/* **交流級は畳んである。** 触る前に開く（入れ替えは年度の初めだけ） */
-await p.evaluate(() => { tpFromOpen = true; drawTanpopoView(); });
-await p.waitForTimeout(300);
-await p.locator("#tpSel .tpchip[data-c='5-2']").click(); await p.waitForTimeout(300);
+/* **組分けは窓の中。** 面には置かない（直すのは年度の初めと転入・転出だけ） */
+await p.locator("#tpGrpOpen").click(); await p.waitForTimeout(300);
+await p.locator("#tpGrpBody .tpchip[data-c='5-2']").click(); await p.waitForTimeout(300);
 const tq = await lastCall("apiWriteRoster");
 ok("入れるとシートへ書く（組ごとの並びで）",
    !!tq && JSON.stringify(tq.args[4]) === JSON.stringify({"1":["5-1","5-2"]}),
    tq && tq.args[4]);
 /* **同じ組へ2回入れれば2人。** 前のクリック切り替えはもう無い */
-await p.locator("#tpSel .tpchip[data-c='5-2']").click(); await p.waitForTimeout(250);
+await p.locator("#tpGrpBody .tpchip[data-c='5-2']").click(); await p.waitForTimeout(250);
 ok("同じ組へ2回入れると2人になる", await p.evaluate(() => tpCount("5-2")) === 2,
    await p.evaluate(() => tpCount("5-2")));
 ok("2人ぶんが2列として並ぶ",
    (await p.evaluate(() => tpColumns())).filter(x => x.cls === "5-2").length === 2,
    await p.evaluate(() => tpColumns()));
-await p.locator("#tpSel .tpin[data-g='1'][data-i='2']").click(); await p.waitForTimeout(250);
+await p.locator("#tpGrpBody .tpin[data-g='1'][data-i='2']").click(); await p.waitForTimeout(250);
 ok("組の中の1人を押すと外れる", await p.evaluate(() => tpCount("5-2")) === 1,
    await p.evaluate(() => Y().tanpopo));
 /* 2組へも入れて、出す並びが 1組 → 2組 になることを見る */
-await p.locator("#tpSel .tpghead[data-g='2']").click(); await p.waitForTimeout(150);
-await p.locator("#tpSel .tpchip[data-c='5-2']").click(); await p.waitForTimeout(250);
+await p.locator("#tpGrpBody .tpghead[data-g='2']").click(); await p.waitForTimeout(150);
+await p.locator("#tpGrpBody .tpchip[data-c='5-2']").click(); await p.waitForTimeout(250);
 ok("たんぽぽ1組の全員 → 2組の全員 の順に並ぶ",
    JSON.stringify(await p.evaluate(() => tpColumns()))
      === JSON.stringify([{cls:"5-1",group:1},{cls:"5-2",group:1},{cls:"5-2",group:2}]),
@@ -704,6 +703,7 @@ ok("シートには組の番号が届く",
    JSON.stringify((await lastCall("apiWriteRoster")).args[4])
      === JSON.stringify({"1":["5-1","5-2"], "2":["5-2"]}),
    (await lastCall("apiWriteRoster")).args[4]);
+await p.locator("#tpGrpDlg .dlgx").click(); await p.waitForTimeout(250);
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(300);
 
@@ -1386,11 +1386,7 @@ await p.evaluate(() => {
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".master[data-go='tanpopo']").click();
 await p.waitForTimeout(600);
-/* **交流級は畳んである。** 触る前に開く */
 await p.waitForTimeout(400);
-if(await p.locator(".tpfromb").count()
-   && await p.locator(".tpfromb").evaluate(e => e.hidden))
-  await p.locator("#tpFromQ").click();
 ok("出す先が、たんぽぽの面に出る", await p.locator("#tpTgt").isVisible() === true);
 ok("版を上げただけの学校は、設定の1本がそのまま出す先になる",
    (await p.locator("#tpTgt").innerText()).indexOf("たんぽぽ時間割") >= 0,

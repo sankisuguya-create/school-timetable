@@ -81,6 +81,13 @@
   --fill-a:#D7E8F8;      /* 上位から降りてきたコマ */
   --fill-b:#FBE3B4;      /* 重なっているコマ */
 
+  /* 効く先が広い操作（学年・全学年への保存＝「保存・反映」）。
+     --cat-grade(#C86A00) の濃いほう。**白い字を載せるため**に暗くしてある
+     （#C86A00 は白字 3.8:1 で読めない。#A85800 は 5.2:1）。
+     保存の青 #0F5EA8 とは 1型 56.4／2型 61.5／3型 73.4（ΔE00、閾値18）。
+     色は識別を担わない ── 同じことをボタンの字が言っている。 */
+  --apply:#A85800;
+
   /* 層の左端の線（必ずラベルと併用する） */
   --cat-school:#0F5EA8;  /* 学校全体 */
   --cat-grade:#C86A00;   /* 学年 */
@@ -243,25 +250,62 @@ button,select,input,textarea{font:inherit;color:inherit}
 .stage{overflow:auto;padding:10px;display:flex;justify-content:center;
   align-items:flex-start;min-height:0;min-width:0}
 .stage[hidden]{display:none!important}
-/* 状態と入力範囲。静的なCSSだけで描き、紙面・印刷の背景には載せない。 */
-body.is-saved{--bg:#dce1e5}
-body.is-saved .stage{box-shadow:inset 0 0 0 1px #b9c2cb}
+/* 状態と入力範囲。静的なCSSだけで描き、紙面・印刷の背景には載せない。
+
+   **どの面でも向きは同じ。くすんでいたら、まだシートに入っていない。**
+   覚えることを1つにするため、学級・専科・たんぽぽ・入口もこの向きにそろえた。
+   保存できた状態がふだんの見え方で、書いたとたんに沈む。
+
+   *「開いただけ」は沈めない。* 合図は Backend.touched（書いたかどうか）が持つ。
+   保存できたかどうか（acknowledged）は立ち上がりが false なので、
+   そちらで塗ると、開いた瞬間から全員の画面がくすむ。読まれない警告になる。
+
+   **色だけに持たせない。** 同じことを、保存ボタンの字（「保存・反映（3）」／
+   「保存ずみ」）と、その下の1行が言っている。ここの手がかりは**明度差**で作る
+   ── 色相が潰れても残るのは明度差だけ。
+
+   実測（color-coding の check-palette.mjs、強度2色覚・全型）
+     地   #F2F4F7 ↔ #D8DADC  明度比 1.3     学級・専科・たんぽぽ・入口
+     空   #9FB8CA ↔ #9DA1A5  明度比 1.3     雲 #FFFFFF ↔ #E9EAEB
+     夜空 #141C27 ↔ #2C3036  明度比 1.3     星 #E0E6ED ↔ #9EA1A5  明度比 2.1
+   値を変えたら測り直す。 */
+/* 学級・専科・たんぽぽ・入口。地はふだんの #F2F4F7 のまま、
+   書いたのに入っていないあいだだけ沈める（明度比 1.3・全型で同じ差）。
+   枠の内側に1本入れて、色のほかに**形**でも言う。 */
+body.is-unsaved{--bg:#D8DADC}
+body.is-unsaved .stage{box-shadow:inset 0 0 0 1px #B7BABD}
+
+/* 学年＝青空。**保存できているときが、この晴れた側。** */
 body[data-scope="grade"] .stage{
-  background:radial-gradient(ellipse 72px 23px at 1% 25%,#ffffff88 50%,#ffffff00 85%),
-    radial-gradient(ellipse 35px 27px at 2% 23%,#ffffff66 45%,#ffffff00 85%),
-    radial-gradient(ellipse 90px 24px at 99% 44%,#ffffff88 50%,#ffffff00 85%),
-    radial-gradient(ellipse 38px 28px at 98% 42%,#ffffff66 45%,#ffffff00 85%),
-    linear-gradient(155deg,#9fb8ca,#d7e2e9 65%,#c1d0db);
+  --sky-1:#9FB8CA; --sky-2:#D7E2E9; --sky-3:#C1D0DB;
+  --cloud-a:#ffffff88; --cloud-b:#ffffff66; --cloud-0:#ffffff00;
+  background:radial-gradient(ellipse 72px 23px at 1% 25%,var(--cloud-a) 50%,var(--cloud-0) 85%),
+    radial-gradient(ellipse 35px 27px at 2% 23%,var(--cloud-b) 45%,var(--cloud-0) 85%),
+    radial-gradient(ellipse 90px 24px at 99% 44%,var(--cloud-a) 50%,var(--cloud-0) 85%),
+    radial-gradient(ellipse 38px 28px at 98% 42%,var(--cloud-b) 45%,var(--cloud-0) 85%),
+    linear-gradient(155deg,var(--sky-1),var(--sky-2) 65%,var(--sky-3));
 }
+/* 未保存＝くもり。色を抜いて、ひとつ暗くする */
+body.is-unsaved[data-scope="grade"] .stage{
+  --sky-1:#9DA1A5; --sky-2:#C4C6C8; --sky-3:#AFB2B5;
+  --cloud-a:#E9EAEBcc; --cloud-b:#E9EAEB99; --cloud-0:#E9EAEB00;
+}
+
+/* 全学年＝夜空。**保存できているときが、星の見える側。** */
 body[data-scope="school"] .stage{
-  background:radial-gradient(circle at 12% 18%,#e0e6edb3 0 1px,transparent 1.8px),
-    radial-gradient(circle at 82% 28%,#cbd9ecb3 0 1px,transparent 1.8px),
-    radial-gradient(circle at 28% 78%,#e0e6ed80 0 .8px,transparent 1.6px),
-    radial-gradient(ellipse at 65% 15%,#293747,transparent 65%),#141c27;
+  --star-a:#e0e6edb3; --star-b:#cbd9ecb3; --star-c:#e0e6ed80;
+  --night-1:#293747; --night-2:#141c27;
+  background:radial-gradient(circle at 12% 18%,var(--star-a) 0 1px,transparent 1.8px),
+    radial-gradient(circle at 82% 28%,var(--star-b) 0 1px,transparent 1.8px),
+    radial-gradient(circle at 28% 78%,var(--star-c) 0 .8px,transparent 1.6px),
+    radial-gradient(ellipse at 65% 15%,var(--night-1),transparent 65%),var(--night-2);
   background-size:193px 173px,277px 229px,331px 307px,100% 100%,auto;
 }
-body.is-saved[data-scope="grade"] .stage{background-color:#aebdca;background-blend-mode:multiply}
-body.is-saved[data-scope="school"] .stage{background-color:#202a36;box-shadow:inset 0 0 0 2px #576575}
+/* 未保存＝くもった夜。星が沈み、地が白ちゃける */
+body.is-unsaved[data-scope="school"] .stage{
+  --star-a:#9ea1a599; --star-b:#93969a99; --star-c:#9ea1a566;
+  --night-1:#464B52; --night-2:#2C3036;
+}
 
 /* 月の面。**4週ぶんを 2×2 に並べる。** 紙と入れ替えて出す。
    転がさずに1画面へ収める（収まらなければ紙にもならない）。 */
@@ -325,16 +369,16 @@ body.is-saved[data-scope="school"] .stage{background-color:#202a36;box-shadow:in
    出す先を先に読ませて、そこへ落とす向きにそろえる。 */
 .tpplace{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:18px;
   align-items:start}
-/* 交流級を畳んでいるあいだは、組の並びを広く使う */
-.tpplace.shut{grid-template-columns:minmax(0,1fr)}
-.tpplace.shut .tpfrom{grid-column:1}
-/* 交流級のトグル。**ふだんは畳む**（入れ替えは年度の初めだけ） */
-.tpfromq{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;
-  border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);
-  color:var(--tx);font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit}
-.tpfromq:hover{background:var(--hover);border-color:var(--ink-link);color:var(--ink-link)}
-.tpfromq span{color:var(--tx-sub);font-weight:400}
-.tpfromb{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+/* 狭い画面では上下に積む（横に並べると、どちらも読めない幅になる） */
+@media (max-width:820px){ .tpplace{grid-template-columns:minmax(0,1fr)} }
+.tpfromh{display:flex;align-items:baseline;gap:8px;font-size:13px}
+.tpfromh span{color:var(--tx-sub);font-size:11.5px}
+.tpfromb{display:flex;flex-direction:column;gap:8px}
+
+/* 面に出す組の並び。**読むだけ。** 直すのは「組分けを直す」の窓。
+   組分けを窓へ移して空いた幅を使い、組を並べて全部を一度に見せる */
+.tponly{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
+  gap:12px;align-items:start}
 /* 見出しの行。出すボタン・出す週・ロック・説明を、重ならないflexの中で並べる */
 .tphead{display:flex;align-items:flex-start;gap:10px}
 .tphead h2{display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex:1;min-width:0}
@@ -381,9 +425,11 @@ body.is-saved[data-scope="school"] .stage{background-color:#202a36;box-shadow:in
 .tpin{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;font-size:12.5px;
   border:1px solid var(--line);border-radius:13px;background:var(--card);cursor:pointer;
   font-variant-numeric:tabular-nums;font-family:inherit}
-.tpin:hover{border-color:var(--cat-clash);color:var(--cat-clash)}
+button.tpin:hover{border-color:var(--cat-clash);color:var(--cat-clash)}
 .tpin u{text-decoration:none;font-size:11px;color:var(--tx-sub)}
-.tpin:hover u{color:var(--cat-clash)}
+button.tpin:hover u{color:var(--cat-clash)}
+/* 面では読むだけなので、押せるように見せない（× も出さない） */
+span.tpin{cursor:default}
 
 /* 交流級の着手／未着手。**組の中のチップそのものが言う。**
    下に字でまとめて出していたころは、組の並びと読み合わせないと
@@ -468,6 +514,17 @@ body.is-saved[data-scope="school"] .stage{background-color:#202a36;box-shadow:in
 .save.dirty{background:var(--ink-link);border-color:var(--ink-link);color:#fff}
 .save.dirty:hover{filter:brightness(1.06)}
 .save.bad{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff}
+/* **効く先が広い面では、色と字の両方を変える。**（学年・全学年、および
+   学級で入れる先を学年・全校にしているとき）。保存の青のままだと、
+   自分の学級へ書くのと同じ手つきで20学級へ出る。
+   #A85800 は白字 5.2:1、保存の青 #0F5EA8 とは全色覚型で ΔE00 47.8〜73.4。 */
+.save.apply{border-color:var(--apply);color:var(--apply)}
+.save.apply.dirty{background:var(--apply);border-color:var(--apply);color:#fff}
+.save.apply.bad{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff}
+/* 押す前に、どこへ出るかを字で言う1行 */
+.applymsg{margin:0;padding:7px 10px;border-left:3px solid var(--apply);
+  background:#FDF2E6;color:#6B3A05;font-size:12px;line-height:1.7}
+.applymsg b{color:#6B3A05}
 /* たんぽぽへの提出。**保存の右隣。** たんぽぽの児童がいるクラスだけに出る。
    色は既にある専科の茶（--cat-special）。保存の青とも、ロックの赤とも
    混ざらない。**押す前は塗って、押したあとは淡くする**——
@@ -583,6 +640,10 @@ body.is-saved[data-scope="school"] .stage{background-color:#202a36;box-shadow:in
 .btn.go:hover{filter:brightness(1.09)}
 .btn.wide{width:100%;justify-content:center;text-align:center}
 .btn.danger{color:var(--ink-alert)}
+/* 反映の窓の「反映する」。**押したボタンと同じ色**にして、続きだと分かるようにする。
+   赤（危ない・取り消せない）は使わない ── 保存そのものは壊す操作ではない */
+.btn.apply{background:var(--apply);border-color:var(--apply);color:#fff;font-weight:600}
+.btn.apply:hover{filter:brightness(1.09)}
 .row-btn{display:flex;flex-direction:column;gap:7px}
 
 /* ── 入口（どの週案を開くか）───────────────────
@@ -1326,10 +1387,14 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
           <span class="tpwhy" id="tpGoWhy" aria-live="polite" hidden></span>
           <span class="tpweek" id="tpWeek"></span>
           <span class="grow"></span>
-          <!-- ソフトロック。**この面からの書き込みを止める。**
-               週案の紙と同じ作りで、この端末にだけ残る -->
+          <!-- 組分けは**年度の初めと転入・転出のときだけ**の操作なので、
+               毎週の面には置かず、窓へ出す（設定からも同じ窓が開く） -->
+          <button class="btn" id="tpGrpOpen">組分けを直す</button>
+          <!-- ソフトロック。**出す先と組分けを直せなくする。**
+               「たんぽぽ時間割へ出す」は止めない ── 見るだけのつもりで開いた面で
+               設定が変わることを防ぐのが役目で、毎週の出力を止める理由は無い -->
           <button class="lock" id="tpLockBtn" aria-pressed="false"
-                  title="この面からの書き込みを止める">
+                  title="出す先と組分けを直せなくする（出すのは止めない）">
             <svg width="15" height="15"><use href="#i-lock"/></svg>
             <span id="tpLockTxt">ロック</span></button></h2>
       </div>
@@ -1359,6 +1424,9 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
             <span id="tpSubTxt">たんぽぽに提出</span></button>
         </div>
       </div>
+      <!-- 学年・全学年の面（と、学級で入れる先を広げたとき）にだけ出る。
+           **押す前に、どこへ出るかを字で言う。** 色と背景だけに持たせない -->
+      <p class="applymsg" id="applyMsg" hidden></p>
       <p class="tpchanged" id="tpChanged" role="status" hidden>未提出の変更あり！　保存後に、たんぽぽへ再提出してください。</p>
       <p class="lockmsg" id="lockMsg" hidden>
         <b>この画面はロック中。</b>直すには右上の「ロック中」を押す。</p>
@@ -1471,6 +1539,18 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
     <button class="settingcard" id="setPaper"><b>印刷と文字</b><span id="setPaperNow">用紙・文字の大きさ</span></button>
     <button class="settingcard" id="setNewYear"><b>新年度の準備</b><span>4月1日から、上から順に確認</span></button>
   </div>
+</div></dialog>
+
+<!-- たんぽぽ組分け。**設定と、たんぽぽの面の「組分けを直す」から開く。**
+     毎週の面から外してあるのは、直すのが年度の初めと転入・転出のときだけだから。
+     開いたままだと、毎週その20クラスを越えないと組に手が届かない -->
+<dialog id="tpGrpDlg"><div class="dlg wide">
+  <h2>たんぽぽ組分け <span class="subttl" id="tpGrpFy"></span></h2>
+  <p>たんぽぽの組へ、交流級を入れます。<b>1回入れると児童1人＝たんぽぽ時間割の1列。</b>
+     同じ組へ2回入れれば2人です。引っぱっても、押しても入ります。<br>
+     直すのは<b>年度の初めと、転入・転出のとき</b>。週ごとの操作ではありません。</p>
+  <div class="tpsel" id="tpGrpBody"></div>
+  <p class="hint" id="tpGrpCount"></p>
 </div></dialog>
 
 <dialog id="outDlg"><div class="dlg">
@@ -1743,6 +1823,19 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 <!-- 上書きの窓。**既定は「変更しない」。**
      ブラウザの confirm は Enter で「はい」に落ちる。打鍵の勢いのまま
      他人の予定が消える。編集そのものは止めない（誰でもどのコマでも直せる） -->
+<!-- 学年・全学年からの保存。**効くのは押した人の学級ではない。**
+     既定は「反映しない」。Esc も、窓枠の ✕ も同じ -->
+<dialog id="apDlg"><div class="dlg">
+  <h2>この保存で、ほかの学級の週案にも出ます</h2>
+  <p id="apWhere"></p>
+  <p class="hint"><b id="apWeek"></b>のぶんです。<br>
+     入れたコマは、その学級の紙に「学年」「全体」の印つきで出ます。
+     <b>戻すときは、赤い「リセット」を同じコマに落とす。</b></p>
+  <div class="end">
+    <button class="btn go" id="apNo">反映しない</button>
+    <button class="btn apply" id="apYes">反映する</button></div>
+</div></dialog>
+
 <dialog id="swDlg"><div class="dlg">
   <h2>ほかの人が入れた予定です</h2>
   <p><b id="swWhen"></b> を「<b id="swTo"></b>」に変えます。<br>
@@ -2506,6 +2599,12 @@ const Backend = (function(){
   let sending = false;
   let editEpoch = 0;
   let acknowledged = false;
+  /* **この画面で1コマでも書いて、まだ入っていないか。**
+     開いただけの人を「未保存」にしないために、acknowledged とは別に持つ
+     （acknowledged は立ち上がりが false なので、開いた瞬間から未保存に見える）。
+     手元でも本番でも同じに動く ── 未保存の数はシートへ送るぶんしか数えないので、
+     手元では always 0 になり、画面の合図に使えない。 */
+  let touched = false;
   const flushWaiters = [];
   let notify = () => {};
   let onDirty = () => {};   /* 未保存の数が変わったら画面に知らせる */
@@ -2536,6 +2635,7 @@ const Backend = (function(){
      いまの週として覚えると、別の週のコマを書き替えてしまう。 */
   function cellChanged(layer, target, d, slotId, baseAt, where){
     acknowledged = false;
+    touched = true;
     editEpoch++;
     if(typeof markTpEdited === "function") markTpEdited(layer, target, where);
     if(!onGas) return;
@@ -2636,7 +2736,7 @@ const Backend = (function(){
     if(after) flushWaiters.push(after);
     if(sending) return;
     const finishFlush = (ok, record = true) => {
-      if(record) acknowledged = ok;
+      if(record){ acknowledged = ok; if(ok) touched = false; }
       onDirty(unsaved(), lastErr);
       for(const fn of flushWaiters.splice(0)) fn(ok);
     };
@@ -3367,7 +3467,9 @@ const Backend = (function(){
     }
   });
 
-  return {isGas, info, saved: () => acknowledged && !unsaved() && !sending, setNotifier, setDirtyWatcher, setConflictWatcher,
+  return {isGas, info, saved: () => acknowledged && !unsaved() && !sending,
+          /* 書いたのに、まだシートに入っていない。画面の地の色はこれで決める */
+          touched: () => touched || !!lastErr, setNotifier, setDirtyWatcher, setConflictWatcher,
           unsaved, prefetchWeek, readWeeks, watch, stale, heldCells, dropHeld, reloadWeek,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
@@ -3952,14 +4054,33 @@ function targetStore(){
    **専科もここを通す。** 前は専科だけ素通りしていたので、音楽専科が
    2-1 の担任の「国語」を潰しても、書く側には何も出なかった
    （された側の担任には次に開いたときに出るので、片肺になっていた）。 */
+/* **いま書くと、どのクラスの紙に出るか。** 上書きの見張りと、
+   保存の前の確認窓が、同じここを読む（判定を2か所に持たない）。
+   上の scopeClasses（マスターの面が持つクラス）とは別もので、
+   こちらは**学級を開いたまま入れる先を広げたとき**も入る。 */
+function writeClasses(forCls){
+  return view.kind === "special" ? (forCls ? [forCls] : [])
+       : view.kind === "class" && scope === "self"  ? [view.cls]
+       : view.kind === "class" && scope === "grade" ? classesOfGrade(gradeOf(view.cls))
+       : view.kind === "class" ? allClasses()
+       : view.kind === "grade" ? classesOfGrade(view.grade)
+       : view.kind === "school" ? allClasses()
+       : [];
+}
+
+/* **効く先が、自分の学級より広い面か。**
+   学年・全学年を開いているときと、学級を開いたまま入れる先を
+   学年・全校にしているときが当たる。ここが真のあいだは、
+   保存が「保存・反映」になり、押したときに1回だけ聞く。 */
+function broadScope(){
+  const k = (typeof view === "object" && view && view.kind) || "";
+  if(k === "grade" || k === "school") return true;
+  return k === "class" && scope !== "self";
+}
+
 function wouldOverwrite(d, s, forCls){
   const hit = [], layer = layerOfStore(), target = targetOfStore();
-  const list = view.kind === "special" ? (forCls ? [forCls] : [])
-             : view.kind === "class" && scope === "self" ? [view.cls]
-             : view.kind === "class" && scope === "grade" ? classesOfGrade(gradeOf(view.cls))
-             : view.kind === "class" ? allClasses()
-             : view.kind === "grade" ? classesOfGrade(view.grade)
-             : allClasses();
+  const list = writeClasses(forCls);
   for(const c of list){
     if(allClasses().indexOf(c) < 0) continue;          /* 編成に無いクラス */
     const cur = compose(c, d, s);
@@ -4899,13 +5020,13 @@ function tpSheetName(mon){
 }
 
 /* ── たんぽぽの面 ────────────────────────────
-   **たんぽぽの組へ、交流級を引っぱって入れる。**
-   1回入れると児童1人＝出す先の1列。同じ組へ2回入れれば2人。
-   引っぱれない端末のために、押しても入るようにしてある
-   （右のクラスを押すと、いま選んでいる組へ入る）。 */
-let tpPick = "1";              /* いま選んでいる組。押して入れるときの行き先 */
-/* 右の交流級を開いているか。**ふだんは畳む**（入れ替えは年度の初めだけ） */
-let tpFromOpen = false;
+   **面ですることは2つ。組の並びを見ることと、出すこと。**
+
+   組分け（どの交流級を、どの組へ、何人ぶん入れるか）はここに置かない。
+   直すのは年度の初めと転入・転出のときだけなのに、毎週の面に置くと、
+   出しに来た人が毎回その20クラスを越えないと組に手が届かない。
+   「組分けを直す」の窓（設定からも開く）へ移してある。 */
+let tpPick = "1";              /* 窓でいま選んでいる組。押して入れるときの行き先 */
 
 /* 交流級の着手／未着手。**組の中のチップそのものに出す。**
    下に字でまとめて出していたころは、組の並びと読み合わせないと
@@ -5084,13 +5205,12 @@ function putTargets(after){
                         why => { Wait.end(w); toast(why); loadTargets(); });
 }
 
-function drawTanpopoView(){
-  drawTargets();
+/* 組の並び。**面と窓で同じものを出す**（片方だけ直した版が出ないように）。
+   edit=false のときは読むだけ ── ×も、引っぱって入れる案内も出さない。 */
+function tpGroupList(edit){
   const groups = tpGroups();
   if(groups.indexOf(tpPick) < 0) tpPick = groups[0];
-
-  /* 左：たんぽぽの組。**出す列の並びがそのまま見えている。** */
-  const left = groups.map(g =>
+  return groups.map(g =>
     "<div class='tpgrp" + (g === tpPick ? " pick" : "") + (+g % 2 === 0 ? " even" : "")
     + "' data-g='" + escText(g) + "'>"
     + "<button class='tpghead' data-g='" + escText(g) + "'>"
@@ -5101,16 +5221,21 @@ function drawTanpopoView(){
            /* **どのクラスが今週まだ書いていないかを、その場で見せる。**
               下に字でまとめて出していたころは、組の並びと読み合わせる必要があった */
            const st = tpState(c);
-           return "<button class='tpin st-" + st + "' data-g='" + escText(g) + "'"
-             + " data-i='" + i + "' title='" + escText(c + "：" + TP_ST[st].why)
-             + "。押すと、この1人を外す'>"
-             + escText(c) + "<em>" + TP_ST[st].mark + "</em><u>×</u></button>";
+           return "<" + (edit ? "button" : "span") + " class='tpin st-" + st + "'"
+             + " data-g='" + escText(g) + "' data-i='" + i + "'"
+             + " title='" + escText(c + "：" + TP_ST[st].why)
+             + (edit ? "。押すと、この1人を外す" : "") + "'>"
+             + escText(c) + "<em>" + TP_ST[st].mark + "</em>"
+             + (edit ? "<u>×</u>" : "")
+             + "</" + (edit ? "button" : "span") + ">";
          }).join("")
-       : "<i>ここへ引っぱって入れる</i>")
+       : "<i>" + (edit ? "ここへ引っぱって入れる" : "まだ入れていない") + "</i>")
     + "</div></div>").join("");
+}
 
-  /* 右：交流級。**どの組に入れてあるかを字で添える**（色だけに頼らない） */
-  const right = grades().map(g =>
+/* 交流級の並び（窓だけ）。**どの組に入れてあるかを字で添える**（色だけに頼らない） */
+function tpFromList(){
+  return grades().map(g =>
     "<div class='tprow'><span>" + escText(g) + "年</span><div class='tpchips'>"
     + classesOfGrade(g).map(c => {
         const gs = tpGroupsOf(c), n = tpCount(c), st = planState(c);
@@ -5122,80 +5247,95 @@ function drawTanpopoView(){
              + "</button>";
       }).join("")
     + "</div></div>").join("");
+}
 
-  /* **右の交流級は畳んでおく。** 入れ替えるのは年度の初めだけで、
-     ふだん見たいのは左の組の並び（出す列そのもの）。
-     開いたままにすると、毎週その20個を越えないと組に手が届かない。 */
-  const open = !!tpFromOpen;
-  $("tpSel").innerHTML =
-    "<div class='tpplace" + (open ? "" : " shut") + "'><div class='tpto'>"
+/* ── 組分けの窓 ──────────────────────────────
+   **設定の「たんぽぽ組分け」と、面の「組分けを直す」から開く。**
+   ここにロックは効かない（面のロックは、見るだけのつもりで開いた面を守るもので、
+   自分から組分けを開いた人を止める理由が無い）。 */
+function openTpGroupDlg(){
+  $("tpGrpFy").textContent = fy() + "年度";
+  drawTpGroupDlg();
+  $("tpGrpDlg").showModal();
+}
+
+function drawTpGroupDlg(){
+  const box = $("tpGrpBody");
+  if(!box) return;
+  box.innerHTML =
+    "<div class='tpplace'><div class='tpto'>"
     + "<div class='tpleg'><b>今週の提出</b>"
     + ["ok","base","changed"].map(k =>
         "<span class='st-" + k + "'><i></i>" + TP_ST[k].mark + "</span>").join("")
     + "</div>"
-    + left
+    + tpGroupList(true)
     + "<button class='btn tpaddg' id='tpAddG'>組を足す</button></div>"
     + "<div class='tpfrom'>"
-    + "<button class='tpfromq' id='tpFromQ' aria-expanded='" + open + "'>"
-    + (open ? "▾" : "▸") + " 交流級から入れる"
-    + "<span>" + allClasses().length + " クラス</span></button>"
-    + "<div class='tpfromb'" + (open ? "" : " hidden") + ">" + right + "</div>"
+    + "<div class='tpfromh'><b>交流級から入れる</b><span>"
+    + allClasses().length + " クラス</span></div>"
+    + "<div class='tpfromb'>" + tpFromList() + "</div>"
     + "</div></div>";
 
-  const q = $("tpFromQ");
-  if(q) q.onclick = () => { tpFromOpen = !tpFromOpen; drawTanpopoView(); };
-
-  /* 入れる／外す。**押しても引っぱっても同じことが起きる。**
-     ロック中は入れない（見るだけのつもりで開いた面で、出す列がずれる） */
-  const redraw = () => { save(); Backend.saveRoster(); drawTanpopoView(); };
-  const locked = () => {
-    if(typeof isLocked === "function" && isLocked()){
-      toast("この面はロックしてある。<b>直すには、上のロックを押す</b>");
-      return true;
-    }
-    return false;
+  /* 入れる／外す。**押しても引っぱっても同じことが起きる。** */
+  const redraw = () => {
+    save(); Backend.saveRoster(); drawTpGroupDlg();
+    if(view.kind === "tanpopo") drawTanpopoView();   /* 後ろの面も合わせる */
   };
-  for(const b of $("tpSel").querySelectorAll(".tpchip")){
+  for(const b of box.querySelectorAll(".tpchip")){
     b.addEventListener("dragstart", ev => {
       ev.dataTransfer.setData("text/x-tanpopo", b.dataset.c);
       ev.dataTransfer.effectAllowed = "copy";
       b.classList.add("drag");
     });
     b.addEventListener("dragend", () => b.classList.remove("drag"));
-    b.onclick = () => { if(locked()) return; tpAdd(tpPick, b.dataset.c); redraw(); };
+    b.onclick = () => { tpAdd(tpPick, b.dataset.c); redraw(); };
   }
-  for(const h of $("tpSel").querySelectorAll(".tpghead"))
-    h.onclick = () => { tpPick = h.dataset.g; drawTanpopoView(); };
-  for(const x of $("tpSel").querySelectorAll(".tpin"))
-    x.onclick = () => { if(locked()) return;
-                        tpDrop(x.dataset.g, tpIn(x.dataset.g)[+x.dataset.i]); redraw(); };
-  for(const box of $("tpSel").querySelectorAll(".tpgrp")){
-    box.addEventListener("dragover", ev => {
+  for(const h of box.querySelectorAll(".tpghead"))
+    h.onclick = () => { tpPick = h.dataset.g; drawTpGroupDlg(); };
+  for(const x of box.querySelectorAll(".tpin"))
+    x.onclick = () => { tpDrop(x.dataset.g, tpIn(x.dataset.g)[+x.dataset.i]); redraw(); };
+  for(const grp of box.querySelectorAll(".tpgrp")){
+    grp.addEventListener("dragover", ev => {
       if(ev.dataTransfer.types.indexOf("text/x-tanpopo") < 0) return;
-      ev.preventDefault(); box.classList.add("over");
+      ev.preventDefault(); grp.classList.add("over");
     });
-    box.addEventListener("dragleave", () => box.classList.remove("over"));
-    box.addEventListener("drop", ev => {
-      ev.preventDefault(); box.classList.remove("over");
+    grp.addEventListener("dragleave", () => grp.classList.remove("over"));
+    grp.addEventListener("drop", ev => {
+      ev.preventDefault(); grp.classList.remove("over");
       const c = ev.dataTransfer.getData("text/x-tanpopo");
-      if(c){ if(locked()) return; tpPick = box.dataset.g; tpAdd(box.dataset.g, c); redraw(); }
+      if(c){ tpPick = grp.dataset.g; tpAdd(grp.dataset.g, c); redraw(); }
     });
   }
   const add = $("tpAddG");
-  if(add) add.onclick = () => { if(locked()) return; tpAddGroup(); save(); drawTanpopoView(); };
+  if(add) add.onclick = () => { tpAddGroup(); save(); drawTpGroupDlg(); };
+  $("tpGrpCount").innerHTML = tpTotal()
+    ? "いま <b>" + tpTotal() + " 人</b>（" + tpTotal() + " 列）・<b>"
+      + tpChosenHere().length + " クラス</b>を入れている"
+    : "まだ1人も入れていない";
+}
+
+/* ── 面 ──────────────────────────────────── */
+function drawTanpopoView(){
+  drawTargets();
+
+  /* 組の並びだけを出す。**読むだけ。** 直すのは「組分けを直す」の窓 */
+  $("tpSel").innerHTML =
+    "<div class='tpleg'><b>今週の提出</b>"
+    + ["ok","base","changed"].map(k =>
+        "<span class='st-" + k + "'><i></i>" + TP_ST[k].mark + "</span>").join("")
+    + "</div><div class='tponly'>" + tpGroupList(false) + "</div>";
 
   $("tpWarn").innerHTML = tpWarnBoxes().join("");
   /* 出す先が1つも無いあいだ、直している最中は出させない。
      **どこへ出るか分からないまま押させない。** */
   const tgt = tpTargetNow();
   const chosen = tpChosenHere();
-  const lockedNow = typeof isLocked === "function" && isLocked();
   const noTarget = Backend.isGas() && !tgt;
-  /* 複数の理由が重なったら、先に解消しなければ何も直せないものを出す。
-     空のままロックした画面で「組へ入れて」と案内しても、その操作自体ができない。 */
-  const why = lockedNow ? "ロックを外してください"
-            : tpTgtEdit ? "出す先の編集を終えてください"
-            : !tpTotal() ? "先に交流級を組へ入れてください"
+  /* **ロックでは止めない。** ロックが守るのは出す先と組分けで、
+     毎週の出力はロックしたまま押してよい（むしろ、触らずに出したい人の面）。
+     複数の理由が重なったら、先に解消しないと先へ進めないものを出す。 */
+  const why = tpTgtEdit ? "出す先の編集を終えてください"
+            : !tpTotal() ? "先に組分けで交流級を入れてください"
             : noTarget ? "出す先を設定してください" : "";
   $("tpGo").disabled = !!why;
   $("tpGoWhy").hidden = !why;
@@ -5209,7 +5349,7 @@ function drawTanpopoView(){
   const ready = allIn && !why;
   $("tpGo").classList.toggle("ready", ready);
   $("tpGo").textContent = allIn ? "✓ たんぽぽ時間割へ出す" : "たんぽぽ時間割へ出す";
-  $("tpGo").title = why || (!chosen.length ? "先に交流級を組へ入れる"
+  $("tpGo").title = why || (!chosen.length ? "先に「組分けを直す」から交流級を入れる"
     : allIn ? "入れている " + chosen.length + " クラスは、ぜんぶ提出ずみ"
             : "まだ " + yet.length + " クラスが提出していない（" + yet.join("・") + "）");
   /* **出す週を、ボタンのとなりにもう一度出す。** 左メニューの週とは離れていて、
@@ -5244,10 +5384,11 @@ function tpWarnBoxes(){
      分からない）。ここに残すのは、組から外さないと直らないものだけ。 */
   if(gone.length)
     boxes.push("<div class='box'><b>" + gone.map(escText).join("・")
-      + "</b> は<b>いまの学級編成にありません</b>。組から外してください。</div>");
+      + "</b> は<b>いまの学級編成にありません</b>。"
+      + "「組分けを直す」から組の外へ出してください。</div>");
   if(!chosen.length)
     boxes.push("<div class='box ok'>まだ誰も入れていません。"
-      + "右のクラスを、左のたんぽぽの組へ引っぱってください。</div>");
+      + "右上の<b>「組分けを直す」</b>から、交流級を組へ入れてください。</div>");
   return boxes;
 }
 
@@ -5287,7 +5428,7 @@ function tanpopoTitles(list){
    操作を、いちばん弱い止め方にしない（1コマの上書きと同じ作りにそろえる）。 */
 function reflectTanpopo(){
   const chosen = tpChosenHere();
-  if(!chosen.length) return toast("先に交流級を選ぶ");
+  if(!chosen.length) return toast("先に<b>「組分けを直す」</b>から交流級を入れる");
   const name = tpSheetName();
   $("tpDlgName").textContent = name;
   $("tpDlgTbl").innerHTML =
@@ -5513,6 +5654,9 @@ function showGate(){
    言っていて、同じものを2か所に置くと、どちらを見ればよいかを毎回考える。 */
 function paintHeader(){
   document.body.dataset.scope = view.kind === 'class' ? scope : view.kind;
+  /* 面と入れる先が変わると、保存が「保存・反映」に変わる。**ここで一緒に塗る**
+     （面を開いたときと、入れる先を選び直したときの両方がここを通る） */
+  if(typeof paintSave === "function") paintSave();
   const open = view.kind !== "gate";
   for(const b of document.querySelectorAll(".nav[data-screen]"))
     b.setAttribute("aria-current", String(b.dataset.screen === (open ? "plan" : "gate")));
@@ -6104,14 +6248,18 @@ const HELP = {
        "<i>はじめの人がつまずくところ：</i>やることは主に管理の3人の仕事です。"
        + "自分の担当でなければ、開いて見るだけで構いません。"]},
   tanpopo: {t:"たんぽぽ",
-    b:["<b>たんぽぽ学級へ渡す時間割を作る画面です。</b>"
-       + "左の<b>たんぽぽの組</b>が、そのまま出す先の列の並びになります。",
-       "<b>交流級から入れる</b>を開いて、クラスを組へ引っぱるか押すかで入れます。"
-       + "<b>1回入れると児童1人＝出す先の1列。</b>同じ組へ2回入れれば2人です。",
+    b:["<b>たんぽぽ学級へ渡す時間割を、1週ぶん出す画面です。</b>"
+       + "並んでいる<b>たんぽぽの組</b>が、そのまま出す先の列の並びになります。",
+       "この面ですることは2つ。<b>組の並びを見ることと、出すこと。</b>"
+       + "どの交流級を何人ぶん入れるかは、右上の<b>「組分けを直す」</b>"
+       + "（設定の「たんぽぽ組分け」と同じ窓）で直します。"
+       + "直すのは年度の初めと、転入・転出のときだけです。",
        "組の中のクラスに付く <b>済／未</b> は、"
        + "その担任が「たんぽぽに提出」を押したかどうかです。",
        "<b>出すと、たんぽぽ時間割に「9月1週」という名前のシートが1枚できます。</b>"
        + "同じ名前のシートがあれば、消さずに名前を変えて残します。",
+       "<b>ロックは、出す先と組分けだけを止めます。</b>"
+       + "「たんぽぽ時間割へ出す」は、ロックしたままでも押せます。",
        "<i>はじめの人がつまずくところ：</i>入れた組は「学級編成」の"
        + "たんぽぽ交流級の欄に残ります。年度の初めに直すのはそちらです。"]},
   month: {t:"月で見る（B4）",
@@ -6781,17 +6929,41 @@ function paintSave(){
   if(!b) return;
   const {n, err, busy} = saveState;
   document.body.classList.toggle('is-saved', !n && !err && !busy && Backend.saved());
+  /* **書いたのに、まだシートに入っていない。** 面ぜんぶの地をくすませる合図。
+     「開いただけ」はここに入らない（Backend.touched が、書いたかどうかを持つ）。
+     前に閉じたとき送れなかったぶんは n が拾う。 */
+  document.body.classList.toggle('is-unsaved', !!n || !!err || Backend.touched());
   paintTpSub();
+  /* **効く先が広い面では、ボタンの字と色を変える。**
+     押した人の学級ではなく、学年ぜんぶ・全校ぜんぶの紙に出る操作なので、
+     同じ見た目の「保存」にしておかない（docs/spec.md 3節）。 */
+  const wide = typeof broadScope === "function" && broadScope();
+  b.classList.toggle("apply", wide);
   b.classList.toggle("dirty", !!n && !err);
   b.classList.toggle("bad", !!err);
   b.disabled = busy;
   t.textContent = busy ? "保存中…"
                 : err  ? "保存できていない"
-                : n    ? "保存（" + n + "）"
+                : n    ? (wide ? "保存・反映（" + n + "）" : "保存（" + n + "）")
+                : wide ? "保存・反映"
                        : "保存ずみ";
   b.title = err ? "もう一度押す。閉じると消える"
           : n   ? n + " コマぶんがまだシートに入っていない"
                 : "シートに入っている";
+  paintApplyMsg();
+}
+
+/* **押す前に、どこへ出るかを字で出す。** 色と背景だけに持たせない。
+   ボタンの中に入れると 400px の右パネルで折り返すので、下に1行で置く。 */
+function paintApplyMsg(){
+  const m = $("applyMsg");
+  if(!m) return;
+  const wide = typeof broadScope === "function" && broadScope();
+  m.hidden = !wide;
+  if(!wide) return;
+  const cs = writeClasses();
+  m.innerHTML = "ここで直したものは、<b>" + escText(viewName()) + " の "
+              + cs.length + " クラス</b>の週案に出る。";
 }
 /* ── たんぽぽへの提出 ────────────────────────
    **担任が「今週ぶんは書き終えた」と言う印。** 週ごとに立て直す。
@@ -6837,6 +7009,38 @@ function toggleTpSub(){
              : "提出を取り消した");
   }, why => { Wait.end(w); toast(why); });
   });
+}
+
+/* ── 学年・全学年からの保存は、押したときに1回聞く ──────
+   効く先が押した人の学級ではないので、出る先と週を見せてから送る。
+   **既定は「反映しない」**（ほかの窓とそろえる。Esc も ✕ も同じ）。
+
+   聞くのは「保存ずみ」でないときだけ。押しても何も送るものが無いときに
+   窓を出すと、読まずに閉じる癖がつく。
+   **doSave そのものは聞かない。** 競合の入れ直しがコードから呼ぶので、
+   そこで窓を出すと、返事をしないかぎり送られない。 */
+let apAsk = null;
+function askApply(yes){
+  apAsk = {yes, done:false};
+  const cs = writeClasses();
+  $("apWhere").innerHTML = "<b>" + escText(viewName()) + " の " + cs.length + " クラス</b>"
+    + (cs.length && cs.length <= 4 ? "（" + escText(cs.join("・")) + "）" : "")
+    + " の週案に出ます。";
+  $("apWeek").textContent = md(monday) + " → " + md(addDays(monday, 4)) + " の週";
+  $("apDlg").showModal();
+  $("apNo").focus();                 /* **既定は「反映しない」。** */
+}
+function apAnswer(ok){
+  const a = apAsk;
+  apAsk = null;
+  if(!a || a.done) return;
+  a.done = true;
+  if(ok) a.yes();
+}
+/* ボタンと Ctrl+S だけがここを通る */
+function requestSave(){
+  if(!broadScope() || Backend.saved()) return doSave(true);
+  askApply(() => doSave(true));
 }
 
 function doSave(loud){
@@ -7018,7 +7222,7 @@ document.addEventListener("keydown", ev => {
   const k = (ev.key || "").toLowerCase();
   /* 保存。**どの画面でも同じ。** ブラウザの「ページを保存」は横取りする
      （この画面で Ctrl+S に期待されるのは、そちらではない） */
-  if(k === "s"){ ev.preventDefault(); if(Wait.guard()) doSave(true); return; }
+  if(k === "s"){ ev.preventDefault(); if(Wait.guard()) requestSave(); return; }
   if(inField(document.activeElement)) return;
   if(k === "z" && !ev.shiftKey){ ev.preventDefault(); doUndo(); return; }
   if((k === "z" && ev.shiftKey) || k === "y"){ ev.preventDefault(); doRedo(); return; }
@@ -7086,6 +7290,11 @@ function wire(){
   on("cfSee","click",  () => { $("cfDlg").close(); });
   on("cfMine","click", () => { cfAnswer(true); $("cfDlg").close(); });
   on("cfDlg","close",  () => cfAnswer(false));
+
+  /* 反映の窓。**閉じ方が何であれ「反映しない」に落ちる。** */
+  on("apNo","click",  () => { $("apDlg").close(); });
+  on("apYes","click", () => { apAnswer(true); $("apDlg").close(); });
+  on("apDlg","close", () => apAnswer(false));
 
   on("swNo","click",  () => { $("swDlg").close(); });
   on("swYes","click", () => { owAnswer(true); $("swDlg").close(); });
@@ -7170,7 +7379,7 @@ function wire(){
   /* 保存。**打つたびには送らない。** ここで1コマ1件にまとめて送る */
   /* 押した瞬間から2回目を受けない。窓が出る 200ms のあいだも、ここが受ける。
      doSave 自体は弾かない（重なりの入れ直しがコードから呼ぶ。弾くと黙って送られない） */
-  on("saveBtn","click", () => { if(Wait.guard()) doSave(true); });
+  on("saveBtn","click", () => { if(Wait.guard()) requestSave(); });
   on("lockBtn","click", () => setLock(!isLocked()));
   on("tpLockBtn","click", () => { setLock(!isLocked()); drawTanpopoView(); });
   on("tpDelNo","click",  () => tpDelAnswer(false));
@@ -7199,7 +7408,7 @@ function wire(){
   on("evGo","click", evGo);
   on("setBase","click", () => { $("settingsDlg").close(); openBaseDlg(); });
   on("setRoster","click", () => { $("settingsDlg").close(); openRosterDlg(); });
-  on("setTanpopo","click", () => { $("settingsDlg").close(); openView({kind:"tanpopo"}); });
+  on("setTanpopo","click", () => { $("settingsDlg").close(); openTpGroupDlg(); });
   on("setPaper","click", () => { $("settingsDlg").close(); applyPaper(); $("setDlg").showModal(); });
   on("setNewYear","click", () => { $("settingsDlg").close(); openNewYearDlg(); });
   on("outPrint","click", () => { $("outDlg").close(); window.print(); });
@@ -7227,6 +7436,20 @@ function wire(){
   on("dayDlg","close", () => { dayPick = 0; });
 
   /* たんぽぽ。**確認の窓は既定「出さない」。** 閉じ方が何であれ出さない側に落ちる */
+  /* 組分けの窓。**面のロック中は開かない。** ロックが守るのは出す先と組分けで、
+     「たんぽぽ時間割へ出す」だけはロックしたままでも押せる */
+  /* 閉じたら中身を捨てる。**開くたびに組み直す。**
+     残しておくと、閉じた窓の写しが DOM に残って、面の並びと二重に見つかる */
+  /* close は非同期に届く。閉じてすぐ開き直したとき（設定からの開き直し）は、
+     もう開いているので捨てない ── 捨てると、開いた窓が空になる */
+  on("tpGrpDlg","close", () => { if(!$("tpGrpDlg").open) $("tpGrpBody").innerHTML = ""; });
+
+  on("tpGrpOpen","click", () => {
+    if(typeof isLocked === "function" && isLocked())
+      return toast("この面はロックしてある。<b>直すには、上のロックを押す</b>");
+    openTpGroupDlg();
+  });
+
   on("tpNo","click",  () => $("tpDlg").close());
   on("tpYes","click", () => { $("tpDlg").close(); doExportTanpopo(); });
   on("baseImp","click", openImpDlg);

@@ -21,17 +21,41 @@ function paintSave(){
   if(!b) return;
   const {n, err, busy} = saveState;
   document.body.classList.toggle('is-saved', !n && !err && !busy && Backend.saved());
+  /* **書いたのに、まだシートに入っていない。** 面ぜんぶの地をくすませる合図。
+     「開いただけ」はここに入らない（Backend.touched が、書いたかどうかを持つ）。
+     前に閉じたとき送れなかったぶんは n が拾う。 */
+  document.body.classList.toggle('is-unsaved', !!n || !!err || Backend.touched());
   paintTpSub();
+  /* **効く先が広い面では、ボタンの字と色を変える。**
+     押した人の学級ではなく、学年ぜんぶ・全校ぜんぶの紙に出る操作なので、
+     同じ見た目の「保存」にしておかない（docs/spec.md 3節）。 */
+  const wide = typeof broadScope === "function" && broadScope();
+  b.classList.toggle("apply", wide);
   b.classList.toggle("dirty", !!n && !err);
   b.classList.toggle("bad", !!err);
   b.disabled = busy;
   t.textContent = busy ? "保存中…"
                 : err  ? "保存できていない"
-                : n    ? "保存（" + n + "）"
+                : n    ? (wide ? "保存・反映（" + n + "）" : "保存（" + n + "）")
+                : wide ? "保存・反映"
                        : "保存ずみ";
   b.title = err ? "もう一度押す。閉じると消える"
           : n   ? n + " コマぶんがまだシートに入っていない"
                 : "シートに入っている";
+  paintApplyMsg();
+}
+
+/* **押す前に、どこへ出るかを字で出す。** 色と背景だけに持たせない。
+   ボタンの中に入れると 400px の右パネルで折り返すので、下に1行で置く。 */
+function paintApplyMsg(){
+  const m = $("applyMsg");
+  if(!m) return;
+  const wide = typeof broadScope === "function" && broadScope();
+  m.hidden = !wide;
+  if(!wide) return;
+  const cs = writeClasses();
+  m.innerHTML = "ここで直したものは、<b>" + escText(viewName()) + " の "
+              + cs.length + " クラス</b>の週案に出る。";
 }
 /* ── たんぽぽへの提出 ────────────────────────
    **担任が「今週ぶんは書き終えた」と言う印。** 週ごとに立て直す。
@@ -77,6 +101,38 @@ function toggleTpSub(){
              : "提出を取り消した");
   }, why => { Wait.end(w); toast(why); });
   });
+}
+
+/* ── 学年・全学年からの保存は、押したときに1回聞く ──────
+   効く先が押した人の学級ではないので、出る先と週を見せてから送る。
+   **既定は「反映しない」**（ほかの窓とそろえる。Esc も ✕ も同じ）。
+
+   聞くのは「保存ずみ」でないときだけ。押しても何も送るものが無いときに
+   窓を出すと、読まずに閉じる癖がつく。
+   **doSave そのものは聞かない。** 競合の入れ直しがコードから呼ぶので、
+   そこで窓を出すと、返事をしないかぎり送られない。 */
+let apAsk = null;
+function askApply(yes){
+  apAsk = {yes, done:false};
+  const cs = writeClasses();
+  $("apWhere").innerHTML = "<b>" + escText(viewName()) + " の " + cs.length + " クラス</b>"
+    + (cs.length && cs.length <= 4 ? "（" + escText(cs.join("・")) + "）" : "")
+    + " の週案に出ます。";
+  $("apWeek").textContent = md(monday) + " → " + md(addDays(monday, 4)) + " の週";
+  $("apDlg").showModal();
+  $("apNo").focus();                 /* **既定は「反映しない」。** */
+}
+function apAnswer(ok){
+  const a = apAsk;
+  apAsk = null;
+  if(!a || a.done) return;
+  a.done = true;
+  if(ok) a.yes();
+}
+/* ボタンと Ctrl+S だけがここを通る */
+function requestSave(){
+  if(!broadScope() || Backend.saved()) return doSave(true);
+  askApply(() => doSave(true));
 }
 
 function doSave(loud){
@@ -258,7 +314,7 @@ document.addEventListener("keydown", ev => {
   const k = (ev.key || "").toLowerCase();
   /* 保存。**どの画面でも同じ。** ブラウザの「ページを保存」は横取りする
      （この画面で Ctrl+S に期待されるのは、そちらではない） */
-  if(k === "s"){ ev.preventDefault(); if(Wait.guard()) doSave(true); return; }
+  if(k === "s"){ ev.preventDefault(); if(Wait.guard()) requestSave(); return; }
   if(inField(document.activeElement)) return;
   if(k === "z" && !ev.shiftKey){ ev.preventDefault(); doUndo(); return; }
   if((k === "z" && ev.shiftKey) || k === "y"){ ev.preventDefault(); doRedo(); return; }
@@ -326,6 +382,11 @@ function wire(){
   on("cfSee","click",  () => { $("cfDlg").close(); });
   on("cfMine","click", () => { cfAnswer(true); $("cfDlg").close(); });
   on("cfDlg","close",  () => cfAnswer(false));
+
+  /* 反映の窓。**閉じ方が何であれ「反映しない」に落ちる。** */
+  on("apNo","click",  () => { $("apDlg").close(); });
+  on("apYes","click", () => { apAnswer(true); $("apDlg").close(); });
+  on("apDlg","close", () => apAnswer(false));
 
   on("swNo","click",  () => { $("swDlg").close(); });
   on("swYes","click", () => { owAnswer(true); $("swDlg").close(); });
@@ -410,7 +471,7 @@ function wire(){
   /* 保存。**打つたびには送らない。** ここで1コマ1件にまとめて送る */
   /* 押した瞬間から2回目を受けない。窓が出る 200ms のあいだも、ここが受ける。
      doSave 自体は弾かない（重なりの入れ直しがコードから呼ぶ。弾くと黙って送られない） */
-  on("saveBtn","click", () => { if(Wait.guard()) doSave(true); });
+  on("saveBtn","click", () => { if(Wait.guard()) requestSave(); });
   on("lockBtn","click", () => setLock(!isLocked()));
   on("tpLockBtn","click", () => { setLock(!isLocked()); drawTanpopoView(); });
   on("tpDelNo","click",  () => tpDelAnswer(false));
@@ -439,7 +500,7 @@ function wire(){
   on("evGo","click", evGo);
   on("setBase","click", () => { $("settingsDlg").close(); openBaseDlg(); });
   on("setRoster","click", () => { $("settingsDlg").close(); openRosterDlg(); });
-  on("setTanpopo","click", () => { $("settingsDlg").close(); openView({kind:"tanpopo"}); });
+  on("setTanpopo","click", () => { $("settingsDlg").close(); openTpGroupDlg(); });
   on("setPaper","click", () => { $("settingsDlg").close(); applyPaper(); $("setDlg").showModal(); });
   on("setNewYear","click", () => { $("settingsDlg").close(); openNewYearDlg(); });
   on("outPrint","click", () => { $("outDlg").close(); window.print(); });
@@ -467,6 +528,20 @@ function wire(){
   on("dayDlg","close", () => { dayPick = 0; });
 
   /* たんぽぽ。**確認の窓は既定「出さない」。** 閉じ方が何であれ出さない側に落ちる */
+  /* 組分けの窓。**面のロック中は開かない。** ロックが守るのは出す先と組分けで、
+     「たんぽぽ時間割へ出す」だけはロックしたままでも押せる */
+  /* 閉じたら中身を捨てる。**開くたびに組み直す。**
+     残しておくと、閉じた窓の写しが DOM に残って、面の並びと二重に見つかる */
+  /* close は非同期に届く。閉じてすぐ開き直したとき（設定からの開き直し）は、
+     もう開いているので捨てない ── 捨てると、開いた窓が空になる */
+  on("tpGrpDlg","close", () => { if(!$("tpGrpDlg").open) $("tpGrpBody").innerHTML = ""; });
+
+  on("tpGrpOpen","click", () => {
+    if(typeof isLocked === "function" && isLocked())
+      return toast("この面はロックしてある。<b>直すには、上のロックを押す</b>");
+    openTpGroupDlg();
+  });
+
   on("tpNo","click",  () => $("tpDlg").close());
   on("tpYes","click", () => { $("tpDlg").close(); doExportTanpopo(); });
   on("baseImp","click", openImpDlg);

@@ -535,10 +535,11 @@ ok("入力パネルも引っこむ", await p.locator(".panel").isHidden() === tr
 ok("紙から出す操作（印刷・時数）も伏せる",
    await p.locator("[data-act='outweek']").isHidden() === true
    && await p.locator("[data-act='tally']").isHidden() === true);
-ok("交流級はすべての学級から選べる",
-   await p.locator("#tpSel .tpchip").count()
-     === await p.evaluate(() => allClasses().length),
+/* **組分けは面に置かない。** 直すのは年度の初めと転入・転出のときだけなので、
+   毎週の面に置くと、出しに来た人が毎回20クラスを越えないと組に手が届かない */
+ok("面に交流級の並びは出さない", await p.locator("#tpSel .tpchip").count() === 0,
    await p.locator("#tpSel .tpchip").count());
+ok("面から組分けの窓を開ける", await p.locator("#tpGrpOpen").count() === 1);
 ok("入れるまでは出せない", await p.locator("#tpGo").isDisabled() === true);
 ok("まだ誰も入れていないと言う",
    (await p.locator("#tpWarn").innerText()).indexOf("まだ誰も入れていません") >= 0,
@@ -550,9 +551,8 @@ ok("たんぽぽの組が4つ出ている", await p.locator("#tpSel .tpgrp").cou
 ok("1組から順に並ぶ",
    (await p.locator("#tpSel .tpgrp .tpghead").first().innerText()).indexOf("1組") >= 0,
    await p.locator("#tpSel .tpgrp .tpghead").first().innerText());
-ok("空の組は、入れ方を字で言う",
-   (await p.locator("#tpSel .tpgrp").first().innerText()).indexOf("引っぱって") >= 0,
-   await p.locator("#tpSel .tpgrp").first().innerText());
+ok("面の組は読むだけ（×を出さない）",
+   await p.locator("#tpSel button.tpin").count() === 0);
 ok("偶数の組は地の色で分ける",
    await p.locator("#tpSel .tpgrp.even").count() === 2,
    await p.locator("#tpSel .tpgrp.even").count());
@@ -561,25 +561,31 @@ ok("偶数の組は色だけに頼らない（太い縦線も引く）", await p
      return parseFloat(getComputedStyle(e).borderLeftWidth) >= 4;
    }) === true);
 
-/* **交流級は畳んである。** 触る前に開く（入れ替えは年度の初めだけなので、
-   ふだんは畳んでおく設計） */
-const openFrom = async () => {
-  if(await p.locator(".tpfromb").evaluate(e => e.hidden))
-    await p.locator("#tpFromQ").click();
-  await p.waitForTimeout(200);
-};
-await openFrom();
-ok("交流級は、押すと開くトグルに収まっている",
-   await p.locator("#tpFromQ").count() === 1);
+/* ここから組分けの窓。**設定の「たんぽぽ組分け」と同じ窓** */
+await p.locator("#tpGrpOpen").click(); await p.waitForTimeout(250);
+ok("組分けの窓が開く", await p.locator("#tpGrpDlg").evaluate(d => d.open) === true);
+ok("交流級はすべての学級から選べる",
+   await p.locator("#tpGrpBody .tpchip").count()
+     === await p.evaluate(() => allClasses().length),
+   await p.locator("#tpGrpBody .tpchip").count());
+ok("空の組は、入れ方を字で言う",
+   (await p.locator("#tpGrpBody .tpgrp").first().innerText()).indexOf("引っぱって") >= 0,
+   await p.locator("#tpGrpBody .tpgrp").first().innerText());
+ok("設定からも同じ窓が開く", await p.evaluate(() => {
+     $("tpGrpDlg").close();
+     openSettings();
+     $("setTanpopo").click();
+     return $("tpGrpDlg").open && !$("settingsDlg").open;
+   }) === true);
 
 /* 3-3 は担任が書いた週。1-1 は基本時間割のまま。3-1 は学年の予定だけ。
    引っぱれない端末のために、押しても「いま選んでいる組」へ入る。 */
-await p.locator("#tpSel .tpchip[data-c='3-3']").click(); await p.waitForTimeout(200);
+await p.locator("#tpGrpBody .tpchip[data-c='3-3']").click(); await p.waitForTimeout(200);
 ok("押すと1組へ入る", await p.evaluate(() => tpIn("1")).then
    ? true : (await p.evaluate(() => tpIn("1"))).indexOf("3-3") >= 0,
    await p.evaluate(() => tpIn("1")));
-await p.locator("#tpSel .tpchip[data-c='1-1']").click(); await p.waitForTimeout(200);
-await p.locator("#tpSel .tpchip[data-c='3-1']").click(); await p.waitForTimeout(200);
+await p.locator("#tpGrpBody .tpchip[data-c='1-1']").click(); await p.waitForTimeout(200);
+await p.locator("#tpGrpBody .tpchip[data-c='3-1']").click(); await p.waitForTimeout(200);
 /* **済／未は、下の欄に字で書かない。** 組のチップそのものが言う
    （下にまとめて書くと、組の並びと読み合わせないと、どのクラスか分からない） */
 const tpWarn = await p.locator("#tpWarn").innerText();
@@ -597,24 +603,24 @@ ok("入れたクラスは入口にも出る",
    await p.evaluate(() => tpChosen()));
 
 /* **同じ組へ2回入れれば2人（＝2列）。** 前のクリック切り替えはもう無い */
-await p.locator("#tpSel .tpchip[data-c='3-3']").click(); await p.waitForTimeout(200);
+await p.locator("#tpGrpBody .tpchip[data-c='3-3']").click(); await p.waitForTimeout(200);
 ok("同じ組へ2回入れると2人になる", await p.evaluate(() => tpCount("3-3")) === 2,
    await p.evaluate(() => tpCount("3-3")));
 ok("組の中はクラス順に並ぶ",
    JSON.stringify(await p.evaluate(() => tpIn("1"))) === JSON.stringify(["1-1","3-1","3-3","3-3"]),
    await p.evaluate(() => tpIn("1")));
 ok("チップにどの組かを字で出す",
-   (await p.locator("#tpSel .tpchip[data-c='3-3']").innerText()).indexOf("1組") >= 0,
-   await p.locator("#tpSel .tpchip[data-c='3-3']").innerText());
+   (await p.locator("#tpGrpBody .tpchip[data-c='3-3']").innerText()).indexOf("1組") >= 0,
+   await p.locator("#tpGrpBody .tpchip[data-c='3-3']").innerText());
 ok("組の中の1人を押すと外れる", await (async () => {
-     await p.locator("#tpSel .tpin[data-g='1'][data-i='3']").click();
+     await p.locator("#tpGrpBody .tpin[data-g='1'][data-i='3']").click();
      await p.waitForTimeout(200);
      return await p.evaluate(() => tpCount("3-3")) === 1;
    })() === true, await p.evaluate(() => tpIn("1")));
 
 /* **出す列の並びは たんぽぽ1組 → 2組 …。** 組の中はクラス順 */
-await p.locator("#tpSel .tpghead[data-g='2']").click(); await p.waitForTimeout(150);
-await p.locator("#tpSel .tpchip[data-c='1-1']").click(); await p.waitForTimeout(200);
+await p.locator("#tpGrpBody .tpghead[data-g='2']").click(); await p.waitForTimeout(150);
+await p.locator("#tpGrpBody .tpchip[data-c='1-1']").click(); await p.waitForTimeout(200);
 ok("2組を選んでから押すと、2組へ入る",
    (await p.evaluate(() => tpIn("2"))).indexOf("1-1") >= 0,
    await p.evaluate(() => tpIn("2")));
@@ -625,11 +631,24 @@ ok("出す列は1組の全員 → 2組の全員の順",
    await p.evaluate(() => tpColumns()));
 ok("組を足せる", await (async () => {
      await p.locator("#tpAddG").click(); await p.waitForTimeout(200);
-     return await p.locator("#tpSel .tpgrp").count() === 5;
+     return await p.locator("#tpGrpBody .tpgrp").count() === 5;
    })() === true);
 /* 足した組は空のままにして、あとの検査に響かせない */
-await p.locator("#tpSel .tpghead[data-g='1']").click(); await p.waitForTimeout(150);
-await p.locator("#tpSel .tpin[data-g='2'][data-i='0']").click(); await p.waitForTimeout(200);
+await p.locator("#tpGrpBody .tpghead[data-g='1']").click(); await p.waitForTimeout(150);
+await p.locator("#tpGrpBody .tpin[data-g='2'][data-i='0']").click(); await p.waitForTimeout(200);
+
+/* 組分けを終えたら窓を閉じる。**出すのは面から。** */
+await p.locator("#tpGrpDlg").evaluate(d => d.close()); await p.waitForTimeout(200);
+ok("窓を閉じると、面の組にも入っている",
+   await p.locator("#tpSel .tpin").count() === 3,
+   await p.locator("#tpSel .tpin").count());
+/* **ロックは出すことを止めない。** 守るのは出す先と組分け */
+await p.evaluate(() => setLock(true)); await p.waitForTimeout(150);
+ok("ロック中でも出せる", await p.locator("#tpGo").isDisabled() === false);
+await p.locator("#tpGrpOpen").click(); await p.waitForTimeout(200);
+ok("ロック中は組分けを開かない",
+   await p.locator("#tpGrpDlg").evaluate(d => d.open) === false);
+await p.evaluate(() => setLock(false)); await p.waitForTimeout(150);
 
 /* 出す。**専用の窓で聞く。既定は「出さない」。**
    ブラウザの confirm は Enter で「はい」に落ちるので、この面でいちばん大きく
@@ -682,17 +701,19 @@ ok("手元では書き込まないと言う",
    (await p.locator("#tpWarn").innerText()).indexOf("書き込まない") >= 0,
    await p.locator("#tpWarn").innerText());
 
-console.log("\n■ たんぽぽの面は、組が左・交流級が右");
+console.log("\n■ 組分けの窓は、組が左・交流級が右");
+await p.evaluate(() => openTpGroupDlg()); await p.waitForTimeout(250);
 ok("左が たんぽぽの組", await p.evaluate(() => {
-     const to = document.querySelector(".tpto").getBoundingClientRect();
-     const from = document.querySelector(".tpfrom").getBoundingClientRect();
+     const to = document.querySelector("#tpGrpBody .tpto").getBoundingClientRect();
+     const from = document.querySelector("#tpGrpBody .tpfrom").getBoundingClientRect();
      return to.left < from.left;
    }) === true);
 ok("組と交流級の上端がそろっている", await p.evaluate(() => {
-     const to = document.querySelector(".tpto").getBoundingClientRect();
-     const from = document.querySelector(".tpfrom").getBoundingClientRect();
+     const to = document.querySelector("#tpGrpBody .tpto").getBoundingClientRect();
+     const from = document.querySelector("#tpGrpBody .tpfrom").getBoundingClientRect();
      return Math.abs(to.top - from.top) < 2;
    }) === true);
+await p.evaluate(() => $("tpGrpDlg").close()); await p.waitForTimeout(200);
 /* 説明は ？ に寄せた。**畳んだ説明を毎回たどらせない。**
    ほかの面の「？」と同じ押し方にそろえる */
 ok("説明は ？ から読める", await (async () => {
@@ -1469,41 +1490,36 @@ ok("緑の上でも字が読める（4.5以上）", await p.evaluate(() => {
 await p.evaluate(() => { week().tpSub = {}; save(); drawTanpopoView(); });
 await p.waitForTimeout(200);
 
-console.log("\n■ たんぽぽの面（ロック・交流級の畳み・外す確認）");
+console.log("\n■ たんぽぽの面（ロックは出すことを止めない）");
 await p.evaluate(() => { Y().tanpopo = {"1":["1-1"]}; save(); });
 await p.locator(".nav[data-act='gate']").first().click(); await p.waitForTimeout(250);
 await p.locator(".master[data-go='tanpopo']").click(); await p.waitForTimeout(600);
 ok("ロックのボタンがある", await p.locator("#tpLockBtn").isVisible() === true);
-/* **ふだんは畳む。** 入れ替えるのは年度の初めだけ
-   （前の節で開いてあるので、畳んだところから見る） */
-await p.evaluate(() => { tpFromOpen = false; drawTanpopoView(); });
-await p.waitForTimeout(300);
-ok("交流級は畳んである", await p.locator(".tpfromb").evaluate(e => e.hidden) === true);
-await p.locator("#tpFromQ").click(); await p.waitForTimeout(300);
-ok("押すと開く", await p.locator(".tpfromb").evaluate(e => e.hidden) === false
-   && await p.locator(".tpchip").count() > 0);
 await p.evaluate(() => { week().tpSub = {"1-1":{at:"x",by:"y"}}; save(); drawTanpopoView(); });
 await p.locator("#tpLockBtn").click(); await p.waitForTimeout(300);
-ok("ロック中は、出すボタンが押せない", await p.locator("#tpGo").isDisabled() === true);
-ok("押せない理由をボタンの隣に出す",
-   (await p.locator("#tpGoWhy").innerText()) === "ロックを外してください");
-ok("押せない間は、提出済みでも緑にしない",
-   await p.evaluate(() => $("tpGo").classList.contains("ready")) === false);
-ok("押せないボタンは見た目でも区別できる", await p.evaluate(() => {
-     const s = getComputedStyle($("tpGo"));
-     return s.cursor === "not-allowed" && s.backgroundColor !== "rgb(47, 110, 78)";
-   }) === true);
-/* 空の面をロックした場合も、実行できない「組へ入れる」より先にロック解除を案内する */
-await p.evaluate(() => { Y().tanpopo = {}; save(); drawTanpopoView(); });
-ok("押せない理由が重なれば、まず可能にする操作を案内する",
-   (await p.locator("#tpGoWhy").innerText()) === "ロックを外してください");
-await p.locator(".tpchip").first().click(); await p.waitForTimeout(300);
-ok("ロック中は、組に入れられない",
-   await p.evaluate(() => tpCount("1-1")) === 0,
-   await p.evaluate(() => tpCount("1-1")));
+/* **ロックが守るのは出す先と組分け。** 毎週やるのは出すことだけで、
+   そこまで止めると、毎週ロックを外して掛け直すことになる */
+ok("ロック中でも、出すボタンは押せる", await p.locator("#tpGo").isDisabled() === false);
+ok("押せない理由も出さない", await p.locator("#tpGoWhy").isHidden() === true);
+ok("提出ずみなら、ロック中でも緑にする",
+   await p.evaluate(() => $("tpGo").classList.contains("ready")) === true);
+await p.locator("#tpGrpOpen").click(); await p.waitForTimeout(250);
+ok("ロック中は、組分けの窓を開かない",
+   await p.locator("#tpGrpDlg").evaluate(d => d.open) === false);
+/* 外したら、組分けの窓から入れられる */
 await p.locator("#tpLockBtn").click(); await p.waitForTimeout(300);
-await p.locator('.tpchip').first().click(); await p.waitForTimeout(200);
-ok("外すと、また入れられる", await p.locator("#tpGo").isDisabled() === false);
+await p.evaluate(() => { Y().tanpopo = {}; save(); drawTanpopoView(); });
+ok("1人も入れていないと、出せない", await p.locator("#tpGo").isDisabled() === true);
+ok("押せない理由は、組分けへ案内する",
+   (await p.locator("#tpGoWhy").innerText()) === "先に組分けで交流級を入れてください",
+   await p.locator("#tpGoWhy").innerText());
+await p.locator("#tpGrpOpen").click(); await p.waitForTimeout(250);
+ok("ロックを外すと、組分けの窓が開く",
+   await p.locator("#tpGrpDlg").evaluate(d => d.open) === true);
+await p.locator("#tpGrpBody .tpchip").first().click(); await p.waitForTimeout(250);
+await p.evaluate(() => $("tpGrpDlg").close()); await p.waitForTimeout(250);
+ok("窓で入れると、面から出せるようになる",
+   await p.locator("#tpGo").isDisabled() === false);
 
 console.log("\n■ いま見ている週は、転がしても左上に残る");
 ok("左メニューを転がしても、週の欄が見えたまま", await p.evaluate(() => {
@@ -1650,16 +1666,16 @@ console.log("\n■ たんぽぽの組は、提出したかをチップそのも�
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
 await p.locator(".master[data-go='tanpopo']").click(); await p.waitForTimeout(500);
 ok("出したクラスと、まだのクラスを見分ける",
-   await p.evaluate(() => [...document.querySelectorAll(".tpin")]
+   await p.evaluate(() => [...document.querySelectorAll("#tpSel .tpin")]
      .map(x => x.className.match(/st-\w+/)[0]).join(",")) === "st-ok,st-base,st-base",
-   await p.evaluate(() => [...document.querySelectorAll(".tpin")].map(x => x.className)));
+   await p.evaluate(() => [...document.querySelectorAll("#tpSel .tpin")].map(x => x.className)));
 /* **色だけに頼らない。** どちらも短い字を持つ */
 ok("色だけでなく、字でも言う（済／未）",
-   await p.evaluate(() => [...document.querySelectorAll(".tpin em")]
+   await p.evaluate(() => [...document.querySelectorAll("#tpSel .tpin em")]
      .map(x => x.textContent).join(",")) === "済,未,未",
-   await p.evaluate(() => [...document.querySelectorAll(".tpin em")].map(x => x.textContent)));
+   await p.evaluate(() => [...document.querySelectorAll("#tpSel .tpin em")].map(x => x.textContent)));
 ok("済と未は色が違う（左端の線）", await p.evaluate(() => {
-     const c = [...document.querySelectorAll(".tpin")]
+     const c = [...document.querySelectorAll("#tpSel .tpin")]
        .map(x => getComputedStyle(x, "::before").backgroundColor);
      return new Set(c).size === 2;
    }) === true);
