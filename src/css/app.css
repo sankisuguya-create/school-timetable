@@ -153,7 +153,7 @@ button,select,input,textarea{font:inherit;color:inherit}
    実測（color-coding の check-palette.mjs、強度2色覚・全型）
      地   #F2F4F7 ↔ #D8DADC  明度比 1.3     学級・専科・たんぽぽ・入口
      空   #9FB8CA ↔ #9DA1A5  明度比 1.3     雲 #FFFFFF ↔ #E9EAEB
-     夜空 #141C27 ↔ #2C3036  明度比 1.3     星 #E0E6ED ↔ #9EA1A5  明度比 2.1
+     夜空 #141C27 ↔ #2C3036  明度比 1.3     星は、くすむ側では消す
    値を変えたら測り直す。 */
 /* 学級・専科・たんぽぽ・入口。地はふだんの #F2F4F7 のまま、
    書いたのに入っていないあいだだけ沈める（明度比 1.3・全型で同じ差）。
@@ -177,20 +177,76 @@ body.is-unsaved[data-scope="grade"] .stage{
   --cloud-a:#E9EAEBcc; --cloud-b:#E9EAEB99; --cloud-0:#E9EAEB00;
 }
 
-/* 全学年＝夜空。**保存できているときが、星の見える側。** */
+/* 全学年＝夜空。**保存できているときが、星の見える側。**
+
+   星は**1粒＝1層**で、座標は箱に対する％。タイルの繰り返しで描かない
+   ── 1タイルに1粒しか置けないので、紙の左右の狭い帯では、必ず等間隔の
+   縦一列になる。粒ごとに層を持てば、並びを手で散らせる。
+   `background-repeat:no-repeat` を1つ書けば、全部の層に効く。
+
+   **置くのは、見えるところだけ。** 画面の中央は紙が占めるので、
+   見えるのは紙の左右の帯と、上下のわずかな隙間。星はそこへ寄せてある
+   （x が 12〜18%・82〜89% のものは、画面が広くて帯が太いときに出てくる）。
+
+   層が何枚あっても、背景を描くのは1回きり。字を打つたびに描き直す場所ではない。 */
 body[data-scope="school"] .stage{
-  --star-a:#e0e6edb3; --star-b:#cbd9ecb3; --star-c:#e0e6ed80;
-  --night-1:#293747; --night-2:#141c27;
-  background:radial-gradient(circle at 12% 18%,var(--star-a) 0 1px,transparent 1.8px),
-    radial-gradient(circle at 82% 28%,var(--star-b) 0 1px,transparent 1.8px),
-    radial-gradient(circle at 28% 78%,var(--star-c) 0 .8px,transparent 1.6px),
-    radial-gradient(ellipse at 65% 15%,var(--night-1),transparent 65%),var(--night-2);
-  background-size:193px 173px,277px 229px,331px 307px,100% 100%,auto;
+  background-repeat:no-repeat;
+  background:
+  /* 大きな星3つ。にじみと十字の光条を、同じ座標に3層ずつ重ねる */
+    radial-gradient(ellipse 11.05px 1.1px at 6.5% 35%,#ffffffb3,transparent 72%),
+    radial-gradient(ellipse 1.1px 11.05px at 6.5% 35%,#ffffffb3,transparent 72%),
+    radial-gradient(circle at 6.5% 35%,#ffffff 0 1.7px,#d6e6ff73 2.89px,transparent 6.8px),
+    radial-gradient(ellipse 9.75px 1.1px at 93.5% 14%,#ffffffb3,transparent 72%),
+    radial-gradient(ellipse 1.1px 9.75px at 93.5% 14%,#ffffffb3,transparent 72%),
+    radial-gradient(circle at 93.5% 14%,#ffffff 0 1.5px,#d6e6ff73 2.55px,transparent 6px),
+    radial-gradient(ellipse 7.15px 1.1px at 88% 58%,#ffffffb3,transparent 72%),
+    radial-gradient(ellipse 1.1px 7.15px at 88% 58%,#ffffffb3,transparent 72%),
+    radial-gradient(circle at 88% 58%,#ffffff 0 1.1px,#d6e6ff73 1.87px,transparent 4.4px),
+  /* 左の帯 */
+    radial-gradient(circle at 2.5% 7%,#ffffffcc 0 1.0px,transparent 1.9px),
+    radial-gradient(circle at 7.5% 16%,#dfe8f799 0 0.8px,transparent 1.6px),
+    radial-gradient(circle at 4% 26%,#ffffff80 0 0.7px,transparent 1.6px),
+    radial-gradient(circle at 9% 30%,#dfe8f773 0 0.6px,transparent 1.4px),
+    radial-gradient(circle at 10.5% 45%,#dfe8f7a6 0 0.9px,transparent 1.7px),
+    radial-gradient(circle at 3% 52%,#ffffffcc 0 1.1px,transparent 2px),
+    radial-gradient(circle at 8% 61%,#dfe8f78c 0 0.8px,transparent 1.6px),
+    radial-gradient(circle at 5.5% 73%,#ffffffb3 0 1.0px,transparent 1.9px),
+    radial-gradient(circle at 11% 82%,#dfe8f780 0 0.7px,transparent 1.5px),
+    radial-gradient(circle at 2% 91%,#ffffff99 0 0.9px,transparent 1.8px),
+    radial-gradient(circle at 14% 12%,#dfe8f78c 0 0.8px,transparent 1.6px),
+    radial-gradient(circle at 16.5% 39%,#ffffffa6 0 0.9px,transparent 1.8px),
+    radial-gradient(circle at 12.5% 55%,#ffffff8c 0 0.7px,transparent 1.6px),
+    radial-gradient(circle at 13% 67%,#dfe8f780 0 0.7px,transparent 1.5px),
+    radial-gradient(circle at 18% 88%,#ffffff99 0 0.8px,transparent 1.7px),
+  /* 右の帯 */
+    radial-gradient(circle at 97% 6%,#dfe8f78c 0 0.8px,transparent 1.6px),
+    radial-gradient(circle at 91% 24%,#ffffffb3 0 1.0px,transparent 1.9px),
+    radial-gradient(circle at 95.5% 31%,#dfe8f780 0 0.7px,transparent 1.5px),
+    radial-gradient(circle at 94% 37%,#ffffff8c 0 0.6px,transparent 1.5px),
+    radial-gradient(circle at 98% 42%,#ffffffcc 0 1.1px,transparent 2px),
+    radial-gradient(circle at 92% 50%,#dfe8f799 0 0.8px,transparent 1.6px),
+    radial-gradient(circle at 96% 63%,#ffffffcc 0 1.2px,transparent 2.1px),
+    radial-gradient(circle at 90.5% 71%,#dfe8f78c 0 0.8px,transparent 1.6px),
+    radial-gradient(circle at 97.5% 84%,#ffffffb3 0 0.9px,transparent 1.8px),
+    radial-gradient(circle at 93% 95%,#dfe8f780 0 0.7px,transparent 1.5px),
+    radial-gradient(circle at 86% 9%,#dfe8f78c 0 0.8px,transparent 1.6px),
+    radial-gradient(circle at 84% 36%,#ffffffa6 0 0.9px,transparent 1.8px),
+    radial-gradient(circle at 87% 47%,#dfe8f773 0 0.6px,transparent 1.4px),
+    radial-gradient(circle at 82.5% 78%,#ffffff99 0 0.8px,transparent 1.7px),
+    radial-gradient(circle at 89% 88%,#dfe8f780 0 0.7px,transparent 1.5px),
+  /* 上下の帯（紙を小さくしているときに見える） */
+    radial-gradient(circle at 46% 3%,#dfe8f799 0 0.9px,transparent 1.7px),
+    radial-gradient(circle at 71% 4%,#dfe8f78c 0 0.8px,transparent 1.6px),
+    radial-gradient(circle at 34% 96%,#dfe8f780 0 0.7px,transparent 1.5px),
+    radial-gradient(circle at 62% 97%,#dfe8f78c 0 0.8px,transparent 1.6px),
+  /* 空のにじみと地 */
+    radial-gradient(ellipse at 65% 15%,#293747,transparent 65%),#141c27;
 }
-/* 未保存＝くもった夜。星が沈み、地が白ちゃける */
+/* 未保存＝くもった夜。**星をぜんぶ消して、平らにする。**
+   暗くして残すより、有る／無いのほうが、色にもよらず、目にも入る。
+   地は #141C27 ↔ #2C3036 で明度比 1.3（1型・2型・3型で同じ差）。 */
 body.is-unsaved[data-scope="school"] .stage{
-  --star-a:#9ea1a599; --star-b:#93969a99; --star-c:#9ea1a566;
-  --night-1:#464B52; --night-2:#2C3036;
+  background:radial-gradient(ellipse at 65% 15%,#464B52,transparent 65%),#2C3036;
 }
 
 /* 月の面。**4週ぶんを 2×2 に並べる。** 紙と入れ替えて出す。

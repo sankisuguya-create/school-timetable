@@ -68,6 +68,15 @@ try{
     await p.evaluate(shut+'doSave(false);');
     assert.equal(await unsaved(),false,kind+': 保存できたら戻る');
   }
+  /* 全学年の夜空。**保存ずみは星がある／未保存は星をぜんぶ消す。**
+     層の数で見る（くすませるだけに戻したら、ここで落ちる） */
+  const skyLayers = () => p.locator('#stage')
+    .evaluate(e => getComputedStyle(e).backgroundImage.split('gradient(').length - 1);
+  assert.ok(await skyLayers() > 20, '保存ずみの夜空には星がある');
+  await p.evaluate(shut+"writeCell(0,'p1',{title:'朝会'});refreshWeek();");
+  assert.equal(await skyLayers(), 1, '未保存の夜空からは星を消す');
+  await p.evaluate(shut+'doSave(false);');
+
   /* 学年・全学年の保存は、押したときに1回聞く。**既定は「反映しない」** */
   await p.evaluate(`${shut}openView({kind:'grade',grade:'5'});writeCell(3,'p1',{title:'学年集会'});refreshWeek();`);
   await p.evaluate(shut);
