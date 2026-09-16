@@ -74,11 +74,12 @@
    |---|---|---|
    | マニフェスト | `appsscript.json` | `gas/appsscript.json`（**既存を上書き**。新規作成ではない） |
    | スクリプト | `Gate` | `gas/Gate.gs` |
+   | スクリプト | `Domain` | `gas/Domain.gs` |
    | スクリプト | `Sheets` | `gas/Sheets.gs` |
    | スクリプト | `Store` | `gas/Store.gs` |
    | HTML | `plan` | `gas/plan.html` |
 
-   拡張子は付けない。`gatecheck.js` `storecheck.js` `README.md` は**貼らない**。
+   拡張子は付けない。`domaincheck.js` `gatecheck.js` `storecheck.js` `README.md` は**貼らない**。
 
 4. `Gate.gs` の先頭のドメインが自校のものか見る
 
@@ -87,7 +88,7 @@
    const STUDENT_LOCAL = /^[0-9]{8}$/;        // 児童は @ の左が8桁の数字
    ```
 
-**確かめる**：手元で `node gas/gatecheck.js`（27件）・`node gas/apicheck.js`（52件）・`node gas/storecheck.js`（279件）が通ること。
+**確かめる**：手元で `node gas/domaincheck.js`・`node gas/gatecheck.js`（27件）・`node gas/apicheck.js`（52件）・`node gas/storecheck.js`（279件）が通ること。
 **通らないまま貼らない。**
 
 ---

@@ -5,6 +5,7 @@
 | | |
 |---|---|
 | `Gate.gs` | **誰が入れるかを決める唯一の場所。** 教職員だけを通す |
+| `Domain.gs` | 時間割・提出状態の副作用のない業務ルール |
 | `Sheets.gs` | シートの形と、読み書きの道具。`setupSheets` でシート8枚を作る |
 | `Store.gs` | 週案・基本時間割・学級編成の読み書き。画面から呼ぶ口（`api…`） |
 | `gatecheck.js` | 手元で関門を試す（`node gas/gatecheck.js`）。貼らない |
@@ -71,8 +72,8 @@ node gas/gatecheck.js
 2. **共有は「特定のユーザー」で教職員だけ。** ここを先に決める
 3. 拡張機能 → Apps Script
 4. ⚙ プロジェクトの設定 →「`appsscript.json` マニフェスト ファイルをエディタで表示する」
-5. スクリプトを作って貼る：`Gate` `Sheets` `Store`
-   （`gatecheck.js` `storecheck.js` `README.md` は貼らない）
+5. スクリプトを作って貼る：`Gate` `Domain` `Sheets` `Store`
+   （`domaincheck.js` `gatecheck.js` `storecheck.js` `README.md` は貼らない）
 6. HTML を作って貼る：`plan`（`plan.html` の中身）
 7. `setupSheets` を実行 → シートが8枚できる。**何度走らせても同じ**
 8. 「クラス」「専科」「時程」「教科」「設定」を実物に合わせて直す
