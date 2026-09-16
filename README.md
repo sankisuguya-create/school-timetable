@@ -10,7 +10,8 @@
 
 | ファイル | 内容 |
 |---|---|
-| [`docs/spec.md`](docs/spec.md) | **仕様の正本。まずここを読む** |\n| [`docs/ddd-map.md`](docs/ddd-map.md) | **軽量DDDの境界。コードを分ける理由** |
+| [`docs/spec.md`](docs/spec.md) | **仕様の正本。まずここを読む** |
+| [`docs/ddd-map.md`](docs/ddd-map.md) | **軽量DDDの境界。コードを分ける理由** |
 | [`docs/setup.md`](docs/setup.md) | **置き方の手順。** 上から順にやる |
 | [`docs/launch-readiness.md`](docs/launch-readiness.md) | **最大40人で利用開始する前の受入試験・障害対応** |
 | `src/` | **直すのはこちら。** 12節に置き方 |
@@ -26,6 +27,7 @@ python3 build.py --check  生成物が src と一致するか調べる
 
 
 node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（253件）
+node gas/domaincheck.js   副作用のない業務ルールを確かめる
 node gas/storecheck.js    シートの読み書きを確かめる（338件）
 node gas/gatecheck.js     関門を確かめる（27件）
 node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明を見る（79件）
