@@ -136,7 +136,8 @@ function requestSave(){
 }
 
 function doSave(loud){
-  if(!Backend.isGas()){ save(); Backend.flush(() => paintSave()); if(loud) toast("この端末に保存した（本番ではシートへ）"); return; }
+  if(!Backend.isGas()){ saveNow(); Backend.flush(() => paintSave()); if(loud) toast("この端末に保存した（本番ではシートへ）"); return; }
+  saveNow();                      /* 送る前に、この端末の控えを書き切る */
   saveState.busy = true; paintSave();
   const w = Wait.begin("シートに保存しています");
   Backend.flush(okAll => {
@@ -199,6 +200,7 @@ function refreshWeek(){
   autoFit();
 }
 function goWeek(n){
+  saveNow();                      /* 週を出る前に、この端末の控えを書き切る */
   Backend.flush();                /* 週を出る前に、書いたぶんを送る */
   monday = addDays(monday, n);
   const fresh = !db.years[String(fy())];
@@ -206,7 +208,7 @@ function goWeek(n){
   /* **待たせない。** 手元の控えで先に描いて、シートが届いたら描き直す */
   const draw = () => {
     if(view.kind === "gate") drawGate(); else refreshWeek();
-    if(fresh) save();             /* 新しい年度をその場で1回だけ書き出す */
+    if(fresh) saveNow();          /* 新しい年度をその場で1回だけ書き出す */
   };
   loadAndDraw(draw, "週をひらいています");
 }
@@ -353,6 +355,13 @@ document.addEventListener("selectionchange", () => {
 /* ── 結線 ────────────────────────────────────── */
 function wire(){
   const on = (id, ev, fn) => { const e = $(id); if(e) e.addEventListener(ev, fn); };
+
+  /* **画面が消える前に、この端末の控えを書き切る。**
+     打鍵は 400ms 遅らせて書いている（store.js の save）ので、
+     そのあいだに閉じられたぶんを取りこぼさない。
+     beforeunload は Chromebook の蓋を閉じたときなど、来ないことがある。 */
+  addEventListener("pagehide", saveNow);
+  addEventListener("visibilitychange", () => { if(document.hidden) saveNow(); });
   on('guideOpen', 'click', () => openGuide(false));
   on('guideDlg', 'close', finishGuide);
 
@@ -391,6 +400,17 @@ function wire(){
   on("swNo","click",  () => { $("swDlg").close(); });
   on("swYes","click", () => { owAnswer(true); $("swDlg").close(); });
   on("swDlg","close", () => owAnswer(false));
+
+  /* 文だけの確認。**閉じ方が何であれ「やめる」に落ちる。**
+     ここが confirm の代わり（→ dialogs.js askOk） */
+  on("okNo","click",  () => { $("okDlg").close(); });
+  on("okYes","click", () => { okAnswer(true); $("okDlg").close(); });
+  on("okDlg","close", () => okAnswer(false));
+
+  /* リンクを付ける窓。**Enter でも押せる**（URL を打ち終えた手のまま進める） */
+  on("linkGo","click", doAddLink);
+  on("linkUrl","keydown", ev => { if(ev.key === "Enter"){ ev.preventDefault(); doAddLink(); } });
+  on("linkDlg","close", () => { linkAt = null; });
   on("gClose","click", () => { if(lastTarget) openView(lastTarget); });
 
   for(const b of document.querySelectorAll("[data-act]"))
@@ -631,9 +651,17 @@ function wire(){
       for(const h of wouldOverwrite(d, sid))
         hits.push(Object.assign({}, h, {cls:h.cls + "（" + DOW[d] + "）"}));
     const put = () => {
-      for(const d of days) writeCell(d, sid, {title:c.title, note:c.note || ""});
+      /* **入った日だけを数えて言う。** 休みの日・ロック中の日は writeCell が
+         弾くので、5日と言い切ると、入っていない日まで入ったことになる */
+      const done = [], skip = [];
+      for(const d of days)
+        (writeCell(d, sid, {title:c.title, note:c.note || ""}) ? done : skip).push(DOW[d]);
       paintSheet(); fillPanel();
-      toast("5日とも「" + (escText(plain(c.title)) || "（空）") + "」にした");
+      const what = escText(plain(c.title)) || "（空）";
+      toast(!done.length
+          ? whyCantWrite(days[0], sid) || "書けなかった"
+          : done.length + "日を「" + what + "」にした"
+            + (skip.length ? "　<b>" + skip.join("・") + "には書けなかった</b>" : ""));
     };
     if(!hits.length) return put();
     askOverwrite("この週の " + SLOT_BY_ID[sid].name
@@ -683,7 +711,7 @@ function start(){
      入口に要るのは学級編成だけで、それはこの端末に前回ぶんが残っている。
      読み終わったら、その場で描き直す（クラスが増減していれば、そこで直る）。 */
   if(!Backend.isGas() && !Object.keys(Y().base).length) seedBase();
-  if(!Backend.isGas()) save();
+  if(!Backend.isGas()) saveNow();
   applyPaper();
   showGate();
 
@@ -694,7 +722,7 @@ function start(){
     applyPaper();
     /* **本番では、古い週の控えをここで間引く。** 溢れてから慌てない。
        捨てた週はシートに残っているので、開けば読み直される。 */
-    if(pruneWeeks(KEEP_WEEKS)) save();
+    if(pruneWeeks(KEEP_WEEKS)) saveNow();
     if(view.kind === "gate") drawGate();
     /* 新年度の設定が未了なら、左メニューに出す。**4/1 から、済むまで。**
        立ち上がりの1回だけ見に行く（週を繰るたびに見に行かない） */

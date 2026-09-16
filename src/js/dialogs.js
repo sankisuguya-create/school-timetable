@@ -1,5 +1,41 @@
 /* 窓（基本時間割・学級編成・用紙・時数コピー・たんぽぽ）。 */
 
+/* ── 危ない操作の確認 ────────────────────────
+   **ブラウザの confirm を使わない。** Enter で「はい」に落ちるので、
+   打鍵の勢いのまま通ってしまう（docs/spec.md 3節・上書きの窓と同じ理由）。
+   いちばん大きく壊せる操作が、いちばん弱い止め方になっていた。
+
+   表を持つ確認には専用の窓がある（上書き swDlg・反映 apDlg・競合 cfDlg・
+   出す先 tpDelDlg・たんぽぽ tpDlg）。ここが受けるのは**文だけの確認**。
+   3か所に別々の窓を作ると、書き方がばらつく（足した窓で「既定はやめる」を
+   付け忘れる）ので、1つにまとめてある。
+
+     title   窓の見出し。**「…しますか」で終える**
+     lines   段落の並び。中身は HTML なので、入れる字は escText を通す
+     goLabel 進む側のボタンの字。**何が起きるかを動詞で書く**（「はい」にしない）
+     onYes   進むと答えたときにすること
+     onNo    やめると答えたとき。**閉じ方が何であれここに落ちる**（省略可）
+
+   既定は「やめる」。✕ でも Esc でも外側でも、やめる側に落ちる。 */
+let okAsk = null;
+function askOk(o){
+  okAsk = {yes:o.onYes || (() => {}), no:o.onNo || (() => {}), done:false};
+  $("okTtl").textContent = o.title;   /* 字のまま入れる。escText は通さない（二重になる） */
+  $("okBody").innerHTML = (o.lines || []).map(x => "<p>" + x + "</p>").join("");
+  $("okNo").textContent  = o.noLabel || "やめる";
+  $("okYes").textContent = o.goLabel || "続ける";
+  $("okDlg").showModal();
+  $("okNo").focus();                 /* **既定は「やめる」。** */
+}
+/* 窓の返事を1回だけ流す。閉じ方（ボタン・Esc・外側）で取りこぼさない */
+function okAnswer(yes){
+  const a = okAsk;
+  okAsk = null;
+  if(!a || a.done) return;
+  a.done = true;
+  (yes ? a.yes : a.no)();
+}
+
 /* ── 基本時間割（A週・B週） ─────────────────────
    ここに入れたものが、週案を開いた時点で全部のコマに出る。
    担任は毎週30コマ埋めるのではなく、変えたところだけ直す。 */
@@ -245,18 +281,23 @@ function goImp(){
   if(!impRes || impRes.error) return;
   const known = impRes.order.filter(c => allClasses().indexOf(c) >= 0);
   if(!known.length) return;
-  const yes = confirm(
-    fy() + "年度の基本時間割を、読んだ表で入れ替えます。\n\n"
-    + "・入れ替えるクラス：" + known.length + "（" + known.join("、") + "）\n"
-    + "・A週とB週の両方が入れ替わります\n"
-    + "・いま入っている基本時間割は消えます\n\n"
-    + "週案に手で書いたものは消えません。つづけますか？");
-  if(!yes) return;
-  const done = applyFixed(impRes);
-  toast("基本時間割に入れた（<b>" + done.length + " クラス</b>）");
-  $("impDlg").close();
-  if($("baseDlg").open) drawBaseGrid();
-  refreshWeek();
+  askOk({
+    title: fy() + "年度の基本時間割を、読んだ表で入れ替えますか",
+    lines: [
+      "入れ替えるのは <b>" + known.length + " クラス</b>（"
+        + escText(known.join("、")) + "）。<b>A週とB週の両方</b>が入れ替わります。",
+      "<b>いま入っている基本時間割は消えます。</b>"
+        + "戻すには、もとの表をもう一度読ませることになります。",
+      "週案に手で書いたものは消えません。"],
+    goLabel: "入れ替える",
+    onYes: () => {
+      const done = applyFixed(impRes);
+      toast("基本時間割に入れた（<b>" + done.length + " クラス</b>）");
+      $("impDlg").close();
+      if($("baseDlg").open) drawBaseGrid();
+      refreshWeek();
+    }
+  });
 }
 
 /* ── 学級編成 ───────────────────────────────────
@@ -286,12 +327,18 @@ function drawRoster(){
     b.onclick = () => {
       const g = b.dataset.del;
       const used = (Y().classes[g] || []).filter(hasAnyData);
-      if(used.length && !confirm(g + "年を消します。\n"
-        + used.join("・") + " には書き込みが残っています。\n"
-        + "消しても中身は残りますが、画面からは開けなくなります。"))
-        return;
-      delete Y().classes[g];
-      save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+      const go = () => {
+        delete Y().classes[g];
+        save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+      };
+      if(!used.length) return go();
+      askOk({
+        title: g + "年を、この年度の編成から消しますか",
+        lines: ["<b>" + escText(used.join("・")) + "</b> には書き込みが残っています。",
+                "消しても<b>中身は残ります</b>が、画面からは開けなくなります。"
+                + "もう一度この学年を足せば、また開けます。"],
+        goLabel: "消す", onYes: go
+      });
     };
 }
 /* 「1-1, 1-2, 1-3」を配列にする。空と重複は落とす。 */
@@ -303,10 +350,22 @@ function setGradeClasses(g, text){
     seen[n] = 1; out.push(n);
   }
   const gone = (Y().classes[g] || []).filter(c => out.indexOf(c) < 0 && hasAnyData(c));
-  if(gone.length && !confirm(gone.join("・") + " を外します。\n"
-    + "書き込みは残りますが、画面からは開けなくなります。")) { drawRoster(); return; }
-  Y().classes[g] = out;
-  save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+  const go = () => {
+    Y().classes[g] = out;
+    save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+  };
+  if(!gone.length) return go();
+  askOk({
+    title: gone.join("・") + " を、この年度の編成から外しますか",
+    lines: ["このクラスには<b>書き込みが残っています</b>。",
+            "外しても<b>中身は残ります</b>が、画面からは開けなくなります。"
+            + "もう一度書き足せば、また開けます。"],
+    goLabel: "外す",
+    onYes: go,
+    /* **やめたら、打ち込んだ字を元の並びへ戻す。**
+       戻さないと、外れていないのに外れた字が欄に残る */
+    onNo: () => drawRoster()
+  });
 }
 /* そのクラスに何か入っているか（外す前に知らせるため） */
 function hasAnyData(c){
