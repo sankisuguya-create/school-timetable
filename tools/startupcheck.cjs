@@ -64,6 +64,15 @@ if(!process.env.BASELINE_REF){
     if(normClasses_(['1-1'])['1'][0]!=='1-1') throw Error('旧形式');`,store);
   // 静的なID参照は全ソースを走査。動的に生成するIDも含めて存在を調べる。
   const sources=fs.readdirSync('src/js').filter(f=>f.endsWith('.js')).map(f=>read('src/js/'+f)).join('\n');
+  // ブラウザの confirm / prompt を1つも置かない（docs/spec.md 7節）。
+  // Enter で「はい」に落ちるので、いちばん大きく壊せる操作がそこに残る。
+  // 文だけの確認は askOk（okDlg）、URL の入力は linkDlg。
+  // コメントの中の字は数えない（禁じている理由をコメントに書けなくなる）。
+  const code=sources.replace(/\/\*[\s\S]*?\*\//g,'').replace(/^[ \t]*\/\/.*$/gm,'');
+  for(const bad of ['confirm','prompt'])
+    assert.ok(!new RegExp('(^|[^.\\w])'+bad+'\\s*\\(').test(code),
+      'ブラウザの '+bad+'() を使わない（docs/spec.md 7節）。'
+      +'文だけの確認は askOk、URL の入力は linkDlg');
   for(const match of sources.matchAll(/\$\(['"]([\w-]+)['"]\)/g)){
     const id=match[1];
     assert.ok(nodes.has(id) || sources.includes('id="'+id+'"') || sources.includes("id='"+id+"'")

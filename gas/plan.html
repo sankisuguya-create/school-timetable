@@ -1698,6 +1698,33 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
     <button class="btn danger" id="tpDelYes">外す</button></div>
 </div></dialog>
 
+<!-- 危ない操作の確認。**ブラウザの confirm を使わない**（Enter で「はい」に落ちる）。
+     出す先・たんぽぽ・上書き・反映・競合には、それぞれ表を持った専用の窓がある。
+     ここが受けるのは**表を持たない、文だけの確認**。既定は「やめる」で、
+     ✕ でも Esc でも外側を押しても、やめる側に落ちる -->
+<dialog id="okDlg"><div class="dlg">
+  <h2 id="okTtl"></h2>
+  <div id="okBody"></div>
+  <div class="end">
+    <button class="btn go" id="okNo">やめる</button>
+    <button class="btn danger" id="okYes">続ける</button></div>
+</div></dialog>
+
+<!-- リンクを付ける。**ブラウザの prompt を使わない**
+     （閉じ方で落ち先が変わるのが、この窓だけ別になる）。
+     選んだ範囲は窓が閉じるまで控える ── 窓を開くと選択が外れる -->
+<dialog id="linkDlg"><div class="dlg">
+  <h2>選んだ文字を、リンクにする</h2>
+  <p>選んでいるのは「<b id="linkText"></b>」です。
+     <b>紙の上でも、その文字を押すと開きます。</b>刷ると下線だけが残ります。</p>
+  <div class="row"><span>リンク先のURL</span>
+    <input type="url" id="linkUrl" placeholder="https://"
+           style="flex:1;min-width:16em"></div>
+  <div id="linkWhy" class="tpwarn"></div>
+  <div class="end"><button class="btn" data-close="linkDlg">やめる</button>
+    <button class="btn go" id="linkGo">リンクにする</button></div>
+</div></dialog>
+
 <dialog id="helpDlg"><div class="dlg">
   <h2 id="helpTtl"></h2>
   <div id="helpBody"></div>
@@ -1884,7 +1911,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.20.0";
+let APP_VERSION = "1.21.0";
 let BUILD_DATE  = "2026-09-16";
 
 /* 時程。行を固定しない（学校ごとに違う）。
@@ -4648,7 +4675,13 @@ function paintSheet(one, root){
   }
   /* **書き終えてから、まとめて測る。** 1コマずつだと並べ直しが55回になる */
   fitTitles(list.map(e => e.querySelector(".t")).filter(Boolean));
-  if(!one) warnOverwritten();
+  /* **上書きの知らせは、週の紙からだけ出す。**
+     月の面は同じ窓を4回開こうとする。2回目からの showModal は無視されるので、
+     一覧だけが後の週のものに入れ替わり、**先に出ていたぶんが読まれないまま消える。**
+     しかも消えたぶんは acked に積まれないので、次に開くとまた出る。
+     月の面は見るだけの面でもあるので、ここからは出さない
+     （その週を開けば、そこで出る）。 */
+  if(!one && (!root || root === $("sheet"))) warnOverwritten();
 }
 
 /* **自分の予定が上書きされていたら、開いたときに知らせる。**
@@ -5048,6 +5081,10 @@ function fillPanel(){
 
 let lastRange = null;   /* 直前に選んだ文字の範囲。ボタンを押すときに使う */
 
+/* いま窓で聞いている最中のリンク。**欄と範囲を控える。**
+   窓を開くと選択が外れるので、閉じてから入れ直す。 */
+let linkAt = null;
+
 function addLinkToSelection(){
   if(!selCell) return;
   if(!lastRange || lastRange.collapsed)
@@ -5058,16 +5095,38 @@ function addLinkToSelection(){
   const fld  = box && box.closest && box.closest("#sheet .t, #sheet .n, .fld");
   if(!fld) return toast("題名か詳細の欄の中で文字を選ぶ");
 
-  const url = prompt("リンク先のURL", "https://");
-  if(!url) return;
-  if(!/^https?:\/\//i.test(url.trim())) return toast("URL は https:// から始める");
+  /* **ブラウザの prompt を使わない。** ほかの窓と閉じ方をそろえる
+     （prompt だけ Esc の落ち先が別で、字の大きさも画面と合わない）。 */
+  linkAt = {fld, range: lastRange.cloneRange(), at:{d:selCell.d, s:selCell.s}};
+  $("linkText").textContent = linkAt.range.toString();
+  $("linkUrl").value = "";
+  $("linkWhy").innerHTML = "";
+  $("linkDlg").showModal();
+  $("linkUrl").focus();              /* ここは入力窓。打つところへ落とす */
+}
 
+function doAddLink(){
+  const a = linkAt;
+  if(!a) return;
+  const url = String($("linkUrl").value || "").trim();
+  if(!/^https?:\/\//i.test(url))
+    return void ($("linkWhy").innerHTML = "<div class='box'><b>URL は https:// から始めます。</b>"
+      + "ブラウザのアドレス欄からそのまま貼れます。</div>");
+  $("linkDlg").close();
+  linkAt = null;
+
+  /* **窓を閉じてから、控えた欄と範囲を入れ直す。**
+     execCommand は、その欄に focus が戻っていないと何もしない。
+     focus のあいだ typing を立てて、塗り直しにこの欄を書き替えさせない */
+  typing = a.fld;
+  a.fld.focus();
   const sel = document.getSelection();
-  sel.removeAllRanges(); sel.addRange(lastRange);
-  document.execCommand("createLink", false, url.trim());
+  sel.removeAllRanges(); sel.addRange(a.range);
+  document.execCommand("createLink", false, url);
+  typing = null;
 
-  const isNote = fld.id === "pNote" || fld.classList.contains("n");
-  writeCell(selCell.d, selCell.s, isNote ? {note:fld.innerHTML} : {title:fld.innerHTML});
+  const isNote = a.fld.id === "pNote" || a.fld.classList.contains("n");
+  writeCell(a.at.d, a.at.s, isNote ? {note:a.fld.innerHTML} : {title:a.fld.innerHTML});
   paintSheet(); fillPanel();
   toast("リンクを付けた。<b>その文字を押すと開く</b>");
 }
@@ -5781,6 +5840,42 @@ function onTargetChange(v){
 /* ▼ src/js/dialogs.js ▼ */
 /* 窓（基本時間割・学級編成・用紙・時数コピー・たんぽぽ）。 */
 
+/* ── 危ない操作の確認 ────────────────────────
+   **ブラウザの confirm を使わない。** Enter で「はい」に落ちるので、
+   打鍵の勢いのまま通ってしまう（docs/spec.md 3節・上書きの窓と同じ理由）。
+   いちばん大きく壊せる操作が、いちばん弱い止め方になっていた。
+
+   表を持つ確認には専用の窓がある（上書き swDlg・反映 apDlg・競合 cfDlg・
+   出す先 tpDelDlg・たんぽぽ tpDlg）。ここが受けるのは**文だけの確認**。
+   3か所に別々の窓を作ると、書き方がばらつく（足した窓で「既定はやめる」を
+   付け忘れる）ので、1つにまとめてある。
+
+     title   窓の見出し。**「…しますか」で終える**
+     lines   段落の並び。中身は HTML なので、入れる字は escText を通す
+     goLabel 進む側のボタンの字。**何が起きるかを動詞で書く**（「はい」にしない）
+     onYes   進むと答えたときにすること
+     onNo    やめると答えたとき。**閉じ方が何であれここに落ちる**（省略可）
+
+   既定は「やめる」。✕ でも Esc でも外側でも、やめる側に落ちる。 */
+let okAsk = null;
+function askOk(o){
+  okAsk = {yes:o.onYes || (() => {}), no:o.onNo || (() => {}), done:false};
+  $("okTtl").textContent = o.title;   /* 字のまま入れる。escText は通さない（二重になる） */
+  $("okBody").innerHTML = (o.lines || []).map(x => "<p>" + x + "</p>").join("");
+  $("okNo").textContent  = o.noLabel || "やめる";
+  $("okYes").textContent = o.goLabel || "続ける";
+  $("okDlg").showModal();
+  $("okNo").focus();                 /* **既定は「やめる」。** */
+}
+/* 窓の返事を1回だけ流す。閉じ方（ボタン・Esc・外側）で取りこぼさない */
+function okAnswer(yes){
+  const a = okAsk;
+  okAsk = null;
+  if(!a || a.done) return;
+  a.done = true;
+  (yes ? a.yes : a.no)();
+}
+
 /* ── 基本時間割（A週・B週） ─────────────────────
    ここに入れたものが、週案を開いた時点で全部のコマに出る。
    担任は毎週30コマ埋めるのではなく、変えたところだけ直す。 */
@@ -6026,18 +6121,23 @@ function goImp(){
   if(!impRes || impRes.error) return;
   const known = impRes.order.filter(c => allClasses().indexOf(c) >= 0);
   if(!known.length) return;
-  const yes = confirm(
-    fy() + "年度の基本時間割を、読んだ表で入れ替えます。\n\n"
-    + "・入れ替えるクラス：" + known.length + "（" + known.join("、") + "）\n"
-    + "・A週とB週の両方が入れ替わります\n"
-    + "・いま入っている基本時間割は消えます\n\n"
-    + "週案に手で書いたものは消えません。つづけますか？");
-  if(!yes) return;
-  const done = applyFixed(impRes);
-  toast("基本時間割に入れた（<b>" + done.length + " クラス</b>）");
-  $("impDlg").close();
-  if($("baseDlg").open) drawBaseGrid();
-  refreshWeek();
+  askOk({
+    title: fy() + "年度の基本時間割を、読んだ表で入れ替えますか",
+    lines: [
+      "入れ替えるのは <b>" + known.length + " クラス</b>（"
+        + escText(known.join("、")) + "）。<b>A週とB週の両方</b>が入れ替わります。",
+      "<b>いま入っている基本時間割は消えます。</b>"
+        + "戻すには、もとの表をもう一度読ませることになります。",
+      "週案に手で書いたものは消えません。"],
+    goLabel: "入れ替える",
+    onYes: () => {
+      const done = applyFixed(impRes);
+      toast("基本時間割に入れた（<b>" + done.length + " クラス</b>）");
+      $("impDlg").close();
+      if($("baseDlg").open) drawBaseGrid();
+      refreshWeek();
+    }
+  });
 }
 
 /* ── 学級編成 ───────────────────────────────────
@@ -6067,12 +6167,18 @@ function drawRoster(){
     b.onclick = () => {
       const g = b.dataset.del;
       const used = (Y().classes[g] || []).filter(hasAnyData);
-      if(used.length && !confirm(g + "年を消します。\n"
-        + used.join("・") + " には書き込みが残っています。\n"
-        + "消しても中身は残りますが、画面からは開けなくなります。"))
-        return;
-      delete Y().classes[g];
-      save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+      const go = () => {
+        delete Y().classes[g];
+        save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+      };
+      if(!used.length) return go();
+      askOk({
+        title: g + "年を、この年度の編成から消しますか",
+        lines: ["<b>" + escText(used.join("・")) + "</b> には書き込みが残っています。",
+                "消しても<b>中身は残ります</b>が、画面からは開けなくなります。"
+                + "もう一度この学年を足せば、また開けます。"],
+        goLabel: "消す", onYes: go
+      });
     };
 }
 /* 「1-1, 1-2, 1-3」を配列にする。空と重複は落とす。 */
@@ -6084,10 +6190,22 @@ function setGradeClasses(g, text){
     seen[n] = 1; out.push(n);
   }
   const gone = (Y().classes[g] || []).filter(c => out.indexOf(c) < 0 && hasAnyData(c));
-  if(gone.length && !confirm(gone.join("・") + " を外します。\n"
-    + "書き込みは残りますが、画面からは開けなくなります。")) { drawRoster(); return; }
-  Y().classes[g] = out;
-  save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+  const go = () => {
+    Y().classes[g] = out;
+    save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+  };
+  if(!gone.length) return go();
+  askOk({
+    title: gone.join("・") + " を、この年度の編成から外しますか",
+    lines: ["このクラスには<b>書き込みが残っています</b>。",
+            "外しても<b>中身は残ります</b>が、画面からは開けなくなります。"
+            + "もう一度書き足せば、また開けます。"],
+    goLabel: "外す",
+    onYes: go,
+    /* **やめたら、打ち込んだ字を元の並びへ戻す。**
+       戻さないと、外れていないのに外れた字が欄に残る */
+    onNo: () => drawRoster()
+  });
 }
 /* そのクラスに何か入っているか（外す前に知らせるため） */
 function hasAnyData(c){
@@ -7393,6 +7511,17 @@ function wire(){
   on("swNo","click",  () => { $("swDlg").close(); });
   on("swYes","click", () => { owAnswer(true); $("swDlg").close(); });
   on("swDlg","close", () => owAnswer(false));
+
+  /* 文だけの確認。**閉じ方が何であれ「やめる」に落ちる。**
+     ここが confirm の代わり（→ dialogs.js askOk） */
+  on("okNo","click",  () => { $("okDlg").close(); });
+  on("okYes","click", () => { okAnswer(true); $("okDlg").close(); });
+  on("okDlg","close", () => okAnswer(false));
+
+  /* リンクを付ける窓。**Enter でも押せる**（URL を打ち終えた手のまま進める） */
+  on("linkGo","click", doAddLink);
+  on("linkUrl","keydown", ev => { if(ev.key === "Enter"){ ev.preventDefault(); doAddLink(); } });
+  on("linkDlg","close", () => { linkAt = null; });
   on("gClose","click", () => { if(lastTarget) openView(lastTarget); });
 
   for(const b of document.querySelectorAll("[data-act]"))

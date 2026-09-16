@@ -400,6 +400,17 @@ function wire(){
   on("swNo","click",  () => { $("swDlg").close(); });
   on("swYes","click", () => { owAnswer(true); $("swDlg").close(); });
   on("swDlg","close", () => owAnswer(false));
+
+  /* 文だけの確認。**閉じ方が何であれ「やめる」に落ちる。**
+     ここが confirm の代わり（→ dialogs.js askOk） */
+  on("okNo","click",  () => { $("okDlg").close(); });
+  on("okYes","click", () => { okAnswer(true); $("okDlg").close(); });
+  on("okDlg","close", () => okAnswer(false));
+
+  /* リンクを付ける窓。**Enter でも押せる**（URL を打ち終えた手のまま進める） */
+  on("linkGo","click", doAddLink);
+  on("linkUrl","keydown", ev => { if(ev.key === "Enter"){ ev.preventDefault(); doAddLink(); } });
+  on("linkDlg","close", () => { linkAt = null; });
   on("gClose","click", () => { if(lastTarget) openView(lastTarget); });
 
   for(const b of document.querySelectorAll("[data-act]"))

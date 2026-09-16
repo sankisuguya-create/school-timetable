@@ -477,6 +477,33 @@
     <button class="btn danger" id="tpDelYes">外す</button></div>
 </div></dialog>
 
+<!-- 危ない操作の確認。**ブラウザの confirm を使わない**（Enter で「はい」に落ちる）。
+     出す先・たんぽぽ・上書き・反映・競合には、それぞれ表を持った専用の窓がある。
+     ここが受けるのは**表を持たない、文だけの確認**。既定は「やめる」で、
+     ✕ でも Esc でも外側を押しても、やめる側に落ちる -->
+<dialog id="okDlg"><div class="dlg">
+  <h2 id="okTtl"></h2>
+  <div id="okBody"></div>
+  <div class="end">
+    <button class="btn go" id="okNo">やめる</button>
+    <button class="btn danger" id="okYes">続ける</button></div>
+</div></dialog>
+
+<!-- リンクを付ける。**ブラウザの prompt を使わない**
+     （閉じ方で落ち先が変わるのが、この窓だけ別になる）。
+     選んだ範囲は窓が閉じるまで控える ── 窓を開くと選択が外れる -->
+<dialog id="linkDlg"><div class="dlg">
+  <h2>選んだ文字を、リンクにする</h2>
+  <p>選んでいるのは「<b id="linkText"></b>」です。
+     <b>紙の上でも、その文字を押すと開きます。</b>刷ると下線だけが残ります。</p>
+  <div class="row"><span>リンク先のURL</span>
+    <input type="url" id="linkUrl" placeholder="https://"
+           style="flex:1;min-width:16em"></div>
+  <div id="linkWhy" class="tpwarn"></div>
+  <div class="end"><button class="btn" data-close="linkDlg">やめる</button>
+    <button class="btn go" id="linkGo">リンクにする</button></div>
+</div></dialog>
+
 <dialog id="helpDlg"><div class="dlg">
   <h2 id="helpTtl"></h2>
   <div id="helpBody"></div>

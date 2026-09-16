@@ -258,6 +258,10 @@ function fillPanel(){
 
 let lastRange = null;   /* 直前に選んだ文字の範囲。ボタンを押すときに使う */
 
+/* いま窓で聞いている最中のリンク。**欄と範囲を控える。**
+   窓を開くと選択が外れるので、閉じてから入れ直す。 */
+let linkAt = null;
+
 function addLinkToSelection(){
   if(!selCell) return;
   if(!lastRange || lastRange.collapsed)
@@ -268,16 +272,38 @@ function addLinkToSelection(){
   const fld  = box && box.closest && box.closest("#sheet .t, #sheet .n, .fld");
   if(!fld) return toast("題名か詳細の欄の中で文字を選ぶ");
 
-  const url = prompt("リンク先のURL", "https://");
-  if(!url) return;
-  if(!/^https?:\/\//i.test(url.trim())) return toast("URL は https:// から始める");
+  /* **ブラウザの prompt を使わない。** ほかの窓と閉じ方をそろえる
+     （prompt だけ Esc の落ち先が別で、字の大きさも画面と合わない）。 */
+  linkAt = {fld, range: lastRange.cloneRange(), at:{d:selCell.d, s:selCell.s}};
+  $("linkText").textContent = linkAt.range.toString();
+  $("linkUrl").value = "";
+  $("linkWhy").innerHTML = "";
+  $("linkDlg").showModal();
+  $("linkUrl").focus();              /* ここは入力窓。打つところへ落とす */
+}
 
+function doAddLink(){
+  const a = linkAt;
+  if(!a) return;
+  const url = String($("linkUrl").value || "").trim();
+  if(!/^https?:\/\//i.test(url))
+    return void ($("linkWhy").innerHTML = "<div class='box'><b>URL は https:// から始めます。</b>"
+      + "ブラウザのアドレス欄からそのまま貼れます。</div>");
+  $("linkDlg").close();
+  linkAt = null;
+
+  /* **窓を閉じてから、控えた欄と範囲を入れ直す。**
+     execCommand は、その欄に focus が戻っていないと何もしない。
+     focus のあいだ typing を立てて、塗り直しにこの欄を書き替えさせない */
+  typing = a.fld;
+  a.fld.focus();
   const sel = document.getSelection();
-  sel.removeAllRanges(); sel.addRange(lastRange);
-  document.execCommand("createLink", false, url.trim());
+  sel.removeAllRanges(); sel.addRange(a.range);
+  document.execCommand("createLink", false, url);
+  typing = null;
 
-  const isNote = fld.id === "pNote" || fld.classList.contains("n");
-  writeCell(selCell.d, selCell.s, isNote ? {note:fld.innerHTML} : {title:fld.innerHTML});
+  const isNote = a.fld.id === "pNote" || a.fld.classList.contains("n");
+  writeCell(a.at.d, a.at.s, isNote ? {note:a.fld.innerHTML} : {title:a.fld.innerHTML});
   paintSheet(); fillPanel();
   toast("リンクを付けた。<b>その文字を押すと開く</b>");
 }

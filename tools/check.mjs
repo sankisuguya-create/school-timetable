@@ -197,8 +197,11 @@ async function linkWord(word, url){
     }
   }, word);
   await p.waitForTimeout(120);
-  p.once("dialog", d => d.accept(url));
+  /* URL は専用の窓で聞く（ブラウザの prompt は使わない。docs/spec.md 7節） */
   await p.locator("#pAddLink").click();
+  await p.waitForTimeout(150);
+  await p.locator("#linkUrl").fill(url);
+  await p.locator("#linkGo").click();
   await p.waitForTimeout(250);
 }
 await linkWord("教科書P12", "https://example.com/a");
@@ -877,14 +880,24 @@ ok("読めないときは入れられない", await p.locator("#impGo").isDisabl
 /* 入れる */
 await p.locator("#impSrc button[data-s='builtin']").click(); await p.waitForTimeout(150);
 await p.locator("#impRead").click(); await p.waitForTimeout(300);
-let impAsked = null;
-const onImpDialog = async d => { impAsked = d.message(); await d.accept(); };
+/* **専用の窓で聞く**（ブラウザの confirm は使わない。docs/spec.md 7節） */
+let impNative = false;
+const onImpDialog = async d => { impNative = true; await d.accept(); };
 p.on("dialog", onImpDialog);
-await p.locator("#impGo").click(); await p.waitForTimeout(400);
-p.off("dialog", onImpDialog);
-ok("入れる前に聞く", typeof impAsked === "string" && impAsked.indexOf("入れ替え") >= 0, impAsked);
+await p.locator("#impGo").click(); await p.waitForTimeout(300);
+const impAsked = await p.evaluate(() => $("okDlg").open
+  ? {ttl:$("okTtl").textContent, body:$("okBody").textContent,
+     go:$("okYes").textContent, focus:document.activeElement && document.activeElement.id}
+  : null);
+ok("入れる前に聞く", !!impAsked && impAsked.ttl.indexOf("入れ替え") >= 0, impAsked);
+ok("ブラウザの confirm を使わない", impNative === false);
+ok("既定は「やめる」側にある", !!impAsked && impAsked.focus === "okNo", impAsked);
 ok("いまの基本時間割が消えることを言う",
-   !!impAsked && impAsked.indexOf("消えます") >= 0, impAsked);
+   !!impAsked && impAsked.body.indexOf("消えます") >= 0, impAsked);
+ok("進む側のボタンに、何が起きるかを書く",
+   !!impAsked && impAsked.go === "入れ替える", impAsked);
+await p.locator("#okYes").click(); await p.waitForTimeout(400);
+p.off("dialog", onImpDialog);
 ok("入れると基本時間割になる",
    await p.evaluate(() => (Y().base["3-1"].B["3|p3"] || {}).title) === "音楽",
    await p.evaluate(() => Y().base["3-1"].B["3|p3"]));
@@ -1538,7 +1551,37 @@ ok("張りついたとき、下の並びが透けない",
 console.log("\n■ 月の面（4週を 2×2 で、B4 よこ1枚に）");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
 await p.locator(".tile[data-c='1-1']").click(); await p.waitForTimeout(500);
+/* **上書きの知らせが、2つ以上の週にある状態**を作ってから月の面を開く。
+   月の面は同じ窓を4回開こうとするが、2回目からの showModal は無視される。
+   出していたら、一覧が後の週のものへ入れ替わって先に出たぶんが消える */
+await p.evaluate(() => {
+  for(const d of document.querySelectorAll("dialog[open]")) d.close();
+  const mon0 = new Date(monday);
+  for(let i = 0; i < 2; i++){
+    const keep = monday; monday = addDays(mon0, i * 7);
+    const w = week();
+    w.home["1-1"] = {"0|p1":{title:"国語", note:"", at:100, by:"me@edu.nishi.or.jp"}};
+    w.school      = {"0|p1":{title:"全校朝会", note:"", at:200, by:"other@edu.nishi.or.jp"}};
+    w.acked = [];
+    monday = keep;
+  }
+});
 await p.locator(".nav[data-act='month']").click(); await p.waitForTimeout(700);
+ok("上書きの知らせは、月の面からは出さない（先に出たぶんを消さない）",
+   await p.evaluate(() => $("owDlg").open) === false);
+/* 仕込んだぶんを片づける。**あとの検査に響かせない**
+   （残すと、週の紙へ戻ったところで知らせの窓が出て、次の操作を塞ぐ） */
+await p.evaluate(() => {
+  const mon0 = new Date(monday);
+  for(let i = 0; i < 2; i++){
+    const keep = monday; monday = addDays(mon0, i * 7);
+    const w = week();
+    delete (w.home["1-1"] || {})["0|p1"];
+    delete w.school["0|p1"];
+    monday = keep;
+  }
+  save();
+});
 ok("紙が4枚出る", await p.locator("#mPaper .sheet").count() === 4,
    await p.locator("#mPaper .sheet").count());
 ok("2×2 に並ぶ", await p.evaluate(() => {

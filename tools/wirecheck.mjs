@@ -658,8 +658,9 @@ ok("シートの表をそのまま読める",
    await p.evaluate(() => (impRes.classes["5-1"].B["0|p2"] || {}).title) === "理科",
    await p.evaluate(() => impRes.classes && impRes.classes["5-1"]));
 await p.evaluate(() => { window.__calls.length = 0; });
-p.once("dialog", d => d.accept());
-await p.locator("#impGo").click(); await p.waitForTimeout(500);
+/* 入れる前の確認は専用の窓（ブラウザの confirm は使わない） */
+await p.locator("#impGo").click(); await p.waitForTimeout(250);
+await p.locator("#okYes").click(); await p.waitForTimeout(500);
 const ba = await lastCall("apiWriteBaseAll");
 ok("入れるときは1回でまとめて送る（クラスごとに送らない）",
    !!ba && (await p.evaluate(() =>
