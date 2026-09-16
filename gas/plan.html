@@ -1884,8 +1884,8 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.19.0";
-let BUILD_DATE  = "2026-09-14";
+let APP_VERSION = "1.20.0";
+let BUILD_DATE  = "2026-09-16";
 
 /* 時程。行を固定しない（学校ごとに違う）。
    tally = 時数集計表のどの列に当たるか。chips = 教科を選べるか。
@@ -2308,7 +2308,38 @@ function pruneWeeks(keep){
    飲み込むと、教師は書けたつもりで書けていない状態のまま週を進める。 */
 let onStoreError = () => {};
 function put_(){ localStorage.setItem(KEY, JSON.stringify(db)); }
-function save(){
+
+/* ── 手元への書き出し ──────────────────────────
+   **打鍵のたびに書き出さない。** db は年度ぶんを丸ごと持っているので、
+   JSON.stringify は控えの大きさに比例して重くなる。1打鍵＝1回書き出しにすると、
+   控えが貯まるほど打鍵そのものが詰まる。
+
+     控え 0.07MB（1週）  saveNow 0.9ms   打鍵1つ  6.7ms
+     控え 0.57MB（20週） saveNow 11.6ms  打鍵1つ 19.4ms
+     控え 1.62MB（60週） saveNow 32.7ms  打鍵1つ 44.5ms
+
+   60週は KEEP_WEEKS、つまり**平常運転で必ず到達する**ところ。しかも上は
+   担任の面（週あたり3棚）で、全学年・専科の面は27棚を読むので同じ週数で
+   さらに膨らむ。児童機はこの測定機より遅い。
+
+   だから打鍵は「あとで書く」と覚えるだけにして、まとめて1回書く。
+
+   **打つのをやめてから数えない。** 数えると、打ち続けているあいだ1回も
+   書かないことになる。**最初の1打から数えて 400ms 以内に必ず1回書く**ので、
+   控えが打った内容より遅れるのは、どれだけ打ち続けても 400ms まで。
+   そのあいだに来た打鍵は、その1回にまとまる。
+
+   **書き切る前に画面を出るとき**（週送り・面の移動・入口へ戻る・保存・
+   タブを離れる・閉じる）は、出る前に必ず書き切る（saveNow）。
+
+   Backend の persistSoon（シートへ送るぶんの控え）とは別もの。
+   あちらは 900ms で、送る中身そのものを持っている。 */
+const SAVE_WAIT = 400;
+let saveT = 0;
+
+/* いま書き切る。**書けたかどうかを返す。** */
+function saveNow(){
+  clearTimeout(saveT); saveT = 0;
   try{
     put_();
     if(storeBroken){ storeBroken = ""; }
@@ -2330,6 +2361,19 @@ function save(){
     return false;
   }
 }
+/* あとで書く。**すでに予約してあれば、その予約を先へずらさない**
+   （ずらすと、打ち続けているあいだ1回も書かないことになる）。
+
+   **戻り値は「保存が止まっていないか」**で、「いま書けたか」ではない
+   （まだ書いていないので言えない）。呼ぶ側はどこも戻り値で分岐していない。
+   分岐させたくなったら saveNow を使う。 */
+function save(){
+  if(!saveT) saveT = setTimeout(saveNow, SAVE_WAIT);
+  return !storeBroken;
+}
+
+/* 画面が消える前に書き切る結線は main.js の wire() にある
+   （DOM のイベントを束ねるのはあそこだけ、という決まりのため）。 */
 
 /* ── 年度ごとの入れ物 ────────────────────────── */
 
@@ -3819,7 +3863,16 @@ function compose(cls, d, s){
   const push = (e, layer) => { if(e) cand.push(Object.assign({}, e, {layer, at:e.at || 0})); };
   push(w.school[key], "school");
   push((w.grade[g] || {})[key], "grade");
-  push((w.special[cls] || {})[key], "special");
+  /* **専科の備考は、学級の紙へ降ろさない。**
+     あれは専科が自分の週のために書くもの（持ち物・教室・進度）で、
+     学級の紙に出すと、担任が書いていない詳細が担任の紙に載る。
+     担任にはそれが自分の書いたものか専科のものか見分けられず、
+     消してよいのかも分からない。時数・たんぽぽ・Sheet出力も紙に従う。
+
+     題名（教科名）は降ろす ── それは学級の予定そのものだから。
+     専科自身の面では ownCell がこの棚を直に読むので、備考は消えない。 */
+  const sp = (w.special[cls] || {})[key];
+  if(sp) cand.push(Object.assign({}, sp, {layer:"special", at:sp.at || 0, note:""}));
   push((w.home[cls] || {})[key], "home");
 
   if(!cand.length) return {title:"", note:"", subject:null, layer:"base", clash:null};
@@ -4211,14 +4264,31 @@ function doRedo(){
   toast("やり直した");
 }
 
-function writeCell(d, s, patch){
-  /* **ロック中は書かない。** ここが書き込みの1本道なので、ここで止めれば
-     引っぱって入れても、打っても、パレットを押しても入らない */
-  if(typeof isLocked === "function" && isLocked()) return false;
+/* ── 書けない理由 ────────────────────────────
+   **理由は弾く側が持つ。** 前は writeCell が黙って false を返すだけで、
+   呼ぶ側はどこも戻り値を見ていなかった。だから休みの日にパレットを押すと、
+   コマは何も変わらないのに「国語 を入れた」と出た（実測）。
+   入っていないものを入ったと言う合図は、そこだけの間違いでは済まない
+   ── 次から合図そのものが読まれなくなる。
+
+   書けるなら空文字。書けないなら、そのまま画面に出せる1行を返す。 */
+function whyCantWrite(d, s){
+  /* **ロック中は書かない。** 見るだけのつもりで開いた画面を守る */
+  if(typeof isLocked === "function" && isLocked())
+    return "この画面はロックしてある。<b>直すには、ロックを押す</b>";
   /* **休みの日の授業には書かない。** 斜め線を引いた欄に字が入ると、
      刷った紙で「休みなのか、授業があるのか」が読めなくなる。
      朝学習と放課後は書ける（休業日でも出勤・部活・行事の準備が入る） */
-  if(isDayOff(d) && (SLOT_BY_ID[s] || {}).kind === "lesson") return false;
+  if(isDayOff(d) && (SLOT_BY_ID[s] || {}).kind === "lesson")
+    return "この日は<b>休み</b>にしてある。授業のコマには書けない"
+         + "（全学年の面で日付を押すと戻せる）";
+  return "";
+}
+
+function writeCell(d, s, patch){
+  /* ここが書き込みの1本道。ここで止めれば、引っぱって入れても、
+     打っても、パレットを押しても入らない */
+  if(whyCantWrite(d, s)) return false;
   pushUndo(d, s);                 /* 書く前の中身を控える。戻せるようにする */
   const w = week(), key = ck(d, s);
 
@@ -4227,6 +4297,13 @@ function writeCell(d, s, patch){
     const cur = ownCell(d, s);
     let target = ("cls" in patch) ? patch.cls : cur.cls;
     if("title" in patch && !("cls" in patch)) target = normCls(plain(patch.title));
+    /* **どける前に、行き先のコマの物差しを控える。**
+       下のループで消してから読むと、いつも 0 になる。0 は「その行がまだ無い」
+       の意味なので、サーバは「無いはずの行を書こうとしている」と見て
+       競合で止める（→ gas/Domain.gs expectedVersionMatches）。
+       クラスを変えずに備考だけ直したときが、必ずこれに当たっていた
+       ── 専科が自分で入れたコマを自分で直すたび、競合の窓が出ていた。 */
+    const wasTarget = ((w.special[target] || {})[key] || {}).sat || 0;
     /* 行き先が変わるので一度どける。**どけたクラスだけをサーバに伝える。**
        全クラスに伝えると、1コマ直すたびに20枚のシートを読み書きすることになる
        （週案はクラスごとに1枚。触っていないクラスのシートは開かない） */
@@ -4240,14 +4317,16 @@ function writeCell(d, s, patch){
     }
     if(target && allClasses().indexOf(target) >= 0){
       const sub = SUB_BY_CODE[view.sp];
-      const was = ((w.special[target] || {})[key] || {}).sat || 0;
       (w.special[target] || (w.special[target] = {}))[key] = {
         title: escText(sub ? sub.name : viewName()),
         subject: view.sp, sp: view.sp,
         note: ("note" in patch) ? clean(patch.note) : (cur.note || ""),
+        /* **物差しも控えに持たせる。** 持たせないと、サーバの返事が
+           戻るまでのあいだに続けて直したぶんが、また 0 を送ることになる */
+        sat: wasTarget,
         at: Date.now(), by: myEmail()
       };
-      Backend.cellChanged("special", target, d, s, was);
+      Backend.cellChanged("special", target, d, s, wasTarget);
     }
     return save();
   }
@@ -4823,7 +4902,10 @@ function okToOverwrite(d, sid, to, yes, no, forCls){
 }
 
 function applyPalette(d, sid, v, e){
-  if(typeof isLocked === "function" && isLocked()) return toast("この画面はロック中");
+  /* **入らないなら、入る前に理由を言う。** 通してしまうと writeCell が
+     黙って弾き、下の toast だけが「入れた」と言う */
+  const no = whyCantWrite(d, sid);
+  if(no) return toast(no);
   /* リセット。**ここで入れたものを取り消すだけ。** 各クラスが自分で入れたものは消さない */
   if(v === PAL_CLEAR){
     const had = !!targetStore()[ck(d, sid)];
@@ -4911,7 +4993,8 @@ function fillPanel(){
       + "<span>" + escText(x.text) + "</span></button>").join("");
     for(const b of $("pEvs").querySelectorAll(".ev"))
       b.onclick = () => {
-        if(isLocked()) return toast("この画面はロック中");
+        const no = whyCantWrite(selCell.d, selCell.s);
+        if(no) return toast(no);
         const x = evs[+b.dataset.i], at = {d:selCell.d, s:selCell.s};
         okToOverwrite(at.d, at.s, x.text, () => {
           writeCell(at.d, at.s, {title:escText(x.text),
@@ -5607,6 +5690,7 @@ function drawGate(){
    何も起きない時間ができる。先にこの端末の控えで描いて、届いたら描き直す。
    届くまでは「読み込み中」を出しておく（古いものを見ているかもしれないため）。 */
 function openView(v){
+  saveNow();                      /* 出る前に、この端末の控えを書き切る */
   Backend.flush();                /* いまの画面を出る前に、書いたぶんを送る */
   /* **どこを開くかを先に決める。** そのあとで、その画面に要るシートだけを読む
      （読むものは view から決まるので、読む前に決まっていないといけない） */
@@ -5639,6 +5723,7 @@ function openView(v){
   });
 }
 function showGate(){
+  saveNow();
   Backend.flush();
   view = {kind:"gate"};
   selCell = null;
@@ -7044,7 +7129,8 @@ function requestSave(){
 }
 
 function doSave(loud){
-  if(!Backend.isGas()){ save(); Backend.flush(() => paintSave()); if(loud) toast("この端末に保存した（本番ではシートへ）"); return; }
+  if(!Backend.isGas()){ saveNow(); Backend.flush(() => paintSave()); if(loud) toast("この端末に保存した（本番ではシートへ）"); return; }
+  saveNow();                      /* 送る前に、この端末の控えを書き切る */
   saveState.busy = true; paintSave();
   const w = Wait.begin("シートに保存しています");
   Backend.flush(okAll => {
@@ -7107,6 +7193,7 @@ function refreshWeek(){
   autoFit();
 }
 function goWeek(n){
+  saveNow();                      /* 週を出る前に、この端末の控えを書き切る */
   Backend.flush();                /* 週を出る前に、書いたぶんを送る */
   monday = addDays(monday, n);
   const fresh = !db.years[String(fy())];
@@ -7114,7 +7201,7 @@ function goWeek(n){
   /* **待たせない。** 手元の控えで先に描いて、シートが届いたら描き直す */
   const draw = () => {
     if(view.kind === "gate") drawGate(); else refreshWeek();
-    if(fresh) save();             /* 新しい年度をその場で1回だけ書き出す */
+    if(fresh) saveNow();          /* 新しい年度をその場で1回だけ書き出す */
   };
   loadAndDraw(draw, "週をひらいています");
 }
@@ -7261,6 +7348,13 @@ document.addEventListener("selectionchange", () => {
 /* ── 結線 ────────────────────────────────────── */
 function wire(){
   const on = (id, ev, fn) => { const e = $(id); if(e) e.addEventListener(ev, fn); };
+
+  /* **画面が消える前に、この端末の控えを書き切る。**
+     打鍵は 400ms 遅らせて書いている（store.js の save）ので、
+     そのあいだに閉じられたぶんを取りこぼさない。
+     beforeunload は Chromebook の蓋を閉じたときなど、来ないことがある。 */
+  addEventListener("pagehide", saveNow);
+  addEventListener("visibilitychange", () => { if(document.hidden) saveNow(); });
   on('guideOpen', 'click', () => openGuide(false));
   on('guideDlg', 'close', finishGuide);
 
@@ -7539,9 +7633,17 @@ function wire(){
       for(const h of wouldOverwrite(d, sid))
         hits.push(Object.assign({}, h, {cls:h.cls + "（" + DOW[d] + "）"}));
     const put = () => {
-      for(const d of days) writeCell(d, sid, {title:c.title, note:c.note || ""});
+      /* **入った日だけを数えて言う。** 休みの日・ロック中の日は writeCell が
+         弾くので、5日と言い切ると、入っていない日まで入ったことになる */
+      const done = [], skip = [];
+      for(const d of days)
+        (writeCell(d, sid, {title:c.title, note:c.note || ""}) ? done : skip).push(DOW[d]);
       paintSheet(); fillPanel();
-      toast("5日とも「" + (escText(plain(c.title)) || "（空）") + "」にした");
+      const what = escText(plain(c.title)) || "（空）";
+      toast(!done.length
+          ? whyCantWrite(days[0], sid) || "書けなかった"
+          : done.length + "日を「" + what + "」にした"
+            + (skip.length ? "　<b>" + skip.join("・") + "には書けなかった</b>" : ""));
     };
     if(!hits.length) return put();
     askOverwrite("この週の " + SLOT_BY_ID[sid].name
@@ -7591,7 +7693,7 @@ function start(){
      入口に要るのは学級編成だけで、それはこの端末に前回ぶんが残っている。
      読み終わったら、その場で描き直す（クラスが増減していれば、そこで直る）。 */
   if(!Backend.isGas() && !Object.keys(Y().base).length) seedBase();
-  if(!Backend.isGas()) save();
+  if(!Backend.isGas()) saveNow();
   applyPaper();
   showGate();
 
@@ -7602,7 +7704,7 @@ function start(){
     applyPaper();
     /* **本番では、古い週の控えをここで間引く。** 溢れてから慌てない。
        捨てた週はシートに残っているので、開けば読み直される。 */
-    if(pruneWeeks(KEEP_WEEKS)) save();
+    if(pruneWeeks(KEEP_WEEKS)) saveNow();
     if(view.kind === "gate") drawGate();
     /* 新年度の設定が未了なら、左メニューに出す。**4/1 から、済むまで。**
        立ち上がりの1回だけ見に行く（週を繰るたびに見に行かない） */

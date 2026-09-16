@@ -91,6 +91,7 @@ function drawGate(){
    何も起きない時間ができる。先にこの端末の控えで描いて、届いたら描き直す。
    届くまでは「読み込み中」を出しておく（古いものを見ているかもしれないため）。 */
 function openView(v){
+  saveNow();                      /* 出る前に、この端末の控えを書き切る */
   Backend.flush();                /* いまの画面を出る前に、書いたぶんを送る */
   /* **どこを開くかを先に決める。** そのあとで、その画面に要るシートだけを読む
      （読むものは view から決まるので、読む前に決まっていないといけない） */
@@ -123,6 +124,7 @@ function openView(v){
   });
 }
 function showGate(){
+  saveNow();
   Backend.flush();
   view = {kind:"gate"};
   selCell = null;

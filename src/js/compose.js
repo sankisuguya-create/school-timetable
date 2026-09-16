@@ -74,7 +74,16 @@ function compose(cls, d, s){
   const push = (e, layer) => { if(e) cand.push(Object.assign({}, e, {layer, at:e.at || 0})); };
   push(w.school[key], "school");
   push((w.grade[g] || {})[key], "grade");
-  push((w.special[cls] || {})[key], "special");
+  /* **専科の備考は、学級の紙へ降ろさない。**
+     あれは専科が自分の週のために書くもの（持ち物・教室・進度）で、
+     学級の紙に出すと、担任が書いていない詳細が担任の紙に載る。
+     担任にはそれが自分の書いたものか専科のものか見分けられず、
+     消してよいのかも分からない。時数・たんぽぽ・Sheet出力も紙に従う。
+
+     題名（教科名）は降ろす ── それは学級の予定そのものだから。
+     専科自身の面では ownCell がこの棚を直に読むので、備考は消えない。 */
+  const sp = (w.special[cls] || {})[key];
+  if(sp) cand.push(Object.assign({}, sp, {layer:"special", at:sp.at || 0, note:""}));
   push((w.home[cls] || {})[key], "home");
 
   if(!cand.length) return {title:"", note:"", subject:null, layer:"base", clash:null};
@@ -466,14 +475,31 @@ function doRedo(){
   toast("やり直した");
 }
 
-function writeCell(d, s, patch){
-  /* **ロック中は書かない。** ここが書き込みの1本道なので、ここで止めれば
-     引っぱって入れても、打っても、パレットを押しても入らない */
-  if(typeof isLocked === "function" && isLocked()) return false;
+/* ── 書けない理由 ────────────────────────────
+   **理由は弾く側が持つ。** 前は writeCell が黙って false を返すだけで、
+   呼ぶ側はどこも戻り値を見ていなかった。だから休みの日にパレットを押すと、
+   コマは何も変わらないのに「国語 を入れた」と出た（実測）。
+   入っていないものを入ったと言う合図は、そこだけの間違いでは済まない
+   ── 次から合図そのものが読まれなくなる。
+
+   書けるなら空文字。書けないなら、そのまま画面に出せる1行を返す。 */
+function whyCantWrite(d, s){
+  /* **ロック中は書かない。** 見るだけのつもりで開いた画面を守る */
+  if(typeof isLocked === "function" && isLocked())
+    return "この画面はロックしてある。<b>直すには、ロックを押す</b>";
   /* **休みの日の授業には書かない。** 斜め線を引いた欄に字が入ると、
      刷った紙で「休みなのか、授業があるのか」が読めなくなる。
      朝学習と放課後は書ける（休業日でも出勤・部活・行事の準備が入る） */
-  if(isDayOff(d) && (SLOT_BY_ID[s] || {}).kind === "lesson") return false;
+  if(isDayOff(d) && (SLOT_BY_ID[s] || {}).kind === "lesson")
+    return "この日は<b>休み</b>にしてある。授業のコマには書けない"
+         + "（全学年の面で日付を押すと戻せる）";
+  return "";
+}
+
+function writeCell(d, s, patch){
+  /* ここが書き込みの1本道。ここで止めれば、引っぱって入れても、
+     打っても、パレットを押しても入らない */
+  if(whyCantWrite(d, s)) return false;
   pushUndo(d, s);                 /* 書く前の中身を控える。戻せるようにする */
   const w = week(), key = ck(d, s);
 
@@ -482,6 +508,13 @@ function writeCell(d, s, patch){
     const cur = ownCell(d, s);
     let target = ("cls" in patch) ? patch.cls : cur.cls;
     if("title" in patch && !("cls" in patch)) target = normCls(plain(patch.title));
+    /* **どける前に、行き先のコマの物差しを控える。**
+       下のループで消してから読むと、いつも 0 になる。0 は「その行がまだ無い」
+       の意味なので、サーバは「無いはずの行を書こうとしている」と見て
+       競合で止める（→ gas/Domain.gs expectedVersionMatches）。
+       クラスを変えずに備考だけ直したときが、必ずこれに当たっていた
+       ── 専科が自分で入れたコマを自分で直すたび、競合の窓が出ていた。 */
+    const wasTarget = ((w.special[target] || {})[key] || {}).sat || 0;
     /* 行き先が変わるので一度どける。**どけたクラスだけをサーバに伝える。**
        全クラスに伝えると、1コマ直すたびに20枚のシートを読み書きすることになる
        （週案はクラスごとに1枚。触っていないクラスのシートは開かない） */
@@ -495,14 +528,16 @@ function writeCell(d, s, patch){
     }
     if(target && allClasses().indexOf(target) >= 0){
       const sub = SUB_BY_CODE[view.sp];
-      const was = ((w.special[target] || {})[key] || {}).sat || 0;
       (w.special[target] || (w.special[target] = {}))[key] = {
         title: escText(sub ? sub.name : viewName()),
         subject: view.sp, sp: view.sp,
         note: ("note" in patch) ? clean(patch.note) : (cur.note || ""),
+        /* **物差しも控えに持たせる。** 持たせないと、サーバの返事が
+           戻るまでのあいだに続けて直したぶんが、また 0 を送ることになる */
+        sat: wasTarget,
         at: Date.now(), by: myEmail()
       };
-      Backend.cellChanged("special", target, d, s, was);
+      Backend.cellChanged("special", target, d, s, wasTarget);
     }
     return save();
   }

@@ -29,7 +29,7 @@ const context = vm.createContext({
     boot(fn){bootCount++; fn();}, watch(){}},
   view:{kind:'gate'}, selCell:null, storeBroken:'', onStoreError:null,
   loadDb(){}, applyPaper(){}, paintArchive(){}, pollNewYear(){},
-  pruneWeeks(){return 0;}, KEEP_WEEKS:60, save(){}, showConflicts(){},
+  pruneWeeks(){return 0;}, KEEP_WEEKS:60, save(){}, saveNow(){}, showConflicts(){},
   monday:new Date('2026-09-14'), addDays(d,n){return new Date(+d+n*86400000);},
   fy(){return 2026;}, db:{years:{2026:{}}}, clearSelection(){}, refreshWeek(){draws++;},
   openGuide(){}, localStorage:{getItem(){return null;},setItem(){}},

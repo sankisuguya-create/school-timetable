@@ -112,7 +112,10 @@ function okToOverwrite(d, sid, to, yes, no, forCls){
 }
 
 function applyPalette(d, sid, v, e){
-  if(typeof isLocked === "function" && isLocked()) return toast("この画面はロック中");
+  /* **入らないなら、入る前に理由を言う。** 通してしまうと writeCell が
+     黙って弾き、下の toast だけが「入れた」と言う */
+  const no = whyCantWrite(d, sid);
+  if(no) return toast(no);
   /* リセット。**ここで入れたものを取り消すだけ。** 各クラスが自分で入れたものは消さない */
   if(v === PAL_CLEAR){
     const had = !!targetStore()[ck(d, sid)];
@@ -200,7 +203,8 @@ function fillPanel(){
       + "<span>" + escText(x.text) + "</span></button>").join("");
     for(const b of $("pEvs").querySelectorAll(".ev"))
       b.onclick = () => {
-        if(isLocked()) return toast("この画面はロック中");
+        const no = whyCantWrite(selCell.d, selCell.s);
+        if(no) return toast(no);
         const x = evs[+b.dataset.i], at = {d:selCell.d, s:selCell.s};
         okToOverwrite(at.d, at.s, x.text, () => {
           writeCell(at.d, at.s, {title:escText(x.text),
