@@ -20,7 +20,7 @@ const fs = require("fs"), path = require("path"), vm = require("vm");
 
 const GAS = __dirname;
 const SRC = path.join(__dirname, "..", "src", "js");
-const GS  = ["Gate.gs", "Sheets.gs", "Store.gs"];
+const GS  = ["Gate.gs", "Domain.gs", "Sheets.gs", "Store.gs"];
 
 let ng = 0;
 function ok(name, cond, got){
