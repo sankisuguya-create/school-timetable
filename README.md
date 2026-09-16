@@ -10,7 +10,7 @@
 
 | ファイル | 内容 |
 |---|---|
-| [`docs/spec.md`](docs/spec.md) | **仕様の正本。まずここを読む** |
+| [`docs/spec.md`](docs/spec.md) | **仕様の正本。まずここを読む** |\n| [`docs/ddd-map.md`](docs/ddd-map.md) | **軽量DDDの境界。コードを分ける理由** |
 | [`docs/setup.md`](docs/setup.md) | **置き方の手順。** 上から順にやる |
 | [`docs/launch-readiness.md`](docs/launch-readiness.md) | **最大40人で利用開始する前の受入試験・障害対応** |
 | `src/` | **直すのはこちら。** 12節に置き方 |

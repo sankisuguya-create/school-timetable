@@ -712,9 +712,9 @@ const Store = (function(){
         const drop = {};
         for(const p of byName[name]){
           const date = ymd(p.date), target = Sheets.asClass(p.target);
-          const k = [String(year), date, p.slot, p.layer, target].join("\t");
-          const outKey = [date, p.slot, p.layer, target].join("|");
-          const empty = !String(p.title || "").trim() && !String(p.note || "").trim();
+          const k = TimetableDomain.cellKey(year, date, p.slot, p.layer, target);
+          const outKey = TimetableDomain.resultKey(date, p.slot, p.layer, target);
+          const remove = TimetableDomain.isRemoval(p);
           const i = index[k];
 
           /* **古い画面からの保存を止める。**
@@ -731,7 +731,7 @@ const Store = (function(){
             const cur = (i !== undefined) ? rows[i] : null;
             const curAt = !cur ? 0
                         : Sheets.isDate(cur["更新時刻"]) ? cur["更新時刻"].getTime() : -1;
-            if(curAt !== (+p.expectedAt || 0)){
+            if(!TimetableDomain.expectedVersionMatches(p.expectedAt, curAt)){
               conflicts.push({
                 date: date, slot: p.slot, layer: p.layer, target: target,
                 expectedAt: +p.expectedAt || 0, currentAt: curAt,
@@ -743,7 +743,7 @@ const Store = (function(){
             }
           }
 
-          if(p.remove || empty){
+          if(remove){
             if(i !== undefined) drop[i] = true;
             at[outKey] = 0;
             continue;
@@ -853,9 +853,7 @@ const Store = (function(){
       const c = Sheets.asClass(r["クラス"]);
       if(c){
         const state = states[c] || {};
-        let exports = {}; try{ exports = JSON.parse(state["出力記録"] || '{}'); }catch(_){}
-        out[c] = {at: String(r["提出日時"] || ""), by: String(r["提出者"] || ""),
-                  dirty: String(state["変更あり"]) === '1', exports: exports};
+        out[c] = TimetableDomain.submissionView(r, state);
       }
     }
     return out;
@@ -884,9 +882,7 @@ const Store = (function(){
     for(const mon in months){
       const states = tpStates_(year, mon), submits = tpSubmits(year, mon);
       for(const c in submits){
-        if(!months[mon].some(p => p.layer === 'school'
-          || p.layer === 'grade' && c.split('-')[0] === String(p.target)
-          || (p.layer === 'home' || p.layer === 'special') && Sheets.asClass(p.target) === c)) continue;
+        if(!months[mon].some(p => TimetableDomain.affectsClass(p, c, Sheets.asClass))) continue;
         const state = states[c] || {};
         state['変更あり'] = '1';
         putTpState_(year, mon, c, state);
@@ -911,7 +907,7 @@ const Store = (function(){
            && Sheets.asClass(r["クラス"]) === c){ row = r.__row; break; }
       if(on){
         const previous = tpSubmits(year, mondayISO)[c];
-        const when = new Date(Math.max(Date.now(), (Date.parse(previous && previous.at) || 0) + 1)).toISOString();
+        const when = TimetableDomain.nextSubmissionTimestamp(previous, Date.now());
         const sh = Sheets.sheet('たんぽぽ提出');
         sh.getRange(row || sh.getLastRow() + 1, 4).setNumberFormat('@');
         const obj = {"年度": +year, "月曜": String(mondayISO), "クラス": c,
@@ -1109,7 +1105,7 @@ const Store = (function(){
     const current = tpSubmits(year, mondayISO);
     if(submitted !== undefined){
       for(const c of Object.keys(titles || {})){
-        if((current[c] || {}).dirty || ((current[c] || {}).at || '') !== ((submitted[c] || {}).at || ''))
+        if(!TimetableDomain.submissionUnchanged(current[c], submitted[c]))
           throw new Error(c + ' の提出状態が変わりました。週を読み直し、再提出を確認してください');
       }
     }
