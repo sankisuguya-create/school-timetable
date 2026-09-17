@@ -248,8 +248,36 @@ button,select,input,textarea{font:inherit;color:inherit}
 .legend i.bs{background:var(--sheet)}
 
 .stage{overflow:auto;padding:10px;display:flex;justify-content:center;
-  align-items:flex-start;min-height:0;min-width:0}
+  align-items:flex-start;min-height:0;min-width:0;gap:6px}
 .stage[hidden]{display:none!important}
+
+/* 紙の左右で週を繰る。**左メニューの ◀ ▶ と同じことをする。**
+   読んでいる目の高さに置くので、左端まで視線を戻さずに週を繰れる。
+   **紙は痩せない** ── 幅を取るぶんは autoFit が測って倍率に入れる。
+   刷るときは出さない（@media print で消す。紙の外のものだから）。 */
+.wkarrow{flex:0 0 auto;align-self:center;width:38px;height:76px;
+  border:1px solid var(--line);border-radius:var(--r);background:var(--card);
+  color:var(--tx-sub);font-size:26px;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center}
+.wkarrow:hover{background:var(--hover);color:var(--tx);border-color:var(--tx-sub)}
+.wkarrow:focus-visible{outline:2px solid var(--ink-link);outline-offset:2px}
+
+/* その日の形（右メニュー・全学年の面だけ）。
+   **色だけで表さない。** 形の名前（ふつう／特別校時／休み）を必ず字で出す。 */
+.dayrow{display:flex;flex-direction:column;gap:4px}
+.dayb{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:7px 10px;border:1px solid var(--line);border-radius:var(--r-sm);
+  background:var(--card);cursor:pointer;font:inherit;text-align:left;
+  border-left:4px solid var(--line)}
+.dayb:hover{background:var(--hover);border-color:var(--tx-sub)}
+.dayb:focus-visible{outline:2px solid var(--ink-link);outline-offset:2px}
+.dayb b{font-weight:600;font-size:13px}
+.dayb span{font-size:12px;color:var(--tx-sub)}
+/* 入れてある日だけ、左端の線と字を濃くする */
+.dayb.form-special{border-left-color:var(--cat-grade)}
+.dayb.form-special span{color:var(--cat-grade);font-weight:700}
+.dayb.form-off{border-left-color:var(--cat-clash)}
+.dayb.form-off span{color:var(--cat-clash);font-weight:700}
 /* 状態と入力範囲。静的なCSSだけで描き、紙面・印刷の背景には載せない。
 
    **どの面でも向きは同じ。くすんでいたら、まだシートに入っていない。**
@@ -574,8 +602,20 @@ span.tpin{cursor:default}
 .pal[data-v=doutoku] {background:var(--sub-doutoku)}
 .pal[data-v=gaikoku] {background:var(--sub-gaikoku)}
 .pal[data-v=gakkatsu]{background:var(--sub-gakkatsu)}
+/* 複数学級でやるものは、**元の教科と同じ地**にする。時数も元の教科に数えるので、
+   別の色にすると「別の教科」という読みを色が作ってしまう。
+   合同かどうかは、チップの字（合同体育／体育）が言っている */
+.pal[data-v=goudo_taiiku]{background:var(--sub-taiiku)}
+.pal[data-v=goudo_ongaku]{background:var(--sub-ongaku)}
+.pal[data-v=gakunen_shukai]{background:var(--sub-gakkatsu)}
 /* 時数に数えないもの。**破線の枠は残す。** 色を外しても数えないと分かる */
 .pal.off{background:var(--sub-none)}
+/* 校外行事は教科ではない。**教科の並びと見分けられる形にする**
+   （色だけに頼らない ── 字が「校外行事」と言っている）。
+   地は紙のコマに使っていない色にする ── 白のままだと、紙のコマの地と
+   同じ色になり、「教科の色を紙に出さない」という決まりの検査に当たる */
+.pal.trip{background:var(--hover);border-style:dashed;border-color:var(--cat-school);
+  color:var(--cat-school);font-weight:600}
 .pal:hover{border-color:var(--ink-link);box-shadow:inset 0 0 0 1px var(--ink-link)}
 .pal:active{cursor:grabbing}
 /* 基本時間割にも、教科を探す補助として同じ淡い色を使う。字は必ず残す。 */
@@ -1059,6 +1099,32 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 休みの日。**1〜6 を1本の斜め線で消す。**
    コマごとに引くと、業間と昼休みの行で線が切れて「1〜4だけ休み」に見える。
    線は図形で描く（背景の色は、トナーを節約する設定のプリンタで消える）。 */
+/* ── 校外行事（被覆） ────────────────────────
+   **一日の右に寄せた、縦長のチップ。** 題名にも備考にも入らない。
+   覆ったコマぶんの高さで、その日の右端に1本立てる。
+
+   **半透明にする。下が読めるように。** 校外学習の日でも、その時間に何をするか
+   （社会・理科）は紙の上で読めないと困る。時数もその教科で数えている。
+
+   **校時の横線は消さない。** 消すと、どの校時のことか紙から読めなくなる。
+   縦につながって見えるのはチップのほうで、コマの枠ではない。
+
+   **地の色に頼らない。** トナーを節約する設定のプリンタでは地が消える
+   （休みの斜め線を図形で描いたのと同じ理由）。地が飛んでも、枠の線と字が残る。 */
+.tripmark{position:relative;pointer-events:none;border:none!important;z-index:2}
+.tripmark span{position:absolute;overflow:hidden;
+  top:calc(1.2mm*var(--k));bottom:calc(1.2mm*var(--k));right:calc(1.2mm*var(--k));
+  width:calc(6.8mm*var(--k));
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  border:1.1px solid var(--ink-sub);border-radius:calc(1.8mm*var(--k));
+  background:rgba(26,26,26,.055);color:var(--ink-sub)}
+.tripmark i{font-style:normal;font-weight:700;line-height:1.02;
+  font-size:calc(10.5pt*var(--k))}
+/* **覆ったコマの字は、チップの手前で折り返す。** 半透明でも、字の上に字が
+   重なれば読みにくい。場所を空けておけば、どちらもそのまま読める。
+   （チップの幅 6.8mm ＋ 右の余白 1.2mm ＋ 字とのすきま 1.2mm） */
+.cell.trip .t,.cell.trip .n{padding-right:calc(9.2mm*var(--k))}
+
 .dayoff{position:relative;pointer-events:none;border:none!important;z-index:2}
 .dayoff svg{position:absolute;inset:0;width:100%;height:100%;display:block}
 .dayoff line{stroke:var(--ink);stroke-width:.9}
@@ -1075,14 +1141,12 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   transform:translateX(-50%)}
 @media print{ .hd.hasev::after{display:none} }
 
-/* 全学年の面だけ、日付の見出しを押せる。**押せることは画面でだけ見せる** */
-.hd.pick{cursor:pointer}
-/* **押せることを、字で見せる。** 画面だけ（紙には出さない） */
-.hd .pk{font-size:calc(6pt*var(--k));color:var(--ink-link);font-weight:700;
-  border:1px solid var(--ink-link);border-radius:3px;line-height:1;
-  padding:1px 2px;margin-left:.15em}
-.hd.pick:hover{background:var(--fill-a)}
-.hd.pick:focus-visible{outline:2px solid var(--ink-link);outline-offset:-2px}
+/* 日の形（ふつう／特別校時／休み）を入れる口は、**紙の上には無い。**
+   右メニューの「この週の日の形」に移した（src/index.html の #dayWrap）。
+   紙の見出しに残るのは印（特・休）だけ ── あれは刷って残る情報。
+
+   紙に置いていたころは、押せることに気づかれず
+   「休みの日を入れる口が無い」と言われた。押すものは、押すものが並ぶ場所に置く。 */
 
 /* 見出しの行 */
 .hd{display:flex;align-items:center;justify-content:center;gap:.35em;
@@ -1184,7 +1248,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
    画面のものは何も刷らない。層の色も印も刷らない。
    リンクは下線だけ残す。URL は刷らない。 */
 @media print{
-  .side,.panel,.gate,.toast,.tpview,.busy,.arc,.wait{display:none!important}
+  .side,.panel,.gate,.toast,.tpview,.busy,.arc,.wait,.wkarrow{display:none!important}
   /* 月の面を刷るとき。**まわりの操作も、週の1枚も出さない。**
      刷るのは 2×2 の4枚だけ（B4 よこ） */
   body.printing-month .stage{display:none!important}
@@ -1354,7 +1418,14 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
         <b id="arcTitle"></b><span id="arcNote"></span>
         <a id="arcLink" target="_blank" rel="noopener">保管庫をひらく</a>
       </div>
-      <div class="stage" id="stage"><div class="paper" id="paper"><div class="sheet" id="sheet"></div></div></div>
+      <!-- ④ 紙の左右で週を繰る。**左メニューの ◀ ▶ と同じことをする。**
+           紙を読んでいる目の高さに置く ── 読みながら週を繰るとき、
+           左端まで視線を戻さずに済む。**刷るときは出さない**（紙の外のもの） -->
+      <div class="stage" id="stage">
+        <button class="wkarrow" id="wkPrev" aria-label="前の週" title="前の週">‹</button>
+        <div class="paper" id="paper"><div class="sheet" id="sheet"></div></div>
+        <button class="wkarrow" id="wkNext" aria-label="次の週" title="次の週">›</button>
+      </div>
 
       <!-- 月の面。**4週ぶんを 2×2 に並べて、B4 に1枚で刷る。**
            紙の代わりにここを出す（紙と入れ替える） -->
@@ -1382,7 +1453,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
         <h2>たんぽぽ
           <!-- 出すボタンは、見出しの右。**この面でいちばん大きく動く操作。**
                下に置いていたころは、組を並べ終えてから目で探しに行っていた -->
-          <button class="btn go tpgo" id="tpGo" aria-describedby="tpGoWhy">たんぽぽ時間割へ出す</button>
+          <button class="btn go tpgo" id="tpGo" aria-describedby="tpGoWhy">たんぽぽ時間割に書き入れる</button>
           <!-- 押せない理由を hover の title だけに隠さない。初めての人にもその場で示す -->
           <span class="tpwhy" id="tpGoWhy" aria-live="polite" hidden></span>
           <span class="tpweek" id="tpWeek"></span>
@@ -1391,7 +1462,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
                毎週の面には置かず、窓へ出す（設定からも同じ窓が開く） -->
           <button class="btn" id="tpGrpOpen">組分けを直す</button>
           <!-- ソフトロック。**出す先と組分けを直せなくする。**
-               「たんぽぽ時間割へ出す」は止めない ── 見るだけのつもりで開いた面で
+               「たんぽぽ時間割に書き入れる」は止めない ── 見るだけのつもりで開いた面で
                設定が変わることを防ぐのが役目で、毎週の出力を止める理由は無い -->
           <button class="lock" id="tpLockBtn" aria-pressed="false"
                   title="出す先と組分けを直せなくする（出すのは止めない）">
@@ -1436,6 +1507,19 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
         <div class="pals" id="pals"></div>
         <p class="hint" id="palHint" style="margin-top:8px"></p>
         <button class="chipset" id="chipOpen" hidden>週案のチップ表示：<span id="chipNow">使わない</span></button>
+      </div>
+
+      <!-- ③ その日の形。**全学年の面にだけ出る。** 効く範囲が全クラスなので、
+           担任の画面からは押せない。紙の日付の見出しに置いていたころは、
+           押せることに気づかれず「休みの日を入れる口が無い」と言われた。
+           紙の上には印（特・休）だけを残す ── あれは刷って残る情報 -->
+      <div id="dayWrap" hidden>
+        <h3>この週の日の形</h3>
+        <div class="dayrow" id="dayRow"></div>
+        <p class="hint" style="margin:7px 0 0">押すと、その日を
+          <b>特別校時</b>（朝学習が消えて上へ詰まる）や
+          <b>休み</b>（1〜6校時に斜め線）にできる。<b>全クラスの紙に入る。</b>
+          戻せば、書いてある予定がそのまま出る（休みにしても中身は消していない）。</p>
       </div>
 
       <div class="empty" id="noSel">コマを選ぶと、ここで中身とリンクを直せる。</div>
@@ -1664,7 +1748,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
      ブラウザの confirm は Enter で「はい」に落ちる。いちばん大きく動く操作を、
      いちばん弱い止め方にしない（1コマの上書きと同じ作りにそろえる） -->
 <dialog id="tpDlg"><div class="dlg">
-  <h2>たんぽぽ時間割へ出す</h2>
+  <h2>たんぽぽ時間割に書き入れますか</h2>
   <p>たんぽぽ時間割のファイルに、<b id="tpDlgName">この週</b>という名前のシートを
      <b>1枚あたらしく作って</b>、この週ぶんを書き込む。
      シートは<b>週の順</b>（4月→翌3月）に並ぶので、出した順に散らばらない。<br>
@@ -1911,8 +1995,8 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.21.0";
-let BUILD_DATE  = "2026-09-16";
+let APP_VERSION = "1.24.0";
+let BUILD_DATE  = "2026-09-17";
 
 /* 時程。行を固定しない（学校ごとに違う）。
    tally = 時数集計表のどの列に当たるか。chips = 教科を選べるか。
@@ -1934,7 +2018,15 @@ let SLOTS = [
 let SLOT_BY_ID = Object.fromEntries(SLOTS.map(s => [s.id, s]));
 
 /* short = 時数集計表に入れる1文字。
-   count:false の教科は空にする。**書くと Excel 側の出現数の集計が増える。** */
+   count:false の教科は空にする。**書くと Excel 側の出現数の集計が増える。**
+
+   tp   = たんぽぽ時間割に出す字。**空なら表示名をそのまま出す。**
+          たんぽぽの児童の列は 50px しかないので、「合同体育」は入らない。
+          時数の1文字とは別に持つ（「合体」は2文字で、1文字には縮まない）。
+   面   = そのチップをどの面に出すか。空なら**どの面にも出す**。
+          "学年" と書いたものは、学年と全学年の面にだけ出す。
+          合同体育・合同音楽・学年集会は複数学級でやるものなので、
+          担任の面に出すと、名前と実態がずれたまま自分の学級だけに入る。 */
 let SUBJECTS = [
   {code:"kokugo",  name:"国語",  short:"国", count:true},
   {code:"shakai",  name:"社会",  short:"社", count:true},
@@ -1949,6 +2041,11 @@ let SUBJECTS = [
   {code:"gaikoku", name:"外国語",short:"外", count:true},
   {code:"sogo",    name:"総合",  short:"総", count:true},
   {code:"gakkatsu",name:"学活",  short:"学", count:true},
+  /* 複数学級でやるもの。**学年・全学年の面にだけ出す。**
+     時数は元の教科に数える（合同体育＝体育、合同音楽＝音楽、学年集会＝特別活動） */
+  {code:"goudo_taiiku",  name:"合同体育", short:"体", count:true, tp:"合体",   only:"学年"},
+  {code:"goudo_ongaku",  name:"合同音楽", short:"音", count:true, tp:"合音",   only:"学年"},
+  {code:"gakunen_shukai",name:"学年集会", short:"特", count:true, tp:"学年集", only:"学年"},
   /* 図書（固定時間割の「と」）。**時数に数えるかは学校が決める。**
      数えるなら「時数表の1文字」を入れて count:true にする */
   {code:"tosho",   name:"図書",  short:"",   count:false},
@@ -2047,6 +2144,17 @@ const DAY_FORM = {
   "special": {label:"特別校時", mark:"特", why:"朝学習が無い。その日の欄が1つ上へ詰まる"},
   "off":     {label:"休み",     mark:"休", why:"1〜6校時に斜め線を引く。書き込めなくなる"}
 };
+/* ── 校外行事（被覆） ────────────────────────
+   **題名にも備考にも入らない。** コマの上に薄く縦書きで出る印で、続けて置くと
+   枠がつながって1つの縦長になる。題名欄はコマごとに残るので、時数は今までどおり
+   各コマの教科で数えられる。
+
+   持ち方は**ふつうのコマと同じ**（時程のIDに `trip:時程`）。`day`・`memo` と
+   同じ手で、専用の入れ物を作らない。**週案シートに列を足さない** ── 列を足すと、
+   見出しの無い既存ファイルで黙って読み捨てられる（writePlan は見出しを書き直さない）。 */
+const TRIP_SLOT = "trip:";
+const TRIP_NAME = "校外学習";
+
 /* 休みの日に引く斜め線。**背景ではなく図形で描く。**
    背景の色は、トナーを節約する設定のプリンタでは消えることがある。 */
 const SLASH_SVG = '<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">'
@@ -2537,8 +2645,24 @@ const tpIn = g => (Y().tanpopo || {})[String(g)] || [];
 const tpSubmitted = cls => { const s = tpSubmitInfo(cls); return !!s && !s.dirty; };
 const tpSubmitInfo = cls => (week().tpSub || {})[String(cls)] || null;
 /* 提出後の変更は、保存済みでも再提出するまで残す。サーバにも同じ状態を記録する。 */
-function markTpEdited(layer, target, where){
+/* その層・その対象の棚に、いま入っている題名（字だけ）。 */
+function tpTitleIn_(w, layer, target, d, slot){
+  if(!w) return "";
+  const bank = layer === "school"  ? w.school
+             : layer === "grade"   ? (w.grade[target]   || {})
+             : layer === "special" ? (w.special[target] || {})
+             :                       (w.home[target]    || {});
+  const e = (bank || {})[ck(d, slot)];
+  return e ? plain(e.title) : "";
+}
+/* wasTitle ＝ 直す前に、その棚に入っていた題名。呼ぶ側が書き替える前に控える。
+   **渡したときだけ**、たんぽぽへ渡る文字が変わったかを見て覆すかを決める
+   （規則は tanpopo.js の tpAffected）。渡さなかった呼び出しは今までどおり
+   層だけで決める ── 見落としがあっても、覆す側（安全側）に倒れる。 */
+function markTpEdited(layer, target, where, d, slot, wasTitle){
   const w = where ? ((db.years[String(where.year)] || {}).weeks || {})[where.monday] : week();
+  if(wasTitle !== undefined && typeof tpAffected === "function"
+     && !tpAffected(d, slot, wasTitle, tpTitleIn_(w, layer, target, d, slot))) return;
   if(w){
     const pending = w.tpEdited || (w.tpEdited = {});
     const seq = w.tpEditSeq || (w.tpEditSeq = {});
@@ -2704,11 +2828,15 @@ const Backend = (function(){
   /* where ＝ そのコマがある年度と週。**渡さなければ、いま開いている週。**
      競合したぶんを入れ直すときは、別の週のコマかもしれない。
      いまの週として覚えると、別の週のコマを書き替えてしまう。 */
-  function cellChanged(layer, target, d, slotId, baseAt, where){
+  /* wasTitle ＝ 直す前に、その棚に入っていた題名。**たんぽぽの提出を覆すかを
+     決めるのに要る**（→ store.js markTpEdited ・ tanpopo.js tpAffected）。
+     渡さなかった呼び出しは、今までどおり層だけで決める（覆す側へ倒す）。 */
+  function cellChanged(layer, target, d, slotId, baseAt, where, wasTitle){
     acknowledged = false;
     touched = true;
     editEpoch++;
-    if(typeof markTpEdited === "function") markTpEdited(layer, target, where);
+    if(typeof markTpEdited === "function")
+      markTpEdited(layer, target, where, d, slotId, wasTitle);
     if(!onGas) return;
     const yr = where ? String(where.year) : fy();
     const mo = where ? where.monday : wkKey();
@@ -3843,10 +3971,10 @@ function viewWhere(){
   if(view.kind === "class")   return "書いたものは " + view.cls + " だけに入る";
   if(view.kind === "grade")   return "書いたものは " + view.grade + "年の全クラスに入る";
   if(view.kind === "school")  return "書いたものは全クラスに入る。"
-                                   + "日付を押すと、その日を休みや特別校時にできる";
+                                   + "右の「この週の日の形」から、休みや特別校時にできる";
   if(view.kind === "special") return "コマにクラスを入れると、そのクラスに「"
                                    + viewName() + "」として入る";
-  if(view.kind === "tanpopo") return "交流級を選んで、たんぽぽ時間割へ出す";
+  if(view.kind === "tanpopo") return "交流級を選んで、たんぽぽ時間割に書き入れる";
   return "";
 }
 
@@ -4071,11 +4199,12 @@ function setMemo(html){
   const bank = memoBank(a), key = ck(0, a.slot), t = clean(html);
   /* 書き替える前に、サーバの時刻を控える（競合の物差し） */
   const was = (bank[key] || {}).sat || 0;
+  const wasT = plain((bank[key] || {}).title);   /* たんぽぽ提出の判定に使う */
   if(!plain(t).trim() && !/<a\b/i.test(t)) delete bank[key];
   else bank[key] = {title:t, note:"", subject:null, sat:(bank[key] || {}).sat,
                     by:myEmail(), at:Date.now()};
   if((week().memos || {})[viewName()] !== undefined) delete week().memos[viewName()];
-  Backend.cellChanged(a.layer, a.target, 0, a.slot, was);
+  Backend.cellChanged(a.layer, a.target, 0, a.slot, was, undefined, wasT);
   return save();
 }
 
@@ -4098,13 +4227,87 @@ function setDayForm(d, form){
   if(typeof isLocked === "function" && isLocked()) return false;
   const w = week(), key = ck(d, DAY_SLOT);
   const was = (w.school[key] || {}).sat || 0;   /* 消す前に物差しを控える */
+  const wasT = plain((w.school[key] || {}).title);
   if(!form) delete w.school[key];
   else w.school[key] = {title: escText(DAY_FORM[form].label), note:"", subject:null,
                         sat: (w.school[key] || {}).sat,
                         by: myEmail(), at: Date.now()};
   /* **学校全体の層として送る。** 全クラスの紙に効く */
-  Backend.cellChanged("school", "", d, DAY_SLOT, was);
+  Backend.cellChanged("school", "", d, DAY_SLOT, was, undefined, wasT);
   return save();
+}
+
+/* ── 校外行事（被覆） ────────────────────────
+   **題名にも備考にも入らない。** コマの上に薄く縦書きで「校外学習」と出る印で、
+   連続して置けば枠がつながって1つの縦長になる。題名欄はコマごとに残るので、
+   時数は今までどおり各コマの教科で数えられる（1限社会・2限理科もそのまま）。
+
+   持ち方は**ふつうのコマと同じ**（時程のIDに `trip:時程` を使う）。
+   `day`（日の形）・`memo`（週メモ）と同じ手で、専用の入れ物を作らない。
+   だから書き込み・読み込み・競合・まだ送っていない数え方・年度の退避が、
+   そのまま全部効く。**週案シートに列を足さない**（列を足すと、見出しの無い
+   既存ファイルで黙って読み捨てられる ── writePlan は見出しを書き直さない）。 */
+/* その層の棚に、このコマの被覆があるか */
+const tripIn_ = (bank, d, slot) => !!(bank || {})[ck(d, TRIP_SLOT + slot)];
+
+/* **どれか1つの層に印があれば被覆。**
+   校外学習や自然学校は学年・全校で決まる行事なので、担任が自分の面から
+   消せると、学年が入れた行事が担任ごとにまだらに消える。
+   担任が外せるのは自分の層に入れたぶんだけ（tripOff の理由を見る）。 */
+function tripOn(cls, d, slot){
+  const w = week();
+  return tripIn_(w.school, d, slot)
+      || tripIn_(w.grade[gradeOf(cls)], d, slot)
+      || tripIn_(w.special[cls], d, slot)
+      || tripIn_(w.home[cls], d, slot);
+}
+/* いま開いている面から見た被覆。学級は層を重ねて見る。
+   学年・全学年の面は、その面が持つぶんと全校のぶんだけ見る
+   （担任が入れたぶんまで出すと、どの学級のものか分からなくなる）。 */
+function tripHere(d, slot){
+  const w = week();
+  if(view.kind === "class")   return tripOn(view.cls, d, slot);
+  if(view.kind === "special") return tripIn_(w.school, d, slot);
+  if(view.kind === "grade")
+    return tripIn_(w.school, d, slot) || tripIn_(w.grade[view.grade], d, slot);
+  if(view.kind === "school")  return tripIn_(w.school, d, slot);
+  return false;
+}
+/* この面から外せるか。外せないなら、どこから外すのかを返す。 */
+function tripLockedBy(d, slot){
+  if(tripIn_(targetStore(), d, slot)) return "";        /* 自分の層のぶん。外せる */
+  const w = week();
+  if(tripIn_(w.school, d, slot)) return "全学年";
+  if(view.kind === "class" && tripIn_(w.grade[gradeOf(view.cls)], d, slot))
+    return gradeOf(view.cls) + "年";
+  return "";
+}
+/* 校外に覆われている授業コマの並び（その日ぶん）。紙もたんぽぽもここを見る */
+function tripSlotsOn(cls, d){
+  return SLOTS.filter(s => s.kind === "lesson" && tripOn(cls, d, s.id)).map(s => s.id);
+}
+
+/* 付け外し。**1コマずつ。** 続けて置けば、描くときに1つの縦長にまとまる。 */
+function setTrip(d, slot, on){
+  /* **休みの日にも置ける。** 自然学校のように休日・祝日をまたぐ行事がある。
+     だから whyCantWrite は通さず、ロックだけを見る */
+  const locked = whyLocked();
+  if(locked) return locked;
+  const st = targetStore(), key = ck(d, TRIP_SLOT + slot);
+  if(!on && !st[key]){
+    const who = tripLockedBy(d, slot);
+    if(who) return "この校外学習は<b>" + escText(who) + "</b>が入れたもの。外すにはその面から";
+    return "";
+  }
+  const was = (st[key] || {}).sat || 0;
+  const wasT = plain((st[key] || {}).title);
+  if(on) st[key] = {title:TRIP_NAME, note:"", subject:null, sat:(st[key] || {}).sat,
+                    by:myEmail(), at:Date.now()};
+  else delete st[key];
+  Backend.cellChanged(layerOfStore(), targetOfStore(), d, TRIP_SLOT + slot, was,
+                      undefined, wasT);
+  save();
+  return "";
 }
 
 /* ── 書く ────────────────────────────────────── */
@@ -4257,9 +4460,10 @@ function pushUndo(d, s){
 function restoreCell(d, s, prev){
   const st = targetStore(), key = ck(d, s);
   const was = (st[key] || {}).sat || 0;
+  const wasT = plain((st[key] || {}).title);
   if(prev){ const e = clone(prev); e.sat = was; st[key] = e; }
   else delete st[key];
-  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s, was);
+  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s, was, undefined, wasT);
   save();
 }
 function stepUndo(from, to){
@@ -4299,16 +4503,24 @@ function doRedo(){
    ── 次から合図そのものが読まれなくなる。
 
    書けるなら空文字。書けないなら、そのまま画面に出せる1行を返す。 */
+/* **ロック中は書かない。** 見るだけのつもりで開いた画面を守る。
+   校外行事もここだけは通さないので、理由を1か所に置く */
+function whyLocked(){
+  return (typeof isLocked === "function" && isLocked())
+    ? "この画面はロックしてある。<b>直すには、ロックを押す</b>" : "";
+}
 function whyCantWrite(d, s){
-  /* **ロック中は書かない。** 見るだけのつもりで開いた画面を守る */
-  if(typeof isLocked === "function" && isLocked())
-    return "この画面はロックしてある。<b>直すには、ロックを押す</b>";
+  const locked = whyLocked();
+  if(locked) return locked;
   /* **休みの日の授業には書かない。** 斜め線を引いた欄に字が入ると、
      刷った紙で「休みなのか、授業があるのか」が読めなくなる。
      朝学習と放課後は書ける（休業日でも出勤・部活・行事の準備が入る） */
-  if(isDayOff(d) && (SLOT_BY_ID[s] || {}).kind === "lesson")
+  /* **校外が覆っていれば書ける。** 自然学校のように休日・祝日をまたぐ行事がある。
+     覆っている日は斜め線を引かず、時数のために教科を入れる必要がある */
+  if(isDayOff(d) && (SLOT_BY_ID[s] || {}).kind === "lesson"
+     && !(typeof tripHere === "function" && tripHere(d, s)))
     return "この日は<b>休み</b>にしてある。授業のコマには書けない"
-         + "（全学年の面で日付を押すと戻せる）";
+         + "（右の「この週の日の形」から戻せる。校外行事を置けば書ける）";
   return "";
 }
 
@@ -4331,6 +4543,9 @@ function writeCell(d, s, patch){
        クラスを変えずに備考だけ直したときが、必ずこれに当たっていた
        ── 専科が自分で入れたコマを自分で直すたび、競合の窓が出ていた。 */
     const wasTarget = ((w.special[target] || {})[key] || {}).sat || 0;
+    /* 行き先の題名も、どける前に控える（たんぽぽ提出の判定に使う）。
+       備考だけ直したときは前後で同じ字になるので、提出は覆らない */
+    const wasTargetT = plain(((w.special[target] || {})[key] || {}).title);
     /* 行き先が変わるので一度どける。**どけたクラスだけをサーバに伝える。**
        全クラスに伝えると、1コマ直すたびに20枚のシートを読み書きすることになる
        （週案はクラスごとに1枚。触っていないクラスのシートは開かない） */
@@ -4338,8 +4553,9 @@ function writeCell(d, s, patch){
       const e = (w.special[c] || {})[key];
       if(e && e.sp === view.sp){
         const was = e.sat || 0;          /* 消す前に、サーバの時刻を控える */
+        const wasT = plain(e.title);
         delete w.special[c][key];
-        if(c !== target) Backend.cellChanged("special", c, d, s, was);
+        if(c !== target) Backend.cellChanged("special", c, d, s, was, undefined, wasT);
       }
     }
     if(target && allClasses().indexOf(target) >= 0){
@@ -4353,7 +4569,7 @@ function writeCell(d, s, patch){
         sat: wasTarget,
         at: Date.now(), by: myEmail()
       };
-      Backend.cellChanged("special", target, d, s, wasTarget);
+      Backend.cellChanged("special", target, d, s, wasTarget, undefined, wasTargetT);
     }
     return save();
   }
@@ -4363,6 +4579,9 @@ function writeCell(d, s, patch){
   /* **書き替える前に、サーバの時刻を控える。**
      空にする操作ではコマごと消えるので、あとからでは読めない */
   const was = (st[key] || {}).sat || 0;
+  /* 題名も控える。**e は st[key] と同じものを指すことがある**ので、
+     書き替えたあとでは前の字が読めない（たんぽぽ提出の判定に使う） */
+  const wasT = plain((st[key] || {}).title);
   /* **いま紙に出ているものを引き継いでから直す。**
      前は基本時間割から来たときだけ引き継いでいたので、全校や学年から
      降りてきたコマに詳細を1字書くと、題名が空のまま「担任」として入り、
@@ -4378,7 +4597,7 @@ function writeCell(d, s, patch){
   e.by = myEmail();          /* 層ではなく人。層は開いている面から分かる */
   e.at = Date.now();
   if(isEmptyCell(e)) delete st[key]; else { e.sat = was; st[key] = e; }
-  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s, was);
+  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s, was, undefined, wasT);
   return save();
 }
 
@@ -4458,17 +4677,11 @@ function buildSheet_(sh){
     /* 年間行事のある日に、小さな印。**画面だけ**（紙には出さない）。
        紙に出すと、どの校時か決まっていないものが版面に居座る */
     if(hasEvents(d)) hd.classList.add("hasev");
-    /* **決められるのは全学年の面だけ。** 効く範囲が全クラスなので、
-       担任の画面から押せると、自分の学級を直したついでに全校が動く */
-    if(view.kind === "school"){
-      hd.classList.add("pick");
-      hd.title = "押すと、この日の形を決められる（ふつう／特別校時／休み）。全クラスに入る";
-      /* **押せることを、字で見せる。** 印を出していなかったころは、
-         日付を押せると気づかれず、休みの日を入れる口そのものが無いと言われた。
-         印は画面だけに出す（紙に出すと、決め終わったあとも版面に残る） */
-      hd.appendChild(el("span", "pk", "▾"));
-      hd.addEventListener("click", () => openDayDlg(d));
-    }
+    /* 日の形を入れる口は、**紙の上には置かない。** 右メニューへ移した
+       （index.html の #dayWrap ・ panel.js の drawDayPanel）。
+       紙に置いていたころは、押せることに気づかれず
+       「休みの日を入れる口が無い」と言われた。押すものは、押すものが並ぶ場所に。
+       紙に残るのは印（特・休）だけ ── あれは刷って残る情報。 */
     put(hd, 2 + d, 1);
   }
 
@@ -4510,23 +4723,61 @@ function buildSheet_(sh){
 function dayColEl(d){
   const f = dayForm(d);
   const shown = SLOTS.filter(s => slotShown(d, s));
+  /* 校外行事に覆われている授業コマ。**休みより校外が勝つ。**
+     休みで空にするのは「その日は授業が無い」を伝えるためで、行事があるなら
+     「無い」は誤り。自然学校のように休日をまたぐ行事がある。
+     見出しの「休」印は残す（日の形そのものは変わっていない）。 */
+  const trip = {};
+  for(const s of shown) if(s.kind === "lesson" && tripHere(d, s.id)) trip[s.id] = true;
+  const anyTrip = Object.keys(trip).length > 0;
   const col = el("div", "daycol" + (d === DAYS - 1 ? " lastcol" : "")
                       + (f ? " form-" + f : ""));
   col.dataset.d = d;
   col.style.gridTemplateRows = shown.map(rowH).join(" ");
   /* **1つずつ置く場所を書く。** 下の斜め線が場所を先に取るので、
      自動で並べさせると、そこを避けたぶんだけ行が増える（実際に8行増えた） */
+  /* 続けて覆った授業コマを1つのまとまりにする。**間の業間・昼休みもまたぐ。**
+     1〜3限が校外なら、そのあいだの業間も校外にいる。またがないと、
+     業間のところで透かしが切れて「1・2限」と「3限」の2つに見える。 */
+  const runs = [];
+  let run = null;
+  shown.forEach((s, i) => {
+    if(s.kind !== "lesson") return;              /* 休み時間はまとまりを切らない */
+    if(trip[s.id]){ if(!run) runs.push(run = {a:i, b:i}); else run.b = i; }
+    else run = null;
+  });
+  /* まとまりの中（端も含む）に入っている行 */
+  const inRun = i => runs.some(r => i >= r.a && i <= r.b);
+
   shown.forEach((s, i) => {
     const c = cellEl(d, s);
     c.style.gridColumn = "1";
     c.style.gridRow = String(i + 1);
+    /* **コマの枠はそのまま。** 校時の横線を消すと、どの校時のことか紙から
+       読めなくなる。縦につながって見えるのは、右に立てるチップのほう */
+    if(inRun(i)) c.classList.add("trip");
     col.appendChild(c);
   });
+
+  /* まとまりごとに、チップを1本。**その日の右端に立てる。**
+     半透明なので、下に書いてある予定（社会・理科）はそのまま読める。
+     下の欄は触れる（pointer-events:none）。 */
+  for(const r of runs){
+    /* **1文字ずつ積む。** writing-mode の縦書きに頼ると、字を送るのに
+       フォント側の縦組みの情報が要る。無い環境では4文字が同じ場所に重なって、
+       小さな黒い塊になった（実測）。字を1つずつ並べれば、どのフォントでも同じに出る */
+    const ov = el("div", "tripmark", "<span>"
+      + [...TRIP_NAME].map(c => "<i>" + escText(c) + "</i>").join("") + "</span>");
+    ov.style.gridColumn = "1";
+    ov.style.gridRow = (r.a + 1) + " / " + (r.b + 2);
+    col.appendChild(ov);
+  }
 
   /* **休みの日は 1〜6 を1本の斜め線で消す。**
      コマごとに引くと、業間と昼休みの行で線が切れて「1〜4だけ休み」に見える。
      線は図形で描く（背景の色は、トナーを節約する設定のプリンタで消える）。 */
-  if(f === "off"){
+  /* **校外が覆っている日は、斜め線を引かない。** 授業が無いのではなく行事がある */
+  if(f === "off" && !anyTrip){
     let a = -1, b = -1;
     shown.forEach((s, i) => { if(s.kind === "lesson"){ if(a < 0) a = i; b = i; } });
     if(a >= 0){
@@ -4550,8 +4801,9 @@ function cellEl(d, s){
          ? "<div class='n' contenteditable></div>" : ""));
   e.dataset.d = d; e.dataset.s = s.id;
   /* **休みの日の授業には書かせない。** 斜め線を引いた欄に字が入ると、
-     刷った紙で「休みなのか、授業があるのか」が読めなくなる */
-  if(isDayOff(d) && s.kind === "lesson") e.classList.add("off");
+     刷った紙で「休みなのか、授業があるのか」が読めなくなる。
+     校外が覆っていれば書ける（時数のために教科を入れる必要がある） */
+  if(isDayOff(d) && s.kind === "lesson" && !tripHere(d, s.id)) e.classList.add("off");
   const t = e.querySelector(".t"), n = e.querySelector(".n");
 
   const focus = () => selectCell(d, s.id, e);
@@ -4832,10 +5084,27 @@ const cellAt = (d, s) =>
 /* 学年・全学年からコマを取り消すためのしるし。教科と同じように引っぱって落とせる */
 const PAL_CLEAR = "__clear";
 
+/* 校外行事。**教科ではないので SUBJECTS には入れない。**
+   「リセット」と同じ別枠のチップで、押すとそのコマの被覆を付け外しする。 */
+const PAL_TRIP = "__trip";
+
+/* そのチップをこの面に出すか。**教科の「出す面」が空ならどの面にも出す。**
+   「学年」と書いてあるものは、学年と全学年の面にだけ出す ── 合同体育・
+   合同音楽・学年集会は複数学級でやるものなので、担任の面に出すと、
+   名前と実態がずれたまま自分の学級だけに入る。 */
+function chipHere_(sub){
+  const only = String((sub || {}).only || "").trim();
+  if(!only) return true;
+  return only === "学年" ? (view.kind === "grade" || view.kind === "school") : true;
+}
+
 function drawPalette(){
   const items = (view.kind === "special")
     ? allClasses().map(c => ({v:c, t:c, off:false}))
-    : SUBJECTS.map(s => ({v:s.code, t:s.name, off:!s.count}));
+    : SUBJECTS.filter(chipHere_).map(s => ({v:s.code, t:s.name, off:!s.count}));
+
+  /* **校外行事はどの面にも出す。** 学級だけの校外学習も、学年の自然学校もある */
+  if(view.kind !== "special") items.push({v:PAL_TRIP, t:"校外行事", trip:true});
 
   /* **学年・全学年には「リセット」を出す。**
      ここで入れたコマは全クラスに降りる。入れるのと同じ手数で取り消せないと、
@@ -4846,13 +5115,15 @@ function drawPalette(){
 
   $("pals").innerHTML = items.map(o =>
     "<button class='pal" + (o.off ? " off" : "") + (o.clear ? " clear" : "")
-    + "' draggable='true'"
+    + (o.trip ? " trip" : "") + "' draggable='true'"
     + " data-v='" + escText(o.v) + "'>" + escText(o.t) + "</button>").join("");
 
   if(typeof applyLock === "function") setTimeout(applyLock, 0);
   $("palHint").innerHTML = (view.kind === "special")
     ? "コマへ<b>引っぱって入れる</b>。その時間に行くクラスを選ぶ。"
     : "コマへ<b>引っぱって入れる</b>。コマを選んでから押しても入る。"
+      + "<br><b>校外行事</b>を落とすと、そのコマに薄く「校外学習」が出る"
+      + "（題名・備考には入らない。続けて置くと枠がつながる）。"
       + (canClear ? "<br><b>リセット</b>を落とすと、そのコマをここから取り消す"
                   + "（各クラスの予定が出るようになる）。" : "");
   const chip = $("chipOpen");
@@ -4873,6 +5144,33 @@ function drawPalette(){
       if(!selCell) return toast("先にコマを選ぶ");
       applyPalette(selCell.d, selCell.s, b.dataset.v);
     });
+  }
+}
+
+/* ── この週の日の形（全学年の面だけ） ──────────
+   **紙の上ではなく、押すものが並ぶここに置く。**
+   紙の日付の見出しに置いていたころは、押せることに気づかれず
+   「休みの日を入れる口が無い」と言われた。紙に残すのは印（特・休）だけで、
+   あれは刷って残る情報。押す口は、ほかの押す口と同じ場所にある。
+
+   **出すのは全学年の面だけ。** 効く範囲が全クラスなので、担任の画面から
+   押せると、自分の学級を直したついでに全校が動く。 */
+function drawDayPanel(){
+  const wrap = $("dayWrap");
+  if(!wrap) return;
+  wrap.hidden = (typeof view === "undefined") || view.kind !== "school";
+  if(wrap.hidden) return;
+  const row = $("dayRow");
+  row.textContent = "";
+  for(let d = 0; d < DAYS; d++){
+    const f = dayForm(d), dt = addDays(monday, d);
+    const b = el("button", "dayb" + (f ? " form-" + f : ""),
+      "<b>" + md(dt) + "（" + DOW[d] + "）</b>"
+      + "<span>" + escText(DAY_FORM[f].label) + "</span>");
+    b.type = "button";
+    b.title = DAY_FORM[f].why + "　押すと変えられる（全クラスに入る）";
+    b.onclick = () => openDayDlg(d);
+    row.appendChild(b);
   }
 }
 
@@ -4935,6 +5233,17 @@ function okToOverwrite(d, sid, to, yes, no, forCls){
 }
 
 function applyPalette(d, sid, v, e){
+  /* 校外行事。**押すたびに付け外し。** 続けて置けば、描くときに1つの縦長にまとまる。
+     **休みの日にも置けるので、下の whyCantWrite より先に見る**
+     （自然学校のように休日・祝日をまたぐ行事がある） */
+  if(v === PAL_TRIP){
+    const on = !tripIn_(targetStore(), d, sid);
+    const why = setTrip(d, sid, on);
+    if(why) return toast(why);
+    buildSheet(); autoFit(); selectCell(d, sid, cellAt(d, sid));
+    return void toast(on ? "このコマを<b>校外行事</b>にした（題名・備考はそのまま）"
+                         : "校外行事を外した");
+  }
   /* **入らないなら、入る前に理由を言う。** 通してしまうと writeCell が
      黙って弾き、下の toast だけが「入れた」と言う */
   const no = whyCantWrite(d, sid);
@@ -5132,7 +5441,7 @@ function doAddLink(){
 }
 /* ▲ src/js/panel.js ▲ */
 /* ▼ src/js/tanpopo.js ▼ */
-/* たんぽぽ時間割へ出すところ。
+/* たんぽぽ時間割に書き入れるところ。
 
    **1週ぶんを、1枚の新しいシートとして出す。** シート名は「9月1週」。
 
@@ -5152,6 +5461,61 @@ function doAddLink(){
    **どの校時かは時程シートが決める**ので、授業の行の上から6つを使う
    （時程のIDを学校が変えていても合う）。 */
 const tpSlots = () => SLOTS.filter(s => s.kind === "lesson").slice(0, 6).map(s => s.id);
+
+/* たんぽぽの1コマに出す字。**紙に出ているものと同じ順で決める。**
+
+   ① 校外行事に覆われていれば「校外」。**休みより勝つ** ── 休みで空にするのは
+      「その日は授業が無い」を伝えるためで、行事があるなら「無い」は誤り。
+      たんぽぽ担当はその日も支援員を組む必要がある（自然学校など）
+   ② 休みの日は空
+   ③ 教科に「たんぽぽ表記」があればそれ（児童の列は 50px。「合同体育」は入らない）
+   ④ 無ければ題名をそのまま */
+const TP_TRIP = "校外";
+function tpTitle(cls, d, s){
+  if(tripOn(cls, d, s)) return TP_TRIP;
+  if(isDayOff(d)) return "";
+  const c = compose(cls, d, s);
+  const sub = c.subject ? SUB_BY_CODE[c.subject] : null;
+  const short = sub && String(sub.tp || "").trim();
+  return short || plain(c.title).trim();
+}
+
+/* ── 提出を覆すかどうか ──────────────────────
+   **たんぽぽへ渡る文字が変わったときだけ覆す。**
+
+   提出は「担任が今週ぶんを書き終えた」という印。渡るものが変わっていないのに
+   覆すと、押し直すだけの作業が毎週増える。押し直しが増えるほど、印そのものが
+   「とりあえず押すもの」になって、たんぽぽ担当が見分けられなくなる。
+
+   たんぽぽへ渡るのは **月〜金 × 授業6コマの題名**だけ（tanpopoTitles）。だから
+
+     土曜・朝休み・朝学習・業間・昼休み・放課後・週メモ  渡らない → 覆さない
+     備考だけ直した／同じ教科名で上書きした              文字が同じ → 覆さない
+     休みにした／休みを解いた                            空で出るので → **覆る**
+     特別校時にした                                      朝学習が消えるだけ → 覆さない
+     校外行事を付けた／外した                            「校外」に変わる → **覆る**
+
+   **同じ規則がサーバにもある**（gas/Domain.gs の affectsTanpopo）。
+   画面はすぐ塗るために持ち、サーバは読み直したときの正本として持つ。
+   片方だけ直すと、画面が「済」でシートが「未」になり、どちらが本当か
+   分からなくなる。**必ず両方を直す**（gas/domaincheck.js が同じ表で見る）。
+
+   *層の重なりは見ない*：学年のコマを直しても、その上に担任のコマが載っていれば
+   渡る文字は変わらない。そこまでは見ずに覆す側へ倒す。見るにはクラスごとに
+   層を重ね直すことになり、サーバ側では同じ判定が書けない（画面とずれる）。 */
+function tpAffected(d, slot, wasTitle, nowTitle){
+  if(d >= WEEKDAYS) return false;                /* 土曜はたんぽぽへ出さない */
+  const was = String(wasTitle == null ? "" : wasTitle).trim();
+  const now = String(nowTitle == null ? "" : nowTitle).trim();
+  const OFF = DAY_FORM.off.label;
+  if(slot === DAY_SLOT) return (was === OFF) !== (now === OFF);
+  /* 校外行事の付け外し。**渡る字が「校外」に変わる**ので覆る。
+     覆っている下の時程が、たんぽぽへ出す6コマのときだけ */
+  if(String(slot).indexOf(TRIP_SLOT) === 0)
+    return tpSlots().indexOf(String(slot).slice(TRIP_SLOT.length)) >= 0 && was !== now;
+  if(tpSlots().indexOf(slot) < 0) return false;  /* 出力に入らないコマ */
+  return was !== now;
+}
 
 /* シート名。**「9月1週」。** その月の何番目の月曜かで数える。
    日付をそのまま名前にすると、たんぽぽ担当が「何週目のぶんか」を毎回数えることになる。
@@ -5176,18 +5540,38 @@ let tpPick = "1";              /* 窓でいま選んでいる組。押して入�
    **色だけに頼らない。** 短い字と左端の太い線を必ず添える。 */
 const TP_ST = {
   ok:   {mark:"済", why:"担任が「今週ぶんは書き終えた」と出している"},
-  changed: {mark:"変", why:"再提出された変更が、この出力先にまだ反映されていない"},
+  changed: {mark:"変", why:"この出力先へ出したあとに変わっている。出し直しが要る"},
   base: {mark:"未", why:"担任がまだ出していない"}
 };
 /* **1コマでも書いてあれば済、にはしない。**
    ちょっと触っただけの週と、出してよい週を、たんぽぽ担当が見分けられない。
    担任がクラスの画面で「たんぽぽに提出」を押したものだけを済にする。 */
+/* **一度出したあとに変わったものを「未」に落とさない。**
+   「未」は「担任がまだ書き終えていない。待てばよい」という意味で、
+   たんぽぽ担当はそれを見て待つ。出したあとに変わったものは**待っても直らない**
+   ── 出し直さないと、配った時間割が古いままになる。取るべき手が違うので、
+   同じ印にしない。前は次の順で見ていて、④が「未」に落ちていた。
+
+     ① まだ何もしていない      未
+     ② 担任が提出した          済
+     ③ たんぽぽへ出力した      済
+     ④ そのあと担任が直した    未 ←ここが「①と同じ」に見えていた
+     ⑤ 担任が再提出した        変
+     ⑥ もう一度出力した        済
+
+   ④と⑤は印で分けない（どちらも「出し直しが要る」）。分かれるのはそのあとの
+   手順で、④は担任の再提出を待つ必要がある（出力はサーバが止める）。
+   そこは出す前の窓が名指しで言う（tpNotYetBox）。 */
 const tpState = cls => {
   const s = tpSubmitInfo(cls);
-  if(!s || s.dirty) return 'base';
-  const target = tpTargetNow(), key = target ? (String(target.url).match(/[-\w]{25,}/) || [target.url])[0] : '';
+  if(!s) return 'base';                       /* 一度も提出していない */
+  const target = tpTargetNow();
+  const key = target ? (String(target.url).match(/[-\w]{25,}/) || [target.url])[0] : '';
   const done = (s.exports || {})[key];
-  return done && done !== s.at ? 'changed' : 'ok';
+  /* この出力先へ出したあとに変わった。直しの途中（dirty）でも、再提出後でも */
+  if(done && (s.dirty || done !== s.at)) return 'changed';
+  if(s.dirty) return 'base';                  /* 直しているが、まだ一度も出していない */
+  return 'ok';
 };
 
 /* ── 出す先 ──────────────────────────────────
@@ -5490,14 +5874,18 @@ function drawTanpopoView(){
   const allIn = chosen.length > 0 && !yet.length;
   const ready = allIn && !why;
   $("tpGo").classList.toggle("ready", ready);
-  $("tpGo").textContent = allIn ? "✓ たんぽぽ時間割へ出す" : "たんぽぽ時間割へ出す";
+  /* **「出す」ではなく「書き入れる」。** 左メニューの「週案を出す」（紙・画像・
+     Sheet）と同じ語だと、どこへ何が出るのか読み手が毎回考えることになる。
+     こちらは向こうのファイルに書き込む操作なので、語を分ける */
+  $("tpGo").textContent = allIn ? "✓ たんぽぽ時間割に書き入れる"
+                                : "たんぽぽ時間割に書き入れる";
   $("tpGo").title = why || (!chosen.length ? "先に「組分けを直す」から交流級を入れる"
     : allIn ? "入れている " + chosen.length + " クラスは、ぜんぶ提出ずみ"
             : "まだ " + yet.length + " クラスが提出していない（" + yet.join("・") + "）");
   /* **出す週を、ボタンのとなりにもう一度出す。** 左メニューの週とは離れていて、
      組を並べているうちに「どの週を出すのか」が目から外れる */
   $("tpWeek").innerHTML = "<b>" + md(monday) + " → " + md(addDays(monday, 4)) + "</b>"
-    + "<span>の週を出す</span>"
+    + "<span>の週を書き入れる</span>"
     + (chosen.length ? (allIn ? "<i class='ok'>ぜんぶ提出ずみ</i>"
                               : "<i class='yet'>未提出 " + yet.length + " クラス</i>") : "");
   $("tpCount").innerHTML = tpTotal()
@@ -5538,11 +5926,26 @@ function tpWarnBoxes(){
    出したものを見てたんぽぽ担当が支援員を組むので、まだ書き終えていない
    週を配ると、あとでやり直しになる。 */
 function tpNotYetBox(){
-  const yet = tpChosenHere().filter(c => !tpSubmitted(c));
-  if(!yet.length) return "";
-  return "<div class='box'><b>" + yet.map(escText).join("・")
-       + "</b> は、担任がまだ<b>「たんぽぽに提出」を押していません</b>。<br>"
-       + "このまま出すと、書き終えていない週をたんぽぽへ配ることになります。</div>";
+  const here = tpChosenHere();
+  /* **「まだ押していない」と「押したあとに直した」を分ける。**
+     取るべき手が違う ── 前者は待てばよく、後者は担任に再提出を頼む。
+     前は両方まとめて「まだ押していません」と出していたので、
+     押した覚えのある担任のクラスがそこに並んで、話が止まっていた。 */
+  const never = here.filter(c => !tpSubmitInfo(c));
+  const dirty = here.filter(c => { const s = tpSubmitInfo(c); return !!s && !!s.dirty; });
+  const box = [];
+  if(never.length)
+    box.push("<div class='box'><b>" + never.map(escText).join("・")
+      + "</b> は、担任がまだ<b>「たんぽぽに提出」を押していません</b>。<br>"
+      + "このまま出すと、書き終えていない週をたんぽぽへ配ることになります。</div>");
+  /* **止まることを、押す前に言う。** 提出したあとに直したクラスが1つでもあると、
+     サーバが出力そのものを止める（gas/Store.gs exportWeek_ ・ 変更ありなら通さない）。
+     押してからエラーで知ると、何をすればよいのかが画面に無い。 */
+  if(dirty.length)
+    box.push("<div class='box'><b>" + dirty.map(escText).join("・")
+      + "</b> は、<b>提出したあとに直しています</b>。<br>"
+      + "このままでは<b>出力が止まります</b>。担任に「たんぽぽに再提出」を押してもらってください。</div>");
+  return box.join("");
 }
 
 /* 出す中身を組む。**層を重ねたあとの、紙に出ているとおりの授業名。**
@@ -5555,8 +5958,7 @@ function tanpopoTitles(list){
       const one = {};
       /* **休みの日は空で出す。** 紙に斜め線を引いた日の授業をたんぽぽへ配ると、
          たんぽぽ担当がその日の支援員を組んでしまう */
-      for(const s of tpSlots())
-        one[s] = isDayOff(d) ? "" : plain(compose(cls, d, s).title).trim();
+      for(const s of tpSlots()) one[s] = tpTitle(cls, d, s);
       per[String(d)] = one;
     }
     out[cls] = per;
@@ -6257,6 +6659,7 @@ function drawDayForms(){
       setDayForm(dayPick, b.dataset.f);
       $("dayDlg").close();
       buildSheet();                 /* **組み直す。** 行の並びが変わる */
+      drawDayPanel();               /* 右メニューの並びも、いまの形にそろえる */
       autoFit();
       toast(md(addDays(monday, dayPick)) + "（" + DOW[dayPick] + "）を<b>"
           + escText(DAY_FORM[b.dataset.f].label) + "</b>にした");
@@ -6459,10 +6862,10 @@ const HELP = {
        + "直すのは年度の初めと、転入・転出のときだけです。",
        "組の中のクラスに付く <b>済／未</b> は、"
        + "その担任が「たんぽぽに提出」を押したかどうかです。",
-       "<b>出すと、たんぽぽ時間割に「9月1週」という名前のシートが1枚できます。</b>"
+       "<b>書き入れると、たんぽぽ時間割に「9月1週」という名前のシートが1枚できます。</b>"
        + "同じ名前のシートがあれば、消さずに名前を変えて残します。",
        "<b>ロックは、出す先と組分けだけを止めます。</b>"
-       + "「たんぽぽ時間割へ出す」は、ロックしたままでも押せます。",
+       + "「たんぽぽ時間割に書き入れる」は、ロックしたままでも押せます。",
        "<i>はじめの人がつまずくところ：</i>入れた組は「学級編成」の"
        + "たんぽぽ交流級の欄に残ります。年度の初めに直すのはそちらです。"]},
   month: {t:"月で見る（B4）",
@@ -7273,7 +7676,11 @@ function autoFit(){
   pa.style.zoom = 1;
   const w = sh.offsetWidth, h = sh.offsetHeight;
   if(!w || !h) return applyZoom();
-  const k = Math.min((st.clientWidth - 24) / w, (st.clientHeight - 20) / h);
+  /* **紙は痩せない。** 左右の ‹ › が取る幅を、そのまま倍率の計算に入れる
+     （入れないと、矢印のぶんだけ紙が枠からはみ出す）。隠れていれば 0 */
+  const arrows = [...st.querySelectorAll(".wkarrow")]
+    .reduce((n, e) => n + e.offsetWidth + 6, 0);
+  const k = Math.min((st.clientWidth - 24 - arrows) / w, (st.clientHeight - 20) / h);
   db.settings.vz = Math.max(30, Math.min(160, Math.round(k * 100)));
   applyZoom();
 }
@@ -7298,6 +7705,7 @@ function refreshWeek(){
   const n = weekNo();
   $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
+  drawDayPanel();                 /* この週の日の形。週をまたぐと中身が変わる */
   paintArchive();                 /* 週をまたぐと年度が変わる。**そのつど見る** */
   paintTpSub();                   /* 提出の印は週ごと。週をまたぐと未に戻る */
   if(view.kind === "tanpopo"){
@@ -7479,6 +7887,10 @@ function wire(){
 
   on("prevWk","click", () => goWeek(-7));
   on("nextWk","click", () => goWeek(7));
+  /* 紙の左右の ‹ › 。**左メニューの ◀ ▶ と同じことをする**
+     （行き先を2つ持たない。片方だけ直した版が出る） */
+  on("wkPrev","click", () => goWeek(-7));
+  on("wkNext","click", () => goWeek(7));
 
   on("abA","click", () => setVariant("A"));
   on("abB","click", () => setVariant("B"));
@@ -7660,7 +8072,7 @@ function wire(){
 
   /* たんぽぽ。**確認の窓は既定「出さない」。** 閉じ方が何であれ出さない側に落ちる */
   /* 組分けの窓。**面のロック中は開かない。** ロックが守るのは出す先と組分けで、
-     「たんぽぽ時間割へ出す」だけはロックしたままでも押せる */
+     「たんぽぽ時間割に書き入れる」だけはロックしたままでも押せる */
   /* 閉じたら中身を捨てる。**開くたびに組み直す。**
      残しておくと、閉じた窓の写しが DOM に残って、面の並びと二重に見つかる */
   /* close は非同期に届く。閉じてすぐ開き直したとき（設定からの開き直し）は、

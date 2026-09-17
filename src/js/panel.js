@@ -9,10 +9,27 @@ const cellAt = (d, s) =>
 /* 学年・全学年からコマを取り消すためのしるし。教科と同じように引っぱって落とせる */
 const PAL_CLEAR = "__clear";
 
+/* 校外行事。**教科ではないので SUBJECTS には入れない。**
+   「リセット」と同じ別枠のチップで、押すとそのコマの被覆を付け外しする。 */
+const PAL_TRIP = "__trip";
+
+/* そのチップをこの面に出すか。**教科の「出す面」が空ならどの面にも出す。**
+   「学年」と書いてあるものは、学年と全学年の面にだけ出す ── 合同体育・
+   合同音楽・学年集会は複数学級でやるものなので、担任の面に出すと、
+   名前と実態がずれたまま自分の学級だけに入る。 */
+function chipHere_(sub){
+  const only = String((sub || {}).only || "").trim();
+  if(!only) return true;
+  return only === "学年" ? (view.kind === "grade" || view.kind === "school") : true;
+}
+
 function drawPalette(){
   const items = (view.kind === "special")
     ? allClasses().map(c => ({v:c, t:c, off:false}))
-    : SUBJECTS.map(s => ({v:s.code, t:s.name, off:!s.count}));
+    : SUBJECTS.filter(chipHere_).map(s => ({v:s.code, t:s.name, off:!s.count}));
+
+  /* **校外行事はどの面にも出す。** 学級だけの校外学習も、学年の自然学校もある */
+  if(view.kind !== "special") items.push({v:PAL_TRIP, t:"校外行事", trip:true});
 
   /* **学年・全学年には「リセット」を出す。**
      ここで入れたコマは全クラスに降りる。入れるのと同じ手数で取り消せないと、
@@ -23,13 +40,15 @@ function drawPalette(){
 
   $("pals").innerHTML = items.map(o =>
     "<button class='pal" + (o.off ? " off" : "") + (o.clear ? " clear" : "")
-    + "' draggable='true'"
+    + (o.trip ? " trip" : "") + "' draggable='true'"
     + " data-v='" + escText(o.v) + "'>" + escText(o.t) + "</button>").join("");
 
   if(typeof applyLock === "function") setTimeout(applyLock, 0);
   $("palHint").innerHTML = (view.kind === "special")
     ? "コマへ<b>引っぱって入れる</b>。その時間に行くクラスを選ぶ。"
     : "コマへ<b>引っぱって入れる</b>。コマを選んでから押しても入る。"
+      + "<br><b>校外行事</b>を落とすと、そのコマに薄く「校外学習」が出る"
+      + "（題名・備考には入らない。続けて置くと枠がつながる）。"
       + (canClear ? "<br><b>リセット</b>を落とすと、そのコマをここから取り消す"
                   + "（各クラスの予定が出るようになる）。" : "");
   const chip = $("chipOpen");
@@ -50,6 +69,33 @@ function drawPalette(){
       if(!selCell) return toast("先にコマを選ぶ");
       applyPalette(selCell.d, selCell.s, b.dataset.v);
     });
+  }
+}
+
+/* ── この週の日の形（全学年の面だけ） ──────────
+   **紙の上ではなく、押すものが並ぶここに置く。**
+   紙の日付の見出しに置いていたころは、押せることに気づかれず
+   「休みの日を入れる口が無い」と言われた。紙に残すのは印（特・休）だけで、
+   あれは刷って残る情報。押す口は、ほかの押す口と同じ場所にある。
+
+   **出すのは全学年の面だけ。** 効く範囲が全クラスなので、担任の画面から
+   押せると、自分の学級を直したついでに全校が動く。 */
+function drawDayPanel(){
+  const wrap = $("dayWrap");
+  if(!wrap) return;
+  wrap.hidden = (typeof view === "undefined") || view.kind !== "school";
+  if(wrap.hidden) return;
+  const row = $("dayRow");
+  row.textContent = "";
+  for(let d = 0; d < DAYS; d++){
+    const f = dayForm(d), dt = addDays(monday, d);
+    const b = el("button", "dayb" + (f ? " form-" + f : ""),
+      "<b>" + md(dt) + "（" + DOW[d] + "）</b>"
+      + "<span>" + escText(DAY_FORM[f].label) + "</span>");
+    b.type = "button";
+    b.title = DAY_FORM[f].why + "　押すと変えられる（全クラスに入る）";
+    b.onclick = () => openDayDlg(d);
+    row.appendChild(b);
   }
 }
 
@@ -112,6 +158,17 @@ function okToOverwrite(d, sid, to, yes, no, forCls){
 }
 
 function applyPalette(d, sid, v, e){
+  /* 校外行事。**押すたびに付け外し。** 続けて置けば、描くときに1つの縦長にまとまる。
+     **休みの日にも置けるので、下の whyCantWrite より先に見る**
+     （自然学校のように休日・祝日をまたぐ行事がある） */
+  if(v === PAL_TRIP){
+    const on = !tripIn_(targetStore(), d, sid);
+    const why = setTrip(d, sid, on);
+    if(why) return toast(why);
+    buildSheet(); autoFit(); selectCell(d, sid, cellAt(d, sid));
+    return void toast(on ? "このコマを<b>校外行事</b>にした（題名・備考はそのまま）"
+                         : "校外行事を外した");
+  }
   /* **入らないなら、入る前に理由を言う。** 通してしまうと writeCell が
      黙って弾き、下の toast だけが「入れた」と言う */
   const no = whyCantWrite(d, sid);

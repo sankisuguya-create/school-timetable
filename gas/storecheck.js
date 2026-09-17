@@ -302,7 +302,24 @@ ok("朝休みは休み", slots[0].kind === "brk");
 ok("放課後は備考だけの行", slots.find(x => x.id === "after").kind === "note",
    slots.find(x => x.id === "after"));
 const subs = ev("Store.readSubjects()");
-ok("教科が18（図書を含む）", subs.length === 18, subs.length);
+ok("教科が21（図書と、複数学級でやる3つを含む）", subs.length === 21, subs.length);
+/* たんぽぽ表記と出す面。**後ろに足した2列。** 見出しの無い古いファイルでは
+   空として読まれ、既定（表示名をそのまま出す／どの面にも出す）に落ちる */
+ok("合同体育はたんぽぽに「合体」で出し、時数は体育に数える",
+   (() => { const x = subs.find(s => s.code === "goudo_taiiku");
+            return !!x && x.tp === "合体" && x.short === "体" && x.count === true; })(),
+   subs.find(s => s.code === "goudo_taiiku"));
+ok("合同音楽は「合音」／音", (() => { const x = subs.find(s => s.code === "goudo_ongaku");
+   return !!x && x.tp === "合音" && x.short === "音"; })());
+ok("学年集会は「学年集」／特（特別活動）",
+   (() => { const x = subs.find(s => s.code === "gakunen_shukai");
+            return !!x && x.tp === "学年集" && x.short === "特"; })());
+ok("複数学級でやる3つは、学年・全学年の面にだけ出す",
+   subs.filter(s => s.only === "学年").map(s => s.code).join(",")
+   === "goudo_taiiku,goudo_ongaku,gakunen_shukai",
+   subs.filter(s => s.only === "学年").map(s => s.code));
+ok("ふつうの教科は、どの面にも出す（出す面は空）",
+   subs.find(s => s.code === "kokugo").only === "");
 ok("国語は数える／行事は数えない",
    subs.find(s => s.code === "kokugo").count === true
    && subs.find(s => s.code === "gyoji").count === false);
@@ -1269,7 +1286,7 @@ for(const call of gated){
 EMAIL = "tanaka@edu.nishi.or.jp";
 ok("教職員は apiBoot を通る", typeof ev("apiBoot()").me === "string");
 ok("apiBoot が時程と教科を渡す",
-   ev("apiBoot()").slots.length === 11 && ev("apiBoot()").subjects.length === 18);
+   ev("apiBoot()").slots.length === 11 && ev("apiBoot()").subjects.length === 21);
 
 console.log("\n■ クラス表記が日付に化けるのを防ぐ");
 ok("クラス列は書式なしテキストにしてある", FORMATS["クラス/3"] === "@", FORMATS);

@@ -13,6 +13,12 @@
 const Store = (function(){
 
   const TZ  = "Asia/Tokyo";
+  /* 日の形を置く時程のIDと、休みの題名。**画面の config.js と同じ字。**
+     ここを変えるときは向こうも変える（たんぽぽ提出の判定が食い違う） */
+  const DAY_SLOT_ = "day";
+  const DAY_OFF_  = "休み";
+  /* 校外行事を置く時程のIDの頭。画面の config.js の TRIP_SLOT と同じ字 */
+  const TRIP_SLOT_ = "trip:";
   const DOW_ = ["日", "月", "火", "水", "木", "金", "土"];
   const ymd = d => Utilities.formatDate(
     Sheets.isDate(d) ? d : new Date(String(d)), TZ, "yyyy-MM-dd");
@@ -226,7 +232,12 @@ const Store = (function(){
       code:  String(r["コード"]).trim(),
       name:  String(r["表示名"]),
       short: String(r["時数表の1文字"] || ""),
-      count: truthy(r["時数に数える"])
+      count: truthy(r["時数に数える"]),
+      /* **後ろに足した2列。見出しが無い古いファイルでは空になる。**
+         空のときの既定は「表示名をそのまま出す」「どの面にも出す」なので、
+         列を足していない学校でも、いままでどおり動く */
+      tp:    String(r["たんぽぽ表記"] || ""),
+      only:  String(r["出す面"] || "").trim()
     })).filter(s => s.code);
   }
 
@@ -689,6 +700,10 @@ const Store = (function(){
     const t1 = Date.now();
     try{
       const rank = slotRank();
+      /* **たんぽぽへ渡る文字が変わったコマだけ**が、担任の提出を覆す
+         （→ gas/Domain.gs affectsTanpopo ・ 同じ規則が src/js/tanpopo.js にある）。
+         渡るのは 月〜金 × 授業6コマの題名だけなので、その並びをここで1回だけ作る。 */
+      const tpIds = readSlots().filter(s => s.kind === "lesson").slice(0, 6).map(s => s.id);
       const now = new Date(), at = {};
       /* **競合したコマは、黙って飛ばさない。** 数も中身も返す。
          返さないと、教師は書けたつもりで書けていないまま週を進める。 */
@@ -724,11 +739,20 @@ const Store = (function(){
 
              expectedAt が無いのは古い版の画面。**そこは今までどおり書く**
              （止めると、貼り替えの途中で全員が保存できなくなる）。 */
+          /* 直す前にその行が持っていた題名。**競合の判定より先に読む**
+             （競合で飛ばしたコマは、そもそも書いていないので覆さない） */
+          const before = (i !== undefined) ? rows[i] : null;
+          const wasTitle = before ? String(before["題名"] || "") : "";
+          const nowTitle = remove ? "" : String(p.title || "");
+          const dow = (new Date(date + "T00:00:00").getDay() + 6) % 7;  /* 月曜を 0 に */
+          p.__tanpopo = TimetableDomain.affectsTanpopo(
+            dow, p.slot, wasTitle, nowTitle, tpIds, DAY_SLOT_, DAY_OFF_, TRIP_SLOT_);
+
           if(p.expectedAt !== undefined && p.expectedAt !== null){
             /* 0 は「行がまだ無い」。**行はあるが更新時刻が無い**ときは -1。
                どちらも 0 にすると、新しいコマのつもりで 0 を送ってきた画面と
                一致してしまい、1.3.0 より前に書かれた行を見ないまま消せる。 */
-            const cur = (i !== undefined) ? rows[i] : null;
+            const cur = before;
             const curAt = !cur ? 0
                         : Sheets.isDate(cur["更新時刻"]) ? cur["更新時刻"].getTime() : -1;
             if(!TimetableDomain.expectedVersionMatches(p.expectedAt, curAt)){
@@ -767,6 +791,7 @@ const Store = (function(){
           return (rx === undefined ? 99 : rx) - (ry === undefined ? 99 : ry);
         });
         markTpChanges_(year, byName[name].filter(p =>
+          p.__tanpopo &&
           Object.prototype.hasOwnProperty.call(at, [ymd(p.date), p.slot, p.layer, Sheets.asClass(p.target)].join("|"))));
         Sheets.writePlan(name, keep);
       }

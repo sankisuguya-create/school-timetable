@@ -162,7 +162,11 @@ function autoFit(){
   pa.style.zoom = 1;
   const w = sh.offsetWidth, h = sh.offsetHeight;
   if(!w || !h) return applyZoom();
-  const k = Math.min((st.clientWidth - 24) / w, (st.clientHeight - 20) / h);
+  /* **紙は痩せない。** 左右の ‹ › が取る幅を、そのまま倍率の計算に入れる
+     （入れないと、矢印のぶんだけ紙が枠からはみ出す）。隠れていれば 0 */
+  const arrows = [...st.querySelectorAll(".wkarrow")]
+    .reduce((n, e) => n + e.offsetWidth + 6, 0);
+  const k = Math.min((st.clientWidth - 24 - arrows) / w, (st.clientHeight - 20) / h);
   db.settings.vz = Math.max(30, Math.min(160, Math.round(k * 100)));
   applyZoom();
 }
@@ -187,6 +191,7 @@ function refreshWeek(){
   const n = weekNo();
   $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
+  drawDayPanel();                 /* この週の日の形。週をまたぐと中身が変わる */
   paintArchive();                 /* 週をまたぐと年度が変わる。**そのつど見る** */
   paintTpSub();                   /* 提出の印は週ごと。週をまたぐと未に戻る */
   if(view.kind === "tanpopo"){
@@ -368,6 +373,10 @@ function wire(){
 
   on("prevWk","click", () => goWeek(-7));
   on("nextWk","click", () => goWeek(7));
+  /* 紙の左右の ‹ › 。**左メニューの ◀ ▶ と同じことをする**
+     （行き先を2つ持たない。片方だけ直した版が出る） */
+  on("wkPrev","click", () => goWeek(-7));
+  on("wkNext","click", () => goWeek(7));
 
   on("abA","click", () => setVariant("A"));
   on("abB","click", () => setVariant("B"));
@@ -549,7 +558,7 @@ function wire(){
 
   /* たんぽぽ。**確認の窓は既定「出さない」。** 閉じ方が何であれ出さない側に落ちる */
   /* 組分けの窓。**面のロック中は開かない。** ロックが守るのは出す先と組分けで、
-     「たんぽぽ時間割へ出す」だけはロックしたままでも押せる */
+     「たんぽぽ時間割に書き入れる」だけはロックしたままでも押せる */
   /* 閉じたら中身を捨てる。**開くたびに組み直す。**
      残しておくと、閉じた窓の写しが DOM に残って、面の並びと二重に見つかる */
   /* close は非同期に届く。閉じてすぐ開き直したとき（設定からの開き直し）は、

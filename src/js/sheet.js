@@ -61,17 +61,11 @@ function buildSheet_(sh){
     /* 年間行事のある日に、小さな印。**画面だけ**（紙には出さない）。
        紙に出すと、どの校時か決まっていないものが版面に居座る */
     if(hasEvents(d)) hd.classList.add("hasev");
-    /* **決められるのは全学年の面だけ。** 効く範囲が全クラスなので、
-       担任の画面から押せると、自分の学級を直したついでに全校が動く */
-    if(view.kind === "school"){
-      hd.classList.add("pick");
-      hd.title = "押すと、この日の形を決められる（ふつう／特別校時／休み）。全クラスに入る";
-      /* **押せることを、字で見せる。** 印を出していなかったころは、
-         日付を押せると気づかれず、休みの日を入れる口そのものが無いと言われた。
-         印は画面だけに出す（紙に出すと、決め終わったあとも版面に残る） */
-      hd.appendChild(el("span", "pk", "▾"));
-      hd.addEventListener("click", () => openDayDlg(d));
-    }
+    /* 日の形を入れる口は、**紙の上には置かない。** 右メニューへ移した
+       （index.html の #dayWrap ・ panel.js の drawDayPanel）。
+       紙に置いていたころは、押せることに気づかれず
+       「休みの日を入れる口が無い」と言われた。押すものは、押すものが並ぶ場所に。
+       紙に残るのは印（特・休）だけ ── あれは刷って残る情報。 */
     put(hd, 2 + d, 1);
   }
 
@@ -113,23 +107,61 @@ function buildSheet_(sh){
 function dayColEl(d){
   const f = dayForm(d);
   const shown = SLOTS.filter(s => slotShown(d, s));
+  /* 校外行事に覆われている授業コマ。**休みより校外が勝つ。**
+     休みで空にするのは「その日は授業が無い」を伝えるためで、行事があるなら
+     「無い」は誤り。自然学校のように休日をまたぐ行事がある。
+     見出しの「休」印は残す（日の形そのものは変わっていない）。 */
+  const trip = {};
+  for(const s of shown) if(s.kind === "lesson" && tripHere(d, s.id)) trip[s.id] = true;
+  const anyTrip = Object.keys(trip).length > 0;
   const col = el("div", "daycol" + (d === DAYS - 1 ? " lastcol" : "")
                       + (f ? " form-" + f : ""));
   col.dataset.d = d;
   col.style.gridTemplateRows = shown.map(rowH).join(" ");
   /* **1つずつ置く場所を書く。** 下の斜め線が場所を先に取るので、
      自動で並べさせると、そこを避けたぶんだけ行が増える（実際に8行増えた） */
+  /* 続けて覆った授業コマを1つのまとまりにする。**間の業間・昼休みもまたぐ。**
+     1〜3限が校外なら、そのあいだの業間も校外にいる。またがないと、
+     業間のところで透かしが切れて「1・2限」と「3限」の2つに見える。 */
+  const runs = [];
+  let run = null;
+  shown.forEach((s, i) => {
+    if(s.kind !== "lesson") return;              /* 休み時間はまとまりを切らない */
+    if(trip[s.id]){ if(!run) runs.push(run = {a:i, b:i}); else run.b = i; }
+    else run = null;
+  });
+  /* まとまりの中（端も含む）に入っている行 */
+  const inRun = i => runs.some(r => i >= r.a && i <= r.b);
+
   shown.forEach((s, i) => {
     const c = cellEl(d, s);
     c.style.gridColumn = "1";
     c.style.gridRow = String(i + 1);
+    /* **コマの枠はそのまま。** 校時の横線を消すと、どの校時のことか紙から
+       読めなくなる。縦につながって見えるのは、右に立てるチップのほう */
+    if(inRun(i)) c.classList.add("trip");
     col.appendChild(c);
   });
+
+  /* まとまりごとに、チップを1本。**その日の右端に立てる。**
+     半透明なので、下に書いてある予定（社会・理科）はそのまま読める。
+     下の欄は触れる（pointer-events:none）。 */
+  for(const r of runs){
+    /* **1文字ずつ積む。** writing-mode の縦書きに頼ると、字を送るのに
+       フォント側の縦組みの情報が要る。無い環境では4文字が同じ場所に重なって、
+       小さな黒い塊になった（実測）。字を1つずつ並べれば、どのフォントでも同じに出る */
+    const ov = el("div", "tripmark", "<span>"
+      + [...TRIP_NAME].map(c => "<i>" + escText(c) + "</i>").join("") + "</span>");
+    ov.style.gridColumn = "1";
+    ov.style.gridRow = (r.a + 1) + " / " + (r.b + 2);
+    col.appendChild(ov);
+  }
 
   /* **休みの日は 1〜6 を1本の斜め線で消す。**
      コマごとに引くと、業間と昼休みの行で線が切れて「1〜4だけ休み」に見える。
      線は図形で描く（背景の色は、トナーを節約する設定のプリンタで消える）。 */
-  if(f === "off"){
+  /* **校外が覆っている日は、斜め線を引かない。** 授業が無いのではなく行事がある */
+  if(f === "off" && !anyTrip){
     let a = -1, b = -1;
     shown.forEach((s, i) => { if(s.kind === "lesson"){ if(a < 0) a = i; b = i; } });
     if(a >= 0){
@@ -153,8 +185,9 @@ function cellEl(d, s){
          ? "<div class='n' contenteditable></div>" : ""));
   e.dataset.d = d; e.dataset.s = s.id;
   /* **休みの日の授業には書かせない。** 斜め線を引いた欄に字が入ると、
-     刷った紙で「休みなのか、授業があるのか」が読めなくなる */
-  if(isDayOff(d) && s.kind === "lesson") e.classList.add("off");
+     刷った紙で「休みなのか、授業があるのか」が読めなくなる。
+     校外が覆っていれば書ける（時数のために教科を入れる必要がある） */
+  if(isDayOff(d) && s.kind === "lesson" && !tripHere(d, s.id)) e.classList.add("off");
   const t = e.querySelector(".t"), n = e.querySelector(".n");
 
   const focus = () => selectCell(d, s.id, e);

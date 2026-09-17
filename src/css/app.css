@@ -134,8 +134,36 @@ button,select,input,textarea{font:inherit;color:inherit}
 .legend i.bs{background:var(--sheet)}
 
 .stage{overflow:auto;padding:10px;display:flex;justify-content:center;
-  align-items:flex-start;min-height:0;min-width:0}
+  align-items:flex-start;min-height:0;min-width:0;gap:6px}
 .stage[hidden]{display:none!important}
+
+/* 紙の左右で週を繰る。**左メニューの ◀ ▶ と同じことをする。**
+   読んでいる目の高さに置くので、左端まで視線を戻さずに週を繰れる。
+   **紙は痩せない** ── 幅を取るぶんは autoFit が測って倍率に入れる。
+   刷るときは出さない（@media print で消す。紙の外のものだから）。 */
+.wkarrow{flex:0 0 auto;align-self:center;width:38px;height:76px;
+  border:1px solid var(--line);border-radius:var(--r);background:var(--card);
+  color:var(--tx-sub);font-size:26px;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center}
+.wkarrow:hover{background:var(--hover);color:var(--tx);border-color:var(--tx-sub)}
+.wkarrow:focus-visible{outline:2px solid var(--ink-link);outline-offset:2px}
+
+/* その日の形（右メニュー・全学年の面だけ）。
+   **色だけで表さない。** 形の名前（ふつう／特別校時／休み）を必ず字で出す。 */
+.dayrow{display:flex;flex-direction:column;gap:4px}
+.dayb{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:7px 10px;border:1px solid var(--line);border-radius:var(--r-sm);
+  background:var(--card);cursor:pointer;font:inherit;text-align:left;
+  border-left:4px solid var(--line)}
+.dayb:hover{background:var(--hover);border-color:var(--tx-sub)}
+.dayb:focus-visible{outline:2px solid var(--ink-link);outline-offset:2px}
+.dayb b{font-weight:600;font-size:13px}
+.dayb span{font-size:12px;color:var(--tx-sub)}
+/* 入れてある日だけ、左端の線と字を濃くする */
+.dayb.form-special{border-left-color:var(--cat-grade)}
+.dayb.form-special span{color:var(--cat-grade);font-weight:700}
+.dayb.form-off{border-left-color:var(--cat-clash)}
+.dayb.form-off span{color:var(--cat-clash);font-weight:700}
 /* 状態と入力範囲。静的なCSSだけで描き、紙面・印刷の背景には載せない。
 
    **どの面でも向きは同じ。くすんでいたら、まだシートに入っていない。**
@@ -460,8 +488,20 @@ span.tpin{cursor:default}
 .pal[data-v=doutoku] {background:var(--sub-doutoku)}
 .pal[data-v=gaikoku] {background:var(--sub-gaikoku)}
 .pal[data-v=gakkatsu]{background:var(--sub-gakkatsu)}
+/* 複数学級でやるものは、**元の教科と同じ地**にする。時数も元の教科に数えるので、
+   別の色にすると「別の教科」という読みを色が作ってしまう。
+   合同かどうかは、チップの字（合同体育／体育）が言っている */
+.pal[data-v=goudo_taiiku]{background:var(--sub-taiiku)}
+.pal[data-v=goudo_ongaku]{background:var(--sub-ongaku)}
+.pal[data-v=gakunen_shukai]{background:var(--sub-gakkatsu)}
 /* 時数に数えないもの。**破線の枠は残す。** 色を外しても数えないと分かる */
 .pal.off{background:var(--sub-none)}
+/* 校外行事は教科ではない。**教科の並びと見分けられる形にする**
+   （色だけに頼らない ── 字が「校外行事」と言っている）。
+   地は紙のコマに使っていない色にする ── 白のままだと、紙のコマの地と
+   同じ色になり、「教科の色を紙に出さない」という決まりの検査に当たる */
+.pal.trip{background:var(--hover);border-style:dashed;border-color:var(--cat-school);
+  color:var(--cat-school);font-weight:600}
 .pal:hover{border-color:var(--ink-link);box-shadow:inset 0 0 0 1px var(--ink-link)}
 .pal:active{cursor:grabbing}
 /* 基本時間割にも、教科を探す補助として同じ淡い色を使う。字は必ず残す。 */

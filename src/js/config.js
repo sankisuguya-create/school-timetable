@@ -27,7 +27,15 @@ let SLOTS = [
 let SLOT_BY_ID = Object.fromEntries(SLOTS.map(s => [s.id, s]));
 
 /* short = 時数集計表に入れる1文字。
-   count:false の教科は空にする。**書くと Excel 側の出現数の集計が増える。** */
+   count:false の教科は空にする。**書くと Excel 側の出現数の集計が増える。**
+
+   tp   = たんぽぽ時間割に出す字。**空なら表示名をそのまま出す。**
+          たんぽぽの児童の列は 50px しかないので、「合同体育」は入らない。
+          時数の1文字とは別に持つ（「合体」は2文字で、1文字には縮まない）。
+   面   = そのチップをどの面に出すか。空なら**どの面にも出す**。
+          "学年" と書いたものは、学年と全学年の面にだけ出す。
+          合同体育・合同音楽・学年集会は複数学級でやるものなので、
+          担任の面に出すと、名前と実態がずれたまま自分の学級だけに入る。 */
 let SUBJECTS = [
   {code:"kokugo",  name:"国語",  short:"国", count:true},
   {code:"shakai",  name:"社会",  short:"社", count:true},
@@ -42,6 +50,11 @@ let SUBJECTS = [
   {code:"gaikoku", name:"外国語",short:"外", count:true},
   {code:"sogo",    name:"総合",  short:"総", count:true},
   {code:"gakkatsu",name:"学活",  short:"学", count:true},
+  /* 複数学級でやるもの。**学年・全学年の面にだけ出す。**
+     時数は元の教科に数える（合同体育＝体育、合同音楽＝音楽、学年集会＝特別活動） */
+  {code:"goudo_taiiku",  name:"合同体育", short:"体", count:true, tp:"合体",   only:"学年"},
+  {code:"goudo_ongaku",  name:"合同音楽", short:"音", count:true, tp:"合音",   only:"学年"},
+  {code:"gakunen_shukai",name:"学年集会", short:"特", count:true, tp:"学年集", only:"学年"},
   /* 図書（固定時間割の「と」）。**時数に数えるかは学校が決める。**
      数えるなら「時数表の1文字」を入れて count:true にする */
   {code:"tosho",   name:"図書",  short:"",   count:false},
@@ -140,6 +153,17 @@ const DAY_FORM = {
   "special": {label:"特別校時", mark:"特", why:"朝学習が無い。その日の欄が1つ上へ詰まる"},
   "off":     {label:"休み",     mark:"休", why:"1〜6校時に斜め線を引く。書き込めなくなる"}
 };
+/* ── 校外行事（被覆） ────────────────────────
+   **題名にも備考にも入らない。** コマの上に薄く縦書きで出る印で、続けて置くと
+   枠がつながって1つの縦長になる。題名欄はコマごとに残るので、時数は今までどおり
+   各コマの教科で数えられる。
+
+   持ち方は**ふつうのコマと同じ**（時程のIDに `trip:時程`）。`day`・`memo` と
+   同じ手で、専用の入れ物を作らない。**週案シートに列を足さない** ── 列を足すと、
+   見出しの無い既存ファイルで黙って読み捨てられる（writePlan は見出しを書き直さない）。 */
+const TRIP_SLOT = "trip:";
+const TRIP_NAME = "校外学習";
+
 /* 休みの日に引く斜め線。**背景ではなく図形で描く。**
    背景の色は、トナーを節約する設定のプリンタでは消えることがある。 */
 const SLASH_SVG = '<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">'

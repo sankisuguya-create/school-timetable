@@ -286,8 +286,24 @@ const tpIn = g => (Y().tanpopo || {})[String(g)] || [];
 const tpSubmitted = cls => { const s = tpSubmitInfo(cls); return !!s && !s.dirty; };
 const tpSubmitInfo = cls => (week().tpSub || {})[String(cls)] || null;
 /* 提出後の変更は、保存済みでも再提出するまで残す。サーバにも同じ状態を記録する。 */
-function markTpEdited(layer, target, where){
+/* その層・その対象の棚に、いま入っている題名（字だけ）。 */
+function tpTitleIn_(w, layer, target, d, slot){
+  if(!w) return "";
+  const bank = layer === "school"  ? w.school
+             : layer === "grade"   ? (w.grade[target]   || {})
+             : layer === "special" ? (w.special[target] || {})
+             :                       (w.home[target]    || {});
+  const e = (bank || {})[ck(d, slot)];
+  return e ? plain(e.title) : "";
+}
+/* wasTitle ＝ 直す前に、その棚に入っていた題名。呼ぶ側が書き替える前に控える。
+   **渡したときだけ**、たんぽぽへ渡る文字が変わったかを見て覆すかを決める
+   （規則は tanpopo.js の tpAffected）。渡さなかった呼び出しは今までどおり
+   層だけで決める ── 見落としがあっても、覆す側（安全側）に倒れる。 */
+function markTpEdited(layer, target, where, d, slot, wasTitle){
   const w = where ? ((db.years[String(where.year)] || {}).weeks || {})[where.monday] : week();
+  if(wasTitle !== undefined && typeof tpAffected === "function"
+     && !tpAffected(d, slot, wasTitle, tpTitleIn_(w, layer, target, d, slot))) return;
   if(w){
     const pending = w.tpEdited || (w.tpEdited = {});
     const seq = w.tpEditSeq || (w.tpEditSeq = {});
