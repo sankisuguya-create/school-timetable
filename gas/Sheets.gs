@@ -82,6 +82,14 @@ const Sheets = (function(){
          既定の動き（表示名をそのまま出す／どの面にも出す）に落ちる。 */
       cols: ["コード", "表示名", "時数表の1文字", "時数に数える",
              "たんぽぽ表記", "出す面"],
+      /* **無くてもよい列。** ここに挙げた見出しは、古いファイルに無くても
+         読みを止めない（head が落ちると apiBoot ごと落ちて、教師は
+         「開けなかった」しか見えなくなる）。無いときは空として読まれる。 */
+      opt: ["たんぽぽ表記", "出す面"],
+      /* **あとから足した行。** setup は既にあるシートを触らないので、
+         この3つだけは fillSubjectCols で足す（→ fillAfterRow と同じ考え）。
+         他の行は足さない。消した学校には、消した理由がある */
+      later: ["goudo_taiiku", "goudo_ongaku", "gakunen_shukai"],
       seed: [
         ["kokugo","国語","国",true], ["shakai","社会","社",true],
         ["sansu","算数","算",true],  ["rika","理科","理",true],
@@ -379,6 +387,13 @@ const Sheets = (function(){
      どれも「そのうち必ず来る」ので、書く前にここで伸ばす。
      まとめて余分に伸ばすのは、1行ずつ足すたびに API を1往復するのを避けるため。 */
   const GROW_SLACK = 200;
+  /* 行を、決まった桁まで空文字で埋める */
+  function pad_(row, n){
+    const x = row.slice();
+    while(x.length < n) x.push("");
+    return x;
+  }
+
   function grow(sh, rows, cols){
     if(rows){
       const have = sh.getMaxRows();
@@ -400,7 +415,9 @@ const Sheets = (function(){
       if(sh){ kept.push(name); continue; }
       sh = ss.insertSheet(name);
       const spec = SPEC[name];
-      const rows = [spec.cols].concat(spec.seed.map(r => r.slice()));
+      /* **桁を揃えてから書く。** setValues は配列の形が範囲と合わないと落ちる。
+         列をあとから足したとき、古い seed の行は短いままになる */
+      const rows = [spec.cols].concat(spec.seed.map(r => pad_(r, spec.cols.length)));
       sh.getRange(1, 1, rows.length, spec.cols.length).setValues(rows);
       sh.getRange(1, 1, 1, spec.cols.length).setFontWeight("bold");
       sh.setFrozenRows(1);
@@ -452,6 +469,56 @@ const Sheets = (function(){
     return String(seed[0][1]);                   /* 「放課後」 */
   }
 
+  /* ── 教科シートの、あとから足した列と行 ──────────
+     `setup()` は**無いシートを作るだけ**で、あるシートには触らない。
+     だから 1.23.0 より前に作った学校の「教科」シートには、
+     `たんぽぽ表記`・`出す面` の2列と、複数学級でやる3つの行が入らない。
+
+     **列は右に足し、行は下に足す。** 途中に差し込まない（学校が自分で
+     足した列があっても、位置がずれない）。値は見出しの位置に入れるので、
+     並びを入れ替えている学校でも正しい列に入る。 */
+  function fillSubjectCols(){
+    const sh = sheet("教科");
+    if(!sh) return "";
+    const spec = SPEC["教科"], opt = spec.opt || [], later = spec.later || [];
+    let w = Math.max(1, sh.getLastColumn());
+    const at = {};
+    sh.getRange(1, 1, 1, w).getValues()[0]
+      .forEach((v, i) => { const k = String(v).trim(); if(k) at[k] = i; });
+    const added = [];
+    for(const c of opt){
+      if(c in at) continue;
+      grow(sh, 1, w + 1);
+      sh.getRange(1, w + 1).setValue(c).setFontWeight("bold");
+      at[c] = w; w++;
+      added.push(c + "の列");
+    }
+    /* 行。**コードで見る。**表示名を学校が直していても、二重に足さない */
+    const last = sh.getLastRow();
+    const have = {};
+    if(last >= 2 && ("コード" in at))
+      sh.getRange(2, at["コード"] + 1, last - 1, 1).getValues()
+        .forEach(r => { have[String(r[0]).trim()] = true; });
+    const rows = [];
+    for(const code of later){
+      if(have[code]) continue;
+      const seed = spec.seed.filter(r => String(r[0]) === code)[0];
+      if(!seed) continue;
+      const line = new Array(w).fill("");
+      spec.cols.forEach((c, i) => {
+        if((c in at) && seed[i] !== undefined) line[at[c]] = seed[i];
+      });
+      rows.push(line);
+      added.push(String(seed[1]) + "の行");
+    }
+    if(rows.length){
+      const start = sh.getLastRow() + 1;
+      grow(sh, start + rows.length - 1, w);
+      sh.getRange(start, 1, rows.length, w).setValues(rows);
+    }
+    return added.join("、");
+  }
+
   /* 見出しの行を読んで、列名 → 位置 の対応を作る。 */
   function head(name){
     const sh = sheet(name);
@@ -460,8 +527,10 @@ const Sheets = (function(){
     const row = sh.getRange(1, 1, 1, w).getValues()[0];
     const at = {};
     row.forEach((v, i) => { const k = String(v).trim(); if(k) at[k] = i; });
+    const opt = SPEC[name].opt || [];
     for(const c of SPEC[name].cols)
-      if(!(c in at)) throw new Error(name + " シートに「" + c + "」の列が無い");
+      if(!(c in at) && opt.indexOf(c) < 0)
+        throw new Error(name + " シートに「" + c + "」の列が無い");
     return {sh, at, width: w};
   }
 
@@ -529,7 +598,8 @@ const Sheets = (function(){
 
   return {SPEC, NAMES, PASTE, EVENTS, EVENT_COLS, CLASS_COLS,
           TANPOPO_FILL, TANPOPO_OWN, asClass, isDate, readGrid,
-          book, bookName, stash, shapeOk, shapeError, readAllSoft, grow, fillAfterRow,
+          book, bookName, stash, shapeOk, shapeError, readAllSoft, grow,
+          fillAfterRow, fillSubjectCols,
           PLAN_PREFIX, PLAN_ALL, PLAN_COLS, planName, ensurePlan, readPlan, writePlan,
           planNames, planMap,
           setup, head, readAll, appendRows, toArray, setRow, blankRow, sheet};
@@ -539,12 +609,15 @@ const Sheets = (function(){
 function setupSheets(){
   Gate.check();                 /* URL を開ける人は直接叩ける。ここも関門を通す */
   const r = Sheets.setup();
-  /* **あとから足した行は、setup では入らない。** ここで1行だけ面倒を見る。
-     放課後の行が無いと、画面に放課後の欄そのものが出ない */
+  /* **あとから足した列と行は、setup では入らない。** ここで面倒を見る。
+     放課後の行が無いと、画面に放課後の欄そのものが出ない。
+     教科の2列が無いと、起動の読みが落ちて「開けなかった」しか出ない */
   r.added = Sheets.fillAfterRow();
+  r.subject = Sheets.fillSubjectCols();
   const msg = "作った: " + (r.made.join("、") || "なし")
             + "\nもうあった: " + (r.kept.join("、") || "なし")
-            + (r.added ? "\n「時程」シートに「" + r.added + "」の行を足した" : "");
+            + (r.added ? "\n「時程」シートに「" + r.added + "」の行を足した" : "")
+            + (r.subject ? "\n「教科」シートに " + r.subject + " を足した" : "");
   try{ SpreadsheetApp.getUi().alert(msg); }catch(e){ Logger.log(msg); }
   return r;
 }

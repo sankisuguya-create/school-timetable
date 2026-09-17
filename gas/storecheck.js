@@ -22,6 +22,20 @@ const WIDE = 20;                         /* 偽物の最大列数 */
    いまは新しいシートと同じ 1000行 × 26列から始め、
    insertRowsAfter / insertColumnsAfter で伸ばしたぶんだけ広がる。 */
 const NEW_ROWS = 1000, NEW_COLS = 26;
+/* **形の合わない配列は、本物と同じように断る。**
+   本物の setValues は「範囲の行数・列数と配列の形が合わない」と例外を投げる。
+   偽物が黙って undefined を埋めていたので、seed の行が短いまま列を増やした
+   誤りが検査に出ず、新しいファイルの setupSheets が本番でだけ落ちる形になっていた。 */
+function rect_(v, nr, nc){
+  if(!Array.isArray(v) || v.length !== nr)
+    throw new Error("行の数が範囲と合わない：" + (Array.isArray(v) ? v.length : typeof v)
+                  + " ≠ " + nr);
+  for(let i = 0; i < nr; i++)
+    if(!Array.isArray(v[i]) || v[i].length !== nc)
+      throw new Error("列の数が範囲と合わない：" + (Array.isArray(v[i]) ? v[i].length : typeof v[i])
+                    + " ≠ " + nc + "（" + (i + 1) + " 行目）");
+  return v;
+}
 function ensure(grid, r, c){
   /* 検査のほうが直に押し込んだ行は、シートの側にもあることにする
      （put(...) で1行ずつ足す書き方をしている検査があるため） */
@@ -74,6 +88,7 @@ function fakeSheet(name){
           return this;
         },
         setValues(v){
+          rect_(v, nr, nc);
           for(let i = 0; i < nr; i++) for(let j = 0; j < nc; j++)
             grid[r - 1 + i][c - 1 + j] = v[i][j];
           return this;
@@ -135,7 +150,8 @@ function fakeSheetOn(grid0, name){
           for(let i = 0; i < nr; i++) out.push(grid[r - 1 + i].slice(c - 1, c - 1 + nc));
           return out; },
         getDisplayValues(){ return this.getValues().map(row => row.map(v => String(v == null ? "" : v))); },
-        setValues(v){ for(let i = 0; i < nr; i++) for(let j = 0; j < nc; j++)
+        setValues(v){ rect_(v, nr, nc);
+          for(let i = 0; i < nr; i++) for(let j = 0; j < nc; j++)
             grid[r - 1 + i][c - 1 + j] = v[i][j];
           return this; },
         setValue(v){ grid[r - 1][c - 1] = v; return this; },
@@ -325,6 +341,45 @@ ok("国語は数える／行事は数えない",
    && subs.find(s => s.code === "gyoji").count === false);
 ok("数えない教科の1文字は空",
    subs.filter(s => !s.count).every(s => s.short === ""));
+
+/* ── 古いファイル（教科シートが4列のまま） ─────────
+   1.23.0 で「たんぽぽ表記」「出す面」の2列を足した。**setup は既にある
+   シートを触らない**ので、それより前に作ったファイルは4列のままになる。
+   ここで読みが落ちると apiBoot ごと落ち、教師には「開けなかった」しか出ない
+   （そのうえ、クラス編成も時程も設定もシートから来なくなる）。 */
+console.log("\n■ 教科シートが古い形（4列）のまま");
+const subjBak = SHEETS["教科"];
+const old4 = [["コード", "表示名", "時数表の1文字", "時数に数える"],
+              ["kokugo", "国語", "国", true],
+              ["taiiku", "体育", "体", true]];
+old4.max = {rows: 1000, cols: 26};
+SHEETS["教科"] = old4;
+let oldSubs = null, oldErr = "";
+try{ oldSubs = ev("Store.readSubjects()"); }catch(e){ oldErr = String(e && e.message); }
+ok("2列が無くても落ちない（落ちると起動そのものが止まる）", oldErr === "", oldErr);
+ok("無い列は空として読む（表示名をそのまま出す／どの面にも出す）",
+   !!oldSubs && oldSubs.length === 2 && oldSubs[0].tp === "" && oldSubs[0].only === "",
+   oldSubs);
+ok("起動の1往復も通る",
+   (() => { try{ return (ev("apiBoot(2026)").subjects || []).length === 2; }
+            catch(e){ return String(e && e.message); } })() === true);
+
+const filled = ev("Sheets.fillSubjectCols()");
+ok("足りない2列と3行を足す",
+   filled.indexOf("たんぽぽ表記") >= 0 && filled.indexOf("出す面") >= 0
+   && filled.indexOf("合同体育") >= 0, filled);
+const subs2 = ev("Store.readSubjects()");
+ok("足したあとは「合体」まで読める",
+   (() => { const x = subs2.find(s => s.code === "goudo_taiiku");
+            return !!x && x.tp === "合体" && x.short === "体" && x.only === "学年"; })(),
+   subs2.find(s => s.code === "goudo_taiiku"));
+ok("もとからある行は動かさない",
+   subs2[0].code === "kokugo" && subs2[1].code === "taiiku", subs2.map(s => s.code));
+ok("2回目は何も足さない（何度走らせても同じ）",
+   ev("Sheets.fillSubjectCols()") === ""
+   && ev("Store.readSubjects()").length === subs2.length);
+SHEETS["教科"] = subjBak;
+ok("もとの教科シートは21行のまま", ev("Store.readSubjects()").length === 21);
 
 console.log("\n■ 学級編成（5年6年だけ4クラス）");
 let roster = ev("Store.readRoster(2026)");
