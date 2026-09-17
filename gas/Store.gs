@@ -17,6 +17,8 @@ const Store = (function(){
      ここを変えるときは向こうも変える（たんぽぽ提出の判定が食い違う） */
   const DAY_SLOT_ = "day";
   const DAY_OFF_  = "休み";
+  /* 校外行事を置く時程のIDの頭。画面の config.js の TRIP_SLOT と同じ字 */
+  const TRIP_SLOT_ = "trip:";
   const DOW_ = ["日", "月", "火", "水", "木", "金", "土"];
   const ymd = d => Utilities.formatDate(
     Sheets.isDate(d) ? d : new Date(String(d)), TZ, "yyyy-MM-dd");
@@ -230,7 +232,12 @@ const Store = (function(){
       code:  String(r["コード"]).trim(),
       name:  String(r["表示名"]),
       short: String(r["時数表の1文字"] || ""),
-      count: truthy(r["時数に数える"])
+      count: truthy(r["時数に数える"]),
+      /* **後ろに足した2列。見出しが無い古いファイルでは空になる。**
+         空のときの既定は「表示名をそのまま出す」「どの面にも出す」なので、
+         列を足していない学校でも、いままでどおり動く */
+      tp:    String(r["たんぽぽ表記"] || ""),
+      only:  String(r["出す面"] || "").trim()
     })).filter(s => s.code);
   }
 
@@ -739,7 +746,7 @@ const Store = (function(){
           const nowTitle = remove ? "" : String(p.title || "");
           const dow = (new Date(date + "T00:00:00").getDay() + 6) % 7;  /* 月曜を 0 に */
           p.__tanpopo = TimetableDomain.affectsTanpopo(
-            dow, p.slot, wasTitle, nowTitle, tpIds, DAY_SLOT_, DAY_OFF_);
+            dow, p.slot, wasTitle, nowTitle, tpIds, DAY_SLOT_, DAY_OFF_, TRIP_SLOT_);
 
           if(p.expectedAt !== undefined && p.expectedAt !== null){
             /* 0 は「行がまだ無い」。**行はあるが更新時刻が無い**ときは -1。

@@ -1520,6 +1520,96 @@ for(const [k, want] of [["① 何もしていない","未"], ["② 提出した"
 /* 出す先も元へ戻す（手元では1本も無いのがふだんの姿） */
 await p.evaluate(() => { tpTargets = []; });
 
+console.log("\n■ 新しいチップ（合同3つ・校外行事）");
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(400);
+let chips = await p.evaluate(() => [...document.querySelectorAll("#pals .pal")].map(x => x.textContent));
+/* **合同3つは複数学級でやるもの。** 担任の面に出すと、名前と実態がずれたまま
+   自分の学級だけに入る。校外行事は学級だけの校外学習もあるので、どの面にも出す */
+ok("担任の面に合同3つを出さない",
+   !["合同体育","合同音楽","学年集会"].some(x => chips.includes(x)), chips);
+ok("担任の面にも校外行事は出す", chips.includes("校外行事"), chips);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".master[data-g='3']").click(); await p.waitForTimeout(450);
+chips = await p.evaluate(() => [...document.querySelectorAll("#pals .pal")].map(x => x.textContent));
+ok("学年の面には合同3つが出る",
+   ["合同体育","合同音楽","学年集会"].every(x => chips.includes(x)), chips);
+ok("学年の面にも校外行事が出る", chips.includes("校外行事"), chips);
+
+console.log("\n■ 校外行事（被覆）");
+let tr = await p.evaluate(() => {
+  applyPalette(0, "p1", "__trip"); applyPalette(0, "p2", "__trip"); applyPalette(0, "p3", "__trip");
+  const col = document.querySelector('#sheet .daycol[data-d="0"]');
+  const m = col.querySelector(".tripmark");
+  const gs = [...m.querySelectorAll("i")].map(i => i.getBoundingClientRect().top);
+  return {枚数: col.querySelectorAll(".tripmark").length,
+          覆い: col.querySelectorAll(".cell.trip").length,
+          字数: gs.length, 縦: gs.every((t, i) => i === 0 || t > gs[i - 1] + 5),
+          幅: +m.getBoundingClientRect().width.toFixed(0),
+          線: [...col.querySelectorAll(".cell.trip")]
+                .map(c => getComputedStyle(c).borderBottomWidth).join(","),
+          題名: (week().grade["3"] || {})[ck(0, "p1")] || null,
+          持ち方: ((week().grade["3"] || {})[ck(0, "trip:p1")] || {}).title || ""};
+});
+/* **業間をまたいで1つにまとまる。** 1〜3限が校外なら、そのあいだの業間も校外にいる。
+   またがないと、業間のところで透かしが切れて2つに見える */
+ok("1〜3限は、業間をまたいで1つの透かしになる", tr.枚数 === 1, tr);
+ok("業間もまとまりに入る（4行）", tr.覆い === 4, tr);
+ok("内側の境界線を消して枠をつなげる", tr.線 === "0px,0px,0px,1px", tr.線);
+/* **縦書きに頼らない。** writing-mode の縦組みは、字を送るのにフォント側の
+   情報が要る。無い環境では4文字が同じ場所に重なった（実測 24×11px） */
+ok("「校外学習」が1文字ずつ縦に並ぶ", tr.字数 === 4 && tr.縦 === true, tr);
+ok("題名欄には入らない", tr.題名 === null, tr.題名);
+ok("時程IDに trip: を使って、ふつうのコマとして持つ", tr.持ち方 === "校外学習", tr.持ち方);
+ok("たんぽぽには「校外」で出る",
+   await p.evaluate(() => tpTitle("3-1", 0, "p1")) === "校外");
+ok("時数は題名の教科に準ずる（校外は時数を変えない）", await p.evaluate(() => {
+     writeCell(0, "p1", {title:"社会", subject:"shakai"});
+     const c = compose("3-1", 0, "p1");
+     return c.subject === "shakai" && plain(c.title) === "社会";
+   }) === true);
+
+console.log("\n■ 休みの日にも置ける（自然学校）");
+tr = await p.evaluate(() => {
+  openView({kind:"school"});
+  setDayForm(3, "off");
+  applyPalette(3, "p1", "__trip"); applyPalette(3, "p2", "__trip");
+  buildSheet();
+  const col = document.querySelector('#sheet .daycol[data-d="3"]');
+  return {斜め線: col.querySelectorAll(".dayoff").length,
+          透かし: col.querySelectorAll(".tripmark").length,
+          休み印: (document.querySelector('#sheet .hd[data-d="3"] .mark') || {}).textContent,
+          書ける: writeCell(3, "p1", {title:"社会", subject:"shakai"}) !== false,
+          たんぽぽ: tpTitle(allClasses()[0], 3, "p1")};
+});
+ok("校外が覆う日は、斜め線を引かない", tr.斜め線 === 0, tr);
+ok("透かしは出る", tr.透かし === 1, tr);
+ok("見出しの「休」印は残る（日の形そのものは変わっていない）", tr.休み印 === "休", tr);
+ok("授業コマに書ける（時数のために教科が要る）", tr.書ける === true, tr);
+ok("たんぽぽにも「校外」を出す（休みで空にしない）", tr.たんぽぽ === "校外", tr);
+
+console.log("\n■ 層をまたぐ被覆");
+tr = await p.evaluate(() => {
+  const cls = allClasses()[0];
+  openView({kind:"class", cls});
+  return {担任に出る: tripOn(cls, 3, "p1"),
+          理由: setTrip(3, "p1", false),
+          まだ在る: tripOn(cls, 3, "p1")};
+});
+ok("全学年が入れた校外は、担任の紙にも出る", tr.担任に出る === true, tr);
+ok("担任は外せない。外す先を名指しする",
+   tr.まだ在る === true && /全学年/.test(tr.理由), tr);
+
+/* 仕込んだぶんを片づける。**あとの検査に響かせない** */
+await p.evaluate(() => {
+  openView({kind:"school"}); setDayForm(3, "");
+  const w = week();
+  w.school = {}; w.grade = {}; w.home = {}; w.tpSub = {}; w.tpEdited = {}; w.acked = [];
+  for(const d of document.querySelectorAll("dialog[open]")) d.close();
+  buildSheet();
+});
+await p.waitForTimeout(150);
+
 console.log("\n■ 一手戻す（Ctrl+Z）");
 await p.locator(".nav[data-act='gate']").first().click(); await p.waitForTimeout(250);
 await p.locator(".tile[data-c='1-1']").click(); await p.waitForTimeout(500);

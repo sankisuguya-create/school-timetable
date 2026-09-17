@@ -71,6 +71,7 @@ var TimetableDomain = (function(){
        備考だけ直した／同じ教科名で上書きした              文字が同じ → 覆さない
        休みにした／休みを解いた                            空で出るので → 覆る
        特別校時にした                                      朝学習が消えるだけ → 覆さない
+       校外行事を付けた／外した                            「校外」に変わる → 覆る
 
      **同じ規則が画面にもある**（src/js/tanpopo.js の tpAffected）。
      画面はすぐ塗るために持ち、ここは読み直したときの正本として持つ。
@@ -83,15 +84,25 @@ var TimetableDomain = (function(){
        dow        0=月 … 5=土（画面の「月曜から何日目か」と同じ）
        lessonIds  たんぽぽへ出す時程のID（授業の先頭6つ）
        daySlot    日の形を置く時程のID
-       offLabel   休みの題名 */
-  function affectsTanpopo(dow, slot, wasTitle, nowTitle, lessonIds, daySlot, offLabel){
+       offLabel   休みの題名
+       tripSlot   校外行事を置く時程のIDの頭（"trip:"） */
+  function affectsTanpopo(dow, slot, wasTitle, nowTitle, lessonIds, daySlot, offLabel,
+                          tripSlot){
     if(!(dow >= 0 && dow <= 4)) return false;      /* 土曜はたんぽぽへ出さない */
     var was = str(wasTitle).trim(), now = str(nowTitle).trim();
-    if(str(slot) === str(daySlot))
+    var id = str(slot);
+    if(id === str(daySlot))
       return (was === str(offLabel)) !== (now === str(offLabel));
+    /* 校外行事の付け外し。渡る字が「校外」に変わるので覆る。
+       覆っている下の時程が、たんぽぽへ出す6コマのときだけ */
+    var head = str(tripSlot || "trip:");
+    if(id.indexOf(head) === 0){
+      if(was === now) return false;
+      id = id.slice(head.length);
+    }
     var ids = lessonIds || [], inRange = false;
     for(var i = 0; i < ids.length; i++)
-      if(str(ids[i]) === str(slot)){ inRange = true; break; }
+      if(str(ids[i]) === id){ inRange = true; break; }
     if(!inRange) return false;                     /* 出力に入らないコマ */
     return was !== now;
   }

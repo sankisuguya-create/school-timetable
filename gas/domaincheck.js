@@ -108,10 +108,14 @@ const TP_CASES = [
   [0, "day", "休み", "",        true,  "休みを解いた"],
   [0, "day", "",     "特別校時", false, "特別校時にした（朝学習が消えるだけ）"],
   [0, "day", "休み", "特別校時", true,  "休みを特別校時に変えた"],
-  [0, "day", "特別校時", "",     false, "特別校時を解いた"]
+  [0, "day", "特別校時", "",     false, "特別校時を解いた"],
+  [0, "trip:p1", "",     "校外学習", true,  "校外行事を付けた"],
+  [0, "trip:p1", "校外学習", "",     true,  "校外行事を外した"],
+  [0, "trip:after", "",  "校外学習", false, "放課後に校外（たんぽぽへ渡らない）"],
+  [5, "trip:p1", "",     "校外学習", false, "土曜に校外（たんぽぽへ渡らない）"]
 ];
 for(const [d, slot, was, now, want, what] of TP_CASES){
-  const server = D.affectsTanpopo(d, slot, was, now, LESSON6, "day", "休み");
+  const server = D.affectsTanpopo(d, slot, was, now, LESSON6, "day", "休み", "trip:");
   const screen = client.tpAffected(d, slot, was, now);
   ok((want ? "覆る  : " : "覆らない: ") + what, server === want && screen === want,
      {server, screen, want});

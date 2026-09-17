@@ -168,7 +168,7 @@
         <h2>たんぽぽ
           <!-- 出すボタンは、見出しの右。**この面でいちばん大きく動く操作。**
                下に置いていたころは、組を並べ終えてから目で探しに行っていた -->
-          <button class="btn go tpgo" id="tpGo" aria-describedby="tpGoWhy">たんぽぽ時間割へ出す</button>
+          <button class="btn go tpgo" id="tpGo" aria-describedby="tpGoWhy">たんぽぽ時間割に書き入れる</button>
           <!-- 押せない理由を hover の title だけに隠さない。初めての人にもその場で示す -->
           <span class="tpwhy" id="tpGoWhy" aria-live="polite" hidden></span>
           <span class="tpweek" id="tpWeek"></span>
@@ -177,7 +177,7 @@
                毎週の面には置かず、窓へ出す（設定からも同じ窓が開く） -->
           <button class="btn" id="tpGrpOpen">組分けを直す</button>
           <!-- ソフトロック。**出す先と組分けを直せなくする。**
-               「たんぽぽ時間割へ出す」は止めない ── 見るだけのつもりで開いた面で
+               「たんぽぽ時間割に書き入れる」は止めない ── 見るだけのつもりで開いた面で
                設定が変わることを防ぐのが役目で、毎週の出力を止める理由は無い -->
           <button class="lock" id="tpLockBtn" aria-pressed="false"
                   title="出す先と組分けを直せなくする（出すのは止めない）">
@@ -463,7 +463,7 @@
      ブラウザの confirm は Enter で「はい」に落ちる。いちばん大きく動く操作を、
      いちばん弱い止め方にしない（1コマの上書きと同じ作りにそろえる） -->
 <dialog id="tpDlg"><div class="dlg">
-  <h2>たんぽぽ時間割へ出す</h2>
+  <h2>たんぽぽ時間割に書き入れますか</h2>
   <p>たんぽぽ時間割のファイルに、<b id="tpDlgName">この週</b>という名前のシートを
      <b>1枚あたらしく作って</b>、この週ぶんを書き込む。
      シートは<b>週の順</b>（4月→翌3月）に並ぶので、出した順に散らばらない。<br>

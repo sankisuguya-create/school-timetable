@@ -30,7 +30,7 @@ function viewWhere(){
                                    + "右の「この週の日の形」から、休みや特別校時にできる";
   if(view.kind === "special") return "コマにクラスを入れると、そのクラスに「"
                                    + viewName() + "」として入る";
-  if(view.kind === "tanpopo") return "交流級を選んで、たんぽぽ時間割へ出す";
+  if(view.kind === "tanpopo") return "交流級を選んで、たんぽぽ時間割に書き入れる";
   return "";
 }
 
@@ -293,6 +293,79 @@ function setDayForm(d, form){
   return save();
 }
 
+/* ── 校外行事（被覆） ────────────────────────
+   **題名にも備考にも入らない。** コマの上に薄く縦書きで「校外学習」と出る印で、
+   連続して置けば枠がつながって1つの縦長になる。題名欄はコマごとに残るので、
+   時数は今までどおり各コマの教科で数えられる（1限社会・2限理科もそのまま）。
+
+   持ち方は**ふつうのコマと同じ**（時程のIDに `trip:時程` を使う）。
+   `day`（日の形）・`memo`（週メモ）と同じ手で、専用の入れ物を作らない。
+   だから書き込み・読み込み・競合・まだ送っていない数え方・年度の退避が、
+   そのまま全部効く。**週案シートに列を足さない**（列を足すと、見出しの無い
+   既存ファイルで黙って読み捨てられる ── writePlan は見出しを書き直さない）。 */
+/* その層の棚に、このコマの被覆があるか */
+const tripIn_ = (bank, d, slot) => !!(bank || {})[ck(d, TRIP_SLOT + slot)];
+
+/* **どれか1つの層に印があれば被覆。**
+   校外学習や自然学校は学年・全校で決まる行事なので、担任が自分の面から
+   消せると、学年が入れた行事が担任ごとにまだらに消える。
+   担任が外せるのは自分の層に入れたぶんだけ（tripOff の理由を見る）。 */
+function tripOn(cls, d, slot){
+  const w = week();
+  return tripIn_(w.school, d, slot)
+      || tripIn_(w.grade[gradeOf(cls)], d, slot)
+      || tripIn_(w.special[cls], d, slot)
+      || tripIn_(w.home[cls], d, slot);
+}
+/* いま開いている面から見た被覆。学級は層を重ねて見る。
+   学年・全学年の面は、その面が持つぶんと全校のぶんだけ見る
+   （担任が入れたぶんまで出すと、どの学級のものか分からなくなる）。 */
+function tripHere(d, slot){
+  const w = week();
+  if(view.kind === "class")   return tripOn(view.cls, d, slot);
+  if(view.kind === "special") return tripIn_(w.school, d, slot);
+  if(view.kind === "grade")
+    return tripIn_(w.school, d, slot) || tripIn_(w.grade[view.grade], d, slot);
+  if(view.kind === "school")  return tripIn_(w.school, d, slot);
+  return false;
+}
+/* この面から外せるか。外せないなら、どこから外すのかを返す。 */
+function tripLockedBy(d, slot){
+  if(tripIn_(targetStore(), d, slot)) return "";        /* 自分の層のぶん。外せる */
+  const w = week();
+  if(tripIn_(w.school, d, slot)) return "全学年";
+  if(view.kind === "class" && tripIn_(w.grade[gradeOf(view.cls)], d, slot))
+    return gradeOf(view.cls) + "年";
+  return "";
+}
+/* 校外に覆われている授業コマの並び（その日ぶん）。紙もたんぽぽもここを見る */
+function tripSlotsOn(cls, d){
+  return SLOTS.filter(s => s.kind === "lesson" && tripOn(cls, d, s.id)).map(s => s.id);
+}
+
+/* 付け外し。**1コマずつ。** 続けて置けば、描くときに1つの縦長にまとまる。 */
+function setTrip(d, slot, on){
+  /* **休みの日にも置ける。** 自然学校のように休日・祝日をまたぐ行事がある。
+     だから whyCantWrite は通さず、ロックだけを見る */
+  const locked = whyLocked();
+  if(locked) return locked;
+  const st = targetStore(), key = ck(d, TRIP_SLOT + slot);
+  if(!on && !st[key]){
+    const who = tripLockedBy(d, slot);
+    if(who) return "この校外学習は<b>" + escText(who) + "</b>が入れたもの。外すにはその面から";
+    return "";
+  }
+  const was = (st[key] || {}).sat || 0;
+  const wasT = plain((st[key] || {}).title);
+  if(on) st[key] = {title:TRIP_NAME, note:"", subject:null, sat:(st[key] || {}).sat,
+                    by:myEmail(), at:Date.now()};
+  else delete st[key];
+  Backend.cellChanged(layerOfStore(), targetOfStore(), d, TRIP_SLOT + slot, was,
+                      undefined, wasT);
+  save();
+  return "";
+}
+
 /* ── 書く ────────────────────────────────────── */
 
 /* クラスを開いているときだけ、1コマを学年や全校へ広げられる。
@@ -486,16 +559,24 @@ function doRedo(){
    ── 次から合図そのものが読まれなくなる。
 
    書けるなら空文字。書けないなら、そのまま画面に出せる1行を返す。 */
+/* **ロック中は書かない。** 見るだけのつもりで開いた画面を守る。
+   校外行事もここだけは通さないので、理由を1か所に置く */
+function whyLocked(){
+  return (typeof isLocked === "function" && isLocked())
+    ? "この画面はロックしてある。<b>直すには、ロックを押す</b>" : "";
+}
 function whyCantWrite(d, s){
-  /* **ロック中は書かない。** 見るだけのつもりで開いた画面を守る */
-  if(typeof isLocked === "function" && isLocked())
-    return "この画面はロックしてある。<b>直すには、ロックを押す</b>";
+  const locked = whyLocked();
+  if(locked) return locked;
   /* **休みの日の授業には書かない。** 斜め線を引いた欄に字が入ると、
      刷った紙で「休みなのか、授業があるのか」が読めなくなる。
      朝学習と放課後は書ける（休業日でも出勤・部活・行事の準備が入る） */
-  if(isDayOff(d) && (SLOT_BY_ID[s] || {}).kind === "lesson")
+  /* **校外が覆っていれば書ける。** 自然学校のように休日・祝日をまたぐ行事がある。
+     覆っている日は斜め線を引かず、時数のために教科を入れる必要がある */
+  if(isDayOff(d) && (SLOT_BY_ID[s] || {}).kind === "lesson"
+     && !(typeof tripHere === "function" && tripHere(d, s)))
     return "この日は<b>休み</b>にしてある。授業のコマには書けない"
-         + "（全学年の面で日付を押すと戻せる）";
+         + "（右の「この週の日の形」から戻せる。校外行事を置けば書ける）";
   return "";
 }
 

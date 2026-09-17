@@ -1,4 +1,4 @@
-/* たんぽぽ時間割へ出すところ。
+/* たんぽぽ時間割に書き入れるところ。
 
    **1週ぶんを、1枚の新しいシートとして出す。** シート名は「9月1週」。
 
@@ -19,6 +19,24 @@
    （時程のIDを学校が変えていても合う）。 */
 const tpSlots = () => SLOTS.filter(s => s.kind === "lesson").slice(0, 6).map(s => s.id);
 
+/* たんぽぽの1コマに出す字。**紙に出ているものと同じ順で決める。**
+
+   ① 校外行事に覆われていれば「校外」。**休みより勝つ** ── 休みで空にするのは
+      「その日は授業が無い」を伝えるためで、行事があるなら「無い」は誤り。
+      たんぽぽ担当はその日も支援員を組む必要がある（自然学校など）
+   ② 休みの日は空
+   ③ 教科に「たんぽぽ表記」があればそれ（児童の列は 50px。「合同体育」は入らない）
+   ④ 無ければ題名をそのまま */
+const TP_TRIP = "校外";
+function tpTitle(cls, d, s){
+  if(tripOn(cls, d, s)) return TP_TRIP;
+  if(isDayOff(d)) return "";
+  const c = compose(cls, d, s);
+  const sub = c.subject ? SUB_BY_CODE[c.subject] : null;
+  const short = sub && String(sub.tp || "").trim();
+  return short || plain(c.title).trim();
+}
+
 /* ── 提出を覆すかどうか ──────────────────────
    **たんぽぽへ渡る文字が変わったときだけ覆す。**
 
@@ -32,6 +50,7 @@ const tpSlots = () => SLOTS.filter(s => s.kind === "lesson").slice(0, 6).map(s =
      備考だけ直した／同じ教科名で上書きした              文字が同じ → 覆さない
      休みにした／休みを解いた                            空で出るので → **覆る**
      特別校時にした                                      朝学習が消えるだけ → 覆さない
+     校外行事を付けた／外した                            「校外」に変わる → **覆る**
 
    **同じ規則がサーバにもある**（gas/Domain.gs の affectsTanpopo）。
    画面はすぐ塗るために持ち、サーバは読み直したときの正本として持つ。
@@ -47,6 +66,10 @@ function tpAffected(d, slot, wasTitle, nowTitle){
   const now = String(nowTitle == null ? "" : nowTitle).trim();
   const OFF = DAY_FORM.off.label;
   if(slot === DAY_SLOT) return (was === OFF) !== (now === OFF);
+  /* 校外行事の付け外し。**渡る字が「校外」に変わる**ので覆る。
+     覆っている下の時程が、たんぽぽへ出す6コマのときだけ */
+  if(String(slot).indexOf(TRIP_SLOT) === 0)
+    return tpSlots().indexOf(String(slot).slice(TRIP_SLOT.length)) >= 0 && was !== now;
   if(tpSlots().indexOf(slot) < 0) return false;  /* 出力に入らないコマ */
   return was !== now;
 }
@@ -408,14 +431,18 @@ function drawTanpopoView(){
   const allIn = chosen.length > 0 && !yet.length;
   const ready = allIn && !why;
   $("tpGo").classList.toggle("ready", ready);
-  $("tpGo").textContent = allIn ? "✓ たんぽぽ時間割へ出す" : "たんぽぽ時間割へ出す";
+  /* **「出す」ではなく「書き入れる」。** 左メニューの「週案を出す」（紙・画像・
+     Sheet）と同じ語だと、どこへ何が出るのか読み手が毎回考えることになる。
+     こちらは向こうのファイルに書き込む操作なので、語を分ける */
+  $("tpGo").textContent = allIn ? "✓ たんぽぽ時間割に書き入れる"
+                                : "たんぽぽ時間割に書き入れる";
   $("tpGo").title = why || (!chosen.length ? "先に「組分けを直す」から交流級を入れる"
     : allIn ? "入れている " + chosen.length + " クラスは、ぜんぶ提出ずみ"
             : "まだ " + yet.length + " クラスが提出していない（" + yet.join("・") + "）");
   /* **出す週を、ボタンのとなりにもう一度出す。** 左メニューの週とは離れていて、
      組を並べているうちに「どの週を出すのか」が目から外れる */
   $("tpWeek").innerHTML = "<b>" + md(monday) + " → " + md(addDays(monday, 4)) + "</b>"
-    + "<span>の週を出す</span>"
+    + "<span>の週を書き入れる</span>"
     + (chosen.length ? (allIn ? "<i class='ok'>ぜんぶ提出ずみ</i>"
                               : "<i class='yet'>未提出 " + yet.length + " クラス</i>") : "");
   $("tpCount").innerHTML = tpTotal()
@@ -488,8 +515,7 @@ function tanpopoTitles(list){
       const one = {};
       /* **休みの日は空で出す。** 紙に斜め線を引いた日の授業をたんぽぽへ配ると、
          たんぽぽ担当がその日の支援員を組んでしまう */
-      for(const s of tpSlots())
-        one[s] = isDayOff(d) ? "" : plain(compose(cls, d, s).title).trim();
+      for(const s of tpSlots()) one[s] = tpTitle(cls, d, s);
       per[String(d)] = one;
     }
     out[cls] = per;

@@ -488,8 +488,20 @@ span.tpin{cursor:default}
 .pal[data-v=doutoku] {background:var(--sub-doutoku)}
 .pal[data-v=gaikoku] {background:var(--sub-gaikoku)}
 .pal[data-v=gakkatsu]{background:var(--sub-gakkatsu)}
+/* 複数学級でやるものは、**元の教科と同じ地**にする。時数も元の教科に数えるので、
+   別の色にすると「別の教科」という読みを色が作ってしまう。
+   合同かどうかは、チップの字（合同体育／体育）が言っている */
+.pal[data-v=goudo_taiiku]{background:var(--sub-taiiku)}
+.pal[data-v=goudo_ongaku]{background:var(--sub-ongaku)}
+.pal[data-v=gakunen_shukai]{background:var(--sub-gakkatsu)}
 /* 時数に数えないもの。**破線の枠は残す。** 色を外しても数えないと分かる */
 .pal.off{background:var(--sub-none)}
+/* 校外行事は教科ではない。**教科の並びと見分けられる形にする**
+   （色だけに頼らない ── 字が「校外行事」と言っている）。
+   地は紙のコマに使っていない色にする ── 白のままだと、紙のコマの地と
+   同じ色になり、「教科の色を紙に出さない」という決まりの検査に当たる */
+.pal.trip{background:var(--hover);border-style:dashed;border-color:var(--cat-school);
+  color:var(--cat-school);font-weight:600}
 .pal:hover{border-color:var(--ink-link);box-shadow:inset 0 0 0 1px var(--ink-link)}
 .pal:active{cursor:grabbing}
 /* 基本時間割にも、教科を探す補助として同じ淡い色を使う。字は必ず残す。 */
