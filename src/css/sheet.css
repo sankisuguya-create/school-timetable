@@ -71,29 +71,30 @@
    コマごとに引くと、業間と昼休みの行で線が切れて「1〜4だけ休み」に見える。
    線は図形で描く（背景の色は、トナーを節約する設定のプリンタで消える）。 */
 /* ── 校外行事（被覆） ────────────────────────
-   **題名にも備考にも入らない。** コマの上に薄く縦書きで出る印。
-   続けて置いたコマは内側の境界線を消して、1つの縦長に見せる。
+   **一日の右に寄せた、縦長のチップ。** 題名にも備考にも入らない。
+   覆ったコマぶんの高さで、その日の右端に1本立てる。
 
-   **背景色では描かない。** トナーを節約する設定のプリンタでは背景が消える
-   （休みの斜め線を図形で描いたのと同じ理由）。文字なら色が飛んでも読める。
-   下の欄は触れる（時数のために教科を入れる必要がある）。 */
-.cell.trip.trip-open{border-bottom:none}     /* 下に続く。内側の線を消す */
-/* **透かしは字の下に敷く。** 上に乗せると教科名に薄い字が重なって、
-   どちらも読みにくくなる。下に敷けば、教科名がそのまま読める */
-.tripmark{position:relative;pointer-events:none;border:none!important;z-index:0;
-  overflow:hidden}
-.cell.trip{position:relative;z-index:1}
-/* **縦書きに頼らず、1文字ずつ積む。**
-   writing-mode:vertical-rl は、字を送るのにフォント側の縦組みの情報が要る。
-   無い環境では4文字が同じ場所に重なって、小さな黒い塊になった（実測 24×11px）。
-   児童機・校務PC・Mac でフォントが違うので、**どれでも同じに出る形**にする。 */
-.tripmark span{position:absolute;top:0;bottom:0;left:0;right:0;
+   **半透明にする。下が読めるように。** 校外学習の日でも、その時間に何をするか
+   （社会・理科）は紙の上で読めないと困る。時数もその教科で数えている。
+
+   **校時の横線は消さない。** 消すと、どの校時のことか紙から読めなくなる。
+   縦につながって見えるのはチップのほうで、コマの枠ではない。
+
+   **地の色に頼らない。** トナーを節約する設定のプリンタでは地が消える
+   （休みの斜め線を図形で描いたのと同じ理由）。地が飛んでも、枠の線と字が残る。 */
+.tripmark{position:relative;pointer-events:none;border:none!important;z-index:2}
+.tripmark span{position:absolute;overflow:hidden;
+  top:calc(1.2mm*var(--k));bottom:calc(1.2mm*var(--k));right:calc(1.2mm*var(--k));
+  width:calc(6.8mm*var(--k));
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  color:var(--ink);opacity:.18}
-.tripmark i{font-style:normal;font-weight:700;line-height:1.08;
-  font-size:calc(19pt*var(--k))}
-/* 選んでいるコマの枠は透かしより上に出す（どこを選んでいるか見失わない） */
-.cell.sel{position:relative;z-index:3}
+  border:1.1px solid var(--ink-sub);border-radius:calc(1.8mm*var(--k));
+  background:rgba(26,26,26,.055);color:var(--ink-sub)}
+.tripmark i{font-style:normal;font-weight:700;line-height:1.02;
+  font-size:calc(10.5pt*var(--k))}
+/* **覆ったコマの字は、チップの手前で折り返す。** 半透明でも、字の上に字が
+   重なれば読みにくい。場所を空けておけば、どちらもそのまま読める。
+   （チップの幅 6.8mm ＋ 右の余白 1.2mm ＋ 字とのすきま 1.2mm） */
+.cell.trip .t,.cell.trip .n{padding-right:calc(9.2mm*var(--k))}
 
 .dayoff{position:relative;pointer-events:none;border:none!important;z-index:2}
 .dayoff svg{position:absolute;inset:0;width:100%;height:100%;display:block}

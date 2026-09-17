@@ -1541,21 +1541,38 @@ let tr = await p.evaluate(() => {
   applyPalette(0, "p1", "__trip"); applyPalette(0, "p2", "__trip"); applyPalette(0, "p3", "__trip");
   const col = document.querySelector('#sheet .daycol[data-d="0"]');
   const m = col.querySelector(".tripmark");
-  const gs = [...m.querySelectorAll("i")].map(i => i.getBoundingClientRect().top);
+  const chip = m.querySelector("span");
+  const cr = col.getBoundingClientRect(), sr = chip.getBoundingClientRect();
+  const cs = getComputedStyle(chip);
+  const gs = [...chip.querySelectorAll("i")].map(i => i.getBoundingClientRect().top);
+  const cell = col.querySelector(".cell.trip");
   return {枚数: col.querySelectorAll(".tripmark").length,
           覆い: col.querySelectorAll(".cell.trip").length,
           字数: gs.length, 縦: gs.every((t, i) => i === 0 || t > gs[i - 1] + 5),
-          幅: +m.getBoundingClientRect().width.toFixed(0),
+          右に寄る: (cr.right - sr.right) < cr.width * .12 && sr.left > cr.left + cr.width * .5,
+          細い: sr.width < cr.width * .45,
+          地: cs.backgroundColor, 枠: cs.borderTopStyle,
+          字をよける: parseFloat(getComputedStyle(cell.querySelector(".t")).paddingRight)
+                      >= sr.width,
           線: [...col.querySelectorAll(".cell.trip")]
                 .map(c => getComputedStyle(c).borderBottomWidth).join(","),
           題名: (week().grade["3"] || {})[ck(0, "p1")] || null,
           持ち方: ((week().grade["3"] || {})[ck(0, "trip:p1")] || {}).title || ""};
 });
-/* **業間をまたいで1つにまとまる。** 1〜3限が校外なら、そのあいだの業間も校外にいる。
-   またがないと、業間のところで透かしが切れて2つに見える */
-ok("1〜3限は、業間をまたいで1つの透かしになる", tr.枚数 === 1, tr);
+/* **業間をまたいで1本になる。** 1〜3限が校外なら、そのあいだの業間も校外にいる。
+   またがないと、業間のところでチップが切れて2本に見える */
+ok("1〜3限は、業間をまたいで1本のチップになる", tr.枚数 === 1, tr);
 ok("業間もまとまりに入る（4行）", tr.覆い === 4, tr);
-ok("内側の境界線を消して枠をつなげる", tr.線 === "0px,0px,0px,1px", tr.線);
+/* **一日の右に寄せた、細い縦長のチップ。** 版面の大半は予定のために空ける */
+ok("チップは一日の右に寄る", tr.右に寄る === true, tr);
+ok("チップは細い（列幅の半分未満）", tr.細い === true, tr);
+ok("チップに枠の線がある（地が飛んでも残る）", tr.枠 === "solid", tr.枠);
+/* **半透明。下が読めるように。** 校外学習の日でも、その時間に何をするかは
+   紙の上で読めないと困る（時数もその教科で数えている） */
+ok("チップの地は半透明", /^rgba\(.*0?\.\d+\)$/.test(tr.地), tr.地);
+ok("覆ったコマの字は、チップの手前で折り返す", tr.字をよける === true, tr);
+/* **校時の横線は消さない。** 消すと、どの校時のことか紙から読めなくなる */
+ok("校時の横線はそのまま残る", tr.線 === "1px,1px,1px,1px", tr.線);
 /* **縦書きに頼らない。** writing-mode の縦組みは、字を送るのにフォント側の
    情報が要る。無い環境では4文字が同じ場所に重なった（実測 24×11px） */
 ok("「校外学習」が1文字ずつ縦に並ぶ", tr.字数 === 4 && tr.縦 === true, tr);
@@ -1583,7 +1600,7 @@ tr = await p.evaluate(() => {
           たんぽぽ: tpTitle(allClasses()[0], 3, "p1")};
 });
 ok("校外が覆う日は、斜め線を引かない", tr.斜め線 === 0, tr);
-ok("透かしは出る", tr.透かし === 1, tr);
+ok("チップは出る", tr.透かし === 1, tr);
 ok("見出しの「休」印は残る（日の形そのものは変わっていない）", tr.休み印 === "休", tr);
 ok("授業コマに書ける（時数のために教科が要る）", tr.書ける === true, tr);
 ok("たんぽぽにも「校外」を出す（休みで空にしない）", tr.たんぽぽ === "校外", tr);

@@ -137,18 +137,15 @@ function dayColEl(d){
     const c = cellEl(d, s);
     c.style.gridColumn = "1";
     c.style.gridRow = String(i + 1);
-    /* **覆ったところは枠をつなげる。** 内側の境界線を消すと1つの縦長に見え、
-       透かしを大きく入れる場所ができる */
-    if(inRun(i)){
-      c.classList.add("trip");
-      if(inRun(i + 1)) c.classList.add("trip-open");   /* 下に続く。線を消す */
-    }
+    /* **コマの枠はそのまま。** 校時の横線を消すと、どの校時のことか紙から
+       読めなくなる。縦につながって見えるのは、右に立てるチップのほう */
+    if(inRun(i)) c.classList.add("trip");
     col.appendChild(c);
   });
 
-  /* まとまりごとに、透かしを1枚。**背景色では描かない**
-     （トナーを節約する設定のプリンタで消える。休みの斜め線と同じ理由）。
-     文字なので、色が飛んでも読める。下の欄は触れる（pointer-events:none）。 */
+  /* まとまりごとに、チップを1本。**その日の右端に立てる。**
+     半透明なので、下に書いてある予定（社会・理科）はそのまま読める。
+     下の欄は触れる（pointer-events:none）。 */
   for(const r of runs){
     /* **1文字ずつ積む。** writing-mode の縦書きに頼ると、字を送るのに
        フォント側の縦組みの情報が要る。無い環境では4文字が同じ場所に重なって、
