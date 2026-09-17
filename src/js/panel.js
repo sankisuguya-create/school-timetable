@@ -53,6 +53,33 @@ function drawPalette(){
   }
 }
 
+/* ── この週の日の形（全学年の面だけ） ──────────
+   **紙の上ではなく、押すものが並ぶここに置く。**
+   紙の日付の見出しに置いていたころは、押せることに気づかれず
+   「休みの日を入れる口が無い」と言われた。紙に残すのは印（特・休）だけで、
+   あれは刷って残る情報。押す口は、ほかの押す口と同じ場所にある。
+
+   **出すのは全学年の面だけ。** 効く範囲が全クラスなので、担任の画面から
+   押せると、自分の学級を直したついでに全校が動く。 */
+function drawDayPanel(){
+  const wrap = $("dayWrap");
+  if(!wrap) return;
+  wrap.hidden = (typeof view === "undefined") || view.kind !== "school";
+  if(wrap.hidden) return;
+  const row = $("dayRow");
+  row.textContent = "";
+  for(let d = 0; d < DAYS; d++){
+    const f = dayForm(d), dt = addDays(monday, d);
+    const b = el("button", "dayb" + (f ? " form-" + f : ""),
+      "<b>" + md(dt) + "（" + DOW[d] + "）</b>"
+      + "<span>" + escText(DAY_FORM[f].label) + "</span>");
+    b.type = "button";
+    b.title = DAY_FORM[f].why + "　押すと変えられる（全クラスに入る）";
+    b.onclick = () => openDayDlg(d);
+    row.appendChild(b);
+  }
+}
+
 /* 書く前に一度だけ聞く。**別の人の予定を潰すときだけ。**
    基本時間割を直すのはふだんの作業なので聞かない（→ compose.js の wouldOverwrite）。
    自分が入れたコマも聞かない。一度«上書きする»と答えたコマは、

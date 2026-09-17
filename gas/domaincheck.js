@@ -76,5 +76,46 @@ ok("出力時刻は同一ミリ秒を避ける",
                               Date.parse("2026-09-16T10:00:00.000Z"))
    === "2026-09-16T10:00:00.001Z");
 
+/* ── たんぽぽ提出を覆すかどうか ──────────────────
+   **規則が2か所にある**（Domain.gs と src/js/tanpopo.js）。画面はすぐ塗るために
+   持ち、サーバは読み直したときの正本として持つ。片方だけ直すと、画面が「済」で
+   シートが「未」になり、どちらが本当か分からなくなる。
+   だから**同じ表を両方に通して、答えが一致することまで見る。** */
+const client = {};
+vm.createContext(client);
+for(const f of ["../src/js/config.js", "../src/js/tanpopo.js"])
+  vm.runInContext(fs.readFileSync(path.join(__dirname, f), "utf8"), client, {filename:f});
+/* SLOTS は let なので context のプロパティにならない。式を中で評価して取り出す */
+const LESSON6 = vm.runInContext(
+  "SLOTS.filter(x => x.kind === 'lesson').slice(0, 6).map(x => x.id)", client);
+
+console.log("\n■ たんぽぽ提出を覆すかどうか（サーバと画面で同じ答えになる）");
+/* [その週の何日目か, 時程, 直す前の題名, 直したあとの題名, 覆すか] */
+const TP_CASES = [
+  [0, "p1", "国語", "国語",     false, "同じ教科名で上書きした"],
+  [0, "p1", "国語", "算数",     true,  "教科名が変わった"],
+  [0, "p1", "",     "校外学習", true,  "空のコマに入れた"],
+  [0, "p1", "国語", "",         true,  "コマを空にした"],
+  [0, "p1", "国語", " 国語 ",   false, "前後の空白だけが違う"],
+  [0, "am2", "",    "読書",     false, "朝学習（たんぽぽへ渡らない）"],
+  [0, "br",  "",    "集会",     false, "業間（たんぽぽへ渡らない）"],
+  [0, "lun", "",    "掃除",     false, "昼休み（たんぽぽへ渡らない）"],
+  [0, "after", "",  "部活",     false, "放課後（たんぽぽへ渡らない）"],
+  [0, "memo", "",   "持ち物",   false, "週メモ（たんぽぽへ渡らない）"],
+  [4, "p6", "算数", "理科",     true,  "金曜は渡る"],
+  [5, "p1", "",     "行事",     false, "土曜は渡らない"],
+  [0, "day", "",     "休み",    true,  "休みにした"],
+  [0, "day", "休み", "",        true,  "休みを解いた"],
+  [0, "day", "",     "特別校時", false, "特別校時にした（朝学習が消えるだけ）"],
+  [0, "day", "休み", "特別校時", true,  "休みを特別校時に変えた"],
+  [0, "day", "特別校時", "",     false, "特別校時を解いた"]
+];
+for(const [d, slot, was, now, want, what] of TP_CASES){
+  const server = D.affectsTanpopo(d, slot, was, now, LESSON6, "day", "休み");
+  const screen = client.tpAffected(d, slot, was, now);
+  ok((want ? "覆る  : " : "覆らない: ") + what, server === want && screen === want,
+     {server, screen, want});
+}
+
 console.log(ng ? "\n× " + ng + " 件だめだった" : "\n○ ぜんぶ通った");
 process.exit(ng ? 1 : 0);

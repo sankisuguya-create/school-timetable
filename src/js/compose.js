@@ -27,7 +27,7 @@ function viewWhere(){
   if(view.kind === "class")   return "書いたものは " + view.cls + " だけに入る";
   if(view.kind === "grade")   return "書いたものは " + view.grade + "年の全クラスに入る";
   if(view.kind === "school")  return "書いたものは全クラスに入る。"
-                                   + "日付を押すと、その日を休みや特別校時にできる";
+                                   + "右の「この週の日の形」から、休みや特別校時にできる";
   if(view.kind === "special") return "コマにクラスを入れると、そのクラスに「"
                                    + viewName() + "」として入る";
   if(view.kind === "tanpopo") return "交流級を選んで、たんぽぽ時間割へ出す";
@@ -255,11 +255,12 @@ function setMemo(html){
   const bank = memoBank(a), key = ck(0, a.slot), t = clean(html);
   /* 書き替える前に、サーバの時刻を控える（競合の物差し） */
   const was = (bank[key] || {}).sat || 0;
+  const wasT = plain((bank[key] || {}).title);   /* たんぽぽ提出の判定に使う */
   if(!plain(t).trim() && !/<a\b/i.test(t)) delete bank[key];
   else bank[key] = {title:t, note:"", subject:null, sat:(bank[key] || {}).sat,
                     by:myEmail(), at:Date.now()};
   if((week().memos || {})[viewName()] !== undefined) delete week().memos[viewName()];
-  Backend.cellChanged(a.layer, a.target, 0, a.slot, was);
+  Backend.cellChanged(a.layer, a.target, 0, a.slot, was, undefined, wasT);
   return save();
 }
 
@@ -282,12 +283,13 @@ function setDayForm(d, form){
   if(typeof isLocked === "function" && isLocked()) return false;
   const w = week(), key = ck(d, DAY_SLOT);
   const was = (w.school[key] || {}).sat || 0;   /* 消す前に物差しを控える */
+  const wasT = plain((w.school[key] || {}).title);
   if(!form) delete w.school[key];
   else w.school[key] = {title: escText(DAY_FORM[form].label), note:"", subject:null,
                         sat: (w.school[key] || {}).sat,
                         by: myEmail(), at: Date.now()};
   /* **学校全体の層として送る。** 全クラスの紙に効く */
-  Backend.cellChanged("school", "", d, DAY_SLOT, was);
+  Backend.cellChanged("school", "", d, DAY_SLOT, was, undefined, wasT);
   return save();
 }
 
@@ -441,9 +443,10 @@ function pushUndo(d, s){
 function restoreCell(d, s, prev){
   const st = targetStore(), key = ck(d, s);
   const was = (st[key] || {}).sat || 0;
+  const wasT = plain((st[key] || {}).title);
   if(prev){ const e = clone(prev); e.sat = was; st[key] = e; }
   else delete st[key];
-  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s, was);
+  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s, was, undefined, wasT);
   save();
 }
 function stepUndo(from, to){
@@ -515,6 +518,9 @@ function writeCell(d, s, patch){
        クラスを変えずに備考だけ直したときが、必ずこれに当たっていた
        ── 専科が自分で入れたコマを自分で直すたび、競合の窓が出ていた。 */
     const wasTarget = ((w.special[target] || {})[key] || {}).sat || 0;
+    /* 行き先の題名も、どける前に控える（たんぽぽ提出の判定に使う）。
+       備考だけ直したときは前後で同じ字になるので、提出は覆らない */
+    const wasTargetT = plain(((w.special[target] || {})[key] || {}).title);
     /* 行き先が変わるので一度どける。**どけたクラスだけをサーバに伝える。**
        全クラスに伝えると、1コマ直すたびに20枚のシートを読み書きすることになる
        （週案はクラスごとに1枚。触っていないクラスのシートは開かない） */
@@ -522,8 +528,9 @@ function writeCell(d, s, patch){
       const e = (w.special[c] || {})[key];
       if(e && e.sp === view.sp){
         const was = e.sat || 0;          /* 消す前に、サーバの時刻を控える */
+        const wasT = plain(e.title);
         delete w.special[c][key];
-        if(c !== target) Backend.cellChanged("special", c, d, s, was);
+        if(c !== target) Backend.cellChanged("special", c, d, s, was, undefined, wasT);
       }
     }
     if(target && allClasses().indexOf(target) >= 0){
@@ -537,7 +544,7 @@ function writeCell(d, s, patch){
         sat: wasTarget,
         at: Date.now(), by: myEmail()
       };
-      Backend.cellChanged("special", target, d, s, wasTarget);
+      Backend.cellChanged("special", target, d, s, wasTarget, undefined, wasTargetT);
     }
     return save();
   }
@@ -547,6 +554,9 @@ function writeCell(d, s, patch){
   /* **書き替える前に、サーバの時刻を控える。**
      空にする操作ではコマごと消えるので、あとからでは読めない */
   const was = (st[key] || {}).sat || 0;
+  /* 題名も控える。**e は st[key] と同じものを指すことがある**ので、
+     書き替えたあとでは前の字が読めない（たんぽぽ提出の判定に使う） */
+  const wasT = plain((st[key] || {}).title);
   /* **いま紙に出ているものを引き継いでから直す。**
      前は基本時間割から来たときだけ引き継いでいたので、全校や学年から
      降りてきたコマに詳細を1字書くと、題名が空のまま「担任」として入り、
@@ -562,7 +572,7 @@ function writeCell(d, s, patch){
   e.by = myEmail();          /* 層ではなく人。層は開いている面から分かる */
   e.at = Date.now();
   if(isEmptyCell(e)) delete st[key]; else { e.sat = was; st[key] = e; }
-  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s, was);
+  Backend.cellChanged(layerOfStore(), targetOfStore(), d, s, was, undefined, wasT);
   return save();
 }
 

@@ -86,14 +86,12 @@
   transform:translateX(-50%)}
 @media print{ .hd.hasev::after{display:none} }
 
-/* 全学年の面だけ、日付の見出しを押せる。**押せることは画面でだけ見せる** */
-.hd.pick{cursor:pointer}
-/* **押せることを、字で見せる。** 画面だけ（紙には出さない） */
-.hd .pk{font-size:calc(6pt*var(--k));color:var(--ink-link);font-weight:700;
-  border:1px solid var(--ink-link);border-radius:3px;line-height:1;
-  padding:1px 2px;margin-left:.15em}
-.hd.pick:hover{background:var(--fill-a)}
-.hd.pick:focus-visible{outline:2px solid var(--ink-link);outline-offset:-2px}
+/* 日の形（ふつう／特別校時／休み）を入れる口は、**紙の上には無い。**
+   右メニューの「この週の日の形」に移した（src/index.html の #dayWrap）。
+   紙の見出しに残るのは印（特・休）だけ ── あれは刷って残る情報。
+
+   紙に置いていたころは、押せることに気づかれず
+   「休みの日を入れる口が無い」と言われた。押すものは、押すものが並ぶ場所に置く。 */
 
 /* 見出しの行 */
 .hd{display:flex;align-items:center;justify-content:center;gap:.35em;
@@ -195,7 +193,7 @@
    画面のものは何も刷らない。層の色も印も刷らない。
    リンクは下線だけ残す。URL は刷らない。 */
 @media print{
-  .side,.panel,.gate,.toast,.tpview,.busy,.arc,.wait{display:none!important}
+  .side,.panel,.gate,.toast,.tpview,.busy,.arc,.wait,.wkarrow{display:none!important}
   /* 月の面を刷るとき。**まわりの操作も、週の1枚も出さない。**
      刷るのは 2×2 の4枚だけ（B4 よこ） */
   body.printing-month .stage{display:none!important}

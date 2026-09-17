@@ -59,6 +59,43 @@ var TimetableDomain = (function(){
     return false;
   }
 
+  /* たんぽぽへ渡る文字が変わったか。**変わっていなければ担任の提出を覆さない。**
+
+     提出は「担任が今週ぶんを書き終えた」という印。渡るものが変わっていないのに
+     覆すと、押し直すだけの作業が毎週増える。押し直しが増えるほど、印そのものが
+     「とりあえず押すもの」になって、たんぽぽ担当が見分けられなくなる。
+
+     たんぽぽへ渡るのは **月〜金 × 授業6コマの題名**だけ。だから
+
+       土曜・朝休み・朝学習・業間・昼休み・放課後・週メモ  渡らない → 覆さない
+       備考だけ直した／同じ教科名で上書きした              文字が同じ → 覆さない
+       休みにした／休みを解いた                            空で出るので → 覆る
+       特別校時にした                                      朝学習が消えるだけ → 覆さない
+
+     **同じ規則が画面にもある**（src/js/tanpopo.js の tpAffected）。
+     画面はすぐ塗るために持ち、ここは読み直したときの正本として持つ。
+     片方だけ直すと、画面が「済」でシートが「未」になり、どちらが本当か
+     分からなくなる。**必ず両方を直す**（domaincheck.js が同じ表で見る）。
+
+     層の重なりは見ない。学年のコマを直しても、その上に担任のコマが載っていれば
+     渡る文字は変わらないが、そこまでは見ずに覆す側へ倒す。
+
+       dow        0=月 … 5=土（画面の「月曜から何日目か」と同じ）
+       lessonIds  たんぽぽへ出す時程のID（授業の先頭6つ）
+       daySlot    日の形を置く時程のID
+       offLabel   休みの題名 */
+  function affectsTanpopo(dow, slot, wasTitle, nowTitle, lessonIds, daySlot, offLabel){
+    if(!(dow >= 0 && dow <= 4)) return false;      /* 土曜はたんぽぽへ出さない */
+    var was = str(wasTitle).trim(), now = str(nowTitle).trim();
+    if(str(slot) === str(daySlot))
+      return (was === str(offLabel)) !== (now === str(offLabel));
+    var ids = lessonIds || [], inRange = false;
+    for(var i = 0; i < ids.length; i++)
+      if(str(ids[i]) === str(slot)){ inRange = true; break; }
+    if(!inRange) return false;                     /* 出力に入らないコマ */
+    return was !== now;
+  }
+
   /* 提出行と状態行から、画面へ返す提出状態を組み立てる。
      出力記録が壊れていても、従来どおり空の記録として扱う。 */
   function submissionView(row, state){
@@ -95,6 +132,7 @@ var TimetableDomain = (function(){
     isRemoval: isRemoval,
     expectedVersionMatches: expectedVersionMatches,
     affectsClass: affectsClass,
+    affectsTanpopo: affectsTanpopo,
     submissionView: submissionView,
     submissionUnchanged: submissionUnchanged,
     nextSubmissionTimestamp: nextSubmissionTimestamp

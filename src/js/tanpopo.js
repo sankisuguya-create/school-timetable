@@ -19,6 +19,38 @@
    （時程のIDを学校が変えていても合う）。 */
 const tpSlots = () => SLOTS.filter(s => s.kind === "lesson").slice(0, 6).map(s => s.id);
 
+/* ── 提出を覆すかどうか ──────────────────────
+   **たんぽぽへ渡る文字が変わったときだけ覆す。**
+
+   提出は「担任が今週ぶんを書き終えた」という印。渡るものが変わっていないのに
+   覆すと、押し直すだけの作業が毎週増える。押し直しが増えるほど、印そのものが
+   「とりあえず押すもの」になって、たんぽぽ担当が見分けられなくなる。
+
+   たんぽぽへ渡るのは **月〜金 × 授業6コマの題名**だけ（tanpopoTitles）。だから
+
+     土曜・朝休み・朝学習・業間・昼休み・放課後・週メモ  渡らない → 覆さない
+     備考だけ直した／同じ教科名で上書きした              文字が同じ → 覆さない
+     休みにした／休みを解いた                            空で出るので → **覆る**
+     特別校時にした                                      朝学習が消えるだけ → 覆さない
+
+   **同じ規則がサーバにもある**（gas/Domain.gs の affectsTanpopo）。
+   画面はすぐ塗るために持ち、サーバは読み直したときの正本として持つ。
+   片方だけ直すと、画面が「済」でシートが「未」になり、どちらが本当か
+   分からなくなる。**必ず両方を直す**（gas/domaincheck.js が同じ表で見る）。
+
+   *層の重なりは見ない*：学年のコマを直しても、その上に担任のコマが載っていれば
+   渡る文字は変わらない。そこまでは見ずに覆す側へ倒す。見るにはクラスごとに
+   層を重ね直すことになり、サーバ側では同じ判定が書けない（画面とずれる）。 */
+function tpAffected(d, slot, wasTitle, nowTitle){
+  if(d >= WEEKDAYS) return false;                /* 土曜はたんぽぽへ出さない */
+  const was = String(wasTitle == null ? "" : wasTitle).trim();
+  const now = String(nowTitle == null ? "" : nowTitle).trim();
+  const OFF = DAY_FORM.off.label;
+  if(slot === DAY_SLOT) return (was === OFF) !== (now === OFF);
+  if(tpSlots().indexOf(slot) < 0) return false;  /* 出力に入らないコマ */
+  return was !== now;
+}
+
 /* シート名。**「9月1週」。** その月の何番目の月曜かで数える。
    日付をそのまま名前にすると、たんぽぽ担当が「何週目のぶんか」を毎回数えることになる。
    **サーバ側（Store.weekSheetName）と同じ数え方**にしてある。 */
@@ -42,18 +74,38 @@ let tpPick = "1";              /* 窓でいま選んでいる組。押して入�
    **色だけに頼らない。** 短い字と左端の太い線を必ず添える。 */
 const TP_ST = {
   ok:   {mark:"済", why:"担任が「今週ぶんは書き終えた」と出している"},
-  changed: {mark:"変", why:"再提出された変更が、この出力先にまだ反映されていない"},
+  changed: {mark:"変", why:"この出力先へ出したあとに変わっている。出し直しが要る"},
   base: {mark:"未", why:"担任がまだ出していない"}
 };
 /* **1コマでも書いてあれば済、にはしない。**
    ちょっと触っただけの週と、出してよい週を、たんぽぽ担当が見分けられない。
    担任がクラスの画面で「たんぽぽに提出」を押したものだけを済にする。 */
+/* **一度出したあとに変わったものを「未」に落とさない。**
+   「未」は「担任がまだ書き終えていない。待てばよい」という意味で、
+   たんぽぽ担当はそれを見て待つ。出したあとに変わったものは**待っても直らない**
+   ── 出し直さないと、配った時間割が古いままになる。取るべき手が違うので、
+   同じ印にしない。前は次の順で見ていて、④が「未」に落ちていた。
+
+     ① まだ何もしていない      未
+     ② 担任が提出した          済
+     ③ たんぽぽへ出力した      済
+     ④ そのあと担任が直した    未 ←ここが「①と同じ」に見えていた
+     ⑤ 担任が再提出した        変
+     ⑥ もう一度出力した        済
+
+   ④と⑤は印で分けない（どちらも「出し直しが要る」）。分かれるのはそのあとの
+   手順で、④は担任の再提出を待つ必要がある（出力はサーバが止める）。
+   そこは出す前の窓が名指しで言う（tpNotYetBox）。 */
 const tpState = cls => {
   const s = tpSubmitInfo(cls);
-  if(!s || s.dirty) return 'base';
-  const target = tpTargetNow(), key = target ? (String(target.url).match(/[-\w]{25,}/) || [target.url])[0] : '';
+  if(!s) return 'base';                       /* 一度も提出していない */
+  const target = tpTargetNow();
+  const key = target ? (String(target.url).match(/[-\w]{25,}/) || [target.url])[0] : '';
   const done = (s.exports || {})[key];
-  return done && done !== s.at ? 'changed' : 'ok';
+  /* この出力先へ出したあとに変わった。直しの途中（dirty）でも、再提出後でも */
+  if(done && (s.dirty || done !== s.at)) return 'changed';
+  if(s.dirty) return 'base';                  /* 直しているが、まだ一度も出していない */
+  return 'ok';
 };
 
 /* ── 出す先 ──────────────────────────────────
@@ -404,11 +456,26 @@ function tpWarnBoxes(){
    出したものを見てたんぽぽ担当が支援員を組むので、まだ書き終えていない
    週を配ると、あとでやり直しになる。 */
 function tpNotYetBox(){
-  const yet = tpChosenHere().filter(c => !tpSubmitted(c));
-  if(!yet.length) return "";
-  return "<div class='box'><b>" + yet.map(escText).join("・")
-       + "</b> は、担任がまだ<b>「たんぽぽに提出」を押していません</b>。<br>"
-       + "このまま出すと、書き終えていない週をたんぽぽへ配ることになります。</div>";
+  const here = tpChosenHere();
+  /* **「まだ押していない」と「押したあとに直した」を分ける。**
+     取るべき手が違う ── 前者は待てばよく、後者は担任に再提出を頼む。
+     前は両方まとめて「まだ押していません」と出していたので、
+     押した覚えのある担任のクラスがそこに並んで、話が止まっていた。 */
+  const never = here.filter(c => !tpSubmitInfo(c));
+  const dirty = here.filter(c => { const s = tpSubmitInfo(c); return !!s && !!s.dirty; });
+  const box = [];
+  if(never.length)
+    box.push("<div class='box'><b>" + never.map(escText).join("・")
+      + "</b> は、担任がまだ<b>「たんぽぽに提出」を押していません</b>。<br>"
+      + "このまま出すと、書き終えていない週をたんぽぽへ配ることになります。</div>");
+  /* **止まることを、押す前に言う。** 提出したあとに直したクラスが1つでもあると、
+     サーバが出力そのものを止める（gas/Store.gs exportWeek_ ・ 変更ありなら通さない）。
+     押してからエラーで知ると、何をすればよいのかが画面に無い。 */
+  if(dirty.length)
+    box.push("<div class='box'><b>" + dirty.map(escText).join("・")
+      + "</b> は、<b>提出したあとに直しています</b>。<br>"
+      + "このままでは<b>出力が止まります</b>。担任に「たんぽぽに再提出」を押してもらってください。</div>");
+  return box.join("");
 }
 
 /* 出す中身を組む。**層を重ねたあとの、紙に出ているとおりの授業名。**

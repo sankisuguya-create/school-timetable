@@ -417,6 +417,7 @@ function drawDayForms(){
       setDayForm(dayPick, b.dataset.f);
       $("dayDlg").close();
       buildSheet();                 /* **組み直す。** 行の並びが変わる */
+      drawDayPanel();               /* 右メニューの並びも、いまの形にそろえる */
       autoFit();
       toast(md(addDays(monday, dayPick)) + "（" + DOW[dayPick] + "）を<b>"
           + escText(DAY_FORM[b.dataset.f].label) + "</b>にした");

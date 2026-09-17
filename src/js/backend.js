@@ -62,11 +62,15 @@ const Backend = (function(){
   /* where ＝ そのコマがある年度と週。**渡さなければ、いま開いている週。**
      競合したぶんを入れ直すときは、別の週のコマかもしれない。
      いまの週として覚えると、別の週のコマを書き替えてしまう。 */
-  function cellChanged(layer, target, d, slotId, baseAt, where){
+  /* wasTitle ＝ 直す前に、その棚に入っていた題名。**たんぽぽの提出を覆すかを
+     決めるのに要る**（→ store.js markTpEdited ・ tanpopo.js tpAffected）。
+     渡さなかった呼び出しは、今までどおり層だけで決める（覆す側へ倒す）。 */
+  function cellChanged(layer, target, d, slotId, baseAt, where, wasTitle){
     acknowledged = false;
     touched = true;
     editEpoch++;
-    if(typeof markTpEdited === "function") markTpEdited(layer, target, where);
+    if(typeof markTpEdited === "function")
+      markTpEdited(layer, target, where, d, slotId, wasTitle);
     if(!onGas) return;
     const yr = where ? String(where.year) : fy();
     const mo = where ? where.monday : wkKey();

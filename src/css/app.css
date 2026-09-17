@@ -134,8 +134,36 @@ button,select,input,textarea{font:inherit;color:inherit}
 .legend i.bs{background:var(--sheet)}
 
 .stage{overflow:auto;padding:10px;display:flex;justify-content:center;
-  align-items:flex-start;min-height:0;min-width:0}
+  align-items:flex-start;min-height:0;min-width:0;gap:6px}
 .stage[hidden]{display:none!important}
+
+/* 紙の左右で週を繰る。**左メニューの ◀ ▶ と同じことをする。**
+   読んでいる目の高さに置くので、左端まで視線を戻さずに週を繰れる。
+   **紙は痩せない** ── 幅を取るぶんは autoFit が測って倍率に入れる。
+   刷るときは出さない（@media print で消す。紙の外のものだから）。 */
+.wkarrow{flex:0 0 auto;align-self:center;width:38px;height:76px;
+  border:1px solid var(--line);border-radius:var(--r);background:var(--card);
+  color:var(--tx-sub);font-size:26px;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center}
+.wkarrow:hover{background:var(--hover);color:var(--tx);border-color:var(--tx-sub)}
+.wkarrow:focus-visible{outline:2px solid var(--ink-link);outline-offset:2px}
+
+/* その日の形（右メニュー・全学年の面だけ）。
+   **色だけで表さない。** 形の名前（ふつう／特別校時／休み）を必ず字で出す。 */
+.dayrow{display:flex;flex-direction:column;gap:4px}
+.dayb{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:7px 10px;border:1px solid var(--line);border-radius:var(--r-sm);
+  background:var(--card);cursor:pointer;font:inherit;text-align:left;
+  border-left:4px solid var(--line)}
+.dayb:hover{background:var(--hover);border-color:var(--tx-sub)}
+.dayb:focus-visible{outline:2px solid var(--ink-link);outline-offset:2px}
+.dayb b{font-weight:600;font-size:13px}
+.dayb span{font-size:12px;color:var(--tx-sub)}
+/* 入れてある日だけ、左端の線と字を濃くする */
+.dayb.form-special{border-left-color:var(--cat-grade)}
+.dayb.form-special span{color:var(--cat-grade);font-weight:700}
+.dayb.form-off{border-left-color:var(--cat-clash)}
+.dayb.form-off span{color:var(--cat-clash);font-weight:700}
 /* 状態と入力範囲。静的なCSSだけで描き、紙面・印刷の背景には載せない。
 
    **どの面でも向きは同じ。くすんでいたら、まだシートに入っていない。**

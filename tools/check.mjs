@@ -1145,14 +1145,17 @@ await p.waitForTimeout(250);
 console.log("\n■ この日の形（ふつう／特別校時／休み）");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(400);
-ok("担任の画面からは決められない（日付の見出しを押せない）",
-   await p.locator("#sheet .hd.pick").count() === 0);
+/* **入れる口は右メニューにある。** 紙の上には印（特・休）だけを残す */
+ok("担任の画面には、日の形の欄を出さない",
+   await p.locator("#dayWrap").evaluate(e => e.hidden) === true);
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".master.all").click(); await p.waitForTimeout(400);
-ok("全学年の面では、日付の見出しが押せる",
-   await p.locator("#sheet .hd.pick").count() === 6,
-   await p.locator("#sheet .hd.pick").count());
-await p.locator("#sheet .hd[data-d='1']").click(); await p.waitForTimeout(250);
+ok("全学年の面では、右メニューに6日ぶん並ぶ",
+   await p.locator("#dayRow .dayb").count() === 6,
+   await p.locator("#dayRow .dayb").count());
+ok("紙の日付の見出しには、押す口を置かない",
+   await p.locator("#sheet .hd.pick, #sheet .hd .pk").count() === 0);
+await p.locator("#dayRow .dayb").nth(1).click(); await p.waitForTimeout(250);
 ok("押すと窓が開く", await p.locator("#dayDlg").evaluate(d => d.open) === true);
 ok("その日の日付を出す",
    /\d+\/\d+/.test(await p.locator("#dayWhen").innerText()),
@@ -1205,7 +1208,7 @@ ok("詰めたぶんは放課後が受け取る（その日の放課後が広い�
    }) === true);
 
 console.log("\n■ 休み：1〜6に1本の斜め線");
-await p.locator("#sheet .hd[data-d='3']").click(); await p.waitForTimeout(250);
+await p.locator("#dayRow .dayb").nth(3).click(); await p.waitForTimeout(250);
 await p.locator("#dayForms .dayform[data-f='off']").click(); await p.waitForTimeout(350);
 ok("見出しに「休」の印が出る",
    (await p.locator("#sheet .hd[data-d='3'] .mark").innerText()).trim() === "休");
@@ -1242,13 +1245,13 @@ ok("休みの日は時数に数えない", await p.evaluate(() => {
      return g[3 * block].every(v => v === "");
    }) === true, await p.evaluate(() => tallyGrid()[3 * (+db.settings.tally.block || 10)]));
 ok("ふつうに戻すと、書いてある予定がそのまま出る", await (async () => {
-     await p.locator("#sheet .hd[data-d='3']").click(); await p.waitForTimeout(250);
+     await p.locator("#dayRow .dayb").nth(3).click(); await p.waitForTimeout(250);
      await p.locator("#dayForms .dayform[data-f='']").click(); await p.waitForTimeout(350);
      return await p.locator("#sheet .daycol[data-d='3'] .dayoff").count() === 0
          && await p.locator("#sheet .hd[data-d='3'] .mark").count() === 0;
    })() === true);
 /* 片づける */
-await p.locator("#sheet .hd[data-d='1']").click(); await p.waitForTimeout(250);
+await p.locator("#dayRow .dayb").nth(1).click(); await p.waitForTimeout(250);
 await p.locator("#dayForms .dayform[data-f='']").click(); await p.waitForTimeout(350);
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(400);
@@ -1400,28 +1403,122 @@ ok("入口の下に説明文を置かない（閉じるだけ）",
 
 console.log("\n■ 全学年の面では、日付を押して休みにできる");
 await p.locator(".master.all").click(); await p.waitForTimeout(500);
-/* **押せることを、字で見せる。** 印が無かったころは、口そのものが無いと言われた */
-ok("日付に、押せる印が出る", await p.locator("#sheet .hd .pk").count() === 6,
-   await p.locator("#sheet .hd .pk").count());
-ok("説明にも、押せると書いてある",
-   (await p.evaluate(() => viewWhere())).indexOf("休み") >= 0,
+/* **押す口は、押す口が並ぶ場所に置く。** 紙の上に置いていたころは気づかれなかった */
+ok("右メニューに日の形の欄が出る",
+   await p.locator("#dayWrap").evaluate(e => e.hidden) === false);
+ok("説明にも、どこから決めるかが書いてある",
+   (await p.evaluate(() => viewWhere())).indexOf("日の形") >= 0,
    await p.evaluate(() => viewWhere()));
-await p.locator("#sheet .hd").first().click(); await p.waitForTimeout(300);
+await p.locator("#dayRow .dayb").first().click(); await p.waitForTimeout(300);
 await p.locator(".dayform[data-f='off']").click(); await p.waitForTimeout(400);
 ok("休みにすると、斜め線が入る", await p.locator("#sheet .dayoff").count() === 1);
 ok("休みの日の授業には書けない",
    await p.evaluate(() => writeCell(0, "p1", {title:"あ"})) === false);
 ok("朝学習と放課後には書ける（休業日でも行事の準備が入る）",
    await p.evaluate(() => writeCell(0, "after", {note:"準備"})) !== false);
-await p.locator("#sheet .hd").first().click(); await p.waitForTimeout(300);
+ok("休みにすると、右メニューの字も変わる",
+   (await p.locator("#dayRow .dayb").first().innerText()).indexOf("休み") >= 0,
+   await p.locator("#dayRow .dayb").first().innerText());
+ok("紙には印（休）が残る　※刷って残る情報",
+   (await p.locator("#sheet .hd[data-d='0'] .mark").innerText()).trim() === "休");
+await p.locator("#dayRow .dayb").first().click(); await p.waitForTimeout(300);
 await p.locator(".dayform[data-f='']").click(); await p.waitForTimeout(400);
 ok("戻すと、斜め線は消える", await p.locator("#sheet .dayoff").count() === 0);
-/* **押せる印は画面だけ。** 決め終わったあとも版面に残ると、紙が汚れる */
+
+console.log("\n■ 紙の左右で週を繰る");
+ok("紙の左右に2つ出る", await p.locator("#stage .wkarrow").count() === 2);
+const wkWas = await p.locator("#weekLabel").innerText();
+await p.locator("#wkNext").click(); await p.waitForTimeout(500);
+const wkNext = await p.locator("#weekLabel").innerText();
+ok("› で次の週へ動く", wkNext !== wkWas, {wkWas, wkNext});
+await p.locator("#wkPrev").click(); await p.waitForTimeout(500);
+ok("‹ で元の週へ戻る", await p.locator("#weekLabel").innerText() === wkWas);
+/* **紙は痩せない。** 矢印が取る幅は autoFit が倍率に入れる */
+ok("紙が枠からはみ出さない", await p.evaluate(() =>
+     $("sheet").getBoundingClientRect().width <= $("stage").clientWidth + 1) === true);
+ok("矢印が潰れていない", await p.evaluate(() =>
+     [...document.querySelectorAll("#stage .wkarrow")].every(e => e.offsetWidth > 0)) === true);
+/* **紙の外のもの。** 刷るときは出さない */
 await p.emulateMedia({media:"print"}); await p.waitForTimeout(200);
-ok("押せる印は、紙には出さない", await p.evaluate(() =>
-     [...document.querySelectorAll("#sheet .hd .pk")]
+ok("矢印は、紙には出さない", await p.evaluate(() =>
+     [...document.querySelectorAll("#stage .wkarrow")]
        .every(x => getComputedStyle(x).display === "none")) === true);
 await p.emulateMedia({media:"screen"}); await p.waitForTimeout(200);
+
+console.log("\n■ たんぽぽ提出を覆すのは、渡る文字が変わったときだけ");
+/* 規則そのものは gas/domaincheck.js が画面とサーバの両方に同じ表を通す。
+   ここで見るのは**書き込みの道がその規則へ繋がっているか**（前の題名を渡しているか）。
+   繋がっていないと、規則を直しても効かない。 */
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(400);
+const tpHit = async (label, body) => await p.evaluate(fn => {
+  const cls = view.cls, w = week();
+  w.tpSub = {[cls]:{at:"T1", by:"x", dirty:false, exports:{}}};
+  w.tpEdited = {};
+  (new Function(fn))();
+  return !!(w.tpSub[cls] || {}).dirty || !!(w.tpEdited || {})[cls];
+}, body);
+ok("覆る  : 教科名が変わった",
+   await tpHit("t", "writeCell(0,'p1',{title:'算数',subject:'sansu'})") === true);
+ok("覆らない: 同じ教科名で上書きした", await tpHit("t",
+   "const w=week();w.home[view.cls]={[ck(0,'p2')]:{title:'国語',note:'',at:1,sat:1}};"
+   + "writeCell(0,'p2',{title:'国語',subject:'kokugo'})") === false);
+ok("覆らない: 備考だけ直した", await tpHit("t",
+   "const w=week();w.home[view.cls]={[ck(0,'p3')]:{title:'体育',note:'',at:1,sat:1}};"
+   + "writeCell(0,'p3',{note:'運動場'})") === false);
+ok("覆らない: 放課後を直した",
+   await tpHit("t", "writeCell(0,'after',{note:'部活'})") === false);
+ok("覆らない: 朝学習を直した",
+   await tpHit("t", "writeCell(0,'am2',{title:'読書'})") === false);
+ok("覆らない: 土曜を直した",
+   await tpHit("t", "writeCell(5,'p1',{title:'行事'})") === false);
+ok("覆らない: 週メモを直した",
+   await tpHit("t", "setMemo('持ち物')") === false);
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
+await p.locator(".master.all").click(); await p.waitForTimeout(400);
+ok("覆らない: 特別校時にした（全校の面）", await tpHit("t",
+   "setDayForm(1,'special');setDayForm(1,'')") === false);
+ok("覆る  : 休みにした（全校の面）", await tpHit("t",
+   "setDayForm(2,'off');setDayForm(2,'')") === true);
+await p.evaluate(() => { setDayForm(1,""); setDayForm(2,""); });
+
+/* 仕込んだぶんを片づける。**あとの検査に響かせない**
+   （残すと上書きの知らせが出たままになり、次の操作を塞ぐ） */
+await p.evaluate(() => {
+  const w = week();
+  for(const cls of allClasses()) delete w.home[cls];
+  for(const k of ["0|p1","0|p2","0|p3","0|after","0|am2","5|p1","0|memo"]) delete w.school[k];
+  w.tpSub = {}; w.tpEdited = {}; w.acked = [];
+  for(const d of document.querySelectorAll("dialog[open]")) d.close();
+  buildSheet();
+});
+await p.waitForTimeout(150);
+
+console.log("\n■ 出したあとに変わったら「未」ではなく「変」");
+/* 「未」は「担任がまだ書き終えていない。待てばよい」。出したあとに変わったものは
+   待っても直らない（出し直しが要る）ので、同じ印にしない */
+const tpMark = await p.evaluate(() => {
+  const TGT = "1AbCdEfGhIjKlMnOpQrStUvWxYz0123456789";
+  tpTargets = [{name:"たんぽぽ", url:"https://docs.google.com/spreadsheets/d/" + TGT + "/edit", def:true}];
+  const cls = allClasses()[0], w = week();
+  const set = o => { w.tpSub = {[cls]:o}; return TP_ST[tpState(cls)].mark; };
+  const out = {};
+  w.tpSub = {}; out["① 何もしていない"] = TP_ST[tpState(cls)].mark;
+  out["② 提出した"]         = set({at:"T1", dirty:false, exports:{}});
+  out["③ 出力した"]         = set({at:"T1", dirty:false, exports:{[TGT]:"T1"}});
+  out["④ そのあと直した"]   = set({at:"T1", dirty:true,  exports:{[TGT]:"T1"}});
+  out["⑤ 再提出した"]       = set({at:"T2", dirty:false, exports:{[TGT]:"T1"}});
+  out["⑥ もう一度出力した"] = set({at:"T2", dirty:false, exports:{[TGT]:"T2"}});
+  out["提出→出力前に直した"] = set({at:"T1", dirty:true,  exports:{}});
+  w.tpSub = {};
+  return out;
+});
+for(const [k, want] of [["① 何もしていない","未"], ["② 提出した","済"], ["③ 出力した","済"],
+                        ["④ そのあと直した","変"], ["⑤ 再提出した","変"],
+                        ["⑥ もう一度出力した","済"], ["提出→出力前に直した","未"]])
+  ok(k + " → " + want, tpMark[k] === want, tpMark[k]);
+/* 出す先も元へ戻す（手元では1本も無いのがふだんの姿） */
+await p.evaluate(() => { tpTargets = []; });
 
 console.log("\n■ 一手戻す（Ctrl+Z）");
 await p.locator(".nav[data-act='gate']").first().click(); await p.waitForTimeout(250);

@@ -133,7 +133,14 @@
         <b id="arcTitle"></b><span id="arcNote"></span>
         <a id="arcLink" target="_blank" rel="noopener">保管庫をひらく</a>
       </div>
-      <div class="stage" id="stage"><div class="paper" id="paper"><div class="sheet" id="sheet"></div></div></div>
+      <!-- ④ 紙の左右で週を繰る。**左メニューの ◀ ▶ と同じことをする。**
+           紙を読んでいる目の高さに置く ── 読みながら週を繰るとき、
+           左端まで視線を戻さずに済む。**刷るときは出さない**（紙の外のもの） -->
+      <div class="stage" id="stage">
+        <button class="wkarrow" id="wkPrev" aria-label="前の週" title="前の週">‹</button>
+        <div class="paper" id="paper"><div class="sheet" id="sheet"></div></div>
+        <button class="wkarrow" id="wkNext" aria-label="次の週" title="次の週">›</button>
+      </div>
 
       <!-- 月の面。**4週ぶんを 2×2 に並べて、B4 に1枚で刷る。**
            紙の代わりにここを出す（紙と入れ替える） -->
@@ -215,6 +222,19 @@
         <div class="pals" id="pals"></div>
         <p class="hint" id="palHint" style="margin-top:8px"></p>
         <button class="chipset" id="chipOpen" hidden>週案のチップ表示：<span id="chipNow">使わない</span></button>
+      </div>
+
+      <!-- ③ その日の形。**全学年の面にだけ出る。** 効く範囲が全クラスなので、
+           担任の画面からは押せない。紙の日付の見出しに置いていたころは、
+           押せることに気づかれず「休みの日を入れる口が無い」と言われた。
+           紙の上には印（特・休）だけを残す ── あれは刷って残る情報 -->
+      <div id="dayWrap" hidden>
+        <h3>この週の日の形</h3>
+        <div class="dayrow" id="dayRow"></div>
+        <p class="hint" style="margin:7px 0 0">押すと、その日を
+          <b>特別校時</b>（朝学習が消えて上へ詰まる）や
+          <b>休み</b>（1〜6校時に斜め線）にできる。<b>全クラスの紙に入る。</b>
+          戻せば、書いてある予定がそのまま出る（休みにしても中身は消していない）。</p>
       </div>
 
       <div class="empty" id="noSel">コマを選ぶと、ここで中身とリンクを直せる。</div>
