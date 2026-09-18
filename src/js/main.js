@@ -201,8 +201,13 @@ function refreshWeek(){
     if(tpTargets === null) loadTargets();
     return;
   }
+  /* 中央が週の紙でないときは、そちらを描き直す。
+     **週を繰ったのに、見ている面だけ前の週のまま、にしない** */
+  if(centerMode === "month"){ mMonday = new Date(monday); drawMonth(); paintFree(); return; }
+  if(centerMode === "grade"){ drawGradeView(); paintFree(); return; }
   buildSheet();
   autoFit();
+  paintFree();
 }
 function goWeek(n){
   saveNow();                      /* 週を出る前に、この端末の控えを書き切る */
@@ -509,6 +514,28 @@ function wire(){
   on("tpDelDlg","close", () => tpDelAnswer(false));
   on("tpSubBtn","click", toggleTpSub);
 
+  /* 中央のかたち（週案・4週・学年）。**行き先は1つ。**
+     左メニューの「4週まとめて（B4）」と同じ面へ行く */
+  for(const b of document.querySelectorAll("#centerTabs [data-center]"))
+    b.addEventListener("click", () => setCenter(b.dataset.center));
+  /* 空き枠さがし */
+  for(const b of document.querySelectorAll("#freeSeg [data-free]"))
+    b.addEventListener("click", () => {
+      freeOpt().level = +b.dataset.free;
+      save(); paintFree(); redrawCenter();
+    });
+  on("freeAvoid","toggle", () => { if($("freeAvoid").open) drawAvoidList(); });
+
+  /* 学年の面。**見るだけ。** */
+  on("gvGrade","change", e => { gGrade = e.target.value; drawGradeView(); });
+  on("gvClose","click",  () => setCenter("week"));
+  on("gvImage","click", async () => {
+    try{ await nodePng($("gvPaper"), outputName(gGrade + "年_" + "学年") + ".png");
+         toast("学年の画像を保存した"); }
+    catch(e){ toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
+  });
+  addEventListener("resize", () => { if(!$("gradeView").hidden) fitGrade(); });
+
   /* 月の面。**見るだけ。** 直すのは週の紙のほうで */
   on("mPrev","click",  () => { mMonday = addDays(mMonday, -7 * MONTH_WEEKS); drawMonth(); });
   on("mNext","click",  () => { mMonday = addDays(mMonday,  7 * MONTH_WEEKS); drawMonth(); });
@@ -593,13 +620,19 @@ function wire(){
     save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
   });
   on("rsSp","change", e => {
+    /* **いま入っている担当学年を、教科コードで引き継ぐ。**
+       引き継がないと、専科の並びを1文字直すたびに担当学年が消え、
+       専科の基本時間割が全学年に広がる（誰も気づかない） */
+    const had = {};
+    for(const s of (Y().specials || [])) had[s.code] = s.grades || [];
     const seen = {}, out = [];
     for(const raw of String(e.target.value).split(/[,、\s]+/)){
       const label = raw.trim();
       if(!label || seen[label]) continue;
       seen[label] = 1;
       const known = SUB_BY_NAME[label];
-      out.push({code: known ? known.code : "sp_" + out.length, label});
+      const code = known ? known.code : "sp_" + out.length;
+      out.push({code, label, grades: had[code] || []});
     }
     Y().specials = out; save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
   });

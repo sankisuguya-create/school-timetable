@@ -199,6 +199,45 @@
 .cell[data-layer=special] .tag{background:var(--cat-special)}
 .cell.clash .tag{background:var(--cat-clash)}
 
+/* ── 空き枠さがしの印（画面だけ） ────────────────
+   **色は情報を運ばない。** 斜線の有無・密度と、記号（△ ×）が運ぶ。
+
+     自由    そのまま。何も敷かない
+     避けたい 斜線（粗め）＋ △
+     使えない 斜線（密）  ＋ ×
+
+   *自由に何も足さない理由*：**自由がいちばん多いことがある。**
+   基本時間割の入っていない週や、午後がまるごと空いている学年では、
+   ほとんどのコマに印が付いて、紙が印の海になる。探しているものを目立たせる
+   つもりが、目立っていないものを探す画面になる。
+   **塞がっているほうを暗くして、空いているところを明るいまま残す。**
+   遠目には、明るい面＝空きとして塊で読める。
+
+   *休みの斜め線と取り違えない*：休みは `\` 向き・濃い実線1本（図形で描く）。
+   こちらは **`/` 向き・薄く・やや密**。角度が反対なので、同じ紙の上でも混ざらない。
+
+   *塗りではなく background-image で敷く理由*：紙の塗り2色（降ってきた／重なっている）は
+   background-color で既に使っている。**画像として重ねれば、どちらも消さずに両立する。**
+   `::before` は層の左端の線が使っているので、そちらも空けておく。
+
+   *印の大きさは --k で縮めない*：画面だけのもので、4週や学年の面では
+   --k が 0.4 前後まで下がる。紙の字と一緒に縮めると読めなくなる。 */
+.cell[data-free=avoid]{
+  background-image:repeating-linear-gradient(135deg,
+    rgba(26,26,26,.16) 0 1px, transparent 1px 6px)}
+.cell[data-free=busy]{
+  background-image:repeating-linear-gradient(135deg,
+    rgba(26,26,26,.26) 0 1.2px, transparent 1.2px 4px)}
+.cell[data-free=avoid]::after,.cell[data-free=busy]::after{
+  position:absolute;left:0;bottom:0;z-index:3;
+  font-size:10px;line-height:1.15;padding:0 3px;font-weight:700;
+  border-top-right-radius:3px;pointer-events:none;
+  background:var(--sheet);color:var(--ink-sub)}
+.cell[data-free=avoid]::after{content:"△";color:var(--cat-grade)}
+.cell[data-free=busy]::after {content:"×";font-weight:400}
+/* 斜線の上でも字は読めるように、題名を地の上へ持ち上げる */
+.cell[data-free] .t,.cell[data-free] .n{position:relative}
+
 /* リンクは文字に付く。1つのコマにいくつでも */
 .cell a,.foot a{color:var(--ink-link);text-decoration:underline;
   text-decoration-color:var(--ink-link);text-underline-offset:1.5px;cursor:pointer}
@@ -229,6 +268,12 @@
    リンクは下線だけ残す。URL は刷らない。 */
 @media print{
   .side,.panel,.gate,.toast,.tpview,.busy,.arc,.wait,.wkarrow{display:none!important}
+  /* 中央のかたちを入れ替える帯と、学年の面。**どちらも紙の外のもの** */
+  .cbar,.gvview{display:none!important}
+  /* 空き枠さがしの印も刷らない。**枠を探している最中の作業**であって、
+     刷って残す情報ではない（年間行事の印と同じ扱い） */
+  .cell[data-free]{background-image:none!important}
+  .cell[data-free]::after{display:none!important}
   /* 月の面を刷るとき。**まわりの操作も、週の1枚も出さない。**
      刷るのは 2×2 の4枚だけ（B4 よこ） */
   body.printing-month .stage{display:none!important}
@@ -272,3 +317,40 @@
   .cell.from-base .t{color:#1A1A1A;font-weight:600}
   .cell a,.foot a{color:#1A1A1A;text-decoration-color:#1A1A1A}
 }
+
+/* ── 学年の面の紙 ────────────────────────────────
+   **1日をクラス数で縦に割る。** 同じコマがとなりどうしに並ぶので、
+   クラスのずれを目の往復なしで読める。備考と放課後と週メモは置かない。
+   **見るだけの面。** 書ける欄そのものを作っていない（sheet.js buildGradeSheet）。 */
+.gsheet{
+  --k:1; --pw:100%;
+  --labw:13mm; --h-head:8mm; --h-break:6mm; --h-title:8mm;
+  --fs-s:6pt; --fs-t:16pt;
+  width:var(--pw);
+  background:var(--sheet);color:var(--ink);
+  font-feature-settings:"palt" 1;
+  display:grid;
+  border:1.2px solid var(--rule-week);border-radius:2px;
+  box-shadow:0 1px 3px var(--shade),0 10px 28px var(--shade);
+  overflow:hidden}
+.gsheet>*{border-right:.6px solid var(--rule);border-bottom:.6px solid var(--rule);
+  min-width:0;position:relative}
+/* **クラスの切れ目より、日の切れ目を濃く。** 濃さが同じだと、
+   どこまでが1日かが読めず、4クラスぶんの列が24本の帯に見える */
+.gsheet>.gend{border-right:1.2px solid var(--rule-week)}
+.gsheet>.gday{border-bottom:none}
+/* 組の見出し。**数字だけ。** 学年は面の見出しが言っている */
+.gcls{display:flex;align-items:center;justify-content:center;
+  font-size:calc(var(--fs-s)*var(--k));color:var(--ink-sub);font-weight:600;
+  border-bottom:1.2px solid var(--rule-week);background:var(--band);
+  padding:1px 0}
+.glab{font-size:calc(var(--fs-s)*var(--k))}
+/* 1コマ。**題名だけ。** 高さは題名の行そのもの（備考の行が無い） */
+.gcell.lesson{height:calc(var(--h-title)*var(--k))}
+/* **折り返させない。** 1コマが 22px 前後しか無いので、2行になると
+   下の行が枠から出る。長い名前は fitTitles がそのコマの中で縮める */
+.gcell .t{height:100%;padding:0 1px;white-space:nowrap}
+/* 印は**小さく、地を敷かずに**。1コマが 22px 前後しか無いので、
+   週の紙と同じ大きさで地を敷くと、コマの半分を印が占める */
+.gcell[data-free]::after{font-size:8px;padding:0 1px;background:transparent;
+  font-weight:700}

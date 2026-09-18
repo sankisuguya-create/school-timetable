@@ -197,14 +197,33 @@ const Store = (function(){
     for(const k in tanpopo) tanpopo[k].sort(function(x, y){ return rank(x) - rank(y); });
     const specials = pickYear_("専科", year)
       .map(r => ({code: String(r["教科コード"] || "").trim(),
-                  label: String(r["表示名"] || "").trim()}))
+                  label: String(r["表示名"] || "").trim(),
+                  grades: gradeList_(r["担当学年"])}))
       .filter(s => s.code)
-      .map(s => ({code: s.code, label: s.label || s.code}));
+      .map(s => ({code: s.code, label: s.label || s.code, grades: s.grades}));
     let week1 = "";
     for(const r of Sheets.readAll("年設定").rows)
       if(String(r["年度"]) === String(year) && r["第1週の月曜"]) week1 = ymd(r["第1週の月曜"]);
     return {classes, specials, week1, tanpopo};
   }
+  /* 「担当学年」の書き方をそろえる。`3,4,5,6` `3・4` `3〜6` `3年〜6年` を通す。
+     **空なら空の配列を返す＝全学年を受け持つ。** 書いていない学校を、
+     どの学年も受け持たない専科にしてしまわない。 */
+  function gradeList_(v){
+    const s = String(v == null ? "" : v).trim();
+    if(!s) return [];
+    const out = {}, put = g => { if(g >= 1 && g <= 9) out[String(g)] = true; };
+    /* まず範囲（3〜6）を開く。開いてから1つずつを拾う */
+    const rest = s.replace(/([1-9])\s*年?\s*[〜～~\-ー－]\s*([1-9])/g, function(_, a, b){
+      const lo = Math.min(+a, +b), hi = Math.max(+a, +b);
+      for(let g = lo; g <= hi; g++) put(g);
+      return " ";
+    });
+    const m = rest.match(/[1-9]/g);
+    if(m) m.forEach(x => put(+x));
+    return Object.keys(out).sort();
+  }
+
   function pickYear_(name, year){
     const rows = Sheets.readAll(name).rows;
     const mine = rows.filter(r => String(r["年度"] || "").trim() === String(year));
@@ -1723,8 +1742,11 @@ const Store = (function(){
           "たんぽぽ交流級": tp[c] ? tp[c] : ""
         });
       replaceYear_("クラス", year, clsRows);
+      /* **担当学年を書き戻す。** 落とすと、学級編成をいじるたびに
+         シートの「担当学年」が空になり、専科の基本時間割が全学年に広がる */
       replaceYear_("専科", year, (specials || []).map(s =>
-        ({"年度":year, "教科コード":s.code, "表示名":s.label, "メール": spMail[s.code] || ""})));
+        ({"年度":year, "教科コード":s.code, "表示名":s.label, "メール": spMail[s.code] || "",
+          "担当学年": (s.grades || []).join(",")})));
       if(week1) replaceYear_("年設定", year, [{"年度":year, "第1週の月曜":week1}]);
       SpreadsheetApp.flush();
       return readRoster(year);

@@ -314,6 +314,21 @@ function drawRoster(){
   $("rsW1").value = Yr.week1 || firstMonday(fy());
   $("rsAbNow").textContent = "いまは " + (db.settings.abAnchor || AB_ANCHOR);
   $("rsSp").value = (Yr.specials || []).map(s => s.label).join(", ");
+  /* 専科ごとの担当学年。**空欄は全学年。** ここを書くと、基本時間割の
+     その教科のコマが、その学年ぶんだけ専科の週に出る（compose.js spBaseClasses） */
+  $("rsSpRows").innerHTML = (Yr.specials || []).map(s =>
+    "<div class='row'><span>" + escText(s.label) + " の担当学年</span>"
+    + "<input type='text' data-sp='" + escText(s.code) + "' style='flex:1;min-width:10em'"
+    + " placeholder='空欄＝全学年' value='" + escText((s.grades || []).join(",")) + "'>"
+    + "</div>").join("");
+  for(const e of $("rsSpRows").querySelectorAll("input[data-sp]"))
+    e.onchange = () => {
+      const t = (Y().specials || []).find(x => x.code === e.dataset.sp);
+      if(!t) return;
+      t.grades = spGrades_(e.value);
+      save(); Backend.saveRoster(); drawRoster();
+      if(view.kind === "special") refreshWeek();
+    };
 
   $("rsRows").innerHTML = grades().map(g =>
     "<div class='row'><span>" + escText(g) + "年</span>"

@@ -9,6 +9,12 @@
 /* いま何を開いているか。**開いたものが層を決める。**
    「だれとして書くか」を別に選ばせない。 */
 let view = {kind:"gate"};
+/* **見るだけの紙を組んでいるあいだの控え。**（月の面・学年の面）
+   sheetRO … 書ける欄も、教科を落とす先も作らない
+   sheetOuter … 紙は差し替えても、**人が開いている面はこちら**。
+                空き枠さがしの範囲は、開いている面のほうで決める
+   freeOverride … 開いている面と、見ている範囲が違うとき（学年の面）*/
+let sheetRO = false, sheetOuter = null, freeOverride = null;
 const LAYER_OF = {class:"home", grade:"grade", school:"school", special:"special"};
 const layerOf = () => LAYER_OF[view.kind];
 
@@ -128,14 +134,65 @@ function overriders(d, s){
   return out;
 }
 
+/* ── 教科の「元」────────────────────────────────
+   合同体育＝体育、合同音楽＝音楽。**時数表の1文字が同じものを元とみなす。**
+   教科シートに列を足さずに済む（時数の数え方と同じ決まりをそのまま使う）。
+   学年でだけ使う教科（only が入っているもの）だけが写しなので、そこだけ見る。 */
+function rootSubject(code){
+  const s = SUB_BY_CODE[code];
+  if(!s || !s.only || !s.short) return code || "";
+  const root = SUBJECTS.find(x => !x.only && x.short === s.short);
+  return root ? root.code : code;
+}
+
+/* ── 専科の基本時間割 ──────────────────────────
+   **基本時間割は、教師を持っていない。** クラス×校時×教科があるだけで、
+   そのコマに誰が行くかは書いていない。だから専科が自分の面を開いても、
+   自分で入れたコマしか出ていなかった（基本の持ちコマが1つも出ない）。
+
+   持ち主は「専科」シートから引く ── 教科コードが自分の教科で、
+   担当学年に入っていれば、そのクラスのそのコマは自分のもの。
+   **新しく入れてもらう入力は無い。** 担当学年だけが年に1回、数行。
+
+   *合成したあとの教科で見る理由*：基本時間割では音楽でも、担任や学年が
+   別の予定を入れていれば、その時間に専科は行かない。基本の字だけを見ると、
+   もう無くなった授業が専科の週に残る。 */
+function spBaseClasses(d, s){
+  const me = specials().find(x => x.code === view.sp);
+  const gs = (me && me.grades && me.grades.length) ? me.grades : null;
+  const out = [];
+  for(const c of allClasses()){
+    if(gs && gs.indexOf(gradeOf(c)) < 0) continue;
+    const b = baseCell(c, d, s);
+    if(!b || b.subject !== view.sp) continue;
+    const cur = compose(c, d, s);
+    if(rootSubject(cur.subject) !== view.sp) continue;
+    out.push(c);
+  }
+  return out;
+}
+
 /* 専科の自分の週。同じデータを、教科名ではなくクラス名で見る。 */
 function ownCell(d, s){
   const w = week(), key = ck(d, s);
+  /* 1. 自分で入れたコマ。**こちらが勝つ**（基本から動かした結果だから） */
   for(const c of allClasses()){
     const e = (w.special[c] || {})[key];
     if(e && e.sp === view.sp)
       return {title:escText(c), note:e.note || "", layer:"special", cls:c, clash:null};
   }
+  /* 2. 基本時間割が割り当てているコマ。**淡く出る**（layer が base なので） */
+  const hit = spBaseClasses(d, s);
+  if(hit.length)
+    /* **2クラス以上に当たったら、隠さずに言う。** 同じ教科の専科が2人いて
+       担当学年を書いていないときに起きる。黙って片方だけ出すと、
+       出なかったほうのクラスに誰も行かない週ができる。
+       **全部は並べない** ── 1コマの欄に入らず、字が潰れて読めなくなる */
+    return {title:escText(hit.length > 2 ? hit[0] + " ほか" + (hit.length - 1)
+                                         : hit.join("・")),
+            note:"", layer:"base",
+            cls:hit.length === 1 ? hit[0] : "",
+            multi:hit.length > 1, nsp:hit.length, clash:null};
   return {title:"", note:"", layer:"base", clash:null};
 }
 
@@ -194,6 +251,154 @@ function planState(cls){
   if(own)   return "ok";
   if(upper) return "upper";        /* 上位だけ入っている。担任は未着手 */
   return "base";                   /* どの層からも1つも入っていない */
+}
+
+/* ── 空き枠さがし ────────────────────────────────
+   **一覧して目で探すのではなく、コマ1つずつを判定して出す。**
+   学年・全校・専科の面で、行事や合同の授業を入れられる枠を探すための道具。
+
+   *3段で返す理由*：「空いている／埋まっている」の2値にすると、
+   埋まった週には候補が1つも出ず、使う側には壊れた画面と区別がつかない。
+   **使えないのか、空いているが避けたいのか**を分けておけば、
+   候補ゼロの週でも「どこが、なぜ、埋まっているか」は読める。
+
+     "busy"   使えない  … 休み・授業なし・校外行事・全校の予定・学年の予定
+     "avoid"  避けたい  … 場所を取る教科・学年でやる活動・ほかの専科・指定した教科
+     "free"   自由
+
+   *レベル1で担任の予定を避けない理由*：担任が入れた国語は、学年や全校が
+   あとから上書きできる（そう決めてある。上書きは両側に知らせる）。
+   避ける対象にすると、ほとんどのコマが埋まって使いものにならない。
+   避けるのは**上位が既に約束しているもの**だけ。
+
+   **画面だけのもの。紙には出さない。** 枠を探している最中の作業であって、
+   刷って残す情報ではない（行事の印と同じ扱い）。 */
+
+/* いまの設定。**この端末の持ちもの**（人によって探し方が違う）。 */
+function freeOpt(){
+  const s = db.settings.free || (db.settings.free = {level:FREE_OFF, avoid:[]});
+  if(typeof s.level !== "number") s.level = FREE_OFF;
+  if(!Array.isArray(s.avoid))     s.avoid = [];
+  return s;
+}
+const freeOn = () => freeOpt().level > FREE_OFF && !!freeScope();
+
+/* 探す範囲。**紙ではなく、人が開いている面で決める。**
+   学年の面は紙を1枚ずつ別のクラスとして組むので、紙のほうを見ると
+   「学級の面」に見えて、空き枠の印が1つも出なくなる。
+
+   **学級の面には出さない。** 自分1クラスの中に「空き枠」は無く、
+   担任が探しているのは自分の空き時間のほうで、それは別のもの。 */
+function freeScope(){
+  if(freeOverride && freeOverride.kind === "grade" && freeOverride.grade)
+    return {kind:"grade", classes:classesOfGrade(freeOverride.grade)};
+  const v = sheetOuter || view;
+  if(v.kind === "grade")  return {kind:"grade",  classes:classesOfGrade(v.grade)};
+  if(v.kind === "school") return {kind:"school", classes:allClasses()};
+  if(v.kind === "special"){
+    const me = specials().find(x => x.code === v.sp);
+    const gs = (me && me.grades && me.grades.length) ? me.grades : null;
+    return {kind:"special", sp:v.sp,
+            classes: gs ? allClasses().filter(c => gs.indexOf(gradeOf(c)) >= 0)
+                        : allClasses()};
+  }
+  return null;
+}
+
+/* 1クラス・1コマの判定 */
+function freeOne(d, sid, c, opt){
+  if(noLessonOn(c, d, sid)) return {st:"busy", why:"授業なし"};
+  if(tripOn(c, d, sid))     return {st:"busy", why:"校外行事"};
+  const w = week(), key = ck(d, sid);
+  const sc = w.school[key];
+  if(sc && plain(sc.title).trim()) return {st:"busy", why:"全校の予定"};
+  const gr = (w.grade[gradeOf(c)] || {})[key];
+  if(gr && plain(gr.title).trim()) return {st:"busy", why:"学年の予定"};
+
+  const cur  = compose(c, d, sid);
+  const code = cur.subject || "";
+  if(!code) return {st:"free", why:""};
+  const root = rootSubject(code);
+  const name = (SUB_BY_CODE[code] || {}).name || plain(cur.title).trim() || code;
+  /* 指定した教科は、**どの段でも**避ける（段の指定に足すもの） */
+  if(opt.avoid.indexOf(code) >= 0 || opt.avoid.indexOf(root) >= 0)
+    return {st:"avoid", why:name};
+  if(opt.level < FREE_L2) return {st:"free", why:""};
+  if(PLACE_SUBJECTS.indexOf(root) >= 0) return {st:"avoid", why:name + "（場所）"};
+  if((SUB_BY_CODE[code] || {}).only)    return {st:"avoid", why:name};
+  if(specials().some(x => x.code === root) && root !== opt.sp)
+    return {st:"avoid", why:name + "（専科）"};
+  return {st:"free", why:""};
+}
+
+/* 1コマの判定。**面によって、まとめ方が違う。**
+
+   学年・全校 … そのコマに全クラスが空いていないと使えない（いちばん悪いほうを取る）
+   専科       … 自分が空いていて、**どれか1クラス**が空いていれば行ける（いちばん良いほう）
+                自分の週が埋まっていれば、その時点で使えない */
+function freeAt(d, sid){
+  const sc = freeOn() ? freeScope() : null;
+  if(!sc || !sc.classes.length) return null;
+  const s = SLOT_BY_ID[sid];
+  if(!s || s.kind !== "lesson") return null;
+  if(isDayOff(d) && !tripHere(d, sid)) return {st:"busy", why:"休み"};
+  const o = freeOpt();
+  const opt = {level:o.level, avoid:o.avoid, sp:sc.sp || ""};
+
+  if(sc.kind === "special"){
+    /* 自分の週が埋まっていたら、その時点で行けない。
+       **紙のほうではなく、専科の面として引く**（学年の面から見ていても同じ） */
+    const keep = view;
+    view = {kind:"special", sp:sc.sp};
+    let own;
+    try{ own = ownCell(d, sid); } finally{ view = keep; }
+    if(plain(own.title).trim())
+      return {st:"busy", why:plain(own.title).trim() + " を受け持っている"};
+    let best = null;
+    for(const c of sc.classes){
+      const r = freeOne(d, sid, c, opt);
+      if(r.st === "free") return {st:"free", why:c, cls:c};
+      if(!best || (best.st === "busy" && r.st === "avoid"))
+        best = {st:r.st, why:c + "：" + r.why, cls:c};
+    }
+    return best;
+  }
+
+  let worst = {st:"free", why:""};
+  for(const c of sc.classes){
+    const r = freeOne(d, sid, c, opt);
+    if(r.st === "busy") return {st:"busy", why:c + "：" + r.why};
+    if(r.st === "avoid" && worst.st === "free") worst = {st:"avoid", why:c + "：" + r.why};
+  }
+  return worst;
+}
+
+/* 1クラス・1コマの空き。**学年の面は、どのクラスが塞いでいるかまで出す。**
+   曜日をクラス数で割って並べるので、まとめてしまうと割った意味が無くなる。 */
+function freeAtClass(d, sid, c){
+  const sc = freeOn() ? freeScope() : null;
+  if(!sc) return null;
+  const s = SLOT_BY_ID[sid];
+  if(!s || s.kind !== "lesson") return null;
+  if(isDayOff(d) && !tripOn(c, d, sid)) return {st:"busy", why:"休み"};
+  const o = freeOpt();
+  return freeOne(d, sid, c, {level:o.level, avoid:o.avoid, sp:sc.sp || ""});
+}
+
+/* その週に何コマあるか。**数えたものを出す。**
+   一覧を目で数え直させない（それがこの道具の役目そのもの）。 */
+function freeTally(mon){
+  const keep = monday;
+  if(mon) monday = mon;
+  try{
+    const n = {free:0, avoid:0, busy:0};
+    for(let d = 0; d < WEEKDAYS; d++) for(const s of SLOTS){
+      if(s.kind !== "lesson" || !slotShown(d, s)) continue;
+      const r = freeAt(d, s.id);
+      if(r && n[r.st] !== undefined) n[r.st]++;
+    }
+    return n;
+  } finally{ monday = keep; }
 }
 
 /* ── 年間行事計画表 ────────────────────────────

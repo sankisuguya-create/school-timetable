@@ -104,14 +104,23 @@ function openView(v){
     if(view !== v) return;        /* もう別のところを開いている */
     $("gate").hidden = true;
     /* たんぽぽの面は週案の紙ではない。紙と入力パネルを引っこめて入れ替える */
-    $("stage").hidden = tp;
     $("tpView").hidden = !tp;
-    document.querySelector(".panel").hidden = tp;
-    document.querySelector(".work").classList.toggle("no-panel", tp);
+    if(tp){
+      $("stage").hidden = true;
+      $("monthView").hidden = true;
+      $("gradeView").hidden = true;
+      document.querySelector(".panel").hidden = true;
+      document.querySelector(".work").classList.add("no-panel");
+      $("centerBar").hidden = true;
+    }
     /* たんぽぽの面には紙が無い。紙から出す操作（印刷・時数）は伏せる */
     showPlanOutputs(!tp);
     paintHeader();
     if(!tp) drawPalette();
+    /* **開いた面を、いま見ているかたち（週／4週／学年）のまま出す。**
+       クラスを変えるたびに週の紙へ戻されると、学年の面で組を見比べている
+       途中で、毎回そこへ戻る手が要る */
+    if(!tp) applyCenter(centerOk() ? centerMode : "week");
     refreshWeek();
     if(!tp) fillPanel();
     applyLock();                  /* 画面ごとにロックを持つ */
