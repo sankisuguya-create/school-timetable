@@ -1520,7 +1520,7 @@ for(const [k, want] of [["① 何もしていない","未"], ["② 提出した"
 /* 出す先も元へ戻す（手元では1本も無いのがふだんの姿） */
 await p.evaluate(() => { tpTargets = []; });
 
-console.log("\n■ 新しいチップ（合同3つ・校外行事）");
+console.log("\n■ 新しいチップ（合同3つ・校外行事・授業なし）");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(400);
 let chips = await p.evaluate(() => [...document.querySelectorAll("#pals .pal")].map(x => x.textContent));
@@ -1529,12 +1529,14 @@ let chips = await p.evaluate(() => [...document.querySelectorAll("#pals .pal")].
 ok("担任の面に合同3つを出さない",
    !["合同体育","合同音楽","学年集会"].some(x => chips.includes(x)), chips);
 ok("担任の面にも校外行事は出す", chips.includes("校外行事"), chips);
+ok("担任の面にも授業なしは出す", chips.includes("授業なし"), chips);
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".master[data-g='3']").click(); await p.waitForTimeout(450);
 chips = await p.evaluate(() => [...document.querySelectorAll("#pals .pal")].map(x => x.textContent));
 ok("学年の面には合同3つが出る",
    ["合同体育","合同音楽","学年集会"].every(x => chips.includes(x)), chips);
 ok("学年の面にも校外行事が出る", chips.includes("校外行事"), chips);
+ok("学年の面にも授業なしが出る", chips.includes("授業なし"), chips);
 
 console.log("\n■ 校外行事（被覆）");
 let tr = await p.evaluate(() => {
@@ -1622,6 +1624,107 @@ await p.evaluate(() => {
   openView({kind:"school"}); setDayForm(3, "");
   const w = week();
   w.school = {}; w.grade = {}; w.home = {}; w.tpSub = {}; w.tpEdited = {}; w.acked = [];
+  for(const d of document.querySelectorAll("dialog[open]")) d.close();
+  buildSheet();
+});
+await p.waitForTimeout(150);
+
+console.log("\n■ 授業なし（コマ1つ）");
+let nl = await p.evaluate(() => {
+  const cls = allClasses()[0];
+  openView({kind:"class", cls});
+  db.settings.tally.classes = cls;          /* 時数の1行目をこの学級にする */
+  writeCell(0, "p4", {title:"国語", subject:"kokugo"});
+  writeCell(0, "p4", {note:"学年行事のため"});
+  const t = db.settings.tally;
+  const 前 = tallyGrid()[0][t.cols["p4"]];
+  applyPalette(0, "p4", "__none");
+  buildSheet();
+  const cell = document.querySelector('#sheet .cell[data-d="0"][data-s="p4"]');
+  const tt = cell.querySelector(".t"), sl = cell.querySelector(".noneslash");
+  const cr = cell.getBoundingClientRect(), sr = sl ? sl.getBoundingClientRect() : null;
+  return {題名: plain(compose(cls, 0, "p4").title),
+          備考: plain(compose(cls, 0, "p4").note),
+          斜め線: !!sl,
+          図形で描く: !!(sl && sl.querySelector("svg line")),
+          題名を消す: getComputedStyle(tt).visibility,
+          備考の欄は残る: !!cell.querySelector(".n"),
+          線は題名の欄だけ: sr ? sr.height < cr.height * .75 : null,
+          たんぽぽ: tpTitle(cls, 0, "p4"),
+          時数前: 前, 時数後: tallyGrid()[0][t.cols["p4"]],
+          持ち方: (week().home[cls] || {})[ck(0, "p4")].title};
+});
+ok("題名が「授業なし」になる", nl.題名 === "授業なし", nl.題名);
+ok("斜め線を引く", nl.斜め線 === true, nl);
+ok("線は図形で描く（地の色はトナー節約の印刷機で消える）", nl.図形で描く === true, nl);
+ok("題名の欄は消す", nl.題名を消す === "hidden", nl.題名を消す);
+/* **備考は残す。**「学年行事のため」「自習」を書けないと、
+   なぜ授業が無いのかが紙から読めない */
+ok("備考の欄は残る", nl.備考の欄は残る === true, nl);
+ok("備考の中身も残る", nl.備考 === "学年行事のため", nl.備考);
+ok("斜め線は題名の欄だけ（備考にはかからない）", nl.線は題名の欄だけ === true, nl);
+/* **時数は数えない。**「授業なし」に合う教科が無いので、自然にそうなる */
+ok("時数に数えない（前は数えていた）", nl.時数前 === "国" && nl.時数後 === "", nl);
+/* **たんぽぽには「なし」。空にしない** ── 空は「まだ書いていない」と
+   見分けがつかず、たんぽぽ担当が催促に回る。児童の列は 50px なので2文字 */
+ok("たんぽぽには「なし」で出る", nl.たんぽぽ === "なし", nl.たんぽぽ);
+ok("ふつうのコマとして持つ（専用の入れ物を作らない）",
+   nl.持ち方 === "授業なし", nl.持ち方);
+
+nl = await p.evaluate(() => {
+  const cls = allClasses()[0];
+  applyPalette(0, "p4", "sansu");            /* 授業を入れようとする */
+  const 弾いた = plain(compose(cls, 0, "p4").title);
+  const 知らせ = document.getElementById("toast").textContent;
+  applyPalette(0, "p4", "__none");           /* もう一度押して外す */
+  buildSheet();
+  const cell = document.querySelector('#sheet .cell[data-d="0"][data-s="p4"]');
+  return {弾いた, 知らせ,
+          外れた: plain(compose(cls, 0, "p4").title),
+          備考は残る: plain(compose(cls, 0, "p4").note),
+          斜め線: !!cell.querySelector(".noneslash"),
+          また書ける: writeCell(0, "p4", {title:"算数", subject:"sansu"}) !== false};
+});
+ok("授業なしのコマには、授業を入れない", nl.弾いた === "授業なし", nl.弾いた);
+ok("入らない理由を、その場で言う", /授業なし/.test(nl.知らせ), nl.知らせ);
+ok("もう一度押すと外れる", nl.外れた === "" && nl.斜め線 === false, nl);
+/* **外しても備考は消さない。** 打ち直させない */
+ok("外しても備考は残る", nl.備考は残る === "学年行事のため", nl.備考は残る);
+ok("外したあとは、また授業を入れられる", nl.また書ける === true, nl);
+
+/* **学年から降ろせる。** 学年で1コマ潰れる日のほうが多い */
+nl = await p.evaluate(() => {
+  const cls = allClasses()[0], g = cls.split("-")[0];
+  openView({kind:"grade", grade:g});
+  applyPalette(1, "p5", "__none");
+  openView({kind:"class", cls});
+  buildSheet();
+  const cell = document.querySelector('#sheet .cell[data-d="1"][data-s="p5"]');
+  return {担任に出る: plain(compose(cls, 1, "p5").title),
+          斜め線: !!cell.querySelector(".noneslash"),
+          休みの日には入らない: (() => {
+            openView({kind:"school"}); setDayForm(2, "off");
+            const why = setNoLesson(2, "p1", true);
+            setDayForm(2, "");
+            return why;
+          })(),
+          授業のコマだけ: setNoLesson(0, "br", true)};
+});
+ok("学年で入れた授業なしは、担任の紙にも斜め線で出る",
+   nl.担任に出る === "授業なし" && nl.斜め線 === true, nl);
+ok("休みの日には入れない（1日ぶんは日の形のほう）",
+   /休み/.test(nl.休みの日には入らない), nl.休みの日には入らない);
+ok("休み時間には入れない（もともと授業が無い）",
+   /授業のコマ/.test(nl.授業のコマだけ), nl.授業のコマだけ);
+
+/* 仕込んだぶんを片づける */
+await p.evaluate(() => {
+  openView({kind:"school"});
+  const w = week();
+  w.school = {}; w.grade = {}; w.home = {}; w.tpSub = {}; w.tpEdited = {}; w.acked = [];
+  db.settings.tally.classes = "3-1,3-2,3-3";
+  /* **戻す控えも片づける。** 残すと、次の「戻すものが無ければ」が戻せてしまう */
+  undoStack.length = 0; redoStack.length = 0;
   for(const d of document.querySelectorAll("dialog[open]")) d.close();
   buildSheet();
 });
@@ -1873,7 +1976,14 @@ ok("教科の色は、紙のコマには出さない", await p.evaluate(() => {
      pal.delete("rgba(0, 0, 0, 0)");
      return [...document.querySelectorAll("#sheet .cell")]
        .every(x => !pal.has(getComputedStyle(x).backgroundColor));
-   }) === true);
+   }) === true, await p.evaluate(() => {
+     const pal = new Set([...document.querySelectorAll(".pal")]
+       .map(x => getComputedStyle(x).backgroundColor));
+     pal.delete("rgba(0, 0, 0, 0)");
+     return [...document.querySelectorAll("#sheet .cell")]
+       .filter(x => pal.has(getComputedStyle(x).backgroundColor))
+       .map(x => x.className + "=" + getComputedStyle(x).backgroundColor);
+   }));
 /* 時数に数えない教科は、色を外しても分かる（破線の枠） */
 ok("時数に数えない教科は、枠の形でも分かる", await p.evaluate(() =>
      [...document.querySelectorAll(".pal.off")]

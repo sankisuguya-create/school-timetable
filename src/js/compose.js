@@ -366,6 +366,32 @@ function setTrip(d, slot, on){
   return "";
 }
 
+/* ── 授業なし（コマ1つ） ────────────────────────
+   **題名そのものが印。** 専用の入れ物を作らないので、層の重なり・競合・
+   取り消し・年度の退避が、そのまま全部効く（→ src/js/config.js NO_LESSON）。
+
+   見るときは**紙に出ているコマ**（合成したあと）で見る。学年から降りてきた
+   「授業なし」も、担任の面で斜め線になっていなければ意味が無い。 */
+const noLessonIn_ = c => plain((c || {}).title).trim() === NO_LESSON;
+/* そのクラスの紙で、このコマが授業なしか */
+const noLessonOn = (cls, d, slot) => noLessonIn_(compose(cls, d, slot));
+/* いま開いている面で、このコマが授業なしか */
+const noLessonHere = (d, slot) => noLessonIn_(cellFor(d, slot));
+
+/* 入れる・外す。**授業のコマにだけ入れられる。**
+   朝休みや業間に入れても「授業がない」は情報にならない（もともと無い）。
+   休みの日とロックは今までどおり止める（whyCantWrite をそのまま通す）。
+   外すときは**題名だけ空にする。備考は消さない** ── 「学年行事のため」と
+   書いたものを、授業を入れ直すたびに打ち直させない。 */
+function setNoLesson(d, slot, on){
+  if((SLOT_BY_ID[slot] || {}).kind !== "lesson")
+    return "<b>授業のコマ</b>にだけ入れられる";
+  const no = whyCantWrite(d, slot);
+  if(no) return no;
+  writeCell(d, slot, {title: on ? escText(NO_LESSON) : "", subject: null});
+  return "";
+}
+
 /* ── 書く ────────────────────────────────────── */
 
 /* クラスを開いているときだけ、1コマを学年や全校へ広げられる。

@@ -295,6 +295,19 @@ function paintSheet(one, root){
     if(t && t !== typing && t.innerHTML !== wantT) t.innerHTML = wantT;
     if(n && n !== typing && n.innerHTML !== wantN) n.innerHTML = wantN;
 
+    /* **授業なしのコマは、題名の欄を斜め線で消す。** 備考は書ける。
+       ここで付け外しするのは、**他の端末から降りてきたときにも効かせる**ため
+       （面を組み直すのは日の形を変えたときだけで、コマの中身は paintSheet が持つ）。
+       線は図形で描く（背景の色はトナーを節約する設定のプリンタで消える）。
+       まとめて1本にはしない ── 3限と4限が授業なしなら短い線が2本並ぶ。
+       つないでしまうと、何限から何限までかが紙から読めなくなる。 */
+    const none = t && (SLOT_BY_ID[s] || {}).kind === "lesson"
+              && plain(c.title).trim() === NO_LESSON;
+    e.classList.toggle("nolesson", !!none);
+    const had = e.querySelector(".noneslash");
+    if(none && !had) e.insertBefore(el("div", "noneslash", SLASH_SVG), e.firstChild);
+    if(!none && had) had.remove();
+
     e.dataset.layer = c.layer;
     e.dataset.subject = c.subject || "";
     e.classList.toggle("has-sub", !!c.subject);
