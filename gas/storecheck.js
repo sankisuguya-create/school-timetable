@@ -459,19 +459,23 @@ ok("別の年度は残っている",
 
 console.log("\n■ 同じコマを書き直しても行は増えない");
 const before = rowsOf("週案 3-3").length;
-ev(`Store.writeCells(2026, [
+const partial = ev(`Store.writeCells(2026, [
   {date:"2026-11-16", slot:"p2", layer:"home", target:"3-3", title:"国語", subject:"kokugo"}
 ])`);
 ok("行は増えない", rowsOf("週案 3-3").length === before, rowsOf("週案 3-3").length);
+ok("既存コマの編集は全面書き戻しにしない",
+   partial.rowWrites === 1 && partial.fullWrites === 0, partial);
 /* 日付はシートの中で日付型になる。**そこで取り違えると、打つたびに行が増える。** */
 (function(){
   const at = ev('(function(){const o={};Sheets.PLAN_COLS.forEach((c,i)=>o[c]=i);return o;})()');
   for(const row of SHEETS["週案 3-3"])
     if(String(row[at["日付"]]) === "2026-11-16") row[at["日付"]] = new Date(2026, 10, 16);
 })();
-ev(`Store.writeCells(2026, [
+const datePartial = ev(`Store.writeCells(2026, [
   {date:"2026-11-16", slot:"p2", layer:"home", target:"3-3", title:"社会", subject:"shakai"}
 ])`);
+ok("日付型の行も部分書き込みで直す",
+   datePartial.rowWrites === 1 && datePartial.fullWrites === 0, datePartial);
 ok("日付が日付型になっていても、同じ行を直す",
    rowsOf("週案 3-3").length === before, rowsOf("週案 3-3").length);
 w = ev('Store.readWeek(2026, "2026-11-16")');
@@ -479,9 +483,11 @@ ok("中身が入れ替わる", w.home["3-3"]["0|p2"].title === "社会",
    w.home["3-3"]["0|p2"]);
 
 console.log("\n■ 空にすると、その行だけ消える");
-ev(`Store.writeCells(2026, [
+const removed = ev(`Store.writeCells(2026, [
   {date:"2026-11-16", slot:"p2", layer:"home", target:"3-3", title:"", note:""}
 ])`);
+ok("削除は日付順を保つため全面を書き戻す",
+   removed.fullWrites === 1 && removed.rowWrites === 0, removed);
 w = ev('Store.readWeek(2026, "2026-11-16")');
 ok("消える", !(w.home["3-3"] || {})["0|p2"], w.home["3-3"]);
 ok("同じシートのほかのコマは残る", !!w.home["3-3"]["0|am1"], w.home["3-3"]);
