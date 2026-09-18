@@ -32,6 +32,7 @@ const Sheets = (function(){
                                    "時程ID:左からの列数。実物に合わせて直す"],
         ["例外で通すメール", "",   "8桁の数字が本名のアドレスになっている職員だけ。"
                                  + "教職員ドメインの中でしか効かない"],
+        ["管理者メール",       "",   "管理・設定を使える教職員。カンマ区切り。未設定なら誰も使えない"],
         ["たんぽぽファイルID", "", "たんぽぽ時間割のURL（そのまま貼ってよい）"],
         ["A週の起点の月曜", "2026-09-07", "この週がA週。あとは1週ごとに入れ替わる"],
         ["たんぽぽ支援員",     "", "たんぽぽ時間割に列を作る支援員。カンマ区切り"],
@@ -192,6 +193,10 @@ const Sheets = (function(){
   const PLAN_COLS = ["年度", "日付", "曜日", "時程", "題名", "詳細",
                      "教科コード", "層", "対象", "担当", "更新者", "更新時刻"];
   const PLAN_CLASS_COLS = ["対象"];
+  /* 人が入れた「=…」を数式として実行しない。題名や詳細に IMPORT 系の式が
+     入ると、表示崩れだけでなく外部参照にもなり得るため、文字列の列は text に固定。 */
+  const PLAN_TEXT_COLS = ["曜日", "時程", "題名", "詳細", "教科コード", "層",
+                          "対象", "担当", "更新者"];
 
   /* 層と対象から、どのシートに置くかを決める。
      専科がクラスに入れたコマも、そのクラスのシートに置く。
@@ -205,12 +210,13 @@ const Sheets = (function(){
   function ensurePlan(name){
     const ss = book();
     let sh = ss.getSheetByName(name);
-    if(sh) return sh;
-    sh = ss.insertSheet(name);
-    sh.getRange(1, 1, 1, PLAN_COLS.length).setValues([PLAN_COLS]).setFontWeight("bold");
-    sh.setFrozenRows(1);
+    if(!sh){
+      sh = ss.insertSheet(name);
+      sh.getRange(1, 1, 1, PLAN_COLS.length).setValues([PLAN_COLS]).setFontWeight("bold");
+      sh.setFrozenRows(1);
+    }
     /* 対象の列は書式なしテキスト。**3-3 が「3月3日」に化けるのを止める。** */
-    for(const col of PLAN_CLASS_COLS){
+    for(const col of PLAN_TEXT_COLS){
       const i = PLAN_COLS.indexOf(col);
       if(i >= 0) sh.getRange(1, i + 1, sh.getMaxRows(), 1).setNumberFormat("@");
     }
@@ -630,7 +636,7 @@ const Sheets = (function(){
 
 /* シートを作る。エディタから1回実行する。 */
 function setupSheets(){
-  Gate.check();                 /* URL を開ける人は直接叩ける。ここも関門を通す */
+  Gate.checkAdmin();            /* 初期シート作成も、直接呼べる管理操作 */
   const r = Sheets.setup();
   /* **あとから足した列と行は、setup では入らない。** ここで面倒を見る。
      放課後の行が無いと、画面に放課後の欄そのものが出ない。

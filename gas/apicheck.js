@@ -70,8 +70,8 @@ for(const n of names){
        /Gate\.judge\s*\(/.test(body) && /Gate\.denyPage\s*\(/.test(body), where[n]);
     continue;
   }
-  ok(n + " が Gate.check() を呼ぶ  (" + where[n] + ")",
-     /Gate\.check\s*\(/.test(body), body.slice(0, 120));
+  ok(n + " が Gate.check/checkAdmin を呼ぶ  (" + where[n] + ")",
+     /Gate\.(?:check|checkAdmin)\s*\(/.test(body), body.slice(0, 120));
 }
 
 console.log("\n■ 画面が呼ぶ名前は、サーバに実在する");

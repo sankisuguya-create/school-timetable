@@ -24,7 +24,7 @@ const context = vm.createContext({
     return {classList:{toggle(){}}};
   }, querySelectorAll(s){ return s === '[data-plan-output]' ? outputs : []; }},
   $:id => nodes.get(id),
-  Backend:{flush(){}, ready(fn){fn();}, isGas(){return true;},
+  Backend:{flush(){}, ready(fn){fn();}, isGas(){return true;}, info(){return {isAdmin:false};},
     setNotifier(){}, setDirtyWatcher(){}, setConflictWatcher(){},
     boot(fn){bootCount++; fn();}, watch(){}},
   view:{kind:'gate'}, selCell:null, storeBroken:'', onStoreError:null,

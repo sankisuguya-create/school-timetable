@@ -51,6 +51,15 @@ async function check(gas, failure=false, guide='new'){
     await wait(80);
     assert.ok(d.getElementById('gate').hidden,'週切替なしで学級表示');
     assert.ok(d.querySelectorAll('#sheet .cell').length>0,'週案セル');
+    const title=d.querySelector('#sheet .cell .t[contenteditable]');
+    const note=d.querySelector('#sheet .cell .n[contenteditable]');
+    assert.equal(title.getAttribute('role'),'textbox','紙の教科名を編集欄として伝える');
+    assert.match(title.getAttribute('aria-label'),/教科名・行事名$/,'紙の教科名に場所と欄名を付ける');
+    assert.equal(note.getAttribute('aria-multiline'),'true','紙の備考を複数行編集欄として伝える');
+    assert.match(note.getAttribute('aria-label'),/詳細・備考$/,'紙の備考に場所と欄名を付ける');
+    assert.equal(d.querySelector('#sheet .foot .t').getAttribute('aria-label'),'週のメモ');
+    assert.equal(d.getElementById('pTitle').getAttribute('aria-labelledby'),'pTitleLabel');
+    assert.equal(d.getElementById('pNote').getAttribute('aria-multiline'),'true');
     assert.ok(d.querySelectorAll('#pals .pal').length>0,'右の授業チップ');
     assert.equal(d.getElementById('sheet').classList.contains('chips-screen'),false);
     d.getElementById('chipOpen').click();
