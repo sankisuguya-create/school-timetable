@@ -253,6 +253,18 @@
           <label for="pNote">詳細・備考</label>
           <div class="fld tall" id="pNote" contenteditable></div>
         </div>
+        <!-- 校外行事の名前。**選んでいるコマを覆っている行事**のぶんを直す。
+             1本のチップ（続けて置いたコマ）は同じ名前になる。
+             行事ごとに違う名前が要る（自然学校・社会見学・修学旅行）ので、
+             学校ひとつの設定にはしない -->
+        <div id="pTripWrap" hidden>
+          <h3>この校外行事の名前</h3>
+          <label for="pTripName">紙に出す字</label>
+          <input class="pinp" id="pTripName" maxlength="12" placeholder="校外学習">
+          <label for="pTripTp" style="margin-top:8px">たんぽぽに出す字</label>
+          <input class="pinp" id="pTripTp" maxlength="4" placeholder="校外">
+          <p class="hint" id="pTripHint" style="margin:6px 0 0"></p>
+        </div>
         <!-- 年間行事計画表。**日付にしか結びついていない**ので、
              どの校時に入れるかは押した人が決める（docs/spec.md 6節） -->
         <div id="pEvWrap" hidden>

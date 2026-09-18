@@ -539,6 +539,12 @@ span.tpin{cursor:default}
 .pal.off{color:var(--tx-sub);border-style:dashed}
 .pal.drag{opacity:.4}
 
+/* 右メニューの1行入力（校外行事の名前）。.fld と同じ見た目にそろえる */
+.pinp{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:7px 10px;font-size:13px;font-family:inherit;color:var(--ink);
+  width:100%;box-sizing:border-box;outline:none}
+.pinp:focus{border-color:var(--ink-link);box-shadow:inset 0 0 0 1px var(--ink-link)}
+
 .fld{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
   padding:8px 10px;font-size:13px;line-height:1.5;min-height:36px;outline:none;
   word-break:break-word}

@@ -279,6 +279,25 @@ function fillPanel(){
   $("pTitleLabel").textContent =
     view.kind === "special" ? "行き先のクラス" : "教科名・行事名";
 
+  /* 校外行事の名前。**覆っているコマを選んでいるときだけ出す。**
+     続けて置いた1本ぶんに同じ字が入る。**打っている欄は書き替えない**
+     （書き替えるとカーソルが先頭へ跳ぶ）。 */
+  const tw = $("pTripWrap");
+  const onTrip = slot.kind === "lesson" && typeof tripHere === "function"
+              && tripHere(selCell.d, selCell.s);
+  tw.hidden = !onTrip;
+  if(onTrip){
+    const nm = $("pTripName"), tp = $("pTripTp"), who = tripLockedBy(selCell.d, selCell.s);
+    if(nm !== document.activeElement) nm.value = tripName(selCell.d, selCell.s);
+    if(tp !== document.activeElement) tp.value = tripTp(selCell.d, selCell.s);
+    nm.disabled = tp.disabled = !!who;
+    $("pTripHint").innerHTML = who
+      ? "この行事は<b>" + escText(who) + "</b>が入れたもの。名前もその面から直す。"
+      : "続けて置いた<b>1本ぶんに同じ字</b>が入る。"
+        + "紙の字は、長ければ小さくして収める。"
+        + "<b>たんぽぽに出す字は2文字まで</b>にする（児童の列は 50px しかない）。";
+  }
+
   /* **この日の行事。** 年間行事計画表から読んだもの。
      押すと、選んでいるコマに入る（何校時かは表に書いていないので、決めるのは人）。
      教科は「行事」にする——時数に数えない教科なので、Excel 側の集計が増えない。 */

@@ -19,6 +19,10 @@ const Store = (function(){
   const DAY_OFF_  = "休み";
   /* 校外行事を置く時程のIDの頭。画面の config.js の TRIP_SLOT と同じ字 */
   const TRIP_SLOT_ = "trip:";
+  /* 校外行事の、たんぽぽに出す既定の字。画面の tanpopo.js の TP_TRIP と同じ字。
+     **行事ごとに変えられる**ので、実際に出るのは trip: の行の「詳細」。
+     空なら、この字が出る（→ src/js/compose.js tripTpIn_） */
+  const TRIP_TP_ = "校外";
   const DOW_ = ["日", "月", "火", "水", "木", "金", "土"];
   const ymd = d => Utilities.formatDate(
     Sheets.isDate(d) ? d : new Date(String(d)), TZ, "yyyy-MM-dd");
@@ -742,8 +746,17 @@ const Store = (function(){
           /* 直す前にその行が持っていた題名。**競合の判定より先に読む**
              （競合で飛ばしたコマは、そもそも書いていないので覆さない） */
           const before = (i !== undefined) ? rows[i] : null;
-          const wasTitle = before ? String(before["題名"] || "") : "";
-          const nowTitle = remove ? "" : String(p.title || "");
+          /* **校外行事の行だけは「詳細」で見る。** 題名は紙に出す字（行事名）、
+             詳細がたんぽぽに出す字。題名で見ると、紙の字を直しただけで提出が
+             覆り、たんぽぽの字を直しても覆らない（逆になる）。
+             画面も同じ字で見る（→ src/js/store.js tpTitleIn_） */
+          const isTrip_ = String(p.slot).indexOf(TRIP_SLOT_) === 0;
+          const wasTitle = !before ? ""
+            : isTrip_ ? (String(before["詳細"] || "").trim() || TRIP_TP_)
+                      : String(before["題名"] || "");
+          const nowTitle = remove ? ""
+            : isTrip_ ? (String(p.note || "").trim() || TRIP_TP_)
+                      : String(p.title || "");
           const dow = (new Date(date + "T00:00:00").getDay() + 6) % 7;  /* 月曜を 0 に */
           p.__tanpopo = TimetableDomain.affectsTanpopo(
             dow, p.slot, wasTitle, nowTitle, tpIds, DAY_SLOT_, DAY_OFF_, TRIP_SLOT_);

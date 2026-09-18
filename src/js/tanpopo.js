@@ -21,7 +21,8 @@ const tpSlots = () => SLOTS.filter(s => s.kind === "lesson").slice(0, 6).map(s =
 
 /* たんぽぽの1コマに出す字。**紙に出ているものと同じ順で決める。**
 
-   ① 校外行事に覆われていれば「校外」。**休みより勝つ** ── 休みで空にするのは
+   ① 校外行事に覆われていれば、その行事の「たんぽぽに出す字」（既定「校外」。
+      右メニューで行事ごとに直せる）。**休みより勝つ** ── 休みで空にするのは
       「その日は授業が無い」を伝えるためで、行事があるなら「無い」は誤り。
       たんぽぽ担当はその日も支援員を組む必要がある（自然学校など）
    ② 休みの日は空
@@ -33,7 +34,7 @@ const tpSlots = () => SLOTS.filter(s => s.kind === "lesson").slice(0, 6).map(s =
 const TP_TRIP = "校外";
 const TP_NONE = "なし";
 function tpTitle(cls, d, s){
-  if(tripOn(cls, d, s)) return TP_TRIP;
+  if(tripOn(cls, d, s)) return tripTpIn_(tripEntry(cls, d, s));
   if(isDayOff(d)) return "";
   const c = compose(cls, d, s);
   if(noLessonIn_(c)) return TP_NONE;

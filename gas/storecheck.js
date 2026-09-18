@@ -1675,6 +1675,18 @@ console.log("\n■ 提出後の変更と、出力先ごとの提出版");
   submit();
   ev(`Store.writeCells(2026, [{date:'${mon}',slot:'p3',layer:'school',target:'',title:'全校行事',expectedAt:0}])`);
   ok('全校からの変更も再提出が必要', read()[cls].dirty);
+  /* 校外行事の行は、**題名＝紙に出す字／詳細＝たんぽぽに出す字**。
+     たんぽぽへ渡るのは詳細のほうなので、覆るかどうかもそちらで決める。
+     題名で決めると、紙の字を直しただけで覆り、たんぽぽの字を直しても
+     覆らない（逆になる）。画面も同じ字で見る（src/js/store.js tpTitleIn_） */
+  submit();
+  ev(`Store.writeCells(2026, [{date:'${mon}',slot:'trip:p4',layer:'home',target:'${cls}',title:'自然学校',note:''}])`);
+  ok('校外行事を置くと再提出が必要', read()[cls].dirty);
+  submit();
+  ev(`Store.writeCells(2026, [{date:'${mon}',slot:'trip:p4',layer:'home',target:'${cls}',title:'社会見学',note:''}])`);
+  ok('紙に出す字だけ直しても覆らない（たんぽぽは「校外」のまま）', !read()[cls].dirty);
+  ev(`Store.writeCells(2026, [{date:'${mon}',slot:'trip:p4',layer:'home',target:'${cls}',title:'社会見学',note:'見学'}])`);
+  ok('たんぽぽに出す字を直すと覆る', read()[cls].dirty);
 })();
 (function(){
   const mon = "2026-11-16";

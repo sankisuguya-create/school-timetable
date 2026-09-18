@@ -98,6 +98,7 @@ function buildSheet_(sh){
   });
 
   paintSheet(null, sh);
+  fitTripMarks(sh);
   if(typeof applyLock === "function") applyLock();
 }
 
@@ -150,8 +151,10 @@ function dayColEl(d){
     /* **1文字ずつ積む。** writing-mode の縦書きに頼ると、字を送るのに
        フォント側の縦組みの情報が要る。無い環境では4文字が同じ場所に重なって、
        小さな黒い塊になった（実測）。字を1つずつ並べれば、どのフォントでも同じに出る */
+    /* 字は**行事ごと**（右メニューで直せる。既定は「校外学習」） */
     const ov = el("div", "tripmark", "<span>"
-      + [...TRIP_NAME].map(c => "<i>" + escText(c) + "</i>").join("") + "</span>");
+      + [...tripName(d, shown[r.a].id)].map(c => "<i>" + escText(c) + "</i>").join("")
+      + "</span>");
     ov.style.gridColumn = "1";
     ov.style.gridRow = (r.a + 1) + " / " + (r.b + 2);
     col.appendChild(ov);
@@ -238,6 +241,29 @@ function cellEl(d, s){
    測るのと書くのを分ける。1コマずつ「書いて測って」を繰り返すと、
    そのたびにブラウザが並べ直す（55コマで55回）。 */
 const FIT_MIN = 0.45;      /* これ以上は縮めない。読めなくなる */
+
+/* 校外行事のチップの字を、チップの高さに収める。
+   **長い行事名でも全部読めるようにする**（「6年生を送る会」は7文字）。
+   1コマだけの校外に長い名前を入れると小さくなるが、切って見えなくなるより
+   読める。紙に入ってから測る（組んでいる途中の列はまだ高さを持たない）。 */
+function fitTripMarks(root){
+  const list = [...(root || $("sheet")).querySelectorAll(".tripmark span")];
+  for(const sp of list){
+    const gl = sp.querySelectorAll("i");
+    if(!gl.length) continue;
+    const cs = getComputedStyle(sp);
+    const h = sp.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    const w = sp.clientWidth  - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    if(h <= 0 || w <= 0) continue;
+    const base = parseFloat(getComputedStyle(gl[0]).fontSize);
+    /* 行の高さ 1.02 ぶんを見込む。横も、1字が枠に入る大きさまで */
+    const fit = Math.min(base, h / (gl.length * 1.06), w);
+    if(fit > 0 && fit < base)
+      for(const g of gl) g.style.fontSize = fit.toFixed(2) + "px";
+    else
+      for(const g of gl) g.style.fontSize = "";
+  }
+}
 
 function fitTitles(els){
   if(!els.length) return;

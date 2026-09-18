@@ -1619,6 +1619,89 @@ ok("全学年が入れた校外は、担任の紙にも出る", tr.担任に出�
 ok("担任は外せない。外す先を名指しする",
    tr.まだ在る === true && /全学年/.test(tr.理由), tr);
 
+console.log("\n■ 校外行事の名前（行事ごと・右メニュー）");
+let tn = await p.evaluate(() => {
+  const cls = allClasses()[0];
+  openView({kind:"class", cls});
+  setTrip(2, "p1", true); setTrip(2, "p2", true);
+  buildSheet();
+  selectCell(2, "p1", cellAt(2, "p1"));
+  const wrap = document.getElementById("pTripWrap");
+  const nm = document.getElementById("pTripName"), tp = document.getElementById("pTripTp");
+  const 既定 = {出る: !wrap.hidden, 紙: nm.value, たんぽぽ: tp.value};
+  /* 提出ずみにしておく。**どちらの字で覆るか**を見る */
+  week().tpSub[cls] = {at: Date.now() - 1000, dirty: false, exports: {}};
+  setTripName(2, "p1", "自然学校", undefined);          /* 紙の字だけ直す */
+  const 紙だけ = !!(tpSubmitInfo(cls) || {}).dirty;
+  setTripName(2, "p1", undefined, "自然");              /* たんぽぽの字を直す */
+  const たんぽぽも = !!(tpSubmitInfo(cls) || {}).dirty;
+  buildSheet();
+  selectCell(2, "p1", cellAt(2, "p1"));
+  const col = document.querySelector('#sheet .daycol[data-d="2"]');
+  return Object.assign(既定, {
+    紙だけ, たんぽぽも,
+    紙の字: [...col.querySelectorAll(".tripmark span i")].map(i => i.textContent).join(""),
+    たんぽぽの字: tpTitle(cls, 2, "p1"),
+    まとまりの端: tripName(2, "p2"),
+    欄にも出る: document.getElementById("pTripName").value,
+    持ち方: (() => { const e = (week().home[cls] || {})[ck(2, "trip:p2")] || {};
+                     return {題名: plain(e.title), 詳細: plain(e.note)}; })()
+  });
+});
+ok("覆っているコマを選ぶと、名前の欄が出る", tn.出る === true, tn);
+ok("既定は「校外学習」「校外」", tn.紙 === "校外学習" && tn.たんぽぽ === "校外", tn);
+ok("紙の字を直すと、チップの字が変わる", tn.紙の字 === "自然学校", tn.紙の字);
+ok("たんぽぽの字を直すと、たんぽぽに出る字が変わる", tn.たんぽぽの字 === "自然", tn);
+/* **1本のチップは同じ名前。** まとまりの全部のコマに同じ字を書く */
+ok("続けて置いた1本ぶんに、同じ字が入る", tn.まとまりの端 === "自然学校", tn);
+ok("欄にも、いまの字が出る", tn.欄にも出る === "自然学校", tn);
+/* **題名＝紙の字／詳細＝たんぽぽの字。** シートに列を足さない */
+ok("題名は紙の字、詳細はたんぽぽの字",
+   tn.持ち方.題名 === "自然学校" && tn.持ち方.詳細 === "自然", tn.持ち方);
+/* **たんぽぽへ渡る字で覆る。** 紙の字だけ直しても、たんぽぽ担当に渡るものは
+   変わっていない。逆にすると、渡る字が変わったのに印が立たない */
+ok("紙の字だけでは提出は覆らない", tn.紙だけ === false, tn);
+ok("たんぽぽの字を直すと提出が覆る", tn.たんぽぽも === true, tn);
+
+tn = await p.evaluate(() => {
+  const cls = allClasses()[0];
+  setTrip(2, "p3", true);                    /* あとから1コマ足す */
+  const 引き継ぐ = tripName(2, "p3");
+  /* 長い名前。**小さくして収める**（切らない） */
+  setTripName(2, "p1", "6年生を送る会", undefined);
+  buildSheet();
+  const col = document.querySelector('#sheet .daycol[data-d="2"]');
+  const gl = [...col.querySelectorAll(".tripmark span i")];
+  const sp = col.querySelector(".tripmark span");
+  const 字の高さ = gl.reduce((a, g) => a + g.getBoundingClientRect().height, 0);
+  return {引き継ぐ, 字数: gl.length,
+          小さい: parseFloat(getComputedStyle(gl[0]).fontSize),
+          はみ出さない: 字の高さ <= sp.getBoundingClientRect().height + 1};
+});
+ok("あとから足したコマは、隣の名前を引き継ぐ", tn.引き継ぐ === "自然学校", tn);
+ok("長い名前も全部出す（7文字）", tn.字数 === 7, tn);
+ok("長い名前は小さくして、はみ出させない", tn.はみ出さない === true, tn);
+
+/* **入れた層からしか直せない。** 外すのと同じ規則 */
+tn = await p.evaluate(() => {
+  const cls = allClasses()[0], g = gradeOf(cls);
+  openView({kind:"grade", grade:String(g)});
+  setTrip(4, "p1", true);
+  setTripName(4, "p1", "社会見学", "見学");
+  openView({kind:"class", cls});
+  buildSheet();
+  selectCell(4, "p1", cellAt(4, "p1"));
+  return {担任にも出る: tripName(4, "p1"),
+          直せない: document.getElementById("pTripName").disabled,
+          理由: document.getElementById("pTripHint").textContent,
+          弾く: setTripName(4, "p1", "遠足", undefined),
+          そのまま: tripName(4, "p1")};
+});
+ok("学年が入れた行事の名前は、担任の紙にも出る", tn.担任にも出る === "社会見学", tn);
+ok("担任は直せない（欄を止める）", tn.直せない === true, tn);
+ok("どこから直すのかを名指しする", /年/.test(tn.理由), tn.理由);
+ok("押しても変わらない", tn.そのまま === "社会見学" && /年/.test(tn.弾く), tn);
+
 /* 仕込んだぶんを片づける。**あとの検査に響かせない** */
 await p.evaluate(() => {
   openView({kind:"school"}); setDayForm(3, "");
