@@ -686,13 +686,13 @@ const Store = (function(){
   /* patches = [{date, slot, layer, target, title, note, subject, sp, remove}]
      戻り値は、いま入った更新時刻（サーバの時計）。画面はこれで手元の控えを直す。
 
-     **シートごとに、丸ごと読んで・差し替えて・日付順に並べて・書き戻す。**
-     行番号を覚えて1行ずつ直すやり方はやめた。
-     日付は書いた瞬間にシートの側で日付型になるので、文字のまま覚えた行番号は
-     次に読んだときもう合わない。合わないと、直したつもりの行が増えていく。 */
+     **追加・削除では丸ごと並べ直し、既存行の編集では変わった行だけを書く。**
+     行番号だけを後日まで覚えることはしない。ロックを取って全面を読んだ、その保存の
+     中だけで実際の行番号を使うため、間に行が入って別の行を直すことはない。 */
   function writeCells(year, patches){
     if(!patches || !patches.length)
-      return {at:{}, count:0, asked:0, conflicts:[], ms:0, waitMs:0};
+      return {at:{}, count:0, asked:0, conflicts:[], sheets:0,
+              fullWrites:0, rowWrites:0, ms:0, waitMs:0};
     /* **保存にかかった時間を測って返す。**
        「速くする改造」は、必ず正しさを削る方向に働く。数字が基準に届く前に
        手を入れない（→ docs/spec.md 13-2）。ロック待ちと書き込みは分けて測る。
@@ -703,11 +703,19 @@ const Store = (function(){
     lock.waitLock(30000);
     const t1 = Date.now();
     try{
-      const rank = slotRank();
+      /* **時程シートは、この保存で1回だけ読む。** 並べ替えの順（rank）と、
+         たんぽぽへ渡る6コマの並び（tpIds）の両方がこれを使う。
+         前は slotRank() と readSlots() が同じシートを2回読んでいた。
+         どちらもロックの中なので、木曜の夕方に重なるとその回数だけ伸びる。
+         ID の空いた行は readSlots が落とすが、**残りの前後の順は変わらない**ので、
+         並べ替えの結果は今までと同じ。 */
+      const slots_ = readSlots();
+      const rank = {};
+      slots_.forEach((s, i) => { rank[s.id] = i; });
       /* **たんぽぽへ渡る文字が変わったコマだけ**が、担任の提出を覆す
          （→ gas/Domain.gs affectsTanpopo ・ 同じ規則が src/js/tanpopo.js にある）。
-         渡るのは 月〜金 × 授業6コマの題名だけなので、その並びをここで1回だけ作る。 */
-      const tpIds = readSlots().filter(s => s.kind === "lesson").slice(0, 6).map(s => s.id);
+         渡るのは 月〜金 × 授業6コマの題名だけ。 */
+      const tpIds = slots_.filter(s => s.kind === "lesson").slice(0, 6).map(s => s.id);
       const now = new Date(), at = {};
       /* **競合したコマは、黙って飛ばさない。** 数も中身も返す。
          返さないと、教師は書けたつもりで書けていないまま週を進める。 */
@@ -721,6 +729,7 @@ const Store = (function(){
         (byName[name] || (byName[name] = [])).push(p);
       }
 
+      let fullWrites = 0, rowWrites = 0;
       for(const name in byName){
         const rows = Sheets.readPlan(name, ymd);
         const index = {};
@@ -728,7 +737,8 @@ const Store = (function(){
           index[[String(r["年度"]), r["日付"], String(r["時程"]),
                  String(r["層"]), Sheets.asClass(r["対象"])].join("\t")] = i;
         });
-        const drop = {};
+        const drop = {}, changed = [];
+        let structural = false;
         for(const p of byName[name]){
           const date = ymd(p.date), target = Sheets.asClass(p.target);
           const k = TimetableDomain.cellKey(year, date, p.slot, p.layer, target);
@@ -781,7 +791,7 @@ const Store = (function(){
           }
 
           if(remove){
-            if(i !== undefined) drop[i] = true;
+            if(i !== undefined){ drop[i] = true; structural = true; }
             at[outKey] = 0;
             continue;
           }
@@ -791,27 +801,47 @@ const Store = (function(){
             "教科コード":String(p.subject || ""), "層":p.layer, "対象":target,
             "担当":String(p.sp || ""), "更新者":me, "更新時刻":now
           };
-          if(i !== undefined) rows[i] = obj;
-          else { index[k] = rows.length; rows.push(obj); }
+          if(i !== undefined){
+            /* **新しい中身にも行番号を持たせる。** 持たせないと、同じコマが
+               1回の保存に2つ入ったとき（2つ目は自分が書いたばかりの行を引き当てる）
+               行番号が undefined になり、`getRange(NaN, …)` で**保存ごと落ちる**。
+               落ちるのは1つ目を書いたあとなので、同じ保存の他のコマも道連れになる。
+               いまの画面は1コマ1つに畳んでから送る（src/js/backend.js の dirty）が、
+               ここで塞いでおく。 */
+            obj.__row = rows[i].__row;
+            changed.push({row:obj.__row, value:obj});
+            rows[i] = obj;
+          } else {
+            structural = true;
+            index[k] = rows.length; rows.push(obj);
+          }
           at[outKey] = now.getTime();
         }
-        const keep = rows.filter((r, i) => !drop[i]);
-        keep.sort(function(x, y){
-          const a1 = String(x["年度"]), b1 = String(y["年度"]);
-          if(a1 !== b1) return a1 < b1 ? -1 : 1;
-          if(x["日付"] !== y["日付"]) return x["日付"] < y["日付"] ? -1 : 1;
-          const rx = rank[String(x["時程"])], ry = rank[String(y["時程"])];
-          return (rx === undefined ? 99 : rx) - (ry === undefined ? 99 : ry);
-        });
         markTpChanges_(year, byName[name].filter(p =>
           p.__tanpopo &&
           Object.prototype.hasOwnProperty.call(at, [ymd(p.date), p.slot, p.layer, Sheets.asClass(p.target)].join("|"))));
-        Sheets.writePlan(name, keep);
+        /* **並べ替えるのは、行が増えたか減ったときだけ。** 既存のコマを直しても
+           年度・日付・時程は変わらないので、並びは動かない。毎回 1,200 行を
+           並べ直して捨てていた（部分書き込みでは使わない） */
+        if(structural){
+          const keep = rows.filter((r, i) => !drop[i]);
+          keep.sort(function(x, y){
+            const a1 = String(x["年度"]), b1 = String(y["年度"]);
+            if(a1 !== b1) return a1 < b1 ? -1 : 1;
+            if(x["日付"] !== y["日付"]) return x["日付"] < y["日付"] ? -1 : 1;
+            const rx = rank[String(x["時程"])], ry = rank[String(y["時程"])];
+            return (rx === undefined ? 99 : rx) - (ry === undefined ? 99 : ry);
+          });
+          Sheets.writePlan(name, keep);
+          fullWrites++;
+        }
+        else if(changed.length){ Sheets.writePlanRows(name, changed); rowWrites += changed.length; }
       }
       SpreadsheetApp.flush();
       return {at, count: patches.length - conflicts.length,
               asked: patches.length, conflicts: conflicts,
               sheets: Object.keys(byName).length,
+              fullWrites: fullWrites, rowWrites: rowWrites,
               ms: Date.now() - t1, waitMs: t1 - t0};
     } finally {
       lock.releaseLock();
