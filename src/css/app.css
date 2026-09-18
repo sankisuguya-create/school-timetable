@@ -502,6 +502,10 @@ span.tpin{cursor:default}
    同じ色になり、「教科の色を紙に出さない」という決まりの検査に当たる */
 .pal.trip{background:var(--hover);border-style:dashed;border-color:var(--cat-school);
   color:var(--cat-school);font-weight:600}
+/* 授業なし。**地は敷かない。** 校外行事と並ぶので、破線の枠と字で見分ける
+   （色は識別を担わない。字が「授業なし」と書いてある） */
+.pal.none{background:var(--hover);border-style:dashed;border-color:var(--tx-sub);
+  color:var(--tx-sub);font-weight:600}
 .pal:hover{border-color:var(--ink-link);box-shadow:inset 0 0 0 1px var(--ink-link)}
 .pal:active{cursor:grabbing}
 /* 基本時間割にも、教科を探す補助として同じ淡い色を使う。字は必ず残す。 */
@@ -534,6 +538,12 @@ span.tpin{cursor:default}
 .pal.clear:hover{filter:brightness(1.06)}
 .pal.off{color:var(--tx-sub);border-style:dashed}
 .pal.drag{opacity:.4}
+
+/* 右メニューの1行入力（校外行事の名前）。.fld と同じ見た目にそろえる */
+.pinp{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:7px 10px;font-size:13px;font-family:inherit;color:var(--ink);
+  width:100%;box-sizing:border-box;outline:none}
+.pinp:focus{border-color:var(--ink-link);box-shadow:inset 0 0 0 1px var(--ink-link)}
 
 .fld{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
   padding:8px 10px;font-size:13px;line-height:1.5;min-height:36px;outline:none;

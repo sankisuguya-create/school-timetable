@@ -21,17 +21,23 @@ const tpSlots = () => SLOTS.filter(s => s.kind === "lesson").slice(0, 6).map(s =
 
 /* たんぽぽの1コマに出す字。**紙に出ているものと同じ順で決める。**
 
-   ① 校外行事に覆われていれば「校外」。**休みより勝つ** ── 休みで空にするのは
+   ① 校外行事に覆われていれば、その行事の「たんぽぽに出す字」（既定「校外」。
+      右メニューで行事ごとに直せる）。**休みより勝つ** ── 休みで空にするのは
       「その日は授業が無い」を伝えるためで、行事があるなら「無い」は誤り。
       たんぽぽ担当はその日も支援員を組む必要がある（自然学校など）
    ② 休みの日は空
-   ③ 教科に「たんぽぽ表記」があればそれ（児童の列は 50px。「合同体育」は入らない）
-   ④ 無ければ題名をそのまま */
+   ③ 授業なしのコマは「なし」。**空にしない** ── 空は「担任がまだ書いていない」
+      と見分けがつかず、たんぽぽ担当が催促に回ることになる。
+      「授業なし」の4文字は児童の列（50px）に入らないので2文字にする
+   ④ 教科に「たんぽぽ表記」があればそれ（児童の列は 50px。「合同体育」は入らない）
+   ⑤ 無ければ題名をそのまま */
 const TP_TRIP = "校外";
+const TP_NONE = "なし";
 function tpTitle(cls, d, s){
-  if(tripOn(cls, d, s)) return TP_TRIP;
+  if(tripOn(cls, d, s)) return tripTpIn_(tripEntry(cls, d, s));
   if(isDayOff(d)) return "";
   const c = compose(cls, d, s);
+  if(noLessonIn_(c)) return TP_NONE;
   const sub = c.subject ? SUB_BY_CODE[c.subject] : null;
   const short = sub && String(sub.tp || "").trim();
   return short || plain(c.title).trim();

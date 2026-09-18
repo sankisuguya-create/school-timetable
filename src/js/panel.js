@@ -13,6 +13,11 @@ const PAL_CLEAR = "__clear";
    「リセット」と同じ別枠のチップで、押すとそのコマの被覆を付け外しする。 */
 const PAL_TRIP = "__trip";
 
+/* 授業なし（コマ1つ）。**教科ではないので SUBJECTS には入れない。**
+   押すと、そのコマの題名を「授業なし」にして斜め線を引く。もう一度押すと外す。
+   休みの日（1日ぶん）は右メニューの「この週の日の形」。ここは1コマぶん。 */
+const PAL_NONE = "__none";
+
 /* そのチップをこの面に出すか。**教科の「出す面」が空ならどの面にも出す。**
    「学年」と書いてあるものは、学年と全学年の面にだけ出す ── 合同体育・
    合同音楽・学年集会は複数学級でやるものなので、担任の面に出すと、
@@ -30,6 +35,8 @@ function drawPalette(){
 
   /* **校外行事はどの面にも出す。** 学級だけの校外学習も、学年の自然学校もある */
   if(view.kind !== "special") items.push({v:PAL_TRIP, t:"校外行事", trip:true});
+  /* **授業なしもどの面にも出す。** 1学級だけ潰れる日も、学年で潰れる日もある */
+  if(view.kind !== "special") items.push({v:PAL_NONE, t:"授業なし", none:true});
 
   /* **学年・全学年には「リセット」を出す。**
      ここで入れたコマは全クラスに降りる。入れるのと同じ手数で取り消せないと、
@@ -40,7 +47,7 @@ function drawPalette(){
 
   $("pals").innerHTML = items.map(o =>
     "<button class='pal" + (o.off ? " off" : "") + (o.clear ? " clear" : "")
-    + (o.trip ? " trip" : "") + "' draggable='true'"
+    + (o.trip ? " trip" : "") + (o.none ? " none" : "") + "' draggable='true'"
     + " data-v='" + escText(o.v) + "'>" + escText(o.t) + "</button>").join("");
 
   if(typeof applyLock === "function") setTimeout(applyLock, 0);
@@ -49,6 +56,8 @@ function drawPalette(){
     : "コマへ<b>引っぱって入れる</b>。コマを選んでから押しても入る。"
       + "<br><b>校外行事</b>を落とすと、そのコマに薄く「校外学習」が出る"
       + "（題名・備考には入らない。続けて置くと枠がつながる）。"
+      + "<br><b>授業なし</b>を落とすと、そのコマに斜め線を引く"
+      + "（授業は入らなくなる。備考は書ける。もう一度落とすと外れる）。"
       + (canClear ? "<br><b>リセット</b>を落とすと、そのコマをここから取り消す"
                   + "（各クラスの予定が出るようになる）。" : "");
   const chip = $("chipOpen");
@@ -169,6 +178,16 @@ function applyPalette(d, sid, v, e){
     return void toast(on ? "このコマを<b>校外行事</b>にした（題名・備考はそのまま）"
                          : "校外行事を外した");
   }
+  /* 授業なし。**押すたびに付け外し。** 題名そのものを印にしているので、
+     入れたあとは下の「授業なしのコマには入れない」で守られる */
+  if(v === PAL_NONE){
+    const on = !noLessonHere(d, sid);
+    const why = setNoLesson(d, sid, on);
+    if(why) return toast(why);
+    paintSheet(); fillPanel(); selectCell(d, sid, e || cellAt(d, sid));
+    return void toast(on ? "このコマを<b>授業なし</b>にした（備考は書ける）"
+                         : "授業なしを外した");
+  }
   /* **入らないなら、入る前に理由を言う。** 通してしまうと writeCell が
      黙って弾き、下の toast だけが「入れた」と言う */
   const no = whyCantWrite(d, sid);
@@ -182,10 +201,21 @@ function applyPalette(d, sid, v, e){
               : viewName() + "には、もともと入っていない");
     return;
   }
+  /* **授業なしのコマには、授業を入れない。** 斜め線を引いた欄に字が入ると、
+     刷った紙で「授業があるのか、無いのか」が読めなくなる（休みの日と同じ理由）。
+     リセットはここより上で通す ── 学年から降りた「授業なし」を取り消せなくなる */
+  if(noLessonHere(d, sid))
+    return toast("このコマは<b>授業なし</b>にしてある。"
+               + "授業を入れるには、もう一度<b>授業なし</b>を落として外す");
+
   if(view.kind === "special"){
     /* **専科も、他人の予定を潰すときは聞く。** 行き先のクラスの
        そのコマに、担任や別の専科の予定が入っていることがある */
     const target = normCls(plain(v));
+    /* **行き先が授業なしなら入れない。** 専科の面からは相手の紙が見えないので、
+       止めないと、潰れたコマに専科だけが入ったまま気づかれない */
+    if(target && noLessonOn(target, d, sid))
+      return toast(escText(target) + " のこのコマは<b>授業なし</b>にしてある");
     okToOverwrite(d, sid, v, () => {
       writeCell(d, sid, {cls:v});
       paintSheet(); selectCell(d, sid, e || cellAt(d, sid));
@@ -248,6 +278,25 @@ function fillPanel(){
   $("pTitleWrap").hidden  = slot.kind === "note";
   $("pTitleLabel").textContent =
     view.kind === "special" ? "行き先のクラス" : "教科名・行事名";
+
+  /* 校外行事の名前。**覆っているコマを選んでいるときだけ出す。**
+     続けて置いた1本ぶんに同じ字が入る。**打っている欄は書き替えない**
+     （書き替えるとカーソルが先頭へ跳ぶ）。 */
+  const tw = $("pTripWrap");
+  const onTrip = slot.kind === "lesson" && typeof tripHere === "function"
+              && tripHere(selCell.d, selCell.s);
+  tw.hidden = !onTrip;
+  if(onTrip){
+    const nm = $("pTripName"), tp = $("pTripTp"), who = tripLockedBy(selCell.d, selCell.s);
+    if(nm !== document.activeElement) nm.value = tripName(selCell.d, selCell.s);
+    if(tp !== document.activeElement) tp.value = tripTp(selCell.d, selCell.s);
+    nm.disabled = tp.disabled = !!who;
+    $("pTripHint").innerHTML = who
+      ? "この行事は<b>" + escText(who) + "</b>が入れたもの。名前もその面から直す。"
+      : "続けて置いた<b>1本ぶんに同じ字</b>が入る。"
+        + "紙の字は、長ければ小さくして収める。"
+        + "<b>たんぽぽに出す字は2文字まで</b>にする（児童の列は 50px しかない）。";
+  }
 
   /* **この日の行事。** 年間行事計画表から読んだもの。
      押すと、選んでいるコマに入る（何校時かは表に書いていないので、決めるのは人）。

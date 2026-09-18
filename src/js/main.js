@@ -700,6 +700,22 @@ function wire(){
       paintSheet(); typing = null;
     });
   }
+  /* 校外行事の名前。**紙に出す字**と**たんぽぽに出す字**を別に持つ。
+     続けて置いた1本ぶんに同じ字が入る（→ compose.js setTripName）。 */
+  for(const id of ["pTripName", "pTripTp"]){
+    $(id).addEventListener("input", () => {
+      if(!selCell) return;
+      const v = $(id).value;
+      const why = setTripName(selCell.d, selCell.s,
+                              id === "pTripName" ? v : undefined,
+                              id === "pTripTp"   ? v : undefined);
+      if(why){ fillPanel(); return toast(why); }
+      /* 紙の字が変わるので組み直す。**行事ごとに1回ぶんの打鍵**なので、
+         ここは組み直しでよい（毎コマの打鍵とは回数が違う） */
+      buildSheet();
+      selectCell(selCell.d, selCell.s, cellAt(selCell.d, selCell.s));
+    });
+  }
 }
 
 /* ── 起動 ────────────────────────────────────── */

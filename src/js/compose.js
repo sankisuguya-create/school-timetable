@@ -343,6 +343,68 @@ function tripSlotsOn(cls, d){
   return SLOTS.filter(s => s.kind === "lesson" && tripOn(cls, d, s.id)).map(s => s.id);
 }
 
+/* ── 校外行事の名前 ────────────────────────────
+   **行事ごとに違う。** 自然学校・社会見学・修学旅行を、学校ひとつの設定で
+   持たせると、置くたびに設定を直して回ることになる。だから名前は
+   **置いた行事**（trip: の行）が持つ。シートに列は足さない。
+
+   題名 ＝ 紙に出す字（既定「校外学習」）
+   詳細 ＝ たんぽぽに出す字（既定「校外」）
+
+   **たんぽぽへ渡るのは詳細のほう。** 提出を覆すかどうかもこの字で決める
+   （→ store.js tpTitleIn_ ・ gas/Store.gs の trip: の分岐）。
+   紙の字を直しただけでは覆らず、たんぽぽの字を直せば覆る。 */
+const tripNameIn_ = e => plain((e || {}).title).trim() || TRIP_NAME;
+const tripTpIn_   = e => plain((e || {}).note).trim()  || TP_TRIP;
+/* いちばん上の層の印を返す（tripOn と同じ順で見る） */
+function tripEntry(cls, d, slot){
+  const w = week(), k = ck(d, TRIP_SLOT + slot);
+  return (w.school || {})[k] || ((w.grade[gradeOf(cls)] || {})[k])
+      || ((w.special[cls] || {})[k]) || ((w.home[cls] || {})[k]) || null;
+}
+function tripEntryHere(d, slot){
+  const w = week(), k = ck(d, TRIP_SLOT + slot);
+  if(view.kind === "class")  return tripEntry(view.cls, d, slot);
+  if(view.kind === "grade")  return (w.school || {})[k] || ((w.grade[view.grade] || {})[k]) || null;
+  return (w.school || {})[k] || null;
+}
+const tripName = (d, slot) => tripNameIn_(tripEntryHere(d, slot));
+const tripTp   = (d, slot) => tripTpIn_(tripEntryHere(d, slot));
+
+/* 続けて置いたコマ（＝紙の上で1本のチップになるまとまり）。
+   **業間・昼休みはまたぐ**（描くときと同じ数え方）。名前はこのまとまり単位で持つ。 */
+function tripRun(d, slot){
+  const ids = SLOTS.filter(s => s.kind === "lesson").map(s => s.id);
+  const i = ids.indexOf(slot);
+  if(i < 0 || !tripHere(d, slot)) return [];
+  let a = i, b = i;
+  while(a > 0 && tripHere(d, ids[a - 1])) a--;
+  while(b < ids.length - 1 && tripHere(d, ids[b + 1])) b++;
+  return ids.slice(a, b + 1);
+}
+
+/* 名前を直す。**1本のチップは同じ名前。** まとまりの全部のコマに同じ字を書く。
+   直せるのは自分の層に入れたぶんだけ（外すのと同じ規則）。 */
+function setTripName(d, slot, name, tp){
+  const locked = whyLocked();
+  if(locked) return locked;
+  const who = tripLockedBy(d, slot);
+  if(who) return "この校外行事は<b>" + escText(who) + "</b>が入れたもの。名前もその面から";
+  const st = targetStore();
+  for(const id of tripRun(d, slot)){
+    const key = ck(d, TRIP_SLOT + id), e = st[key];
+    if(!e) continue;                       /* その層に無いコマは飛ばす */
+    const was = e.sat || 0, wasTp = tripTpIn_(e);
+    if(name !== undefined) e.title = escText(String(name).trim());
+    if(tp   !== undefined) e.note  = escText(String(tp).trim());
+    e.by = myEmail(); e.at = Date.now();
+    Backend.cellChanged(layerOfStore(), targetOfStore(), d, TRIP_SLOT + id, was,
+                        undefined, wasTp);
+  }
+  save();
+  return "";
+}
+
 /* 付け外し。**1コマずつ。** 続けて置けば、描くときに1つの縦長にまとまる。 */
 function setTrip(d, slot, on){
   /* **休みの日にも置ける。** 自然学校のように休日・祝日をまたぐ行事がある。
@@ -356,13 +418,65 @@ function setTrip(d, slot, on){
     return "";
   }
   const was = (st[key] || {}).sat || 0;
-  const wasT = plain((st[key] || {}).title);
-  if(on) st[key] = {title:TRIP_NAME, note:"", subject:null, sat:(st[key] || {}).sat,
-                    by:myEmail(), at:Date.now()};
+  /* **たんぽぽへ渡る字で見る。** 題名（紙の字）で見ると、紙の字を直しただけで
+     提出が覆り、たんぽぽの字を直しても覆らない（逆になる） */
+  const wasTp = st[key] ? tripTpIn_(st[key]) : "";
+  if(on){
+    /* **隣から名前を引き継ぐ。** あとから1コマ足したときに、そこだけ
+       「校外学習」に戻ると、1本のチップの中で名前が食い違う */
+    const near = neighborTrip_(st, d, slot);
+    st[key] = {title: near ? near.title : escText(TRIP_NAME),
+               note:  near ? near.note  : "",
+               subject:null, sat:(st[key] || {}).sat,
+               by:myEmail(), at:Date.now()};
+  }
   else delete st[key];
   Backend.cellChanged(layerOfStore(), targetOfStore(), d, TRIP_SLOT + slot, was,
-                      undefined, wasT);
+                      undefined, wasTp);
   save();
+  return "";
+}
+/* 同じ日の、前後に続く同じ層の印。名前を引き継ぐ相手を探す */
+function neighborTrip_(st, d, slot){
+  const ids = SLOTS.filter(s => s.kind === "lesson").map(s => s.id);
+  const i = ids.indexOf(slot);
+  if(i < 0) return null;
+  for(let j = i - 1; j >= 0; j--){
+    const e = st[ck(d, TRIP_SLOT + ids[j])];
+    if(!e) break;
+    return e;
+  }
+  for(let j = i + 1; j < ids.length; j++){
+    const e = st[ck(d, TRIP_SLOT + ids[j])];
+    if(!e) break;
+    return e;
+  }
+  return null;
+}
+
+/* ── 授業なし（コマ1つ） ────────────────────────
+   **題名そのものが印。** 専用の入れ物を作らないので、層の重なり・競合・
+   取り消し・年度の退避が、そのまま全部効く（→ src/js/config.js NO_LESSON）。
+
+   見るときは**紙に出ているコマ**（合成したあと）で見る。学年から降りてきた
+   「授業なし」も、担任の面で斜め線になっていなければ意味が無い。 */
+const noLessonIn_ = c => plain((c || {}).title).trim() === NO_LESSON;
+/* そのクラスの紙で、このコマが授業なしか */
+const noLessonOn = (cls, d, slot) => noLessonIn_(compose(cls, d, slot));
+/* いま開いている面で、このコマが授業なしか */
+const noLessonHere = (d, slot) => noLessonIn_(cellFor(d, slot));
+
+/* 入れる・外す。**授業のコマにだけ入れられる。**
+   朝休みや業間に入れても「授業がない」は情報にならない（もともと無い）。
+   休みの日とロックは今までどおり止める（whyCantWrite をそのまま通す）。
+   外すときは**題名だけ空にする。備考は消さない** ── 「学年行事のため」と
+   書いたものを、授業を入れ直すたびに打ち直させない。 */
+function setNoLesson(d, slot, on){
+  if((SLOT_BY_ID[slot] || {}).kind !== "lesson")
+    return "<b>授業のコマ</b>にだけ入れられる";
+  const no = whyCantWrite(d, slot);
+  if(no) return no;
+  writeCell(d, slot, {title: on ? escText(NO_LESSON) : "", subject: null});
   return "";
 }
 

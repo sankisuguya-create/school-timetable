@@ -294,6 +294,10 @@ function tpTitleIn_(w, layer, target, d, slot){
              : layer === "special" ? (w.special[target] || {})
              :                       (w.home[target]    || {});
   const e = (bank || {})[ck(d, slot)];
+  /* **校外行事はたんぽぽに出す字（詳細）で見る。** 題名は紙に出す字なので、
+     そちらで見ると、紙の字を直しただけで提出が覆り、たんぽぽの字を直しても
+     覆らない（逆になる）。サーバも同じ字で見る（→ gas/Store.gs の trip: の分岐） */
+  if(String(slot).indexOf(TRIP_SLOT) === 0) return e ? tripTpIn_(e) : "";
   return e ? plain(e.title) : "";
 }
 /* wasTitle ＝ 直す前に、その棚に入っていた題名。呼ぶ側が書き替える前に控える。
