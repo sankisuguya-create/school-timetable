@@ -682,13 +682,13 @@ const Store = (function(){
   /* patches = [{date, slot, layer, target, title, note, subject, sp, remove}]
      戻り値は、いま入った更新時刻（サーバの時計）。画面はこれで手元の控えを直す。
 
-     **シートごとに、丸ごと読んで・差し替えて・日付順に並べて・書き戻す。**
-     行番号を覚えて1行ずつ直すやり方はやめた。
-     日付は書いた瞬間にシートの側で日付型になるので、文字のまま覚えた行番号は
-     次に読んだときもう合わない。合わないと、直したつもりの行が増えていく。 */
+     **追加・削除では丸ごと並べ直し、既存行の編集では変わった行だけを書く。**
+     行番号だけを後日まで覚えることはしない。ロックを取って全面を読んだ、その保存の
+     中だけで実際の行番号を使うため、間に行が入って別の行を直すことはない。 */
   function writeCells(year, patches){
     if(!patches || !patches.length)
-      return {at:{}, count:0, asked:0, conflicts:[], ms:0, waitMs:0};
+      return {at:{}, count:0, asked:0, conflicts:[], sheets:0,
+              fullWrites:0, rowWrites:0, ms:0, waitMs:0};
     /* **保存にかかった時間を測って返す。**
        「速くする改造」は、必ず正しさを削る方向に働く。数字が基準に届く前に
        手を入れない（→ docs/spec.md 13-2）。ロック待ちと書き込みは分けて測る。
@@ -717,6 +717,7 @@ const Store = (function(){
         (byName[name] || (byName[name] = [])).push(p);
       }
 
+      let fullWrites = 0, rowWrites = 0;
       for(const name in byName){
         const rows = Sheets.readPlan(name, ymd);
         const index = {};
@@ -724,7 +725,8 @@ const Store = (function(){
           index[[String(r["年度"]), r["日付"], String(r["時程"]),
                  String(r["層"]), Sheets.asClass(r["対象"])].join("\t")] = i;
         });
-        const drop = {};
+        const drop = {}, changed = [];
+        let structural = false;
         for(const p of byName[name]){
           const date = ymd(p.date), target = Sheets.asClass(p.target);
           const k = TimetableDomain.cellKey(year, date, p.slot, p.layer, target);
@@ -768,7 +770,7 @@ const Store = (function(){
           }
 
           if(remove){
-            if(i !== undefined) drop[i] = true;
+            if(i !== undefined){ drop[i] = true; structural = true; }
             at[outKey] = 0;
             continue;
           }
@@ -778,8 +780,13 @@ const Store = (function(){
             "教科コード":String(p.subject || ""), "層":p.layer, "対象":target,
             "担当":String(p.sp || ""), "更新者":me, "更新時刻":now
           };
-          if(i !== undefined) rows[i] = obj;
-          else { index[k] = rows.length; rows.push(obj); }
+          if(i !== undefined){
+            changed.push({row:rows[i].__row, value:obj});
+            rows[i] = obj;
+          } else {
+            structural = true;
+            index[k] = rows.length; rows.push(obj);
+          }
           at[outKey] = now.getTime();
         }
         const keep = rows.filter((r, i) => !drop[i]);
@@ -793,12 +800,14 @@ const Store = (function(){
         markTpChanges_(year, byName[name].filter(p =>
           p.__tanpopo &&
           Object.prototype.hasOwnProperty.call(at, [ymd(p.date), p.slot, p.layer, Sheets.asClass(p.target)].join("|"))));
-        Sheets.writePlan(name, keep);
+        if(structural){ Sheets.writePlan(name, keep); fullWrites++; }
+        else if(changed.length){ Sheets.writePlanRows(name, changed); rowWrites += changed.length; }
       }
       SpreadsheetApp.flush();
       return {at, count: patches.length - conflicts.length,
               asked: patches.length, conflicts: conflicts,
               sheets: Object.keys(byName).length,
+              fullWrites: fullWrites, rowWrites: rowWrites,
               ms: Date.now() - t1, waitMs: t1 - t0};
     } finally {
       lock.releaseLock();

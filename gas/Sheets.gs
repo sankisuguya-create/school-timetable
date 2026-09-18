@@ -239,6 +239,9 @@ const Sheets = (function(){
       o["日付"] = ymdFn(o["日付"]);
       o["対象"] = asClass(o["対象"]);
       if(!o["日付"] || !String(o["時程"]).trim()) continue;    /* 空行は飛ばす */
+      /* 既存行だけを直す保存では、全行を書き戻さずこの位置へ書く。
+         シート上の行番号であって、out の添字ではない（途中の空行を飛ばすため）。 */
+      o.__row = i + 1;
       out.push(o);
     }
     return out;
@@ -265,6 +268,26 @@ const Sheets = (function(){
     const last = sh.getLastRow();
     if(last > body.length + 1)
       sh.getRange(body.length + 2, 1, last - body.length - 1, w).clearContent();
+  }
+
+  /* 追加・削除のない保存は、変わった既存行だけを書く。
+     連続する行は1回の setValues にまとめ、GASとの往復回数も抑える。
+     行の追加・削除は並び順が変わるため、呼ぶ側が writePlan に戻す。 */
+  function writePlanRows(name, changes){
+    if(!changes || !changes.length) return;
+    const sh = ensurePlan(name), w = PLAN_COLS.length;
+    const latest = {};
+    for(const x of changes) latest[+x.row] = x.value;
+    const nums = Object.keys(latest).map(Number).sort((a, b) => a - b);
+    let start = 0;
+    while(start < nums.length){
+      let end = start + 1;
+      while(end < nums.length && nums[end] === nums[end - 1] + 1) end++;
+      const first = nums[start], body = nums.slice(start, end).map(r =>
+        PLAN_COLS.map(c => (c in latest[r] && latest[r][c] != null) ? latest[r][c] : ""));
+      sh.getRange(first, 1, body.length, w).setValues(body);
+      start = end;
+    }
   }
 
   /* ── 退避 ────────────────────────────────────
@@ -600,7 +623,7 @@ const Sheets = (function(){
           TANPOPO_FILL, TANPOPO_OWN, asClass, isDate, readGrid,
           book, bookName, stash, shapeOk, shapeError, readAllSoft, grow,
           fillAfterRow, fillSubjectCols,
-          PLAN_PREFIX, PLAN_ALL, PLAN_COLS, planName, ensurePlan, readPlan, writePlan,
+          PLAN_PREFIX, PLAN_ALL, PLAN_COLS, planName, ensurePlan, readPlan, writePlan, writePlanRows,
           planNames, planMap,
           setup, head, readAll, appendRows, toArray, setRow, blankRow, sheet};
 })();
