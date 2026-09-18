@@ -53,6 +53,23 @@ const Gate = (function(){
     }catch(err){ return []; }   /* 読めなければ例外なし。閉じる側に倒す */
   }
 
+  /* ウェブアプリは設置者として動くため、シートの共有権限では呼び出した人の
+     権限を判定できない。管理操作は設定に明記したメールだけに許す。 */
+  function adminEmails(){
+    try{
+      const sh = SpreadsheetApp.getActive().getSheetByName("設定");
+      if(!sh) return [];
+      const v = sh.getDataRange().getValues(), out = [];
+      for(let i = 1; i < v.length; i++){
+        if(String(v[i][0]).trim() !== "管理者メール") continue;
+        String(v[i][1]).split(/[,\s]+/).forEach(function(x){
+          x = norm(x); if(x && out.indexOf(x) < 0) out.push(x);
+        });
+      }
+      return out;
+    }catch(err){ return []; }
+  }
+
   function norm(raw){
     let e;
     try{ e = String(raw == null ? "" : raw); }catch(err){ return ""; }
@@ -96,6 +113,16 @@ const Gate = (function(){
     if(!j.ok) throw new Error("この週案は教職員だけが使えます。（" + j.why + "）");
     return j;
   }
+  function isAdmin(email){
+    const e = norm(email);
+    return !!e && adminEmails().indexOf(e) >= 0;
+  }
+  function checkAdmin(){
+    const j = check();
+    if(!isAdmin(j.email))
+      throw new Error("この操作は管理者だけが使えます。設定シートの「管理者メール」を確認してください。");
+    return j;
+  }
 
   /* 通らなかった人に出す画面。データは1つも載せない。 */
   function denyPage(j){
@@ -117,7 +144,7 @@ const Gate = (function(){
     });
   }
 
-  return {judge:judge, check:check, activeEmail:activeEmail,
+  return {judge:judge, check:check, checkAdmin:checkAdmin, isAdmin:isAdmin, activeEmail:activeEmail,
           denyPage:denyPage, STAFF_DOMAIN:STAFF_DOMAIN};
 })();
 

@@ -86,7 +86,8 @@ function buildSheet_(sh){
 
   const foot = put(el("div", "foot",
     "<div class='lab'><span>週の</span><span>メモ</span></div>"
-    + "<div class='t' contenteditable></div>"), "1 / 8", 3);
+    + "<div class='t' contenteditable role='textbox' aria-label='週のメモ'"
+    + " aria-multiline='true'></div>"), "1 / 8", 3);
   const ft = foot.querySelector(".t");
   /* **週メモは画面（学級）ごとに持ち、シートへも送る**（compose.js の setMemo）。
      前は週にひとつしか無く、この端末にしか残らなかったので、
@@ -183,15 +184,20 @@ function cellEl(d, s){
                                              : "brk row-break";
   const e = el("div", "cell " + kls,
     "<span class='tag' hidden></span>"
-    + (s.kind === "note" ? "" : "<div class='t' contenteditable></div>")
+    + (s.kind === "note" ? "" : "<div class='t' contenteditable role='textbox'></div>")
     + (s.kind === "lesson" || s.kind === "note"
-         ? "<div class='n' contenteditable></div>" : ""));
+         ? "<div class='n' contenteditable role='textbox' aria-multiline='true'></div>" : ""));
   e.dataset.d = d; e.dataset.s = s.id;
   /* **休みの日の授業には書かせない。** 斜め線を引いた欄に字が入ると、
      刷った紙で「休みなのか、授業があるのか」が読めなくなる。
      校外が覆っていれば書ける（時数のために教科を入れる必要がある） */
   if(isDayOff(d) && s.kind === "lesson" && !tripHere(d, s.id)) e.classList.add("off");
   const t = e.querySelector(".t"), n = e.querySelector(".n");
+  /* contenteditable はそのままだと支援技術へ「編集欄」と名前を伝えない。
+     日付・曜日・時程・欄の種類まで付け、同じ形の66マスを聞き分けられるようにする。 */
+  const where = md(addDays(monday, d)) + "（" + DOW[d] + "） " + s.name;
+  if(t) t.setAttribute("aria-label", where + (s.kind === "lesson" ? "校時" : "") + " 教科名・行事名");
+  if(n) n.setAttribute("aria-label", where + (s.kind === "lesson" ? "校時" : "") + " 詳細・備考");
 
   const focus = () => selectCell(d, s.id, e);
   if(t) t.addEventListener("focus", focus);

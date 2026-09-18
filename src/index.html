@@ -247,11 +247,13 @@
         </div>
         <div id="pTitleWrap">
           <label id="pTitleLabel" for="pTitle">教科名・行事名</label>
-          <div class="fld" id="pTitle" contenteditable></div>
+          <div class="fld" id="pTitle" contenteditable role="textbox"
+               aria-labelledby="pTitleLabel"></div>
         </div>
         <div id="pNoteWrap">
           <label for="pNote">詳細・備考</label>
-          <div class="fld tall" id="pNote" contenteditable></div>
+          <div class="fld tall" id="pNote" contenteditable role="textbox"
+               aria-label="詳細・備考" aria-multiline="true"></div>
         </div>
         <!-- 校外行事の名前。**選んでいるコマを覆っている行事**のぶんを直す。
              1本のチップ（続けて置いたコマ）は同じ名前になる。

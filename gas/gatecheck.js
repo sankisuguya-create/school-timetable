@@ -94,6 +94,19 @@ ok("児童が呼ぶと Gate.check() が止める", threw === true, "止まらな
 EMAIL = "tanaka@edu.nishi.or.jp";
 ok("教職員は Gate.check() を通る", ev("Gate.check().ok") === true, ev("Gate.check()"));
 
+console.log("\n■ 管理操作は管理者メールだけ");
+SETTINGS = [["キー","値"],["管理者メール","admin@edu.nishi.or.jp, sub@edu.nishi.or.jp"]];
+EMAIL = "tanaka@edu.nishi.or.jp";
+threw = false;
+try{ ev("Gate.checkAdmin()"); }catch(e){ threw = /管理者/.test(e.message); }
+ok("一般教員は管理操作を止める", threw === true, "止まらなかった");
+EMAIL = "ADMIN@EDU.NISHI.OR.JP";
+ok("設定した管理者は通す", ev("Gate.checkAdmin().ok") === true, "通らなかった");
+SETTINGS = [["キー","値"]];
+threw = false;
+try{ ev("Gate.checkAdmin()"); }catch(e){ threw = /管理者/.test(e.message); }
+ok("未設定は閉じる側に倒す", threw === true, "止まらなかった");
+
 console.log("\n■ 弾いた画面にデータを載せない");
 EMAIL = "12345678@kyoiku.edu.nishi.or.jp";
 const html = ev("Gate.denyPage(Gate.judge(Gate.activeEmail())).getContent()");
