@@ -495,6 +495,56 @@ ok("学年のコマも残っている", !!w.grade["3"]["2|p3"]);
 ok("消したぶん行が減る", rowsOf("週案 3-3").length === before - 1,
    rowsOf("週案 3-3").length);
 
+/* ── 部分書き込みの当たり判定 ─────────────────────
+   `readPlan` は空行を飛ばすので、返した並びの添字とシートの行番号はずれる。
+   だから行オブジェクトが `__row`（シートの実際の行番号）を持つ。
+   **ここが1つずれると、直したつもりの無いコマが静かに書き替わる。** */
+console.log("\n■ 途中に空行があるシートでも、部分書き込みが当たる");
+(function(){
+  const name = "週案 3-3";
+  ev(`Store.writeCells(2026, [
+    {date:"2026-11-17", slot:"p1", layer:"home", target:"3-3", title:"理科", subject:"rika"},
+    {date:"2026-11-17", slot:"p2", layer:"home", target:"3-3", title:"音楽", subject:"ongaku"}
+  ])`);
+  /* **人が手で行を挿入した**ことにする。readPlan はこの行を飛ばす */
+  const grid = SHEETS[name], blank = new Array(grid[0].length).fill("");
+  grid.splice(1, 0, blank);
+  const r = ev(`Store.writeCells(2026, [
+    {date:"2026-11-17", slot:"p1", layer:"home", target:"3-3", title:"社会", subject:"shakai"}
+  ])`);
+  const w = ev('Store.readWeek(2026, "2026-11-16")');
+  ok("空行があっても、直した行が入れ替わる",
+     ((w.home["3-3"] || {})["1|p1"] || {}).title === "社会",
+     ((w.home["3-3"] || {})["1|p1"] || {}).title);
+  ok("隣のコマを壊さない",
+     ((w.home["3-3"] || {})["1|p2"] || {}).title === "音楽",
+     ((w.home["3-3"] || {})["1|p2"] || {}).title);
+  ok("部分書き込みで直している", r.rowWrites === 1 && r.fullWrites === 0, r);
+  grid.splice(1, 1);
+})();
+
+/* 同じコマが1回の保存に2つ入ると、2つ目は**自分が書いたばかりの行**を引き当てる。
+   新しい中身に行番号を持たせていないと undefined になり、`getRange(NaN, …)` で
+   **保存ごと落ちる**（1つ目を書いたあとなので、同じ保存の他のコマも道連れ）。 */
+console.log("\n■ 同じコマが1回の保存に2つ入っても落ちない");
+(function(){
+  ev(`Store.writeCells(2026, [
+    {date:"2026-11-17", slot:"p3", layer:"home", target:"3-3", title:"図工", subject:"zuko"}
+  ])`);                                     /* 先に行を作る（無いと全面書き戻しに逃げる） */
+  let why = "";
+  try{
+    ev(`Store.writeCells(2026, [
+      {date:"2026-11-17", slot:"p3", layer:"home", target:"3-3", title:"国語", subject:"kokugo"},
+      {date:"2026-11-17", slot:"p3", layer:"home", target:"3-3", title:"算数", subject:"sansu"}
+    ])`);
+  }catch(e){ why = String(e && e.message); }
+  ok("落ちない", why === "", why);
+  const w = ev('Store.readWeek(2026, "2026-11-16")');
+  ok("あとに送ったほうが入る",
+     ((w.home["3-3"] || {})["1|p3"] || {}).title === "算数",
+     ((w.home["3-3"] || {})["1|p3"] || {}).title);
+})();
+
 console.log("\n■ 旧・週案（1枚に全クラス）から移す");
 (function(){
   const cols = ev('Sheets.SPEC["週案"].cols');

@@ -703,11 +703,19 @@ const Store = (function(){
     lock.waitLock(30000);
     const t1 = Date.now();
     try{
-      const rank = slotRank();
+      /* **時程シートは、この保存で1回だけ読む。** 並べ替えの順（rank）と、
+         たんぽぽへ渡る6コマの並び（tpIds）の両方がこれを使う。
+         前は slotRank() と readSlots() が同じシートを2回読んでいた。
+         どちらもロックの中なので、木曜の夕方に重なるとその回数だけ伸びる。
+         ID の空いた行は readSlots が落とすが、**残りの前後の順は変わらない**ので、
+         並べ替えの結果は今までと同じ。 */
+      const slots_ = readSlots();
+      const rank = {};
+      slots_.forEach((s, i) => { rank[s.id] = i; });
       /* **たんぽぽへ渡る文字が変わったコマだけ**が、担任の提出を覆す
          （→ gas/Domain.gs affectsTanpopo ・ 同じ規則が src/js/tanpopo.js にある）。
-         渡るのは 月〜金 × 授業6コマの題名だけなので、その並びをここで1回だけ作る。 */
-      const tpIds = readSlots().filter(s => s.kind === "lesson").slice(0, 6).map(s => s.id);
+         渡るのは 月〜金 × 授業6コマの題名だけ。 */
+      const tpIds = slots_.filter(s => s.kind === "lesson").slice(0, 6).map(s => s.id);
       const now = new Date(), at = {};
       /* **競合したコマは、黙って飛ばさない。** 数も中身も返す。
          返さないと、教師は書けたつもりで書けていないまま週を進める。 */
@@ -794,7 +802,14 @@ const Store = (function(){
             "担当":String(p.sp || ""), "更新者":me, "更新時刻":now
           };
           if(i !== undefined){
-            changed.push({row:rows[i].__row, value:obj});
+            /* **新しい中身にも行番号を持たせる。** 持たせないと、同じコマが
+               1回の保存に2つ入ったとき（2つ目は自分が書いたばかりの行を引き当てる）
+               行番号が undefined になり、`getRange(NaN, …)` で**保存ごと落ちる**。
+               落ちるのは1つ目を書いたあとなので、同じ保存の他のコマも道連れになる。
+               いまの画面は1コマ1つに畳んでから送る（src/js/backend.js の dirty）が、
+               ここで塞いでおく。 */
+            obj.__row = rows[i].__row;
+            changed.push({row:obj.__row, value:obj});
             rows[i] = obj;
           } else {
             structural = true;
@@ -802,18 +817,24 @@ const Store = (function(){
           }
           at[outKey] = now.getTime();
         }
-        const keep = rows.filter((r, i) => !drop[i]);
-        keep.sort(function(x, y){
-          const a1 = String(x["年度"]), b1 = String(y["年度"]);
-          if(a1 !== b1) return a1 < b1 ? -1 : 1;
-          if(x["日付"] !== y["日付"]) return x["日付"] < y["日付"] ? -1 : 1;
-          const rx = rank[String(x["時程"])], ry = rank[String(y["時程"])];
-          return (rx === undefined ? 99 : rx) - (ry === undefined ? 99 : ry);
-        });
         markTpChanges_(year, byName[name].filter(p =>
           p.__tanpopo &&
           Object.prototype.hasOwnProperty.call(at, [ymd(p.date), p.slot, p.layer, Sheets.asClass(p.target)].join("|"))));
-        if(structural){ Sheets.writePlan(name, keep); fullWrites++; }
+        /* **並べ替えるのは、行が増えたか減ったときだけ。** 既存のコマを直しても
+           年度・日付・時程は変わらないので、並びは動かない。毎回 1,200 行を
+           並べ直して捨てていた（部分書き込みでは使わない） */
+        if(structural){
+          const keep = rows.filter((r, i) => !drop[i]);
+          keep.sort(function(x, y){
+            const a1 = String(x["年度"]), b1 = String(y["年度"]);
+            if(a1 !== b1) return a1 < b1 ? -1 : 1;
+            if(x["日付"] !== y["日付"]) return x["日付"] < y["日付"] ? -1 : 1;
+            const rx = rank[String(x["時程"])], ry = rank[String(y["時程"])];
+            return (rx === undefined ? 99 : rx) - (ry === undefined ? 99 : ry);
+          });
+          Sheets.writePlan(name, keep);
+          fullWrites++;
+        }
         else if(changed.length){ Sheets.writePlanRows(name, changed); rowWrites += changed.length; }
       }
       SpreadsheetApp.flush();
