@@ -25,24 +25,25 @@ const rowH = s => s.kind === "note"   ? "1fr"
    外の行をずらす形にすると、朝学習の行に授業1コマが落ちてその行が
    6mm から 29mm に膨らみ、**ほかの5日ぶんも巻き添えで崩れる**
    （紙が 239.5mm → 295.2mm になり B5 に入らない。実測）。 */
-/* 紙を1枚組む。**どこへ、どの週を描くかを渡せる。**
+/* 紙を1枚組む。**どこへ、どの週を、書けるかどうかを渡せる。**
    月の面は同じものを4枚並べるので、組み立てを2つ持たない
    （2つ持つと、片方だけ直した版が出る）。
-   渡さなければ、いつもの1枚（#sheet ・いま見ている週）。 */
-/* `as` を渡すと、その面の紙として組む。**書ける仕掛けは付けない**
-   （sheetRO / sheetOuter は compose.js が持つ。判定もあちらが見る）。
-   月の面と学年の面は、紙が1枚ではない。書けるままにしておくと、
-   打った字が**いま開いているクラス・いま見ている週**に入る
-   （打った本人には、見ている紙に入ったように見える）。 */
-function buildSheet(into, mon, as){
+   渡さなければ、いつもの1枚（#sheet ・いま見ている週・書ける）。
+
+   `ro` を立てると**書ける仕掛けを付けない**。月の面は紙が4枚あるので、
+   書けるままにしておくと、打った字が**いま見ている週**に入る
+   （打った本人には、見ている紙に入ったように見える）。
+   CSS だけで止めると、キーボードの移動で欄に入れてしまう。 */
+function buildSheet(into, mon, ro){
   const sh = into || $("sheet");
-  /* **いま見ている週と面を、一時だけ差し替える。** 層の重ね方・行事・メモは
-     すべて monday と view から決まるので、ここを動かせば中身がそろって動く */
-  const keepM = monday, keepV = view, keepR = sheetRO, keepO = sheetOuter;
+  /* **いま見ている週を、一時だけ差し替える。** 層の重ね方・行事・メモは
+     すべて monday から決まるので、ここを動かせば中身がそろって動く
+     （`monday` と同じ流儀で `sheetRO` も待避する） */
+  const keepM = monday, keepR = sheetRO;
   if(mon) monday = mon;
-  if(as){ sheetOuter = view; view = as; sheetRO = true; }
+  if(ro) sheetRO = true;
   try{ buildSheet_(sh); }
-  finally{ monday = keepM; view = keepV; sheetRO = keepR; sheetOuter = keepO; }
+  finally{ monday = keepM; sheetRO = keepR; }
 }
 function buildSheet_(sh){
   sh.textContent = "";
@@ -59,23 +60,7 @@ function buildSheet_(sh){
   };
   put(el("div", "lab corner"), 1, 1);                       /* 左上の角 */
 
-  for(let d = 0; d < DAYS; d++){
-    const dt = addDays(monday, d), f = dayForm(d);
-    /* **この日の形は、日付の見出しに印で出す。** 紙の上の情報なので刷っても残る */
-    const hd = el("div", "hd" + (d === DAYS - 1 ? " sat lastcol" : ""),
-      "<span>" + md(dt) + "</span><span class='dow'>" + DOW[d] + "</span>"
-      + (f ? "<span class='mark'>" + DAY_FORM[f].mark + "</span>" : ""));
-    hd.dataset.d = d;
-    /* 年間行事のある日に、小さな印。**画面だけ**（紙には出さない）。
-       紙に出すと、どの校時か決まっていないものが版面に居座る */
-    if(hasEvents(d)) hd.classList.add("hasev");
-    /* 日の形を入れる口は、**紙の上には置かない。** 右メニューへ移した
-       （index.html の #dayWrap ・ panel.js の drawDayPanel）。
-       紙に置いていたころは、押せることに気づかれず
-       「休みの日を入れる口が無い」と言われた。押すものは、押すものが並ぶ場所に。
-       紙に残るのは印（特・休）だけ ── あれは刷って残る情報。 */
-    put(hd, 2 + d, 1);
-  }
+  for(let d = 0; d < DAYS; d++) put(dayHeadEl(d, d === DAYS - 1 ? " sat lastcol" : ""), 2 + d, 1);
 
   /* 時程の列。**ここだけは、いつも全部の行を並べる。**
      特別校時の日はこの見出しと合わなくなるが、合わせて行を抜くと
@@ -108,6 +93,24 @@ function buildSheet_(sh){
   paintSheet(null, sh);
   fitTripMarks(sh);
   if(typeof applyLock === "function") applyLock();
+}
+
+/* 日付の見出し。**週の紙と学年の面で同じものを出す。**
+   日の形の印（特・休）は紙の上の情報なので刷っても残る。
+   年間行事の印は**画面だけ**（どの校時か決まっていないものを版面に居座らせない）。
+
+   日の形を入れる口は、**紙の上には置かない。** 右メニューへ移した
+   （index.html の #dayWrap ・ panel.js の drawDayPanel）。
+   紙に置いていたころは、押せることに気づかれず
+   「休みの日を入れる口が無い」と言われた。押すものは、押すものが並ぶ場所に。 */
+function dayHeadEl(d, extra){
+  const dt = addDays(monday, d), f = dayForm(d);
+  const hd = el("div", "hd" + (extra || ""),
+    "<span>" + md(dt) + "</span><span class='dow'>" + DOW[d] + "</span>"
+    + (f ? "<span class='mark'>" + DAY_FORM[f].mark + "</span>" : ""));
+  hd.dataset.d = d;
+  if(hasEvents(d)) hd.classList.add("hasev");
+  return hd;
 }
 
 /* 1日ぶんの列。**この列だけの行の並びを持つ。**
@@ -278,14 +281,19 @@ function fitTripMarks(root){
   }
 }
 
-function fitTitles(els){
+function fitTitles(els, into){
   if(!els.length) return;
   /* **刷ったときの列の幅で測る。** 画面の時程の列は時刻を出すぶん広く、
      刷るときは狭い（そのぶん曜日の列が広い）。画面の幅で決めると、
-     刷ったときに入るはずの字まで小さくなる。紙が正本。 */
-  const sh = $("sheet");
-  const had = sh.style.getPropertyValue("--labw");
-  sh.style.setProperty("--labw", getComputedStyle(sh).getPropertyValue("--labw-print"));
+     刷ったときに入るはずの字まで小さくなる。紙が正本。
+
+     **これができるのは週の紙だけ。** `--labw` は紙ごとに自分で宣言していて、
+     `--labw-print` を持つのも `.sheet` だけ。ほかの紙（学年の面）へ
+     #sheet のインラインを書いても届かず、書いて戻すだけの空振りになる。 */
+  const sh = (into && into !== $("sheet")) ? null : $("sheet");
+  const had = sh ? sh.style.getPropertyValue("--labw") : "";
+  if(sh) sh.style.setProperty("--labw",
+    getComputedStyle(sh).getPropertyValue("--labw-print"));
 
   for(let pass = 0; pass < 2; pass++){
     const want = [];
@@ -313,6 +321,7 @@ function fitTitles(els){
     }
     if(!moved) break;      /* 落ち着いたら、2度目は測らない */
   }
+  if(!sh) return;
   if(had) sh.style.setProperty("--labw", had); else sh.style.removeProperty("--labw");
 }
 
@@ -326,50 +335,9 @@ function paintSheet(one, root){
 
   for(const e of list){
     const d = +e.dataset.d, s = e.dataset.s;
-    const c = cellFor(d, s);
-    const t = e.querySelector(".t"), n = e.querySelector(".n");
-
-    /* 中身が変わったときだけ書き換える。同じ字を入れ直すとカーソルが先頭へ跳ぶ */
-    const wantT = c.title || "", wantN = c.note || "";
-    if(t && t !== typing && t.innerHTML !== wantT) t.innerHTML = wantT;
-    if(n && n !== typing && n.innerHTML !== wantN) n.innerHTML = wantN;
-
-    /* **授業なしのコマは、題名の欄を斜め線で消す。** 備考は書ける。
-       ここで付け外しするのは、**他の端末から降りてきたときにも効かせる**ため
-       （面を組み直すのは日の形を変えたときだけで、コマの中身は paintSheet が持つ）。
-       線は図形で描く（背景の色はトナーを節約する設定のプリンタで消える）。
-       まとめて1本にはしない ── 3限と4限が授業なしなら短い線が2本並ぶ。
-       つないでしまうと、何限から何限までかが紙から読めなくなる。 */
-    const none = t && (SLOT_BY_ID[s] || {}).kind === "lesson"
-              && plain(c.title).trim() === NO_LESSON;
-    e.classList.toggle("nolesson", !!none);
-    const had = e.querySelector(".noneslash");
-    if(none && !had) e.insertBefore(el("div", "noneslash", SLASH_SVG), e.firstChild);
-    if(!none && had) had.remove();
-
-    e.dataset.layer = c.layer;
-    e.dataset.subject = c.subject || "";
-    e.classList.toggle("has-sub", !!c.subject);
-    e.classList.toggle("from-base", c.layer === "base");
-    e.classList.toggle("upper", RANK[c.layer] > RANK[mine] && !c.clash);
-    e.classList.toggle("clash", !!c.clash);
-
-    const tag = e.querySelector(".tag");
-    let name = c.clash ? "！重なり" : LAYER_NAME[c.layer];
-    if(c.over && c.over.length) name = c.over.join("・") + " が変更";
-    /* 専科の面で、基本時間割が2クラス以上に当たったとき。**隠さずに言う。**
-       「専科」シートの担当学年を書けば消える */
-    if(c.multi) name = "！" + (c.nsp || 2) + "クラス";
-    tag.hidden = !name;
-    tag.textContent = name;
-
-    /* ── 空き枠さがしの印 ────────────────────
-       **色は情報を運ばない。** 記号（○ △ ×）と枠線の形が運ぶ。
-       塗りは使わない ── 紙の塗り2色は「降ってきた」「重なっている」で
-       もう埋まっていて、3色目を足すと淡色どうしが潰れる。 */
-    const fr = freeAt(d, s);
-    if(fr){ e.dataset.free = fr.st; e.title = FREE_WHY[fr.st] + (fr.why ? "：" + fr.why : ""); }
-    else  { delete e.dataset.free; e.removeAttribute("title"); }
+    /* 中身が変わったときだけ書き換える（同じ字を入れ直すとカーソルが先頭へ跳ぶ）
+       ── その判定も含めて paintCell が持つ */
+    paintCell(e, cellFor(d, s), d, s, mine);
   }
   /* **書き終えてから、まとめて測る。** 1コマずつだと並べ直しが55回になる */
   fitTitles(list.map(e => e.querySelector(".t")).filter(Boolean));
@@ -380,6 +348,65 @@ function paintSheet(one, root){
      月の面は見るだけの面でもあるので、ここからは出さない
      （その週を開けば、そこで出る）。 */
   if(!one && (!root || root === $("sheet"))) warnOverwritten();
+}
+
+/* ── コマ1つの意味づけ ────────────────────────
+   **版面は2つあるが、コマの読み方は1つ。**（週の紙と学年の面）
+   版面を分けたのは spec 9節が別構造を決めたから（日ごとの入れ子格子と、
+   日×クラスの平らな1枚）。だが `data-layer` / `授業なし` の斜線 / 重なり /
+   空き枠の印は**同じ意味**なので、ここ1か所で付ける。
+   分けて書いていたころ、学年の面には「授業なし」の斜線が出ていなかった。
+
+   `mine` は、いま開いている層。省くと「上位から降りてきた」を塗らない
+   （学年の面は層の淡い塗りを使わない）。 */
+function paintCell(e, c, d, s, mine){
+  const t = e.querySelector(".t"), n = e.querySelector(".n");
+  const wantT = c.title || "", wantN = c.note || "";
+  if(t && t !== typing && t.innerHTML !== wantT) t.innerHTML = wantT;
+  if(n && n !== typing && n.innerHTML !== wantN) n.innerHTML = wantN;
+
+  /* **授業なしのコマは、題名の欄を斜め線で消す。** 備考は書ける。
+     ここで付け外しするのは、**他の端末から降りてきたときにも効かせる**ため。
+     線は図形で描く（背景の色はトナーを節約する設定のプリンタで消える）。
+     まとめて1本にはしない ── 3限と4限が授業なしなら短い線が2本並ぶ。
+     つないでしまうと、何限から何限までかが紙から読めなくなる。 */
+  const none = t && (SLOT_BY_ID[s] || {}).kind === "lesson"
+            && plain(c.title).trim() === NO_LESSON;
+  e.classList.toggle("nolesson", !!none);
+  const had = e.querySelector(".noneslash");
+  if(none && !had) e.insertBefore(el("div", "noneslash", SLASH_SVG), e.firstChild);
+  if(!none && had) had.remove();
+
+  e.dataset.layer = c.layer;
+  e.dataset.subject = c.subject || "";
+  e.classList.toggle("has-sub", !!c.subject);
+  e.classList.toggle("from-base", c.layer === "base");
+  if(mine) e.classList.toggle("upper", RANK[c.layer] > RANK[mine] && !c.clash);
+  e.classList.toggle("clash", !!c.clash);
+
+  const tag = e.querySelector(".tag");
+  if(tag){
+    let name = c.clash ? "！重なり" : LAYER_NAME[c.layer];
+    if(c.over && c.over.length) name = c.over.join("・") + " が変更";
+    /* 専科の面で、基本時間割が2クラス以上に当たったとき。**隠さずに言う。**
+       「専科」シートの担当学年を書けば消える */
+    if(c.multi) name = "！" + (c.nsp || 2) + "クラス";
+    tag.hidden = !name;
+    tag.textContent = name;
+  }
+
+  /* ── 空き枠さがしの印 ────────────────────
+     **色は情報を運ばない。** 記号（△ ×）と斜線の密度が運ぶ。
+     塗りは使わない ── 紙の塗り2色は「降ってきた」「重なっている」で
+     もう埋まっていて、3色目を足すと淡色どうしが潰れる。 */
+  const fr = e.dataset.cls ? freeAtClass(d, s, e.dataset.cls) : freeAt(d, s, c);
+  const want = fr ? (e.dataset.cls ? e.dataset.cls + "　" : "")
+                    + FREE_WHY[fr.st] + (fr.why ? "：" + fr.why : "")
+                  : (e.dataset.cls || "");
+  if(fr) e.dataset.free = fr.st; else delete e.dataset.free;
+  /* **変わっていないときは書かない。** 空き枠さがしを使わない人の面でも
+     66コマぶんの属性書きが毎回走っていた */
+  if(e.title !== want){ if(want) e.title = want; else e.removeAttribute("title"); }
 }
 
 /* **自分の予定が上書きされていたら、開いたときに知らせる。**
@@ -430,7 +457,6 @@ function openMonth(){
   if(!centerOk()) return toast("クラスや学年を開いてから押す");
   setCenter("month");
 }
-function showMonth(on){ setCenter(on ? "month" : "week"); }
 function drawMonth(){
   const ws = mWeeks();
   $("mTitle").textContent = viewName() + "　"
@@ -442,19 +468,22 @@ function drawMonth(){
   /* **見るだけの紙として組む。** 紙が4枚あるので、書けるままにしておくと
      打った字が「いま見ている週」に入る（打った本人には、見ている紙に入って見える）。
      面は変えない ── 見ているのは同じクラスの4週ぶん */
-  for(let i = 0; i < MONTH_WEEKS; i++) buildSheet($("mS" + i), ws[i], view);
+  for(let i = 0; i < MONTH_WEEKS; i++) buildSheet($("mS" + i), ws[i], true);
   fitMonth();
-  paintFreeTally();
   /* **まだ読んでいない週は、読んでから描き直す。** 先に描いておくのは、
      待っているあいだ何も出ない時間を作らないため（週の紙と同じ作り） */
+  /* **同期で返ったら、組み直さない。** 全部読みずみのときは `after` がその場で
+     呼ばれるので、2回目は新しい中身を1つも持たないまま 264コマを組み直すことになる */
+  let sync = true;
   const w = Wait.begin("4週ぶんを読んでいます");
   Backend.readWeeks(ws.map(iso), () => {
     Wait.end(w);
-    if($("monthView").hidden) return;
-    for(let i = 0; i < MONTH_WEEKS; i++) buildSheet($("mS" + i), ws[i], view);
+    if(sync || $("monthView").hidden) return;
+    for(let i = 0; i < MONTH_WEEKS; i++) buildSheet($("mS" + i), ws[i], true);
     fitMonth();
     paintFreeTally();
   });
+  sync = false;
 }
 
 /* ── 学年の面 ────────────────────────────────
@@ -476,8 +505,8 @@ function gradeGuess(){
   if(view.kind === "class") return gradeOf(view.cls);
   if(view.kind === "grade") return view.grade;
   if(view.kind === "special"){
-    const me = specials().find(x => x.code === view.sp);
-    if(me && me.grades && me.grades.length) return me.grades[0];
+    const gs = spGradesOf(view.sp);
+    if(gs) return gs[0];
   }
   return grades()[0] || "";
 }
@@ -513,7 +542,7 @@ function applyCenter(kind){
 }
 function setCenter(kind){
   if(view.kind === "tanpopo" || view.kind === "gate") return;
-  if(kind === "grade") gGrade = gGrade || gradeGuess() || grades()[0];
+  if(kind === "grade") gGrade = gGrade || gradeGuess();
   applyCenter(kind);
   refreshWeek();                  /* 中身は、いまのかたちに合わせて refreshWeek が描く */
   if(centerMode === "week") autoFit();
@@ -524,8 +553,6 @@ function paintCenterTabs(){
     b.setAttribute("aria-pressed", String(b.dataset.center === centerMode));
   const bar = $("centerBar");
   if(bar) bar.hidden = !centerOk();
-  /* 学年の面は、開いている面と範囲が違う。**見ている学年のほうで探す** */
-  freeOverride = (centerMode === "grade" && gGrade) ? {kind:"grade", grade:gGrade} : null;
   paintFree();
 }
 
@@ -577,21 +604,26 @@ function drawAvoidList(){
     save(); drawAvoidList(); paintFree(); redrawCenter();
   };
 }
-/* いま中央に出ているものを描き直す。**かたちを覚えて、そこへ返す** */
-function redrawCenter(){
-  if(centerMode === "month") return drawMonth();
-  if(centerMode === "grade") return drawGradeView();
-  paintSheet();
-}
-function openGradeView(){
-  if(!grades().length) return toast("学級編成がまだ入っていない");
-  if(!centerOk()) return toast("クラスや学年を開いてから押す");
-  gGrade = gradeGuess() || grades()[0];
-  setCenter("grade");
+/* いま中央に出ているものを描き直す。**かたちの分岐はここ1か所。**
+   前は refreshWeek 側にも同じ3分岐があり、かたちを1つ足すと2か所に足すことになった。
+
+   `rebuild` は組み直し（週を繰った・面が変わった）。省くと塗り直しだけ
+   （空き枠の段を変えた、避ける教科を選んだ）。 */
+function redrawCenter(rebuild){
+  if(centerMode === "month"){
+    if(rebuild) mMonday = new Date(monday);
+    drawMonth();
+  }else if(centerMode === "grade"){
+    drawGradeView();
+  }else if(rebuild){
+    buildSheet();
+    autoFit();
+  }else{
+    paintSheet();
+  }
+  paintFree();
 }
 function drawGradeView(){
-  /* 学年の面は、開いている面と範囲が違う。**見ている学年のほうで探す** */
-  freeOverride = gGrade ? {kind:"grade", grade:gGrade} : null;
   const cs = gClasses();
   $("gvTitle").textContent = (gGrade || "") + "年　"
     + md(monday) + " → " + md(addDays(monday, 5));
@@ -610,18 +642,20 @@ function drawGradeView(){
   box.appendChild(sh);
   buildGradeSheet(sh);
   fitGrade();
-  paintFreeTally();
   /* **まだ読んでいない週は、読んでから組み直す。** 先に描いておくのは、
      待っているあいだ何も出ない時間を作らないため（月の面と同じ作り）。
-     ここで drawGradeView を呼び直すと読みに行きつづけるので、紙だけ組み直す */
+     ここで drawGradeView を呼び直すと読みに行きつづけるので、紙だけ組み直す。
+     **同期で返ったら組み直さない** ── 読むのは、いま週の紙で見ている週そのもの。 */
+  let sync = true;
   const w = Wait.begin((gGrade || "") + "年を読んでいます");
   Backend.readWeeks([iso(monday)], () => {
     Wait.end(w);
-    if($("gradeView").hidden) return;
+    if(sync || $("gradeView").hidden) return;
     buildGradeSheet(sh);
     fitGrade();
     paintFreeTally();
   });
+  sync = false;
 }
 
 /* 学年の面の紙。**1日をクラス数で縦に割り、備考を置かない。**
@@ -657,12 +691,7 @@ function buildGradeSheet(sh){
   put(el("div", "lab corner"), 1, 2);
 
   for(let d = 0; d < DAYS; d++){
-    const dt = addDays(monday, d), f = dayForm(d);
-    const hd = el("div", "hd gday" + (d === DAYS - 1 ? " sat" : ""),
-      "<span>" + md(dt) + "</span><span class='dow'>" + DOW[d] + "</span>"
-      + (f ? "<span class='mark'>" + DAY_FORM[f].mark + "</span>" : ""));
-    if(hasEvents(d)) hd.classList.add("hasev");
-    put(hd, 2 + d * n, 1, n);
+    put(dayHeadEl(d, " gday" + (d === DAYS - 1 ? " sat" : "")), 2 + d * n, 1, n);
     /* 組の見出しは**組の数字だけ。** 1/4 の幅に「5-1」は入らない。
        学年は面の見出しが言っている（同じことを2か所に置かない） */
     cs.forEach((c, i) => {
@@ -684,42 +713,48 @@ function buildGradeSheet(sh){
   });
   /* **1コマが 1/4 の幅しか無い。** 「全校朝会」のような長い名前は、
      そのコマの中で縮めないと折り返して枠から溢れる（週の紙と同じ手当て） */
-  fitTitles([...sh.querySelectorAll(".gcell .t")]);
+  fitTitles([...sh.querySelectorAll(".gcell .t")], sh);
 }
 
-/* 学年の面の1コマ。**題名だけ。書く仕掛けは付けない。** */
+/* 学年の面の1コマ。**題名だけ。書く仕掛けは付けない。**
+   中身の意味づけ（層・授業なし・重なり・空き枠）は `paintCell` が持つ
+   ── 週の紙と2つに分けて書いていたころ、こちらだけ古くなった。 */
 function gCellEl(d, s, c){
-  const cur = compose(c, d, s.id);
   const e = el("div", "cell gcell " + (s.kind === "brk" ? "brk row-break" : "lesson"),
-    "<div class='t'>" + (cur.title || "") + "</div>");
-  e.dataset.d = d; e.dataset.s = s.id; e.dataset.cls = c;
-  e.dataset.layer = cur.layer;
-  e.dataset.subject = cur.subject || "";
-  e.classList.toggle("from-base", cur.layer === "base");
-  e.classList.toggle("clash", !!cur.clash);
+    "<div class='t'></div>");
+  e.dataset.d = d; e.dataset.s = s.id;
+  e.dataset.cls = c;              /* これがあると paintCell はクラス単位で判定する */
   if(isDayOff(d) && s.kind === "lesson" && !tripOn(c, d, s.id)) e.classList.add("off");
-  /* 空き枠は**クラスごと**に出す。割った意味がそこにある */
-  const fr = freeAtClass(d, s.id, c);
-  e.title = c + (fr ? "　" + FREE_WHY[fr.st] + (fr.why ? "：" + fr.why : "") : "");
-  if(fr) e.dataset.free = fr.st;
+  /* **特別校時の日は、その日に朝学習が無い。** 1枚の平らな格子なので行は抜けない。
+     週の紙（列ごとに行を持つ）と違い、ここは空欄にして「無い」を示す */
+  if(!slotShown(d, s)) e.classList.add("off");
+  paintCell(e, compose(c, d, s.id), d, s.id);
   return e;
 }
 
-/* 1枚を画面に収める。**測って決める**（月の面と同じ考え）。
-   幅は枠が持つので、合わせるのは高さだけ。 */
+/* 入るところまで --k を下げる。**測って決める。**
+   行の高さは mm で書いてあるが、字の回り込みまでは式で出せない。
+   `nodes` に倍率を入れて `probe` の高さを測り、`want` に収まるまで繰り返す。
+   **月の面と学年の面で1つ。** 2つ持つと、当たりを変えたとき片方しか直らない。 */
+function fitK(nodes, probe, want, setVars){
+  let k = 1;
+  for(let pass = 0; pass < 4; pass++){
+    for(const n of nodes){ setVars(n); n.style.setProperty("--k", String(k)); }
+    const have = probe.scrollHeight;
+    if(want < 2) return k;
+    if(have <= want + 0.5) break;
+    k = Math.max(.2, k * (want / have) * .99);
+  }
+  return k;
+}
+
+/* 1枚を画面に収める。幅は枠が持つので、合わせるのは高さだけ。 */
 function fitGrade(){
   const box = $("gvPaper"), sh = box && box.querySelector(".gsheet");
   if(!box || !sh) return;
   const w = box.clientWidth, h = box.clientHeight;
   if(w < 2 || h < 2) return;
-  let k = 1;
-  for(let pass = 0; pass < 4; pass++){
-    sh.style.setProperty("--pw", w + "px");
-    sh.style.setProperty("--k", String(k));
-    const have = sh.scrollHeight;
-    if(have <= h + 0.5) break;
-    k = Math.max(.2, k * (h / have) * .99);
-  }
+  fitK([sh], sh, h, n => n.style.setProperty("--pw", w + "px"));
 }
 
 /* 1枠に入るところまで --k を下げる。**測って決める。**

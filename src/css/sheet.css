@@ -2,6 +2,18 @@
    教務必携の週案枠に糊で貼るので、枠の形は手帳に合わせてある。
 
    画面でも刷ったときと同じ mm で並べる。--k で全体が伸縮する。 */
+/* 紙の見た目（地・罫・影）は週の紙と学年の面で1つ。
+   寸法と列の並びは、下でそれぞれが持つ。 */
+.sheet,.gsheet{
+  background:var(--sheet); color:var(--ink);
+  /* **紙の上だけ、字の幅を詰める。** 1コマに入る字数がここで決まる。
+     画面のほうに掛けると、小さい字の字間がばらついて字形が崩れて見える */
+  font-feature-settings:"palt" 1;
+  display:grid;
+  border:1.2px solid var(--rule-week);
+  border-radius:2px;
+  box-shadow:0 1px 3px var(--shade),0 10px 28px var(--shade);
+}
 .sheet{
   --k:1;
   --pw:182mm; --ph:257mm; --pm:8mm;      /* B5・余白。設定から動く */
@@ -31,22 +43,14 @@
   --fs-n:12pt;
   --fs-a:11pt;     /* 放課後の備考。罫線 5.2mm に合わせた */
 
-  background:var(--sheet); color:var(--ink);
-  /* **紙の上だけ、字の幅を詰める。** 1コマに入る字数がここで決まる。
-     画面のほうに掛けると、小さい字の字間がばらついて字形が崩れて見える */
-  font-feature-settings:"palt" 1;
   width:calc(var(--pw) - var(--pm)*2);
   min-height:calc(var(--ph) - var(--pm)*2);
-  display:grid;
   grid-template-columns:calc(var(--labw)*var(--k)) repeat(5,1fr) calc(var(--satw)*var(--k));
-  border:1.2px solid var(--rule-week);
-  border-radius:2px;
-  box-shadow:0 1px 3px var(--shade),0 10px 28px var(--shade);
   font-size:calc(var(--fs)*var(--k));
 }
 /* 罫線は**いちばん内側のもの**が引く。列そのものは引かない
    （列が引くと、行の切れ目に縦線が二重に乗る） */
-.sheet>.lab,.sheet>.hd,.sheet>.foot,.labcol>*,.daycol>.cell{
+.sheet>.lab,.sheet>.hd,.sheet>.foot,.labcol>*,.daycol>.cell,.gsheet>*{
   border-right:.6px solid var(--rule);border-bottom:.6px solid var(--rule);
   min-width:0;position:relative}
 .sheet>.lastcol{border-right:none}
@@ -322,19 +326,14 @@
    **1日をクラス数で縦に割る。** 同じコマがとなりどうしに並ぶので、
    クラスのずれを目の往復なしで読める。備考と放課後と週メモは置かない。
    **見るだけの面。** 書ける欄そのものを作っていない（sheet.js buildGradeSheet）。 */
+/* 紙の見た目（地・罫・影・palt）と内側の罫線は `.sheet` と共有。
+   ここで持つのは**この面だけの寸法**（幅いっぱい・時程の列を細く・備考の行が無い）。 */
 .gsheet{
   --k:1; --pw:100%;
   --labw:13mm; --h-head:8mm; --h-break:6mm; --h-title:8mm;
   --fs-s:6pt; --fs-t:16pt;
   width:var(--pw);
-  background:var(--sheet);color:var(--ink);
-  font-feature-settings:"palt" 1;
-  display:grid;
-  border:1.2px solid var(--rule-week);border-radius:2px;
-  box-shadow:0 1px 3px var(--shade),0 10px 28px var(--shade);
   overflow:hidden}
-.gsheet>*{border-right:.6px solid var(--rule);border-bottom:.6px solid var(--rule);
-  min-width:0;position:relative}
 /* **クラスの切れ目より、日の切れ目を濃く。** 濃さが同じだと、
    どこまでが1日かが読めず、4クラスぶんの列が24本の帯に見える */
 .gsheet>.gend{border-right:1.2px solid var(--rule-week)}

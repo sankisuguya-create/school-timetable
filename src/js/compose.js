@@ -9,12 +9,9 @@
 /* いま何を開いているか。**開いたものが層を決める。**
    「だれとして書くか」を別に選ばせない。 */
 let view = {kind:"gate"};
-/* **見るだけの紙を組んでいるあいだの控え。**（月の面・学年の面）
-   sheetRO … 書ける欄も、教科を落とす先も作らない
-   sheetOuter … 紙は差し替えても、**人が開いている面はこちら**。
-                空き枠さがしの範囲は、開いている面のほうで決める
-   freeOverride … 開いている面と、見ている範囲が違うとき（学年の面）*/
-let sheetRO = false, sheetOuter = null, freeOverride = null;
+/* **見るだけの紙を組んでいるあいだ true。**（月の面）
+   書ける欄も、教科を落とす先も作らない。 */
+let sheetRO = false;
 const LAYER_OF = {class:"home", grade:"grade", school:"school", special:"special"};
 const layerOf = () => LAYER_OF[view.kind];
 
@@ -145,6 +142,18 @@ function rootSubject(code){
   return root ? root.code : code;
 }
 
+/* その専科が受け持つ学年。**空なら null＝全学年。**
+   書いていない学校を、どの学年も受け持たない専科にしない。 */
+function spGradesOf(code){
+  const me = specials().find(x => x.code === code);
+  return (me && me.grades && me.grades.length) ? me.grades : null;
+}
+/* その専科が受け持つクラス */
+function classesOfSpecial(code){
+  const gs = spGradesOf(code);
+  return gs ? allClasses().filter(c => gs.indexOf(gradeOf(c)) >= 0) : allClasses();
+}
+
 /* ── 専科の基本時間割 ──────────────────────────
    **基本時間割は、教師を持っていない。** クラス×校時×教科があるだけで、
    そのコマに誰が行くかは書いていない。だから専科が自分の面を開いても、
@@ -157,32 +166,30 @@ function rootSubject(code){
    *合成したあとの教科で見る理由*：基本時間割では音楽でも、担任や学年が
    別の予定を入れていれば、その時間に専科は行かない。基本の字だけを見ると、
    もう無くなった授業が専科の週に残る。 */
-function spBaseClasses(d, s){
-  const me = specials().find(x => x.code === view.sp);
-  const gs = (me && me.grades && me.grades.length) ? me.grades : null;
+function spBaseClasses(d, s, sp){
   const out = [];
-  for(const c of allClasses()){
-    if(gs && gs.indexOf(gradeOf(c)) < 0) continue;
+  for(const c of classesOfSpecial(sp)){
     const b = baseCell(c, d, s);
-    if(!b || b.subject !== view.sp) continue;
+    if(!b || b.subject !== sp) continue;
     const cur = compose(c, d, s);
-    if(rootSubject(cur.subject) !== view.sp) continue;
+    if(rootSubject(cur.subject) !== sp) continue;
     out.push(c);
   }
   return out;
 }
 
 /* 専科の自分の週。同じデータを、教科名ではなくクラス名で見る。 */
-function ownCell(d, s){
+function ownCell(d, s, sp){
+  const me = sp || view.sp;
   const w = week(), key = ck(d, s);
   /* 1. 自分で入れたコマ。**こちらが勝つ**（基本から動かした結果だから） */
   for(const c of allClasses()){
     const e = (w.special[c] || {})[key];
-    if(e && e.sp === view.sp)
+    if(e && e.sp === me)
       return {title:escText(c), note:e.note || "", layer:"special", cls:c, clash:null};
   }
   /* 2. 基本時間割が割り当てているコマ。**淡く出る**（layer が base なので） */
-  const hit = spBaseClasses(d, s);
+  const hit = spBaseClasses(d, s, me);
   if(hit.length)
     /* **2クラス以上に当たったら、隠さずに言う。** 同じ教科の専科が2人いて
        担当学年を書いていないときに起きる。黙って片方だけ出すと、
@@ -290,32 +297,32 @@ const freeOn = () => freeOpt().level > FREE_OFF && !!freeScope();
    **学級の面には出さない。** 自分1クラスの中に「空き枠」は無く、
    担任が探しているのは自分の空き時間のほうで、それは別のもの。 */
 function freeScope(){
-  if(freeOverride && freeOverride.kind === "grade" && freeOverride.grade)
-    return {kind:"grade", classes:classesOfGrade(freeOverride.grade)};
-  const v = sheetOuter || view;
-  if(v.kind === "grade")  return {kind:"grade",  classes:classesOfGrade(v.grade)};
-  if(v.kind === "school") return {kind:"school", classes:allClasses()};
-  if(v.kind === "special"){
-    const me = specials().find(x => x.code === v.sp);
-    const gs = (me && me.grades && me.grades.length) ? me.grades : null;
-    return {kind:"special", sp:v.sp,
-            classes: gs ? allClasses().filter(c => gs.indexOf(gradeOf(c)) >= 0)
-                        : allClasses()};
-  }
+  /* 学年の面は、紙をクラス単位で組む。**紙ではなく、出している学年で決める。**
+     紙のほうを見ると「学級の面」に見えて、印が1つも出なくなる */
+  if(centerMode === "grade" && gGrade)
+    return {kind:"grade", classes:classesOfGrade(gGrade)};
+  if(view.kind === "grade")  return {kind:"grade",  classes:classesOfGrade(view.grade)};
+  if(view.kind === "school") return {kind:"school", classes:allClasses()};
+  if(view.kind === "special")
+    return {kind:"special", sp:view.sp, classes:classesOfSpecial(view.sp)};
   return null;
 }
 
 /* 1クラス・1コマの判定 */
 function freeOne(d, sid, c, opt){
-  if(noLessonOn(c, d, sid)) return {st:"busy", why:"授業なし"};
-  if(tripOn(c, d, sid))     return {st:"busy", why:"校外行事"};
+  /* **安い判定を先に。** 棚を1つ引くだけで決まるものを、
+     層を重ねる compose より前に置く（大半のコマはここで抜ける） */
+  if(tripOn(c, d, sid)) return {st:"busy", why:"校外行事"};
   const w = week(), key = ck(d, sid);
   const sc = w.school[key];
   if(sc && plain(sc.title).trim()) return {st:"busy", why:"全校の予定"};
   const gr = (w.grade[gradeOf(c)] || {})[key];
   if(gr && plain(gr.title).trim()) return {st:"busy", why:"学年の予定"};
 
+  /* **重ねるのは1回だけ。** 前は noLessonOn が中で compose を回し、
+     下でもう一度同じ引数で回していた（1クラス1コマにつき2回） */
   const cur  = compose(c, d, sid);
+  if(noLessonIn_(cur)) return {st:"busy", why:"授業なし"};
   const code = cur.subject || "";
   if(!code) return {st:"free", why:""};
   const root = rootSubject(code);
@@ -331,33 +338,69 @@ function freeOne(d, sid, c, opt){
   return {st:"free", why:""};
 }
 
+/* そのコマで、**学校のどこかが場所を取っているか。**
+
+   *面の範囲で見ない理由*：体育館も図書室も**学校ぜんたいで1つ**。
+   開いている面のクラスだけを見ると、3年が合同体育の枠を探しているときに
+   5年が体育館を押さえていても「自由」と出る ── 教科を場所の代わりに使う
+   ねらい（同じ時間に1クラスしか入れない）が、いちばん効いてほしい場面で効かない。
+   **入力は1つも増えない。** 見る範囲を、場所という資源の広さに合わせるだけ。 */
+function placeTakenBy(d, sid, skip){
+  for(const c of allClasses()){
+    if(skip.indexOf(c) >= 0) continue;
+    const cur = compose(c, d, sid);
+    if(!cur.subject) continue;
+    if(PLACE_SUBJECTS.indexOf(rootSubject(cur.subject)) >= 0)
+      return {cls:c, name:(SUB_BY_CODE[cur.subject] || {}).name || cur.subject};
+  }
+  return null;
+}
+
 /* 1コマの判定。**面によって、まとめ方が違う。**
 
    学年・全校 … そのコマに全クラスが空いていないと使えない（いちばん悪いほうを取る）
    専科       … 自分が空いていて、**どれか1クラス**が空いていれば行ける（いちばん良いほう）
                 自分の週が埋まっていれば、その時点で使えない */
-function freeAt(d, sid){
-  const sc = freeOn() ? freeScope() : null;
-  if(!sc || !sc.classes.length) return null;
+/* 下ごしらえ。**freeAt と freeAtClass で同じ前置きを2度書かない。**
+   戻り値は null（出さない）／`{busy}`（その場で決まる）／`{sc, opt}`。
+   `freeOn()` を挟むと freeScope が1コマにつき2回走るので、ここで1回だけ引く。 */
+function freeCtx(d, sid, c){
+  /* **安い門を先に。** 休み時間のコマで allClasses() の配列を作らない */
   const s = SLOT_BY_ID[sid];
   if(!s || s.kind !== "lesson") return null;
-  if(isDayOff(d) && !tripHere(d, sid)) return {st:"busy", why:"休み"};
+  if(freeOpt().level === FREE_OFF) return null;
+  const sc = freeScope();
+  if(!sc || !sc.classes.length) return null;
+  /* 休みの日でも、校外行事があるなら「授業が無い」は誤り */
+  if(isDayOff(d) && !(c ? tripOn(c, d, sid) : tripHere(d, sid)))
+    return {busy:{st:"busy", why:"休み"}};
   const o = freeOpt();
-  const opt = {level:o.level, avoid:o.avoid, sp:sc.sp || ""};
+  return {sc, opt:{level:o.level, avoid:o.avoid, sp:sc.sp || ""}};
+}
+
+/* `own` は、専科の面で画面が既に組んだ1コマ。**渡せば二度組まない**
+   （paintSheet は cellFor で同じ ownCell を組んでいる）。 */
+function freeAt(d, sid, own){
+  const cx = freeCtx(d, sid);
+  if(!cx) return null;
+  if(cx.busy) return cx.busy;
+  const sc = cx.sc, opt = cx.opt;
 
   if(sc.kind === "special"){
     /* 自分の週が埋まっていたら、その時点で行けない。
-       **紙のほうではなく、専科の面として引く**（学年の面から見ていても同じ） */
-    const keep = view;
-    view = {kind:"special", sp:sc.sp};
-    let own;
-    try{ own = ownCell(d, sid); } finally{ view = keep; }
-    if(plain(own.title).trim())
-      return {st:"busy", why:plain(own.title).trim() + " を受け持っている"};
+       **専科として引く**（学年の面から見ていても同じ結果になるように） */
+    const mine = (own && view.kind === "special" && view.sp === sc.sp)
+               ? own : ownCell(d, sid, sc.sp);
+    if(plain(mine.title).trim())
+      return {st:"busy", why:plain(mine.title).trim() + " を受け持っている"};
     let best = null;
     for(const c of sc.classes){
       const r = freeOne(d, sid, c, opt);
-      if(r.st === "free") return {st:"free", why:c, cls:c};
+      if(r.st === "free"){
+        const e = placeElsewhere(d, sid, sc, opt);
+        return e.st === "free" ? {st:"free", why:c, cls:c}
+                               : Object.assign({cls:c}, e);
+      }
       if(!best || (best.st === "busy" && r.st === "avoid"))
         best = {st:r.st, why:c + "：" + r.why, cls:c};
     }
@@ -370,19 +413,24 @@ function freeAt(d, sid){
     if(r.st === "busy") return {st:"busy", why:c + "：" + r.why};
     if(r.st === "avoid" && worst.st === "free") worst = {st:"avoid", why:c + "：" + r.why};
   }
-  return worst;
+  return worst.st === "free" ? placeElsewhere(d, sid, sc, opt) : worst;
+}
+
+/* **面の外で場所が取られていないか。** 体育館も図書室も学校で1つなので、
+   自分の学年が空いていても、ほかの学年が押さえていれば入れない。 */
+function placeElsewhere(d, sid, sc, opt){
+  if(opt.level < FREE_L2) return {st:"free", why:""};
+  const t = placeTakenBy(d, sid, sc.classes);
+  return t ? {st:"avoid", why:t.cls + "：" + t.name + "（場所）"}
+           : {st:"free", why:""};
 }
 
 /* 1クラス・1コマの空き。**学年の面は、どのクラスが塞いでいるかまで出す。**
    曜日をクラス数で割って並べるので、まとめてしまうと割った意味が無くなる。 */
 function freeAtClass(d, sid, c){
-  const sc = freeOn() ? freeScope() : null;
-  if(!sc) return null;
-  const s = SLOT_BY_ID[sid];
-  if(!s || s.kind !== "lesson") return null;
-  if(isDayOff(d) && !tripOn(c, d, sid)) return {st:"busy", why:"休み"};
-  const o = freeOpt();
-  return freeOne(d, sid, c, {level:o.level, avoid:o.avoid, sp:sc.sp || ""});
+  const cx = freeCtx(d, sid, c);
+  if(!cx) return null;
+  return cx.busy || freeOne(d, sid, c, cx.opt);
 }
 
 /* その週に何コマあるか。**数えたものを出す。**

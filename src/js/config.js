@@ -155,7 +155,7 @@ let PLACE_SUBJECTS = ["taiiku", "tosho"];
      2  1に加えて、場所を取る教科・学年でやる活動・ほかの専科も避ける
 
    どの段でも「避ける教科」の指定は効く（段の指定に足すもの）。 */
-const FREE_OFF = 0, FREE_L1 = 1, FREE_L2 = 2;
+const FREE_OFF = 0, FREE_L2 = 2;
 /* 印の読み。**記号と語を必ず併せる。** 色を外しても意味が残る
    （○△× は形で、語は字で運ぶ。色はそのどちらも言い直しているだけ）。 */
 const FREE_MARK = {free:"○", avoid:"△", busy:"×"};

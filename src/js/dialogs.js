@@ -326,8 +326,7 @@ function drawRoster(){
       const t = (Y().specials || []).find(x => x.code === e.dataset.sp);
       if(!t) return;
       t.grades = spGrades_(e.value);
-      save(); Backend.saveRoster(); drawRoster();
-      if(view.kind === "special") refreshWeek();
+      save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
     };
 
   $("rsRows").innerHTML = grades().map(g =>

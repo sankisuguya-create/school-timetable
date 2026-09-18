@@ -201,13 +201,10 @@ function refreshWeek(){
     if(tpTargets === null) loadTargets();
     return;
   }
-  /* 中央が週の紙でないときは、そちらを描き直す。
-     **週を繰ったのに、見ている面だけ前の週のまま、にしない** */
-  if(centerMode === "month"){ mMonday = new Date(monday); drawMonth(); paintFree(); return; }
-  if(centerMode === "grade"){ drawGradeView(); paintFree(); return; }
-  buildSheet();
-  autoFit();
-  paintFree();
+  /* 中央に出ているものを組み直す。**かたちの分岐は redrawCenter が持つ**
+     （ここにも分岐を置くと、かたちを1つ足したとき2か所に足すことになる）。
+     週を繰ったのに、見ている面だけ前の週のまま、にしない */
+  redrawCenter(true);
 }
 function goWeek(n){
   saveNow();                      /* 週を出る前に、この端末の控えを書き切る */
@@ -522,24 +519,30 @@ function wire(){
   for(const b of document.querySelectorAll("#freeSeg [data-free]"))
     b.addEventListener("click", () => {
       freeOpt().level = +b.dataset.free;
-      save(); paintFree(); redrawCenter();
+      save(); redrawCenter();
     });
   on("freeAvoid","toggle", () => { if($("freeAvoid").open) drawAvoidList(); });
 
   /* 学年の面。**見るだけ。** */
-  on("gvGrade","change", e => { gGrade = e.target.value; drawGradeView(); });
+  on("gvGrade","change", e => { gGrade = e.target.value; redrawCenter(); });
   on("gvClose","click",  () => setCenter("week"));
   on("gvImage","click", async () => {
     try{ await nodePng($("gvPaper"), outputName(gGrade + "年_" + "学年") + ".png");
          toast("学年の画像を保存した"); }
     catch(e){ toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
   });
-  addEventListener("resize", () => { if(!$("gradeView").hidden) fitGrade(); });
+  /* **測り直しは間引く。** 掴んで動かすあいだ、1秒に何十回も強制リフローになる
+     （週の紙の autoFit と同じ 120ms） */
+  let gvT = 0;
+  addEventListener("resize", () => {
+    clearTimeout(gvT);
+    gvT = setTimeout(() => { if(!$("gradeView").hidden) fitGrade(); }, 120);
+  });
 
   /* 月の面。**見るだけ。** 直すのは週の紙のほうで */
-  on("mPrev","click",  () => { mMonday = addDays(mMonday, -7 * MONTH_WEEKS); drawMonth(); });
-  on("mNext","click",  () => { mMonday = addDays(mMonday,  7 * MONTH_WEEKS); drawMonth(); });
-  on("mClose","click", () => showMonth(false));
+  on("mPrev","click",  () => { mMonday = addDays(mMonday, -7 * MONTH_WEEKS); redrawCenter(); });
+  on("mNext","click",  () => { mMonday = addDays(mMonday,  7 * MONTH_WEEKS); redrawCenter(); });
+  on("mClose","click", () => setCenter("week"));
   on("mPrint","click", printMonth);
   on("mImage","click", async () => {
     try{ await nodePng($("mPaper"), outputName("4週_B4")+".png"); toast("4週の画像を保存した"); }

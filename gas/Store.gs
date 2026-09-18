@@ -207,6 +207,8 @@ const Store = (function(){
     return {classes, specials, week1, tanpopo};
   }
   /* 「担当学年」の書き方をそろえる。`3,4,5,6` `3・4` `3〜6` `3年〜6年` を通す。
+     **画面側にも同じものがある**（src/js/store.js の spGrades_）。GAS と画面は
+     別のランタイムなので1本にできない。**片方を直したら、もう片方も直す。**
      **空なら空の配列を返す＝全学年を受け持つ。** 書いていない学校を、
      どの学年も受け持たない専科にしてしまわない。 */
   function gradeList_(v){

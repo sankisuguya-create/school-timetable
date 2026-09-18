@@ -1864,6 +1864,55 @@ await p.evaluate(() => {
 });
 ok("基本時間割の国語も、指定すれば避けたいに落ちる",
    await fst(2, "p1") === "avoid", await fst(2, "p1"));
+/* **場所は学校ぜんたいで1つ。** 面の範囲だけを見ると、代用の眼目が効かない */
+await p.evaluate(() => {
+  /* 5年は全部あける。1年（面の外）にだけ体育を置く */
+  const bank = c => (Y().base[c] || (Y().base[c] = {}));
+  for(const c of classesOfGrade("5")) for(const v of ["A", "B"])
+    delete (bank(c)[v] || {})["3|p1"];
+  for(const c of classesOfGrade("1")) for(const v of ["A", "B"])
+    bank(c)[v] = Object.assign({}, bank(c)[v], {"3|p1":{title:"体育", subject:"taiiku"}});
+  freeOpt().avoid = []; freeOpt().level = 2; save(); redrawCenter();
+});
+await p.waitForTimeout(300);
+ok("ほかの学年が場所を取っていたら、面の外でも避けたいに落ちる",
+   await fst(3, "p1") === "avoid", await fst(3, "p1"));
+ok("どのクラスが取っているかを言う",
+   (await p.evaluate(() =>
+      document.querySelector('#sheet .cell[data-d="3"][data-s="p1"]').title)).indexOf("1-1") >= 0,
+   await p.evaluate(() =>
+      document.querySelector('#sheet .cell[data-d="3"][data-s="p1"]').title));
+await p.evaluate(() => {
+  for(const c of classesOfGrade("1")) for(const v of ["A", "B"])
+    delete ((Y().base[c] || {})[v] || {})["3|p1"];
+  save(); redrawCenter();
+});
+await p.waitForTimeout(300);
+ok("場所が空けば自由に戻る", await fst(3, "p1") === "free", await fst(3, "p1"));
+
+/* **コマの読み方は週の紙と学年の面で1つ。** 分けて書いていたころ、
+   学年の面には「授業なし」の斜線が出ていなかった */
+console.log("\n■ コマの意味づけは、版面が2つでも1つ");
+await p.evaluate(() => {
+  const w = week();
+  w.home["5-2"] = Object.assign(w.home["5-2"] || {},
+    {"0|p2":{title:"授業なし", note:"", subject:null, at:Date.now(), by:"a@edu.nishi.or.jp"}});
+  save(); setCenter("grade");
+});
+await p.waitForTimeout(500); await closeDlgs();
+ok("学年の面でも「授業なし」は斜線で出る（字のままにしない）",
+   await p.evaluate(() =>
+     document.querySelectorAll("#gvPaper .gcell.nolesson .noneslash, #gvPaper .gcell.nolesson + .noneslash").length
+     + document.querySelectorAll("#gvPaper .gcell.nolesson").length >= 2) === true,
+   await p.evaluate(() => document.querySelectorAll("#gvPaper .gcell.nolesson").length));
+ok("週の紙と同じ字を出す（層も写す）",
+   await p.evaluate(() => {
+     const e = document.querySelector('#gvPaper .gcell[data-cls="5-2"][data-d="0"][data-s="p2"]');
+     return !!e && e.dataset.layer === "home" && e.classList.contains("nolesson");
+   }) === true);
+await p.evaluate(() => { const w = week(); delete w.home["5-2"]["0|p2"]; save(); setCenter("week"); });
+await p.waitForTimeout(400); await closeDlgs();
+
 /* 空き枠の印は、紙には出さない */
 ok("空き枠の印は画面だけ（刷る面には出さない）", await p.evaluate(() => {
      const css = [...document.styleSheets].flatMap(s => {
