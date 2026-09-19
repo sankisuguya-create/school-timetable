@@ -539,6 +539,22 @@ function wire(){
     gvT = setTimeout(() => { if(!$("gradeView").hidden) fitGrade(); }, 120);
   });
 
+  /* カレンダーの面。**見るだけ。** 4ヶ月ずつ繰る */
+  on("cvPrev","click",  () => { calFrom = new Date(calFrom.getFullYear(), calFrom.getMonth() - CAL_MONTHS, 1); redrawCenter(); });
+  on("cvNext","click",  () => { calFrom = new Date(calFrom.getFullYear(), calFrom.getMonth() + CAL_MONTHS, 1); redrawCenter(); });
+  on("cvClose","click", () => setCenter("week"));
+  on("cvPrint","click", printCal);
+  on("cvImage","click", async () => {
+    try{ await nodePng($("cvPaper"), outputName("カレンダー") + ".png");
+         toast("カレンダーの画像を保存した"); }
+    catch(e){ toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
+  });
+  let cvT = 0;
+  addEventListener("resize", () => {
+    clearTimeout(cvT);
+    cvT = setTimeout(() => { if(!$("calView").hidden) fitCal(); }, 120);
+  });
+
   /* 月の面。**見るだけ。** 直すのは週の紙のほうで */
   on("mPrev","click",  () => { mMonday = addDays(mMonday, -7 * MONTH_WEEKS); redrawCenter(); });
   on("mNext","click",  () => { mMonday = addDays(mMonday,  7 * MONTH_WEEKS); redrawCenter(); });
@@ -557,6 +573,7 @@ function wire(){
   on("abSave","click", saveAb);
   on("evRead","click", evRead);
   on("evGo","click", evGo);
+  on("setSub","click",  () => { $("settingsDlg").close(); openSubDlg(); });
   on("setBase","click", () => { $("settingsDlg").close(); openBaseDlg(); });
   on("setRoster","click", () => { $("settingsDlg").close(); openRosterDlg(); });
   on("setTanpopo","click", () => { $("settingsDlg").close(); openTpGroupDlg(); });
@@ -568,20 +585,13 @@ function wire(){
     catch(e){ $("outStat").textContent="画像を作れませんでした（"+(e.message||e)+"）"; }
   });
   on("outSheet","click", exportWeekSheet);
-  on("chipOpen","click", () => {
-    if(view.kind!=="class") return;
-    $("chipClass").textContent=view.cls;
-    const mode=(Y().chipModes||{})[view.cls]||"off";
-    const radio=document.querySelector("input[name=chipMode][value='"+mode+"']"); if(radio) radio.checked=true;
-    $("chipDlg").showModal();
-  });
-  on("chipSave","click", () => {
-    if(view.kind!=="class") return;
-    const radio=document.querySelector("input[name=chipMode]:checked");
-    (Y().chipModes||(Y().chipModes={}))[view.cls]=radio?radio.value:"off";
-    save(); $("chipDlg").close(); buildSheet(); drawPalette();
-    toast(view.cls+" の教科チップを変更した");
-  });
+  /* 教科の色。**窓を開かせない。** 紙を見ているときに、そのとなりで切り替える */
+  for(const b of document.querySelectorAll("#chipSeg [data-chip]"))
+    b.addEventListener("click", () => {
+      if(view.kind !== "class") return;
+      (Y().chipModes || (Y().chipModes = {}))[view.cls] = b.dataset.chip;
+      save(); paintChipSeg(); redrawCenter(true);
+    });
 
   /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */
   on("dayDlg","close", () => { dayPick = 0; });

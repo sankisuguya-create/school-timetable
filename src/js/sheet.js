@@ -361,7 +361,11 @@ function paintSheet(one, root){
    （学年の面は層の淡い塗りを使わない）。 */
 function paintCell(e, c, d, s, mine){
   const t = e.querySelector(".t"), n = e.querySelector(".n");
-  const wantT = c.title || "", wantN = c.note || "";
+  /* **1文字で出す面**（学年・カレンダー）。時数表と同じ字を使うので、
+     設定で直せばどちらも変わる。休み時間の行はそのまま（朝学習など） */
+  const one = e.dataset.one === "1" && (SLOT_BY_ID[s] || {}).kind === "lesson";
+  const wantT = one ? escText(shortOf(c.subject, c.title)) : (c.title || "");
+  const wantN = c.note || "";
   if(t && t !== typing && t.innerHTML !== wantT) t.innerHTML = wantT;
   if(n && n !== typing && n.innerHTML !== wantN) n.innerHTML = wantN;
 
@@ -536,6 +540,7 @@ function applyCenter(kind){
   $("stage").hidden     = !wk;
   $("monthView").hidden = kind !== "month";
   $("gradeView").hidden = kind !== "grade";
+  $("calView").hidden   = kind !== "cal";
   document.querySelector(".panel").hidden = !wk;
   document.querySelector(".work").classList.toggle("no-panel", !wk);
   paintCenterTabs();
@@ -543,6 +548,9 @@ function applyCenter(kind){
 function setCenter(kind){
   if(view.kind === "tanpopo" || view.kind === "gate") return;
   if(kind === "grade") gGrade = gGrade || gradeGuess();
+  /* いま見ている週の月から4ヶ月。**年度の区切りでは切らない**
+     （学期をまたいで単元を見たいので、見ている場所から前後に繰る） */
+  if(kind === "cal" && !calFrom) calFrom = new Date(monday.getFullYear(), monday.getMonth(), 1);
   applyCenter(kind);
   refreshWeek();                  /* 中身は、いまのかたちに合わせて refreshWeek が描く */
   if(centerMode === "week") autoFit();
@@ -615,6 +623,9 @@ function redrawCenter(rebuild){
     drawMonth();
   }else if(centerMode === "grade"){
     drawGradeView();
+  }else if(centerMode === "cal"){
+    if(rebuild) calFrom = new Date(monday.getFullYear(), monday.getMonth(), 1);
+    drawCalView();
   }else if(rebuild){
     buildSheet();
     autoFit();
@@ -676,7 +687,9 @@ function buildGradeSheet(sh){
   const slots = SLOTS.filter(s => s.kind !== "note");   /* 放課後は置かない */
   const colw = [];
   for(let d = 0; d < DAYS; d++)
-    for(let i = 0; i < n; i++) colw.push(d === DAYS - 1 ? ".45fr" : "1fr");
+    for(let i = 0; i < n; i++) colw.push(d === DAYS - 1 ? ".6fr" : "1fr");
+  /* **1文字なので、列はうんと細くてよい。** 紙そのものの幅も、
+     入る幅まで詰める（画面いっぱいに伸ばすと、字だけが離れて読みにくい） */
   sh.style.gridTemplateColumns = "calc(var(--labw)*var(--k)) " + colw.join(" ");
   sh.style.gridTemplateRows = "auto auto " + slots.map(s =>
     "calc(var(--h-" + (s.kind === "brk" ? "break" : "title") + ")*var(--k))").join(" ");
@@ -722,6 +735,7 @@ function buildGradeSheet(sh){
 function gCellEl(d, s, c){
   const e = el("div", "cell gcell " + (s.kind === "brk" ? "brk row-break" : "lesson"),
     "<div class='t'></div>");
+  e.dataset.one = "1";            /* 題名は1文字。paintCell がそこを見る */
   e.dataset.d = d; e.dataset.s = s.id;
   e.dataset.cls = c;              /* これがあると paintCell はクラス単位で判定する */
   if(isDayOff(d) && s.kind === "lesson" && !tripOn(c, d, s.id)) e.classList.add("off");
@@ -749,12 +763,18 @@ function fitK(nodes, probe, want, setVars){
 }
 
 /* 1枚を画面に収める。幅は枠が持つので、合わせるのは高さだけ。 */
+/* 1コマの幅（px）。**1文字が読める最小**。これ×列数が紙の幅になる */
+const G_CELL = 26;
 function fitGrade(){
   const box = $("gvPaper"), sh = box && box.querySelector(".gsheet");
   if(!box || !sh) return;
-  const w = box.clientWidth, h = box.clientHeight;
-  if(w < 2 || h < 2) return;
-  fitK([sh], sh, h, n => n.style.setProperty("--pw", w + "px"));
+  const avail = box.clientWidth, h = box.clientHeight;
+  if(avail < 2 || h < 2) return;
+  /* 月〜金は n 列ずつ、土は約半分 */
+  const n = Math.max(1, gClasses().length);
+  const want = 50 + G_CELL * n * (DAYS - 1 + .6);
+  const w = Math.min(avail, want);
+  fitK([sh], sh, h, x => x.style.setProperty("--pw", w + "px"));
 }
 
 /* 1枠に入るところまで --k を下げる。**測って決める。**
@@ -811,4 +831,138 @@ function fitMonth(cell){
     if(have <= want + 0.5) break;
     k = Math.max(.2, k * (want / have) * .99);
   }
+}
+
+/* ── カレンダーの面 ──────────────────────────────
+   **4ヶ月を A4 1枚に。** 1日が1コマで、題名は**その日の教科を1文字ずつ**、
+   下が備考。単元の配当・行事の重なりは、4週では足りず月をまたいで見たい。
+
+   *1文字で並べる理由*：1日 15.7mm に教科名は入らない。時数表と同じ字を使うので、
+   「教科の表し方」で直せば、時数・学年の面・ここが同時に変わる。
+
+   *日曜を置かない理由*：週の紙と同じ。この学校の年間行事計画表に日曜登校は無い。
+   月〜土の6列なので、1列 15.7mm 取れる（7列なら 13.4mm）。
+
+   *備考に何が出るか*：その日の**放課後の備考**。週の紙で放課後に書いた
+   会議・行事の準備が、そのままここに出る。新しい入力は作らない。
+
+   **見るだけの面。** 直すのは週の紙のほうで。 */
+const CAL_MONTHS = 4;
+let calFrom = null;              /* 左上の月の1日 */
+
+const calMonths = () => {
+  const out = [];
+  for(let i = 0; i < CAL_MONTHS; i++)
+    out.push(new Date(calFrom.getFullYear(), calFrom.getMonth() + i, 1));
+  return out;
+};
+
+/* その日の1コマ。**週の紙と同じ `cellFor` を通す。**
+   日付から月曜を出して `monday` を差し替えれば、層の重ね方も行事も揃って動く。 */
+function calDay(dt){
+  const keep = monday;
+  monday = mondayOf(dt);
+  try{
+    const d = Math.round((dt - monday) / 86400000);
+    if(d < 0 || d >= DAYS) return null;
+    const out = {d, form:dayForm(d), ev:hasEvents(d), subs:[], note:""};
+    for(const s of SLOTS){
+      if(s.kind === "note"){ out.note = plain(cellFor(d, s.id).note || "").trim(); continue; }
+      if(s.kind !== "lesson" || !slotShown(d, s)) continue;
+      const c = cellFor(d, s.id);
+      const t = plain(c.title).trim();
+      if(!t) { out.subs.push(""); continue; }
+      out.subs.push(t === NO_LESSON ? "／" : shortOf(c.subject, c.title));
+    }
+    return out;
+  } finally{ monday = keep; }
+}
+
+function openCal(){
+  if(!centerOk()) return toast("クラスや学年を開いてから押す");
+  setCenter("cal");
+}
+function drawCalView(){
+  const ms = calMonths();
+  $("cvTitle").textContent = viewName() + "　"
+    + ms[0].getFullYear() + "年" + (ms[0].getMonth() + 1) + "月 → "
+    + (ms[CAL_MONTHS - 1].getMonth() + 1) + "月";
+  $("cvHint").innerHTML = "<b>" + CAL_MONTHS + "ヶ月</b>を A4 よこ1枚に。"
+    + "1日の上は<b>その日の教科を1文字ずつ</b>（時数表と同じ字）、下は<b>放課後の備考</b>。"
+    + "直すのは週の紙のほうで。ここは見るだけです。";
+  const box = $("cvPaper");
+  box.textContent = "";
+  for(const m of ms) box.appendChild(calMonthEl(m));
+  fitCal();
+  /* その4ヶ月ぶんの週を読む。**まだ読んでいなければ**（月曜の並びで渡す） */
+  const mons = {};
+  for(const m of ms){
+    const last = new Date(m.getFullYear(), m.getMonth() + 1, 0);
+    for(let x = mondayOf(m); x <= last; x = addDays(x, 7)) mons[iso(x)] = true;
+  }
+  let sync = true;
+  const w = Wait.begin(CAL_MONTHS + "ヶ月ぶんを読んでいます");
+  Backend.readWeeks(Object.keys(mons), () => {
+    Wait.end(w);
+    if(sync || $("calView").hidden) return;
+    box.textContent = "";
+    for(const m of ms) box.appendChild(calMonthEl(m));
+    fitCal();
+  });
+  sync = false;
+}
+
+function calMonthEl(m){
+  const wrap = el("div", "cmonth",
+    "<div class='cmhd'>" + (m.getMonth() + 1) + "月</div>");
+  const grid = el("div", "cgrid");
+  for(let d = 0; d < DAYS; d++)
+    grid.appendChild(el("div", "cdow" + (d === DAYS - 1 ? " sat" : ""), DOW[d]));
+  /* 1日の曜日まで空ける。**月曜はじまり**（週の紙と同じ並び） */
+  const first = new Date(m.getFullYear(), m.getMonth(), 1);
+  const lead = (first.getDay() + 6) % 7;
+  for(let i = 0; i < lead && i < DAYS; i++) grid.appendChild(el("div", "cday none"));
+  const last = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
+  for(let n = 1; n <= last; n++){
+    const dt = new Date(m.getFullYear(), m.getMonth(), n);
+    if((dt.getDay() + 6) % 7 >= DAYS) continue;      /* 日曜は置かない */
+    const info = calDay(dt);
+    const cell = el("div", "cday" + (info && info.form ? " form-" + info.form : ""),
+      "<span class='cnum'>" + n + "</span>"
+      + "<span class='csubs'>" + escText((info ? info.subs : []).join("")) + "</span>"
+      + "<span class='cnote'>" + escText(info ? info.note : "") + "</span>");
+    if(info && info.ev) cell.classList.add("hasev");
+    if(info && info.form) cell.title = DAY_FORM[info.form].label;
+    grid.appendChild(cell);
+  }
+  wrap.appendChild(grid);
+  return wrap;
+}
+
+/* A4 よこ1枚。**枠の大きさは mm で決め、刷るときはそれをそのまま使う。**
+   画面の px で測った倍率のまま刷ると、紙からはみ出すか、すかすかになる。 */
+const CAL_PAGE = {w:297, h:210, mg:8};
+function calCellMM(){
+  return {w:(CAL_PAGE.w - CAL_PAGE.mg * 2 - 6) / 2 + "mm",
+          h:(CAL_PAGE.h - CAL_PAGE.mg * 2 - 6) / 2 + "mm"};
+}
+function fitCal(cell){
+  const box = $("cvPaper"), one = box && box.querySelector(".cmonth");
+  if(!box || !one) return;
+  const c = cell || {w:((box.clientWidth - 6) / 2) + "px",
+                     h:((box.clientHeight - 6) / 2) + "px"};
+  if(!cell && (box.clientWidth < 2 || box.clientHeight < 2)) return;
+  if(cell){
+    box.style.gridTemplateColumns = "repeat(2," + c.w + ")";
+    box.style.gridTemplateRows    = "repeat(2," + c.h + ")";
+    box.style.width = "calc(" + c.w + "*2 + 6mm)";
+  }else{
+    box.style.removeProperty("grid-template-columns");
+    box.style.removeProperty("grid-template-rows");
+    box.style.removeProperty("width");
+  }
+  const rows = getComputedStyle(box).gridTemplateRows.split(" ");
+  const want = parseFloat(rows[0]) || one.clientHeight;
+  fitK([...box.querySelectorAll(".cmonth")], one, want,
+       n => { n.style.setProperty("--cw", c.w); n.style.setProperty("--ch", c.h); });
 }

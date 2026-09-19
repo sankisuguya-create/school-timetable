@@ -710,6 +710,21 @@ const Backend = (function(){
       .withFailureHandler(e => notify("学級編成を保存できなかった（" + escText(String(e && e.message)) + "）"))
       .apiWriteRoster(fy(), Yr.classes, Yr.specials, Yr.week1, Yr.tanpopo || {});
   }
+  /* 教科の表し方。**クラスや年度に紐づかない**（学校で1つ）ので年度を送らない。
+     手元では送る先が無いので、控えだけ書いて済にする */
+  function saveSubjects(rows, then){
+    if(!onGas){ save(); if(then) then(true); return; }
+    google.script.run
+      .withSuccessHandler(r => {
+        if(r && r.subjects && r.subjects.length) setSubjects(r.subjects);
+        if(then) then(true);
+      })
+      .withFailureHandler(e => {
+        notify("教科の表し方を保存できなかった（" + escText(String(e && e.message)) + "）");
+        if(then) then(false);
+      })
+      .apiWriteSubjects(rows);
+  }
   function saveBase(cls, variant){
     if(!onGas) return save();
     google.script.run
@@ -905,7 +920,7 @@ const Backend = (function(){
           touched: () => touched || !!lastErr, setNotifier, setDirtyWatcher, setConflictWatcher,
           unsaved, prefetchWeek, readWeeks, watch, stale, heldCells, dropHeld, reloadWeek,
           cellChanged, flush, boot, ready, readyYear,
-          saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
+          saveRoster, saveSubjects, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,
           tpTargets, saveTpTargets, testTpTarget, tpSubmit,
           yearSetup, tickYearSetup, setupPlanSheets, saveVariantOrigin, saveEvents,

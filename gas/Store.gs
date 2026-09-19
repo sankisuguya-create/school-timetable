@@ -266,6 +266,36 @@ const Store = (function(){
     })).filter(s => s.code);
   }
 
+  /* 教科の表し方を書き戻す。**直せるのは「表し方」の3列だけ。**
+     コードは行の身元なので触らない ── 直せると、週案のコマが指す先が
+     どの行にも当たらなくなり、既に書いた予定の教科が消える。
+     時数に数えるか・出す面も、ここからは触らない（別の決まりごと）。 */
+  function writeSubjects(rows){
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try{
+      const cur = Sheets.readAll("教科");
+      const by = {};
+      for(const r of (rows || [])) if(r && r.code) by[String(r.code).trim()] = r;
+      let n = 0;
+      for(const r of cur.rows){
+        const want = by[String(r["コード"]).trim()];
+        if(!want) continue;
+        /* **無いものは書かない。** 送られてこなかった欄をここで空にすると、
+           古い画面から1列ぶん送られただけで、ほかの列が消える */
+        const patch = {};
+        if(want.name  !== undefined) patch["表示名"]         = String(want.name);
+        if(want.short !== undefined) patch["時数表の1文字"]   = String(want.short);
+        if(want.tp    !== undefined) patch["たんぽぽ表記"]     = String(want.tp);
+        if(Object.keys(patch).length){ Sheets.patchRow("教科", r.__row, patch); n++; }
+      }
+      SpreadsheetApp.flush();
+      return {n: n, subjects: readSubjects()};
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
   /* ── 年間行事計画表 ────────────────────────────
      **1行1日の縦長の表を読む**（docs/spec.md 6節）。
      元の表は3か月が横に並んでいるが、そのままは読ませない。
@@ -1886,7 +1916,7 @@ const Store = (function(){
     return new Date(+p[0], +p[1] - 1, +p[2] + n);
   }
 
-  return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects,
+  return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects, writeSubjects,
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste, exportPlanSheet,
           exportWeek, weekSheetName, weekOrder, migratePlan, checkYear, readEvents,
           archiveCount, archiveVerify, archivePurge, archivedAll, ymd,
@@ -2061,6 +2091,12 @@ function apiWriteVariantOrigin(monday){
 }
 /* 年間行事計画表を貼り替える。**貼るのはシートではなく画面から。**
    シートのURLを教員に渡さないまま、年度初めの貼り替えが閉じる。 */
+/* 教科の表し方（表示名・時数表の1文字・たんぽぽ表記）を直す */
+function apiWriteSubjects(rows){
+  Gate.check();
+  return Store.writeSubjects(rows);
+}
+
 function apiWriteEvents(rows){
   Gate.check();
   return Store.writeEvents(rows);

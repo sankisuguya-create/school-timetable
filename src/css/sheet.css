@@ -159,22 +159,41 @@
   align-items:center;justify-content:center;text-align:center;
   font-weight:600;line-height:1.15;
   font-size:calc(var(--fs-t)*var(--k)*var(--fit,1))}
-/* 教科チップはタイトルの字を消さず、形と淡い色を足す。紙へ出すかはクラス設定。 */
-.sheet.chips-screen .cell.has-sub .t{width:max-content;max-width:94%;height:auto;min-height:60%;
-  align-self:center;margin:auto;padding-left:calc(1.8mm*var(--k));padding-right:calc(1.8mm*var(--k));
-  border:1px solid var(--rule);border-radius:99px}
-.sheet.chips-screen .cell[data-subject=kokugo] .t{background:var(--sub-kokugo)}
-.sheet.chips-screen .cell[data-subject=shakai] .t{background:var(--sub-shakai)}
-.sheet.chips-screen .cell[data-subject=sansu] .t{background:var(--sub-sansu)}
-.sheet.chips-screen .cell[data-subject=rika] .t{background:var(--sub-rika)}
-.sheet.chips-screen .cell[data-subject=seikatsu] .t,.sheet.chips-screen .cell[data-subject=sogo] .t{background:var(--sub-seikatsu)}
-.sheet.chips-screen .cell[data-subject=ongaku] .t{background:var(--sub-ongaku)}
-.sheet.chips-screen .cell[data-subject=zuko] .t{background:var(--sub-zuko)}
-.sheet.chips-screen .cell[data-subject=katei] .t{background:var(--sub-katei)}
-.sheet.chips-screen .cell[data-subject=taiiku] .t{background:var(--sub-taiiku)}
-.sheet.chips-screen .cell[data-subject=doutoku] .t{background:var(--sub-doutoku)}
-.sheet.chips-screen .cell[data-subject=gaikoku] .t{background:var(--sub-gaikoku)}
+/* ── 教科の色 ────────────────────────────────
+   **題名の欄の地だけを変える。** 前は丸い枠のチップを紙に埋め込んでいたが、
+   枠と地の2つで同じことを言うぶんコマの中が混み、長い教科名は枠に入らなかった。
+   地だけにすれば、字の大きさも枠いっぱいのまま変わらない。
+
+   **この色は識別を担わない。** どの教科かはセルの字が言っている。
+   淡い13色は色覚型によって互いに潰れる（実測：1型で 国語×理科 ΔE00 1.4）ので、
+   色だけで教科を探せるとは約束しない。字を消したり、色だけの凡例を作ったりしない。
+
+   出すかどうかはクラスごと（右メニューの「教科に色をつける」）。
+   紙にも出すと、モノクロ印刷では灰色の濃淡になる ── 選んだ人の紙にだけ出す。 */
+.sheet.chips-screen .cell[data-subject=kokugo]   .t{background:var(--sub-kokugo)}
+.sheet.chips-screen .cell[data-subject=shakai]   .t{background:var(--sub-shakai)}
+.sheet.chips-screen .cell[data-subject=sansu]    .t{background:var(--sub-sansu)}
+.sheet.chips-screen .cell[data-subject=rika]     .t{background:var(--sub-rika)}
+.sheet.chips-screen .cell[data-subject=seikatsu] .t,
+.sheet.chips-screen .cell[data-subject=sogo]     .t{background:var(--sub-seikatsu)}
+.sheet.chips-screen .cell[data-subject=ongaku]   .t{background:var(--sub-ongaku)}
+.sheet.chips-screen .cell[data-subject=zuko]     .t{background:var(--sub-zuko)}
+.sheet.chips-screen .cell[data-subject=katei]    .t{background:var(--sub-katei)}
+.sheet.chips-screen .cell[data-subject=taiiku]   .t{background:var(--sub-taiiku)}
+.sheet.chips-screen .cell[data-subject=doutoku]  .t{background:var(--sub-doutoku)}
+.sheet.chips-screen .cell[data-subject=gaikoku]  .t{background:var(--sub-gaikoku)}
 .sheet.chips-screen .cell[data-subject=gakkatsu] .t{background:var(--sub-gakkatsu)}
+/* 時数に数えないもの（図書・行事・給食・クラブ・委員会）。**灰の地で1つ。**
+   色で見分ける対象ではないので、13色の輪に入れずにまとめる */
+.sheet.chips-screen .cell[data-subject=tosho]    .t,
+.sheet.chips-screen .cell[data-subject=gyoji]    .t,
+.sheet.chips-screen .cell[data-subject=kyushoku] .t,
+.sheet.chips-screen .cell[data-subject=club]     .t,
+.sheet.chips-screen .cell[data-subject=iinkai]   .t{background:var(--sub-none)}
+/* 合同でやるもの。**元の教科と同じ地**（時数の数え方と同じ考え） */
+.sheet.chips-screen .cell[data-subject=goudo_taiiku] .t{background:var(--sub-taiiku)}
+.sheet.chips-screen .cell[data-subject=goudo_ongaku] .t{background:var(--sub-ongaku)}
+.sheet.chips-screen .cell[data-subject=gakunen_shukai] .t{background:var(--sub-gakkatsu)}
 .cell.brk .t{height:100%;font-weight:400;
   font-size:calc(var(--fs-b)*var(--k)*var(--fit,1))}
 .cell .n{flex:1;font-size:calc(var(--fs-n)*var(--k));color:var(--ink-sub);
@@ -274,6 +293,14 @@
   .side,.panel,.gate,.toast,.tpview,.busy,.arc,.wait,.wkarrow{display:none!important}
   /* 中央のかたちを入れ替える帯と、学年の面。**どちらも紙の外のもの** */
   .cbar,.gvview{display:none!important}
+  /* カレンダーの面を刷るとき。**まわりの操作も、週の1枚も出さない** */
+  body.printing-cal .stage{display:none!important}
+  body.printing-cal .cvview .mbar,body.printing-cal .cvview .hint{display:none!important}
+  body.printing-cal .cvview{padding:0;gap:0;grid-template-rows:auto;display:block}
+  body.printing-cal .cvpaper{gap:6mm;align-items:start;justify-items:stretch}
+  body.printing-cal .cmonth{width:var(--cw);height:var(--ch);box-shadow:none;
+    border-radius:0;border-color:#000}
+  body:not(.printing-cal) .cvview{display:none!important}
   /* 空き枠さがしの印も刷らない。**枠を探している最中の作業**であって、
      刷って残す情報ではない（年間行事の印と同じ扱い） */
   .cell[data-free]{background-image:none!important}
@@ -299,9 +326,9 @@
   .hd.pick{background:transparent!important;cursor:default}
   .hd .pk{display:none!important}          /* 押せる印は画面だけのもの */
   .cell .t:focus,.cell .n:focus{background:transparent;box-shadow:none}
-  .sheet.chips-screen:not(.chips-output) .cell.has-sub .t{width:auto;max-width:none;height:calc(var(--h-title)*var(--k));
-    min-height:0;margin:0;padding-left:calc(1.4mm*var(--k));padding-right:calc(1.4mm*var(--k));
-    border:0;border-radius:0;background:transparent}
+  /* **「画面だけ」を選んだクラスは、紙には地を出さない。**
+     「紙にも」を選んだクラスだけが刷られる（.chips-output） */
+  .sheet.chips-screen:not(.chips-output) .cell .t{background:transparent}
   /* **紙の外の入れ物に、高さを持たせない。** html,body が height:100% なので、
      そのままだと本文の高さが画面の高さになり、紙が1枚に収まっていても
      2ページ目が出る（白紙が必ず1枚ついてくる） */
@@ -330,10 +357,14 @@
    ここで持つのは**この面だけの寸法**（幅いっぱい・時程の列を細く・備考の行が無い）。 */
 .gsheet{
   --k:1; --pw:100%;
-  --labw:13mm; --h-head:8mm; --h-break:6mm; --h-title:8mm;
-  --fs-s:6pt; --fs-t:16pt;
+  /* **題名は1文字。** 列も紙もそのぶん細くてよい。
+     時程の列は「1」「業間」が入る幅、コマの列は1字が入る幅 */
+  --labw:12.5mm; --h-head:8mm; --h-break:5.5mm; --h-title:6.5mm;
+  --fs-s:6pt; --fs-t:12pt;
   width:var(--pw);
   overflow:hidden}
+/* 1文字の紙は、伸ばさずに詰める。**字だけが離れて並ぶと、かえって読みにくい** */
+.gvpaper{display:flex;justify-content:center;align-items:flex-start}
 /* **クラスの切れ目より、日の切れ目を濃く。** 濃さが同じだと、
    どこまでが1日かが読めず、4クラスぶんの列が24本の帯に見える */
 .gsheet>.gend{border-right:1.2px solid var(--rule-week)}
@@ -343,7 +374,11 @@
   font-size:calc(var(--fs-s)*var(--k));color:var(--ink-sub);font-weight:600;
   border-bottom:1.2px solid var(--rule-week);background:var(--band);
   padding:1px 0}
+/* 時程のラベル。**折り返させない。** 休み時間の行は 5.5mm しかないので、
+   「朝休み」が2行になると、上下の行と重なって読めなくなる */
 .glab{font-size:calc(var(--fs-s)*var(--k))}
+.glab span{white-space:nowrap}
+.glab.row-break span{font-size:calc(5pt*var(--k))}
 /* 1コマ。**題名だけ。** 高さは題名の行そのもの（備考の行が無い） */
 .gcell.lesson{height:calc(var(--h-title)*var(--k))}
 /* **折り返させない。** 1コマが 22px 前後しか無いので、2行になると

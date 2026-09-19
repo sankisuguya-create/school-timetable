@@ -140,7 +140,8 @@
         <div class="seg" id="centerTabs" role="group" aria-label="中央に出すもの">
           <button data-center="week"  aria-pressed="true">週案</button
           ><button data-center="month" aria-pressed="false">4週</button
-          ><button data-center="grade" aria-pressed="false">学年</button>
+          ><button data-center="grade" aria-pressed="false">学年</button
+          ><button data-center="cal" aria-pressed="false">カレンダー</button>
         </div>
         <!-- 空き枠さがし。**学年・全校・専科の面だけ。**
              学級の面に「空き枠」は無い（探しているのは自分の空き時間で、別のもの） -->
@@ -203,6 +204,22 @@
         <div class="gvpaper" id="gvPaper"></div>
       </div>
 
+      <!-- カレンダーの面。**4ヶ月を A4 よこ1枚に。**
+           1日の上はその日の教科を1文字ずつ、下は放課後の備考。**見るだけ** -->
+      <div class="cvview" id="calView" hidden>
+        <div class="mbar">
+          <button class="btn" id="cvPrev">◀ 前の4ヶ月</button>
+          <b id="cvTitle"></b>
+          <button class="btn" id="cvNext">次の4ヶ月 ▶</button>
+          <span class="grow"></span>
+          <button class="btn go" id="cvPrint">印刷</button>
+          <button class="btn" id="cvImage">画像</button>
+          <button class="btn" id="cvClose">週の紙へ戻る</button>
+        </div>
+        <p class="hint" id="cvHint"></p>
+        <div class="cvpaper" id="cvPaper"></div>
+      </div>
+
       <!-- たんぽぽの面。週案の紙ではないので、紙の代わりにここを出す -->
       <div class="tpview" id="tpView" hidden>
         <div class="tphead" data-help="tanpopo">
@@ -262,7 +279,19 @@
         <h3>教科・行事</h3>
         <div class="pals" id="pals"></div>
         <p class="hint" id="palHint" style="margin-top:8px"></p>
-        <button class="chipset" id="chipOpen" hidden>週案のチップ表示：<span id="chipNow">使わない</span></button>
+        <!-- 教科の色。**紙の上では、題名の欄の地だけを変える。**
+             前は丸い枠のチップを紙に埋め込んでいたが、枠と地の2つで言うぶん
+             コマの中が混み、長い教科名は枠に入らなかった。
+             **押す口はここ**（窓を開かせない。毎週変えるものではないが、
+             変えたくなるのは紙を見ているときなので、紙のとなりに置く） -->
+        <div class="chipset" id="chipWrap" hidden>
+          <span class="flab">教科に色をつける</span>
+          <div class="seg" id="chipSeg" role="group" aria-label="教科に色をつける">
+            <button data-chip="off" aria-pressed="true">なし</button
+            ><button data-chip="screen" aria-pressed="false">画面だけ</button
+            ><button data-chip="output" aria-pressed="false">紙にも</button>
+          </div>
+        </div>
       </div>
 
       <!-- ③ その日の形。**全学年の面にだけ出る。** 効く範囲が全クラスなので、
@@ -381,6 +410,21 @@
 </div></dialog>
 
 <!-- 日常の左メニューを増やさず、年に数回の設定をここへ集める -->
+<!-- 教科の表し方。**同じ教科を、面ごとに違う字で出す。**
+     ここに並べておかないと、3つの字がシートの別々の列に散ったままになり、
+     どれを直せばどこが変わるのかが分からない -->
+<dialog id="subDlg"><div class="dlg wide">
+  <h2>教科の表し方 <span class="subttl" id="subFy"></span></h2>
+  <p><b>同じ教科を、面によって違う字で出します。</b>ここが1つの正本です。<br>
+     <b>紙の字</b>＝週案の紙とパレットに出る名前。
+     <b>1文字</b>＝時数集計表に写す字と、学年の面・カレンダーの面に出る字。
+     <b>たんぽぽ</b>＝たんぽぽ時間割に出す字（児童の列は 50px しかないので短く）。<br>
+     空欄にすると、<b>1文字は紙の字の1文字目</b>、<b>たんぽぽは紙の字そのまま</b>になります。
+     <b>時数に数えない教科は1文字を空に</b>してください（書くと Excel 側の集計が増えます）。</p>
+  <div class="subtable" id="subRows"></div>
+  <p class="hint" id="subStat"></p>
+</div></dialog>
+
 <dialog id="settingsDlg"><div class="dlg wide">
   <h2>設定 <span class="subttl" id="settingsFy"></span></h2>
   <p>学校全体や年度のもとになるものを変更します。週ごとの印刷・画像・Sheetは左メニューの「週案を出す」から行います。</p>
@@ -388,6 +432,7 @@
     <button class="settingcard" id="setBase"><b>基本時間割</b><span>A週・B週の、毎週のもと</span></button>
     <button class="settingcard" id="setRoster"><b>学年・クラス</b><span>何年が何組まであるか、専科</span></button>
     <button class="settingcard" id="setTanpopo"><b>たんぽぽ組分け</b><span>交流級と人数を組へ分ける</span></button>
+    <button class="settingcard" id="setSub"><b>教科の表し方</b><span>紙の字・時数の1文字・たんぽぽの字</span></button>
     <button class="settingcard" id="setPaper"><b>印刷と文字</b><span id="setPaperNow">用紙・文字の大きさ</span></button>
     <button class="settingcard" id="setNewYear"><b>新年度の準備</b><span>4月1日から、上から順に確認</span></button>
   </div>
@@ -414,17 +459,6 @@
     <button class="settingcard" id="outSheet"><b>Google Sheet</b><span>編集・共有できる表を作る</span></button>
   </div>
   <p class="hint" id="outStat"></p>
-</div></dialog>
-
-<dialog id="chipDlg"><div class="dlg">
-  <h2><span id="chipClass"></span> の教科チップ</h2>
-  <p>教科名の形と淡い色を、タイトル欄のどこまでに出すか選びます。色がなくても教科名で分かります。</p>
-  <div class="radios">
-    <label><input type="radio" name="chipMode" value="off"> 使わない</label>
-    <label><input type="radio" name="chipMode" value="screen"> 画面だけ</label>
-    <label><input type="radio" name="chipMode" value="output"> 画面と印刷・画像・Sheet</label>
-  </div>
-  <div class="end"><button class="btn go" id="chipSave">保存</button></div>
 </div></dialog>
 
 <dialog id="impDlg"><div class="dlg">

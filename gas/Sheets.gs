@@ -607,6 +607,17 @@ const Sheets = (function(){
     grow(sh, rowNo, SPEC[name].cols.length);
     sh.getRange(rowNo, 1, 1, SPEC[name].cols.length).setValues([toArray(name, obj)]);
   }
+  /* 1行のうち、**渡した見出しの欄だけ**を書き替える。
+     `setRow` は SPEC の並びで1行まるごと書くので、列を入れ替えた学校では
+     中身がずれる。こちらは `head` の見出し位置に書くので、並びに依らない。
+     **無い見出しは黙って飛ばす**（あとから足した列が無い古いファイルのため）。 */
+  function patchRow(name, rowNo, obj){
+    const {sh, at} = head(name);
+    for(const k in obj){
+      if(!(k in at)) continue;
+      sh.getRange(rowNo, at[k] + 1).setValue(obj[k]);
+    }
+  }
   /* 行は消さずに空にする。**消すと、その下の行番号がすべてずれる。**
      同じ書き込みの途中で覚えた行番号が、別の行を指すようになる。 */
   function blankRow(name, rowNo){
@@ -631,7 +642,7 @@ const Sheets = (function(){
           fillAfterRow, fillSubjectCols,
           PLAN_PREFIX, PLAN_ALL, PLAN_COLS, planName, ensurePlan, readPlan, writePlan, writePlanRows,
           planNames, planMap,
-          setup, head, readAll, appendRows, toArray, setRow, blankRow, sheet};
+          setup, head, readAll, appendRows, toArray, setRow, patchRow, blankRow, sheet};
 })();
 
 /* シートを作る。エディタから1回実行する。 */

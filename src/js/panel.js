@@ -60,12 +60,7 @@ function drawPalette(){
       + "（授業は入らなくなる。備考は書ける。もう一度落とすと外れる）。"
       + (canClear ? "<br><b>リセット</b>を落とすと、そのコマをここから取り消す"
                   + "（各クラスの予定が出るようになる）。" : "");
-  const chip = $("chipOpen");
-  chip.hidden = view.kind !== "class";
-  if(view.kind === "class"){
-    const mode = (Y().chipModes || {})[view.cls] || "off";
-    $("chipNow").textContent = mode === "off" ? "使わない" : mode === "output" ? "画面と出力" : "画面だけ";
-  }
+  paintChipSeg();
 
   for(const b of $("pals").querySelectorAll(".pal")){
     b.addEventListener("dragstart", ev => {
@@ -79,6 +74,21 @@ function drawPalette(){
       applyPalette(selCell.d, selCell.s, b.dataset.v);
     });
   }
+}
+
+/* 教科の色。**クラスごとに持つ**（学級によって使いたい人と使わない人がいる）。
+   紙にも出すかまで、ここで選ぶ ── 紙に出すと、モノクロ印刷では13色が
+   灰色の濃淡になる。選んだ人の紙にだけ出す。 */
+function chipMode(){
+  return view.kind === "class" ? ((Y().chipModes || {})[view.cls] || "off") : "off";
+}
+function paintChipSeg(){
+  const w = $("chipWrap");
+  if(!w) return;
+  w.hidden = view.kind !== "class";
+  const m = chipMode();
+  for(const b of document.querySelectorAll("#chipSeg [data-chip]"))
+    b.setAttribute("aria-pressed", String(b.dataset.chip === m));
 }
 
 /* ── この週の日の形（全学年の面だけ） ──────────

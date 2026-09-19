@@ -291,6 +291,17 @@ await p.addInitScript(() => {
         call("apiWriteVariantOrigin", [m]);
         setTimeout(() => okFn({saved:m}), 0);
       },
+      /* 教科の表し方。**本番は直した3列だけを書き戻し、読み直したものを返す** */
+      apiWriteSubjects(rows){
+        const cur = DATA.boot.subjects || [];
+        const out = cur.map(x => {
+          const r = (rows || []).find(y => y.code === x.code);
+          return r ? Object.assign({}, x, {name:r.name, short:r.short, tp:r.tp}) : x;
+        });
+        DATA.boot.subjects = out;
+        call("apiWriteSubjects", [rows]);
+        setTimeout(() => okFn({n:(rows || []).length, subjects:out}), 0);
+      },
       apiWriteEvents(rows){
         call("apiWriteEvents", [rows]);
         window.__nyEvents = true;
@@ -1922,6 +1933,124 @@ ok("空き枠の印は画面だけ（刷る面には出さない）", await p.ev
        && String(r.cssText).indexOf("data-free") >= 0);
    }) === true);
 await p.evaluate(() => { freeOpt().level = 0; freeOpt().avoid = []; save(); });
+
+/* ── 教科の色・1文字・対応表・カレンダー ───────────────── */
+console.log("\n■ 教科の色は、題名の欄の地だけ（チップをやめた）");
+await p.evaluate(() => { openView({kind:"class", cls:"5-1"}); });
+await p.waitForTimeout(400); await closeDlgs();
+ok("右メニューに口がある（窓を開かせない）",
+   await p.evaluate(() => $("chipWrap").hidden) === false);
+ok("はじめは「なし」", await p.evaluate(() =>
+   $("chipSeg").querySelector('[data-chip=off]').getAttribute("aria-pressed")) === "true");
+await p.locator('#chipSeg [data-chip="screen"]').click();
+await p.waitForTimeout(400);
+ok("紙に地が付く", await p.evaluate(() =>
+   $("sheet").classList.contains("chips-screen")) === true);
+ok("「画面だけ」は紙の印を立てない", await p.evaluate(() =>
+   $("sheet").classList.contains("chips-output")) === false);
+ok("丸いチップの形は作らない（地だけ）", await p.evaluate(() => {
+     const css = [...document.styleSheets].flatMap(s2 => {
+       try{ return [...s2.cssRules]; }catch(_){ return []; }
+     }).map(r => r.cssText).join("");
+     return css.indexOf("chips-screen .cell.has-sub .t") < 0;
+   }) === true);
+await p.locator('#chipSeg [data-chip="output"]').click();
+await p.waitForTimeout(300);
+ok("「紙にも」を選ぶと紙の印が立つ", await p.evaluate(() =>
+   $("sheet").classList.contains("chips-output")) === true);
+ok("クラスごとに持つ", await p.evaluate(() =>
+   (Y().chipModes || {})["5-1"]) === "output");
+
+console.log("\n■ 学年の面は1文字（時数表と同じ字）");
+await p.evaluate(() => {
+  const Yr = Y();
+  for(const c of classesOfGrade("5")) for(const v of ["A", "B"])
+    (Yr.base[c] || (Yr.base[c] = {}))[v] =
+      Object.assign({}, (Yr.base[c] || {})[v], {"0|p1":{title:"国語", subject:"kokugo"}});
+  save(); openView({kind:"grade", grade:"5"});
+});
+await p.waitForTimeout(400); await closeDlgs();
+await p.evaluate(() => setCenter("grade"));
+await p.waitForTimeout(600); await closeDlgs();
+ok("題名は1文字で出る", await p.evaluate(() =>
+   (document.querySelector('#gvPaper .gcell[data-cls="5-1"][data-d="0"][data-s="p1"] .t') || {})
+     .textContent) === "国",
+   await p.evaluate(() =>
+     (document.querySelector('#gvPaper .gcell[data-cls="5-1"][data-d="0"][data-s="p1"] .t') || {}).textContent));
+ok("1文字の無い教科は、紙の字の1文字目に落ちる",
+   await p.evaluate(() => shortOf("tosho", "図書")) === "図",
+   await p.evaluate(() => shortOf("tosho", "図書")));
+ok("紙そのものが細い（画面いっぱいに伸ばさない）", await p.evaluate(() => {
+     const sh = document.querySelector("#gvPaper .gsheet");
+     return sh.getBoundingClientRect().width < $("gvPaper").clientWidth;
+   }) === true);
+
+console.log("\n■ 教科の表し方（設定の対応表）");
+await p.evaluate(() => openSubDlg());
+await p.waitForTimeout(300);
+ok("3つの字を並べて出す", await p.evaluate(() =>
+   $("subRows").querySelectorAll(".subrow").length > 0
+   && !!$("subRows").querySelector("[data-f=name]")
+   && !!$("subRows").querySelector("[data-f=short]")
+   && !!$("subRows").querySelector("[data-f=tp]")) === true);
+ok("コードは出さない（行の身元なので触らせない）", await p.evaluate(() =>
+   !$("subRows").querySelector("[data-f=code]")) === true);
+await p.evaluate(() => {
+  const r = $("subRows").querySelector('.subrow[data-code=kokugo]');
+  r.querySelector("[data-f=short]").value = "語";
+  saveSubTable();
+});
+await p.waitForTimeout(400);
+ok("直すとシートへ送る",
+   (await calls()).indexOf("apiWriteSubjects") >= 0, await calls());
+ok("送る中身は、直した3つの字",
+   await p.evaluate(() => {
+     const a = (window.__calls.filter(c => c.name === "apiWriteSubjects").pop() || {}).args;
+     const r = a && a[0].find(x => x.code === "kokugo");
+     return !!r && r.short === "語" && r.name === "国語";
+   }) === true);
+ok("直した字が、そのまま学年の面に出る", await p.evaluate(() => {
+     $("subDlg").close();
+     setCenter("grade");
+     return (document.querySelector('#gvPaper .gcell[data-cls="5-1"][data-d="0"][data-s="p1"] .t') || {})
+       .textContent;
+   }) === "語");
+await p.evaluate(() => {
+  const r = $("subRows").querySelector('.subrow[data-code=kokugo]');
+  if(r) r.querySelector("[data-f=short]").value = "国";
+  const S = SUBJECTS.map(x => x.code === "kokugo" ? Object.assign({}, x, {short:"国"}) : x);
+  setSubjects(S); save();
+});
+
+console.log("\n■ カレンダーの面（4ヶ月・A4よこ1枚）");
+await p.evaluate(() => { openView({kind:"class", cls:"5-1"}); });
+await p.waitForTimeout(400); await closeDlgs();
+await p.locator('#centerTabs [data-center="cal"]').click();
+await p.waitForTimeout(900); await closeDlgs();
+ok("カレンダーの面に入れ替わる", await p.evaluate(() =>
+   $("calView").hidden === false && $("stage").hidden === true) === true);
+ok("4ヶ月ぶん出る", await p.evaluate(() =>
+   document.querySelectorAll("#cvPaper .cmonth").length) === 4);
+ok("月〜土の6列（日曜は置かない）", await p.evaluate(() =>
+   document.querySelectorAll("#cvPaper .cmonth:first-child .cdow").length) === 6);
+ok("1日は「日付・教科の1文字・備考」の3段", await p.evaluate(() => {
+     const d = document.querySelector("#cvPaper .cday:not(.none)");
+     return !!d.querySelector(".cnum") && !!d.querySelector(".csubs") && !!d.querySelector(".cnote");
+   }) === true);
+ok("教科は1文字ずつ並ぶ", await p.evaluate(() =>
+   [...document.querySelectorAll("#cvPaper .csubs")].some(e => e.textContent.trim().length > 1)) === true);
+ok("見るだけ（書ける欄を作らない）", await p.evaluate(() =>
+   document.querySelectorAll("#cvPaper [contenteditable]").length) === 0);
+const calT0 = await p.locator("#cvTitle").innerText();
+await p.locator("#cvNext").click(); await p.waitForTimeout(700); await closeDlgs();
+ok("4ヶ月ずつ繰れる", (await p.locator("#cvTitle").innerText()) !== calT0,
+   [calT0, await p.locator("#cvTitle").innerText()]);
+ok("刷るのは A4 よこ", await p.evaluate(() =>
+   CAL_PAGE.w === 297 && CAL_PAGE.h === 210) === true);
+ok("刷る手順は月の面と1つ（printSpread）", await p.evaluate(() =>
+   typeof printSpread === "function" && typeof printCal === "function") === true);
+await p.locator('#centerTabs [data-center="week"]').click();
+await p.waitForTimeout(400); await closeDlgs();
 
 console.log(errs.length ? "\n【エラー】\n" + errs.join("\n") : "\nJSエラーなし");
 if(errs.length) ng += errs.length;

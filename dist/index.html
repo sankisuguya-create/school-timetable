@@ -277,7 +277,7 @@ button,select,input,textarea{font:inherit;color:inherit}
 .stage{grid-area:3/1/4/2;overflow:auto;padding:10px;display:flex;justify-content:center;
   align-items:flex-start;min-height:0;min-width:0;gap:6px}
 /* 出し入れするものは1本にまとめる。**書き漏らすと、面が2つ重なって出る** */
-.stage[hidden],.mview[hidden],.gvview[hidden],.tpview[hidden],
+.stage[hidden],.mview[hidden],.gvview[hidden],.cvview[hidden],.tpview[hidden],
 .cbar[hidden],.freebox[hidden]{display:none!important}
 
 /* 紙の左右で週を繰る。**左メニューの ◀ ▶ と同じことをする。**
@@ -366,15 +366,15 @@ body.is-unsaved[data-scope="school"] .stage{
 
 /* 月の面。**4週ぶんを 2×2 に並べる。** 紙と入れ替えて出す。
    転がさずに1画面へ収める（収まらなければ紙にもならない）。 */
-.mview,.gvview{grid-area:3/1/4/2;display:grid;
+.mview,.gvview,.cvview{grid-area:3/1/4/2;display:grid;
   grid-template-rows:auto auto minmax(0,1fr);
   gap:8px;padding:12px 16px 16px;min-height:0;min-width:0}
 /* 帯。**同じ並べ方を3つの名前で書かない**（月の面・中央のかたち・空き枠） */
 .mbar,.cbar,.freebox{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .mbar b{font-size:15px}
 .mbar .grow{flex:1}
-.mview .hint,.gvview .hint{margin:0;font-size:12px;color:var(--tx-sub);line-height:1.7}
-.mview .hint b,.gvview .hint b{color:var(--tx)}
+.mview .hint,.gvview .hint,.cvview .hint{margin:0;font-size:12px;color:var(--tx-sub);line-height:1.7}
+.mview .hint b,.gvview .hint b,.cvview .hint b{color:var(--tx)}
 .mpaper{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
   gap:6px;min-height:0;min-width:0;justify-items:center;align-items:start}
 /* 月の面の紙。**詰めるのは高さだけ。** 授業名は残す */
@@ -679,8 +679,11 @@ span.tpin{cursor:default}
 .settingcard b{font-size:14px}.settingcard span{font-size:11.5px;color:var(--tx-sub)}
 .subttl{font-size:12px;color:var(--tx-sub)}
 .radios{display:flex;flex-direction:column;gap:9px}.radios label{font-size:13px}
-.chipset{margin-top:8px;border:0;background:none;color:var(--ink-link);font:inherit;font-size:11.5px;
-  padding:0;text-decoration:underline;cursor:pointer}
+/* 教科に色をつける。**窓を開かせず、押す口をパレットの下に置く。**
+   毎週変えるものではないが、変えたくなるのは紙を見ているときなので、
+   紙のとなりで切り替えられるようにする */
+.chipset{margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.chipset[hidden]{display:none!important}
 /* リセット。**入れるものではないと、押す前に分かる形にする。**
    教科の並びの中にあるので、色だけでなく枠の形でも分ける */
 .pal.clear{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff;
@@ -1071,6 +1074,68 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 退避の手順。**番号のまま読ませる。** 箇条書きにすると順番が消える */
 .steps{margin:6px 0 10px;padding-left:1.5em;font-size:12.5px;line-height:1.9}
 .steps li{margin:2px 0}
+
+/* 教科の表し方の表。**3つの字を横に並べる。**
+   どれを直せばどこが変わるかは、見出しと下の説明が言う */
+.subtable{display:flex;flex-direction:column;gap:3px;max-height:56vh;overflow:auto}
+.subhead,.subrow{display:grid;grid-template-columns:7em 1fr 4.5em 6em;
+  gap:8px;align-items:center}
+.subhead{position:sticky;top:0;background:var(--card);z-index:1;
+  padding:4px 0;font-size:11.5px;color:var(--tx-sub);font-weight:700;
+  border-bottom:1px solid var(--line)}
+.subname{font-size:13px;color:var(--tx-sub);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.subrow input{padding:5px 8px;font:inherit;font-size:13px;
+  border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);
+  min-width:0}
+.subrow input[data-f=short],.subrow input[data-f=tp]{text-align:center}
+
+/* ── カレンダーの面 ──────────────────────────────
+   **4ヶ月を 2×2。** 月の面と同じ並べ方（A4 よこ1枚）。
+   1日は「日付／教科の1文字の並び／放課後の備考」の3段。 */
+.cvpaper{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
+  gap:6px;min-height:0;min-width:0;justify-items:center;align-items:start}
+.cmonth{--k:1;--cw:100%;--ch:auto;
+  /* **枠いっぱいに伸ばす。** 伸ばさないと中身の高さで止まり、
+     1日の欄が潰れたまま下に余白が残る（備考が2行も入らない） */
+  width:var(--cw);height:var(--ch);
+  background:var(--sheet);color:var(--ink);font-feature-settings:"palt" 1;
+  border:1.2px solid var(--rule-week);border-radius:2px;
+  box-shadow:0 1px 3px var(--shade);
+  display:flex;flex-direction:column;overflow:hidden}
+.cmhd{font-size:calc(11pt*var(--k));font-weight:700;text-align:center;
+  padding:calc(1mm*var(--k)) 0;border-bottom:1.2px solid var(--rule-week);
+  background:var(--band)}
+/* 月〜土の6列。**日曜は置かない**（週の紙と同じ。1列ぶん広く取れる） */
+/* 週の行は**均等に伸ばす**。月によって5行だったり6行だったりするので、
+   行の高さを決め打ちにすると、5行の月に1行ぶんの余白が残る */
+.cgrid{display:grid;grid-template-columns:repeat(6,1fr);
+  /* 曜日の行は字のぶんだけ。**週の行だけを均等に伸ばす**
+     （grid-auto-rows だけだと、曜日の行も1週ぶんの高さになる） */
+  grid-template-rows:auto;grid-auto-rows:1fr;flex:1;min-height:0}
+.cdow{font-size:calc(5.5pt*var(--k));text-align:center;color:var(--ink-sub);
+  padding:calc(.5mm*var(--k)) 0;background:var(--band);
+  border-right:.6px solid var(--rule);border-bottom:.6px solid var(--rule)}
+.cdow.sat{color:var(--ink-link)}
+.cday{position:relative;min-width:0;overflow:hidden;
+  display:flex;flex-direction:column;gap:calc(.2mm*var(--k));
+  padding:calc(.4mm*var(--k)) calc(.5mm*var(--k));
+  border-right:.6px solid var(--rule);border-bottom:.6px solid var(--rule)}
+.cday.none{background:var(--band)}
+.cnum{font-size:calc(5.5pt*var(--k));color:var(--ink-sub);line-height:1}
+/* 教科の1文字。**字間を詰めて、6コマを1行に収める** */
+.csubs{font-size:calc(7.5pt*var(--k));font-weight:600;line-height:1.1;
+  letter-spacing:-.04em;white-space:nowrap;overflow:hidden}
+.cnote{flex:1;font-size:calc(5.5pt*var(--k));color:var(--ink-sub);line-height:1.2;
+  overflow:hidden;word-break:break-word}
+/* 休みの日は1文字の並びを出さない（授業が無いので） */
+.cday.form-off .csubs{visibility:hidden}
+.cday.form-off{background:var(--band)}
+.cday.form-special .cnum::after{content:"特";font-size:.85em;margin-left:.2em}
+/* 年間行事のある日。**画面だけ**（週の紙と同じ扱い） */
+.cday.hasev .cnum::before{content:"●";color:var(--ink-link);font-size:.7em;
+  margin-right:.15em}
+@media print{ .cday.hasev .cnum::before{display:none} }
 /* ▲ src/css/app.css ▲ */
 /* ▼ src/css/sheet.css ▼ */
 /* 紙。**刷られる面はここだけ。** 印刷の版面は動かさない。
@@ -1234,22 +1299,41 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   align-items:center;justify-content:center;text-align:center;
   font-weight:600;line-height:1.15;
   font-size:calc(var(--fs-t)*var(--k)*var(--fit,1))}
-/* 教科チップはタイトルの字を消さず、形と淡い色を足す。紙へ出すかはクラス設定。 */
-.sheet.chips-screen .cell.has-sub .t{width:max-content;max-width:94%;height:auto;min-height:60%;
-  align-self:center;margin:auto;padding-left:calc(1.8mm*var(--k));padding-right:calc(1.8mm*var(--k));
-  border:1px solid var(--rule);border-radius:99px}
-.sheet.chips-screen .cell[data-subject=kokugo] .t{background:var(--sub-kokugo)}
-.sheet.chips-screen .cell[data-subject=shakai] .t{background:var(--sub-shakai)}
-.sheet.chips-screen .cell[data-subject=sansu] .t{background:var(--sub-sansu)}
-.sheet.chips-screen .cell[data-subject=rika] .t{background:var(--sub-rika)}
-.sheet.chips-screen .cell[data-subject=seikatsu] .t,.sheet.chips-screen .cell[data-subject=sogo] .t{background:var(--sub-seikatsu)}
-.sheet.chips-screen .cell[data-subject=ongaku] .t{background:var(--sub-ongaku)}
-.sheet.chips-screen .cell[data-subject=zuko] .t{background:var(--sub-zuko)}
-.sheet.chips-screen .cell[data-subject=katei] .t{background:var(--sub-katei)}
-.sheet.chips-screen .cell[data-subject=taiiku] .t{background:var(--sub-taiiku)}
-.sheet.chips-screen .cell[data-subject=doutoku] .t{background:var(--sub-doutoku)}
-.sheet.chips-screen .cell[data-subject=gaikoku] .t{background:var(--sub-gaikoku)}
+/* ── 教科の色 ────────────────────────────────
+   **題名の欄の地だけを変える。** 前は丸い枠のチップを紙に埋め込んでいたが、
+   枠と地の2つで同じことを言うぶんコマの中が混み、長い教科名は枠に入らなかった。
+   地だけにすれば、字の大きさも枠いっぱいのまま変わらない。
+
+   **この色は識別を担わない。** どの教科かはセルの字が言っている。
+   淡い13色は色覚型によって互いに潰れる（実測：1型で 国語×理科 ΔE00 1.4）ので、
+   色だけで教科を探せるとは約束しない。字を消したり、色だけの凡例を作ったりしない。
+
+   出すかどうかはクラスごと（右メニューの「教科に色をつける」）。
+   紙にも出すと、モノクロ印刷では灰色の濃淡になる ── 選んだ人の紙にだけ出す。 */
+.sheet.chips-screen .cell[data-subject=kokugo]   .t{background:var(--sub-kokugo)}
+.sheet.chips-screen .cell[data-subject=shakai]   .t{background:var(--sub-shakai)}
+.sheet.chips-screen .cell[data-subject=sansu]    .t{background:var(--sub-sansu)}
+.sheet.chips-screen .cell[data-subject=rika]     .t{background:var(--sub-rika)}
+.sheet.chips-screen .cell[data-subject=seikatsu] .t,
+.sheet.chips-screen .cell[data-subject=sogo]     .t{background:var(--sub-seikatsu)}
+.sheet.chips-screen .cell[data-subject=ongaku]   .t{background:var(--sub-ongaku)}
+.sheet.chips-screen .cell[data-subject=zuko]     .t{background:var(--sub-zuko)}
+.sheet.chips-screen .cell[data-subject=katei]    .t{background:var(--sub-katei)}
+.sheet.chips-screen .cell[data-subject=taiiku]   .t{background:var(--sub-taiiku)}
+.sheet.chips-screen .cell[data-subject=doutoku]  .t{background:var(--sub-doutoku)}
+.sheet.chips-screen .cell[data-subject=gaikoku]  .t{background:var(--sub-gaikoku)}
 .sheet.chips-screen .cell[data-subject=gakkatsu] .t{background:var(--sub-gakkatsu)}
+/* 時数に数えないもの（図書・行事・給食・クラブ・委員会）。**灰の地で1つ。**
+   色で見分ける対象ではないので、13色の輪に入れずにまとめる */
+.sheet.chips-screen .cell[data-subject=tosho]    .t,
+.sheet.chips-screen .cell[data-subject=gyoji]    .t,
+.sheet.chips-screen .cell[data-subject=kyushoku] .t,
+.sheet.chips-screen .cell[data-subject=club]     .t,
+.sheet.chips-screen .cell[data-subject=iinkai]   .t{background:var(--sub-none)}
+/* 合同でやるもの。**元の教科と同じ地**（時数の数え方と同じ考え） */
+.sheet.chips-screen .cell[data-subject=goudo_taiiku] .t{background:var(--sub-taiiku)}
+.sheet.chips-screen .cell[data-subject=goudo_ongaku] .t{background:var(--sub-ongaku)}
+.sheet.chips-screen .cell[data-subject=gakunen_shukai] .t{background:var(--sub-gakkatsu)}
 .cell.brk .t{height:100%;font-weight:400;
   font-size:calc(var(--fs-b)*var(--k)*var(--fit,1))}
 .cell .n{flex:1;font-size:calc(var(--fs-n)*var(--k));color:var(--ink-sub);
@@ -1349,6 +1433,14 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   .side,.panel,.gate,.toast,.tpview,.busy,.arc,.wait,.wkarrow{display:none!important}
   /* 中央のかたちを入れ替える帯と、学年の面。**どちらも紙の外のもの** */
   .cbar,.gvview{display:none!important}
+  /* カレンダーの面を刷るとき。**まわりの操作も、週の1枚も出さない** */
+  body.printing-cal .stage{display:none!important}
+  body.printing-cal .cvview .mbar,body.printing-cal .cvview .hint{display:none!important}
+  body.printing-cal .cvview{padding:0;gap:0;grid-template-rows:auto;display:block}
+  body.printing-cal .cvpaper{gap:6mm;align-items:start;justify-items:stretch}
+  body.printing-cal .cmonth{width:var(--cw);height:var(--ch);box-shadow:none;
+    border-radius:0;border-color:#000}
+  body:not(.printing-cal) .cvview{display:none!important}
   /* 空き枠さがしの印も刷らない。**枠を探している最中の作業**であって、
      刷って残す情報ではない（年間行事の印と同じ扱い） */
   .cell[data-free]{background-image:none!important}
@@ -1374,9 +1466,9 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   .hd.pick{background:transparent!important;cursor:default}
   .hd .pk{display:none!important}          /* 押せる印は画面だけのもの */
   .cell .t:focus,.cell .n:focus{background:transparent;box-shadow:none}
-  .sheet.chips-screen:not(.chips-output) .cell.has-sub .t{width:auto;max-width:none;height:calc(var(--h-title)*var(--k));
-    min-height:0;margin:0;padding-left:calc(1.4mm*var(--k));padding-right:calc(1.4mm*var(--k));
-    border:0;border-radius:0;background:transparent}
+  /* **「画面だけ」を選んだクラスは、紙には地を出さない。**
+     「紙にも」を選んだクラスだけが刷られる（.chips-output） */
+  .sheet.chips-screen:not(.chips-output) .cell .t{background:transparent}
   /* **紙の外の入れ物に、高さを持たせない。** html,body が height:100% なので、
      そのままだと本文の高さが画面の高さになり、紙が1枚に収まっていても
      2ページ目が出る（白紙が必ず1枚ついてくる） */
@@ -1405,10 +1497,14 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
    ここで持つのは**この面だけの寸法**（幅いっぱい・時程の列を細く・備考の行が無い）。 */
 .gsheet{
   --k:1; --pw:100%;
-  --labw:13mm; --h-head:8mm; --h-break:6mm; --h-title:8mm;
-  --fs-s:6pt; --fs-t:16pt;
+  /* **題名は1文字。** 列も紙もそのぶん細くてよい。
+     時程の列は「1」「業間」が入る幅、コマの列は1字が入る幅 */
+  --labw:12.5mm; --h-head:8mm; --h-break:5.5mm; --h-title:6.5mm;
+  --fs-s:6pt; --fs-t:12pt;
   width:var(--pw);
   overflow:hidden}
+/* 1文字の紙は、伸ばさずに詰める。**字だけが離れて並ぶと、かえって読みにくい** */
+.gvpaper{display:flex;justify-content:center;align-items:flex-start}
 /* **クラスの切れ目より、日の切れ目を濃く。** 濃さが同じだと、
    どこまでが1日かが読めず、4クラスぶんの列が24本の帯に見える */
 .gsheet>.gend{border-right:1.2px solid var(--rule-week)}
@@ -1418,7 +1514,11 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   font-size:calc(var(--fs-s)*var(--k));color:var(--ink-sub);font-weight:600;
   border-bottom:1.2px solid var(--rule-week);background:var(--band);
   padding:1px 0}
+/* 時程のラベル。**折り返させない。** 休み時間の行は 5.5mm しかないので、
+   「朝休み」が2行になると、上下の行と重なって読めなくなる */
 .glab{font-size:calc(var(--fs-s)*var(--k))}
+.glab span{white-space:nowrap}
+.glab.row-break span{font-size:calc(5pt*var(--k))}
 /* 1コマ。**題名だけ。** 高さは題名の行そのもの（備考の行が無い） */
 .gcell.lesson{height:calc(var(--h-title)*var(--k))}
 /* **折り返させない。** 1コマが 22px 前後しか無いので、2行になると
@@ -1561,7 +1661,8 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
         <div class="seg" id="centerTabs" role="group" aria-label="中央に出すもの">
           <button data-center="week"  aria-pressed="true">週案</button
           ><button data-center="month" aria-pressed="false">4週</button
-          ><button data-center="grade" aria-pressed="false">学年</button>
+          ><button data-center="grade" aria-pressed="false">学年</button
+          ><button data-center="cal" aria-pressed="false">カレンダー</button>
         </div>
         <!-- 空き枠さがし。**学年・全校・専科の面だけ。**
              学級の面に「空き枠」は無い（探しているのは自分の空き時間で、別のもの） -->
@@ -1624,6 +1725,22 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
         <div class="gvpaper" id="gvPaper"></div>
       </div>
 
+      <!-- カレンダーの面。**4ヶ月を A4 よこ1枚に。**
+           1日の上はその日の教科を1文字ずつ、下は放課後の備考。**見るだけ** -->
+      <div class="cvview" id="calView" hidden>
+        <div class="mbar">
+          <button class="btn" id="cvPrev">◀ 前の4ヶ月</button>
+          <b id="cvTitle"></b>
+          <button class="btn" id="cvNext">次の4ヶ月 ▶</button>
+          <span class="grow"></span>
+          <button class="btn go" id="cvPrint">印刷</button>
+          <button class="btn" id="cvImage">画像</button>
+          <button class="btn" id="cvClose">週の紙へ戻る</button>
+        </div>
+        <p class="hint" id="cvHint"></p>
+        <div class="cvpaper" id="cvPaper"></div>
+      </div>
+
       <!-- たんぽぽの面。週案の紙ではないので、紙の代わりにここを出す -->
       <div class="tpview" id="tpView" hidden>
         <div class="tphead" data-help="tanpopo">
@@ -1683,7 +1800,19 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
         <h3>教科・行事</h3>
         <div class="pals" id="pals"></div>
         <p class="hint" id="palHint" style="margin-top:8px"></p>
-        <button class="chipset" id="chipOpen" hidden>週案のチップ表示：<span id="chipNow">使わない</span></button>
+        <!-- 教科の色。**紙の上では、題名の欄の地だけを変える。**
+             前は丸い枠のチップを紙に埋め込んでいたが、枠と地の2つで言うぶん
+             コマの中が混み、長い教科名は枠に入らなかった。
+             **押す口はここ**（窓を開かせない。毎週変えるものではないが、
+             変えたくなるのは紙を見ているときなので、紙のとなりに置く） -->
+        <div class="chipset" id="chipWrap" hidden>
+          <span class="flab">教科に色をつける</span>
+          <div class="seg" id="chipSeg" role="group" aria-label="教科に色をつける">
+            <button data-chip="off" aria-pressed="true">なし</button
+            ><button data-chip="screen" aria-pressed="false">画面だけ</button
+            ><button data-chip="output" aria-pressed="false">紙にも</button>
+          </div>
+        </div>
       </div>
 
       <!-- ③ その日の形。**全学年の面にだけ出る。** 効く範囲が全クラスなので、
@@ -1802,6 +1931,21 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 </div></dialog>
 
 <!-- 日常の左メニューを増やさず、年に数回の設定をここへ集める -->
+<!-- 教科の表し方。**同じ教科を、面ごとに違う字で出す。**
+     ここに並べておかないと、3つの字がシートの別々の列に散ったままになり、
+     どれを直せばどこが変わるのかが分からない -->
+<dialog id="subDlg"><div class="dlg wide">
+  <h2>教科の表し方 <span class="subttl" id="subFy"></span></h2>
+  <p><b>同じ教科を、面によって違う字で出します。</b>ここが1つの正本です。<br>
+     <b>紙の字</b>＝週案の紙とパレットに出る名前。
+     <b>1文字</b>＝時数集計表に写す字と、学年の面・カレンダーの面に出る字。
+     <b>たんぽぽ</b>＝たんぽぽ時間割に出す字（児童の列は 50px しかないので短く）。<br>
+     空欄にすると、<b>1文字は紙の字の1文字目</b>、<b>たんぽぽは紙の字そのまま</b>になります。
+     <b>時数に数えない教科は1文字を空に</b>してください（書くと Excel 側の集計が増えます）。</p>
+  <div class="subtable" id="subRows"></div>
+  <p class="hint" id="subStat"></p>
+</div></dialog>
+
 <dialog id="settingsDlg"><div class="dlg wide">
   <h2>設定 <span class="subttl" id="settingsFy"></span></h2>
   <p>学校全体や年度のもとになるものを変更します。週ごとの印刷・画像・Sheetは左メニューの「週案を出す」から行います。</p>
@@ -1809,6 +1953,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
     <button class="settingcard" id="setBase"><b>基本時間割</b><span>A週・B週の、毎週のもと</span></button>
     <button class="settingcard" id="setRoster"><b>学年・クラス</b><span>何年が何組まであるか、専科</span></button>
     <button class="settingcard" id="setTanpopo"><b>たんぽぽ組分け</b><span>交流級と人数を組へ分ける</span></button>
+    <button class="settingcard" id="setSub"><b>教科の表し方</b><span>紙の字・時数の1文字・たんぽぽの字</span></button>
     <button class="settingcard" id="setPaper"><b>印刷と文字</b><span id="setPaperNow">用紙・文字の大きさ</span></button>
     <button class="settingcard" id="setNewYear"><b>新年度の準備</b><span>4月1日から、上から順に確認</span></button>
   </div>
@@ -1835,17 +1980,6 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
     <button class="settingcard" id="outSheet"><b>Google Sheet</b><span>編集・共有できる表を作る</span></button>
   </div>
   <p class="hint" id="outStat"></p>
-</div></dialog>
-
-<dialog id="chipDlg"><div class="dlg">
-  <h2><span id="chipClass"></span> の教科チップ</h2>
-  <p>教科名の形と淡い色を、タイトル欄のどこまでに出すか選びます。色がなくても教科名で分かります。</p>
-  <div class="radios">
-    <label><input type="radio" name="chipMode" value="off"> 使わない</label>
-    <label><input type="radio" name="chipMode" value="screen"> 画面だけ</label>
-    <label><input type="radio" name="chipMode" value="output"> 画面と印刷・画像・Sheet</label>
-  </div>
-  <div class="end"><button class="btn go" id="chipSave">保存</button></div>
 </div></dialog>
 
 <dialog id="impDlg"><div class="dlg">
@@ -2190,8 +2324,8 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.28.0";
-let BUILD_DATE  = "2026-09-18";
+let APP_VERSION = "1.29.0";
+let BUILD_DATE  = "2026-09-19";
 
 /* 時程。行を固定しない（学校ごとに違う）。
    tally = 時数集計表のどの列に当たるか。chips = 教科を選べるか。
@@ -3743,6 +3877,21 @@ const Backend = (function(){
       .withFailureHandler(e => notify("学級編成を保存できなかった（" + escText(String(e && e.message)) + "）"))
       .apiWriteRoster(fy(), Yr.classes, Yr.specials, Yr.week1, Yr.tanpopo || {});
   }
+  /* 教科の表し方。**クラスや年度に紐づかない**（学校で1つ）ので年度を送らない。
+     手元では送る先が無いので、控えだけ書いて済にする */
+  function saveSubjects(rows, then){
+    if(!onGas){ save(); if(then) then(true); return; }
+    google.script.run
+      .withSuccessHandler(r => {
+        if(r && r.subjects && r.subjects.length) setSubjects(r.subjects);
+        if(then) then(true);
+      })
+      .withFailureHandler(e => {
+        notify("教科の表し方を保存できなかった（" + escText(String(e && e.message)) + "）");
+        if(then) then(false);
+      })
+      .apiWriteSubjects(rows);
+  }
   function saveBase(cls, variant){
     if(!onGas) return save();
     google.script.run
@@ -3938,7 +4087,7 @@ const Backend = (function(){
           touched: () => touched || !!lastErr, setNotifier, setDirtyWatcher, setConflictWatcher,
           unsaved, prefetchWeek, readWeeks, watch, stale, heldCells, dropHeld, reloadWeek,
           cellChanged, flush, boot, ready, readyYear,
-          saveRoster, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
+          saveRoster, saveSubjects, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,
           tpTargets, saveTpTargets, testTpTarget, tpSubmit,
           yearSetup, tickYearSetup, setupPlanSheets, saveVariantOrigin, saveEvents,
@@ -4351,6 +4500,20 @@ function rootSubject(code){
   if(!s || !s.only || !s.short) return code || "";
   const root = SUBJECTS.find(x => !x.only && x.short === s.short);
   return root ? root.code : code;
+}
+
+/* 教科の1文字。**「時数表の1文字」を正本にする。**
+   学年の面とカレンダーの面が同じ字を出すので、設定でそこを直せば両方が変わる。
+   別に持つと、片方だけ直した版が出る。
+
+   **空のときは表示名の1文字目に落とす。** 時数に数えない教科（図書・行事・給食・
+   クラブ・委員会）は1文字を空にしてある ── あれは「時数表に書くな」の意味で、
+   「画面にも出すな」ではない。空のまま出すと、予定が入っているコマが空欄に見える。 */
+function shortOf(code, title){
+  const s = SUB_BY_CODE[code];
+  if(s && s.short) return s.short;
+  const t = plain((s && s.name) || title || "").trim();
+  return t ? t.slice(0, 1) : "";
 }
 
 /* その専科が受け持つ学年。**空なら null＝全学年。**
@@ -5611,7 +5774,11 @@ function paintSheet(one, root){
    （学年の面は層の淡い塗りを使わない）。 */
 function paintCell(e, c, d, s, mine){
   const t = e.querySelector(".t"), n = e.querySelector(".n");
-  const wantT = c.title || "", wantN = c.note || "";
+  /* **1文字で出す面**（学年・カレンダー）。時数表と同じ字を使うので、
+     設定で直せばどちらも変わる。休み時間の行はそのまま（朝学習など） */
+  const one = e.dataset.one === "1" && (SLOT_BY_ID[s] || {}).kind === "lesson";
+  const wantT = one ? escText(shortOf(c.subject, c.title)) : (c.title || "");
+  const wantN = c.note || "";
   if(t && t !== typing && t.innerHTML !== wantT) t.innerHTML = wantT;
   if(n && n !== typing && n.innerHTML !== wantN) n.innerHTML = wantN;
 
@@ -5786,6 +5953,7 @@ function applyCenter(kind){
   $("stage").hidden     = !wk;
   $("monthView").hidden = kind !== "month";
   $("gradeView").hidden = kind !== "grade";
+  $("calView").hidden   = kind !== "cal";
   document.querySelector(".panel").hidden = !wk;
   document.querySelector(".work").classList.toggle("no-panel", !wk);
   paintCenterTabs();
@@ -5793,6 +5961,9 @@ function applyCenter(kind){
 function setCenter(kind){
   if(view.kind === "tanpopo" || view.kind === "gate") return;
   if(kind === "grade") gGrade = gGrade || gradeGuess();
+  /* いま見ている週の月から4ヶ月。**年度の区切りでは切らない**
+     （学期をまたいで単元を見たいので、見ている場所から前後に繰る） */
+  if(kind === "cal" && !calFrom) calFrom = new Date(monday.getFullYear(), monday.getMonth(), 1);
   applyCenter(kind);
   refreshWeek();                  /* 中身は、いまのかたちに合わせて refreshWeek が描く */
   if(centerMode === "week") autoFit();
@@ -5865,6 +6036,9 @@ function redrawCenter(rebuild){
     drawMonth();
   }else if(centerMode === "grade"){
     drawGradeView();
+  }else if(centerMode === "cal"){
+    if(rebuild) calFrom = new Date(monday.getFullYear(), monday.getMonth(), 1);
+    drawCalView();
   }else if(rebuild){
     buildSheet();
     autoFit();
@@ -5926,7 +6100,9 @@ function buildGradeSheet(sh){
   const slots = SLOTS.filter(s => s.kind !== "note");   /* 放課後は置かない */
   const colw = [];
   for(let d = 0; d < DAYS; d++)
-    for(let i = 0; i < n; i++) colw.push(d === DAYS - 1 ? ".45fr" : "1fr");
+    for(let i = 0; i < n; i++) colw.push(d === DAYS - 1 ? ".6fr" : "1fr");
+  /* **1文字なので、列はうんと細くてよい。** 紙そのものの幅も、
+     入る幅まで詰める（画面いっぱいに伸ばすと、字だけが離れて読みにくい） */
   sh.style.gridTemplateColumns = "calc(var(--labw)*var(--k)) " + colw.join(" ");
   sh.style.gridTemplateRows = "auto auto " + slots.map(s =>
     "calc(var(--h-" + (s.kind === "brk" ? "break" : "title") + ")*var(--k))").join(" ");
@@ -5972,6 +6148,7 @@ function buildGradeSheet(sh){
 function gCellEl(d, s, c){
   const e = el("div", "cell gcell " + (s.kind === "brk" ? "brk row-break" : "lesson"),
     "<div class='t'></div>");
+  e.dataset.one = "1";            /* 題名は1文字。paintCell がそこを見る */
   e.dataset.d = d; e.dataset.s = s.id;
   e.dataset.cls = c;              /* これがあると paintCell はクラス単位で判定する */
   if(isDayOff(d) && s.kind === "lesson" && !tripOn(c, d, s.id)) e.classList.add("off");
@@ -5999,12 +6176,18 @@ function fitK(nodes, probe, want, setVars){
 }
 
 /* 1枚を画面に収める。幅は枠が持つので、合わせるのは高さだけ。 */
+/* 1コマの幅（px）。**1文字が読める最小**。これ×列数が紙の幅になる */
+const G_CELL = 26;
 function fitGrade(){
   const box = $("gvPaper"), sh = box && box.querySelector(".gsheet");
   if(!box || !sh) return;
-  const w = box.clientWidth, h = box.clientHeight;
-  if(w < 2 || h < 2) return;
-  fitK([sh], sh, h, n => n.style.setProperty("--pw", w + "px"));
+  const avail = box.clientWidth, h = box.clientHeight;
+  if(avail < 2 || h < 2) return;
+  /* 月〜金は n 列ずつ、土は約半分 */
+  const n = Math.max(1, gClasses().length);
+  const want = 50 + G_CELL * n * (DAYS - 1 + .6);
+  const w = Math.min(avail, want);
+  fitK([sh], sh, h, x => x.style.setProperty("--pw", w + "px"));
 }
 
 /* 1枠に入るところまで --k を下げる。**測って決める。**
@@ -6061,6 +6244,140 @@ function fitMonth(cell){
     if(have <= want + 0.5) break;
     k = Math.max(.2, k * (want / have) * .99);
   }
+}
+
+/* ── カレンダーの面 ──────────────────────────────
+   **4ヶ月を A4 1枚に。** 1日が1コマで、題名は**その日の教科を1文字ずつ**、
+   下が備考。単元の配当・行事の重なりは、4週では足りず月をまたいで見たい。
+
+   *1文字で並べる理由*：1日 15.7mm に教科名は入らない。時数表と同じ字を使うので、
+   「教科の表し方」で直せば、時数・学年の面・ここが同時に変わる。
+
+   *日曜を置かない理由*：週の紙と同じ。この学校の年間行事計画表に日曜登校は無い。
+   月〜土の6列なので、1列 15.7mm 取れる（7列なら 13.4mm）。
+
+   *備考に何が出るか*：その日の**放課後の備考**。週の紙で放課後に書いた
+   会議・行事の準備が、そのままここに出る。新しい入力は作らない。
+
+   **見るだけの面。** 直すのは週の紙のほうで。 */
+const CAL_MONTHS = 4;
+let calFrom = null;              /* 左上の月の1日 */
+
+const calMonths = () => {
+  const out = [];
+  for(let i = 0; i < CAL_MONTHS; i++)
+    out.push(new Date(calFrom.getFullYear(), calFrom.getMonth() + i, 1));
+  return out;
+};
+
+/* その日の1コマ。**週の紙と同じ `cellFor` を通す。**
+   日付から月曜を出して `monday` を差し替えれば、層の重ね方も行事も揃って動く。 */
+function calDay(dt){
+  const keep = monday;
+  monday = mondayOf(dt);
+  try{
+    const d = Math.round((dt - monday) / 86400000);
+    if(d < 0 || d >= DAYS) return null;
+    const out = {d, form:dayForm(d), ev:hasEvents(d), subs:[], note:""};
+    for(const s of SLOTS){
+      if(s.kind === "note"){ out.note = plain(cellFor(d, s.id).note || "").trim(); continue; }
+      if(s.kind !== "lesson" || !slotShown(d, s)) continue;
+      const c = cellFor(d, s.id);
+      const t = plain(c.title).trim();
+      if(!t) { out.subs.push(""); continue; }
+      out.subs.push(t === NO_LESSON ? "／" : shortOf(c.subject, c.title));
+    }
+    return out;
+  } finally{ monday = keep; }
+}
+
+function openCal(){
+  if(!centerOk()) return toast("クラスや学年を開いてから押す");
+  setCenter("cal");
+}
+function drawCalView(){
+  const ms = calMonths();
+  $("cvTitle").textContent = viewName() + "　"
+    + ms[0].getFullYear() + "年" + (ms[0].getMonth() + 1) + "月 → "
+    + (ms[CAL_MONTHS - 1].getMonth() + 1) + "月";
+  $("cvHint").innerHTML = "<b>" + CAL_MONTHS + "ヶ月</b>を A4 よこ1枚に。"
+    + "1日の上は<b>その日の教科を1文字ずつ</b>（時数表と同じ字）、下は<b>放課後の備考</b>。"
+    + "直すのは週の紙のほうで。ここは見るだけです。";
+  const box = $("cvPaper");
+  box.textContent = "";
+  for(const m of ms) box.appendChild(calMonthEl(m));
+  fitCal();
+  /* その4ヶ月ぶんの週を読む。**まだ読んでいなければ**（月曜の並びで渡す） */
+  const mons = {};
+  for(const m of ms){
+    const last = new Date(m.getFullYear(), m.getMonth() + 1, 0);
+    for(let x = mondayOf(m); x <= last; x = addDays(x, 7)) mons[iso(x)] = true;
+  }
+  let sync = true;
+  const w = Wait.begin(CAL_MONTHS + "ヶ月ぶんを読んでいます");
+  Backend.readWeeks(Object.keys(mons), () => {
+    Wait.end(w);
+    if(sync || $("calView").hidden) return;
+    box.textContent = "";
+    for(const m of ms) box.appendChild(calMonthEl(m));
+    fitCal();
+  });
+  sync = false;
+}
+
+function calMonthEl(m){
+  const wrap = el("div", "cmonth",
+    "<div class='cmhd'>" + (m.getMonth() + 1) + "月</div>");
+  const grid = el("div", "cgrid");
+  for(let d = 0; d < DAYS; d++)
+    grid.appendChild(el("div", "cdow" + (d === DAYS - 1 ? " sat" : ""), DOW[d]));
+  /* 1日の曜日まで空ける。**月曜はじまり**（週の紙と同じ並び） */
+  const first = new Date(m.getFullYear(), m.getMonth(), 1);
+  const lead = (first.getDay() + 6) % 7;
+  for(let i = 0; i < lead && i < DAYS; i++) grid.appendChild(el("div", "cday none"));
+  const last = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
+  for(let n = 1; n <= last; n++){
+    const dt = new Date(m.getFullYear(), m.getMonth(), n);
+    if((dt.getDay() + 6) % 7 >= DAYS) continue;      /* 日曜は置かない */
+    const info = calDay(dt);
+    const cell = el("div", "cday" + (info && info.form ? " form-" + info.form : ""),
+      "<span class='cnum'>" + n + "</span>"
+      + "<span class='csubs'>" + escText((info ? info.subs : []).join("")) + "</span>"
+      + "<span class='cnote'>" + escText(info ? info.note : "") + "</span>");
+    if(info && info.ev) cell.classList.add("hasev");
+    if(info && info.form) cell.title = DAY_FORM[info.form].label;
+    grid.appendChild(cell);
+  }
+  wrap.appendChild(grid);
+  return wrap;
+}
+
+/* A4 よこ1枚。**枠の大きさは mm で決め、刷るときはそれをそのまま使う。**
+   画面の px で測った倍率のまま刷ると、紙からはみ出すか、すかすかになる。 */
+const CAL_PAGE = {w:297, h:210, mg:8};
+function calCellMM(){
+  return {w:(CAL_PAGE.w - CAL_PAGE.mg * 2 - 6) / 2 + "mm",
+          h:(CAL_PAGE.h - CAL_PAGE.mg * 2 - 6) / 2 + "mm"};
+}
+function fitCal(cell){
+  const box = $("cvPaper"), one = box && box.querySelector(".cmonth");
+  if(!box || !one) return;
+  const c = cell || {w:((box.clientWidth - 6) / 2) + "px",
+                     h:((box.clientHeight - 6) / 2) + "px"};
+  if(!cell && (box.clientWidth < 2 || box.clientHeight < 2)) return;
+  if(cell){
+    box.style.gridTemplateColumns = "repeat(2," + c.w + ")";
+    box.style.gridTemplateRows    = "repeat(2," + c.h + ")";
+    box.style.width = "calc(" + c.w + "*2 + 6mm)";
+  }else{
+    box.style.removeProperty("grid-template-columns");
+    box.style.removeProperty("grid-template-rows");
+    box.style.removeProperty("width");
+  }
+  const rows = getComputedStyle(box).gridTemplateRows.split(" ");
+  const want = parseFloat(rows[0]) || one.clientHeight;
+  fitK([...box.querySelectorAll(".cmonth")], one, want,
+       n => { n.style.setProperty("--cw", c.w); n.style.setProperty("--ch", c.h); });
 }
 /* ▲ src/js/sheet.js ▲ */
 /* ▼ src/js/panel.js ▼ */
@@ -6126,12 +6443,7 @@ function drawPalette(){
       + "（授業は入らなくなる。備考は書ける。もう一度落とすと外れる）。"
       + (canClear ? "<br><b>リセット</b>を落とすと、そのコマをここから取り消す"
                   + "（各クラスの予定が出るようになる）。" : "");
-  const chip = $("chipOpen");
-  chip.hidden = view.kind !== "class";
-  if(view.kind === "class"){
-    const mode = (Y().chipModes || {})[view.cls] || "off";
-    $("chipNow").textContent = mode === "off" ? "使わない" : mode === "output" ? "画面と出力" : "画面だけ";
-  }
+  paintChipSeg();
 
   for(const b of $("pals").querySelectorAll(".pal")){
     b.addEventListener("dragstart", ev => {
@@ -6145,6 +6457,21 @@ function drawPalette(){
       applyPalette(selCell.d, selCell.s, b.dataset.v);
     });
   }
+}
+
+/* 教科の色。**クラスごとに持つ**（学級によって使いたい人と使わない人がいる）。
+   紙にも出すかまで、ここで選ぶ ── 紙に出すと、モノクロ印刷では13色が
+   灰色の濃淡になる。選んだ人の紙にだけ出す。 */
+function chipMode(){
+  return view.kind === "class" ? ((Y().chipModes || {})[view.cls] || "off") : "off";
+}
+function paintChipSeg(){
+  const w = $("chipWrap");
+  if(!w) return;
+  w.hidden = view.kind !== "class";
+  const m = chipMode();
+  for(const b of document.querySelectorAll("#chipSeg [data-chip]"))
+    b.setAttribute("aria-pressed", String(b.dataset.chip === m));
 }
 
 /* ── この週の日の形（全学年の面だけ） ──────────
@@ -7605,6 +7932,63 @@ function openRosterDlg(){
   drawRoster();
   $("rosterDlg").showModal();
 }
+/* ── 教科の表し方 ────────────────────────────
+   **紙の字・時数の1文字・たんぽぽの字を、1つの表で直す。**
+   3つはシートの別々の列にあるので、並べて見せないと
+   「どれを直せばどこが変わるか」が分からない。
+
+   **コードは出さない。** 行の身元なので触らせない ── 直せると、
+   週案のコマが指す先がどの行にも当たらなくなり、書いた予定の教科が消える。 */
+function openSubDlg(){
+  $("subFy").textContent = fy() + "年度";
+  $("subStat").textContent = "";
+  drawSubTable();
+  $("subDlg").showModal();
+}
+function drawSubTable(){
+  const box = $("subRows");
+  box.innerHTML =
+    "<div class='subhead'><span>教科</span><span>紙の字</span>"
+    + "<span>1文字</span><span>たんぽぽ</span></div>"
+    + SUBJECTS.map(s =>
+      "<div class='subrow' data-code='" + escText(s.code) + "'>"
+      + "<span class='subname'>" + escText(s.name) + "</span>"
+      + "<input type='text' data-f='name'  value='" + escText(s.name) + "'>"
+      + "<input type='text' data-f='short' maxlength='2' value='" + escText(s.short || "") + "'>"
+      + "<input type='text' data-f='tp'    maxlength='4' value='" + escText(s.tp || "") + "'>"
+      + "</div>").join("");
+  for(const inp of box.querySelectorAll("input[data-f]"))
+    inp.onchange = () => saveSubTable();
+}
+function saveSubTable(){
+  const rows = [...$("subRows").querySelectorAll(".subrow")].map(r => ({
+    code:  r.dataset.code,
+    name:  r.querySelector("[data-f=name]").value.trim(),
+    short: r.querySelector("[data-f=short]").value.trim(),
+    tp:    r.querySelector("[data-f=tp]").value.trim()
+  }));
+  /* **紙の字が空の行は送らない。** 空にすると、その教科が画面から消えて
+     入れ直す口も無くなる（コードは出していないので、シートを開かないと戻せない） */
+  const bad = rows.filter(r => !r.name);
+  if(bad.length){
+    $("subStat").textContent = "紙の字が空の行があります。空にはできません。";
+    return drawSubTable();
+  }
+  /* 画面の側を先に入れ替える。**待たせない**（送るのは後ろで進む） */
+  setSubjects(SUBJECTS.map(s => {
+    const r = rows.find(x => x.code === s.code);
+    return r ? Object.assign({}, s, {name:r.name, short:r.short, tp:r.tp}) : s;
+  }));
+  save();
+  drawPalette();
+  if(view.kind !== "gate") redrawCenter(true);
+  $("subStat").textContent = "直しました。シートにも送っています。";
+  Backend.saveSubjects(rows, ok => {
+    $("subStat").textContent = ok ? "シートに入れました。"
+                                  : "シートに送れませんでした。もう一度直すと送り直します。";
+  });
+}
+
 function drawRoster(){
   const Yr = Y();
   $("rsFy").textContent = fy() + "年度";
@@ -7740,26 +8124,32 @@ function drawDayForms(){
 /* 月の面を刷る。**B4 のよこ（364×257mm）に1枚。**
    週の紙とは用紙が違うので、刷る直前に @page を書き替え、
    刷り終わったら元へ戻す（戻さないと、次に週の紙を刷るとき B4 で出る）。 */
-function printMonth(){
+/* 複数枚を並べた面を刷る。**月の面とカレンダーの面で1つ。**
+   違うのは「紙の大きさ」「本文に付ける印」「組み直し方」の3つだけ。
+   2つ持つと、当たりを変えたとき片方しか直らない。
+
+   **紙の大きさで組み直してから刷る。** 画面の広さで合わせた倍率のまま刷ると、
+   紙からはみ出すか、すかすかになる。刷り終わり（またはやめた）を拾って戻す
+   ── 拾えない環境のために保険も置く。 */
+function printSpread(page, mark, fit, cellMM){
   const st = $("pagecss");
   const had = st ? st.textContent : "";
-  if(st) st.textContent = "@page{size:" + M_PAGE.w + "mm " + M_PAGE.h + "mm;margin:"
-                        + M_PAGE.mg + "mm}";
-  document.body.classList.add("printing-month");
-  /* **紙の大きさで組み直してから刷る。** 画面の広さで合わせた倍率のまま
-     刷ると、紙からはみ出すか、すかすかになる */
-  fitMonth(mCellMM());
+  if(st) st.textContent = "@page{size:" + page.w + "mm " + page.h + "mm;margin:"
+                        + page.mg + "mm}";
+  document.body.classList.add(mark);
+  fit(cellMM());
   const back = () => {
-    document.body.classList.remove("printing-month");
+    document.body.classList.remove(mark);
     if(st) st.textContent = had;
-    fitMonth();
+    fit();
   };
-  /* 刷り終わり（またはやめた）を拾って戻す。拾えない環境のために保険も置く */
   const once = () => { removeEventListener("afterprint", once); back(); };
   addEventListener("afterprint", once);
-  setTimeout(() => { if(document.body.classList.contains("printing-month")) back(); }, 4000);
+  setTimeout(() => { if(document.body.classList.contains(mark)) back(); }, 4000);
   window.print();
 }
+const printMonth = () => printSpread(M_PAGE,   "printing-month", fitMonth, mCellMM);
+const printCal   = () => printSpread(CAL_PAGE, "printing-cal",   fitCal,   calCellMM);
 
 function applyPaper(){
   const s = db.settings, sh = $("sheet");
@@ -9122,6 +9512,22 @@ function wire(){
     gvT = setTimeout(() => { if(!$("gradeView").hidden) fitGrade(); }, 120);
   });
 
+  /* カレンダーの面。**見るだけ。** 4ヶ月ずつ繰る */
+  on("cvPrev","click",  () => { calFrom = new Date(calFrom.getFullYear(), calFrom.getMonth() - CAL_MONTHS, 1); redrawCenter(); });
+  on("cvNext","click",  () => { calFrom = new Date(calFrom.getFullYear(), calFrom.getMonth() + CAL_MONTHS, 1); redrawCenter(); });
+  on("cvClose","click", () => setCenter("week"));
+  on("cvPrint","click", printCal);
+  on("cvImage","click", async () => {
+    try{ await nodePng($("cvPaper"), outputName("カレンダー") + ".png");
+         toast("カレンダーの画像を保存した"); }
+    catch(e){ toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
+  });
+  let cvT = 0;
+  addEventListener("resize", () => {
+    clearTimeout(cvT);
+    cvT = setTimeout(() => { if(!$("calView").hidden) fitCal(); }, 120);
+  });
+
   /* 月の面。**見るだけ。** 直すのは週の紙のほうで */
   on("mPrev","click",  () => { mMonday = addDays(mMonday, -7 * MONTH_WEEKS); redrawCenter(); });
   on("mNext","click",  () => { mMonday = addDays(mMonday,  7 * MONTH_WEEKS); redrawCenter(); });
@@ -9140,6 +9546,7 @@ function wire(){
   on("abSave","click", saveAb);
   on("evRead","click", evRead);
   on("evGo","click", evGo);
+  on("setSub","click",  () => { $("settingsDlg").close(); openSubDlg(); });
   on("setBase","click", () => { $("settingsDlg").close(); openBaseDlg(); });
   on("setRoster","click", () => { $("settingsDlg").close(); openRosterDlg(); });
   on("setTanpopo","click", () => { $("settingsDlg").close(); openTpGroupDlg(); });
@@ -9151,20 +9558,13 @@ function wire(){
     catch(e){ $("outStat").textContent="画像を作れませんでした（"+(e.message||e)+"）"; }
   });
   on("outSheet","click", exportWeekSheet);
-  on("chipOpen","click", () => {
-    if(view.kind!=="class") return;
-    $("chipClass").textContent=view.cls;
-    const mode=(Y().chipModes||{})[view.cls]||"off";
-    const radio=document.querySelector("input[name=chipMode][value='"+mode+"']"); if(radio) radio.checked=true;
-    $("chipDlg").showModal();
-  });
-  on("chipSave","click", () => {
-    if(view.kind!=="class") return;
-    const radio=document.querySelector("input[name=chipMode]:checked");
-    (Y().chipModes||(Y().chipModes={}))[view.cls]=radio?radio.value:"off";
-    save(); $("chipDlg").close(); buildSheet(); drawPalette();
-    toast(view.cls+" の教科チップを変更した");
-  });
+  /* 教科の色。**窓を開かせない。** 紙を見ているときに、そのとなりで切り替える */
+  for(const b of document.querySelectorAll("#chipSeg [data-chip]"))
+    b.addEventListener("click", () => {
+      if(view.kind !== "class") return;
+      (Y().chipModes || (Y().chipModes = {}))[view.cls] = b.dataset.chip;
+      save(); paintChipSeg(); redrawCenter(true);
+    });
 
   /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */
   on("dayDlg","close", () => { dayPick = 0; });

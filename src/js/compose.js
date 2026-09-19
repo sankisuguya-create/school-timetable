@@ -142,6 +142,20 @@ function rootSubject(code){
   return root ? root.code : code;
 }
 
+/* 教科の1文字。**「時数表の1文字」を正本にする。**
+   学年の面とカレンダーの面が同じ字を出すので、設定でそこを直せば両方が変わる。
+   別に持つと、片方だけ直した版が出る。
+
+   **空のときは表示名の1文字目に落とす。** 時数に数えない教科（図書・行事・給食・
+   クラブ・委員会）は1文字を空にしてある ── あれは「時数表に書くな」の意味で、
+   「画面にも出すな」ではない。空のまま出すと、予定が入っているコマが空欄に見える。 */
+function shortOf(code, title){
+  const s = SUB_BY_CODE[code];
+  if(s && s.short) return s.short;
+  const t = plain((s && s.name) || title || "").trim();
+  return t ? t.slice(0, 1) : "";
+}
+
 /* その専科が受け持つ学年。**空なら null＝全学年。**
    書いていない学校を、どの学年も受け持たない専科にしない。 */
 function spGradesOf(code){
