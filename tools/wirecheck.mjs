@@ -303,6 +303,12 @@ await p.addInitScript(() => {
         call("apiWriteSubjects", [rows]);
         setTimeout(() => okFn({n:(rows || []).length, subjects:out}), 0);
       },
+      apiWriteTally(year, head, rows){
+        /* シートのかわりに、この端末へ置く（形だけ本番と同じにする） */
+        window.__tally = {year:year, head:head, rows:rows};
+        call("apiWriteTally", [year, head, rows]);
+        setTimeout(() => okFn({name:"時数集計", rows:(rows || []).length, kept:0}), 0);
+      },
       apiWriteEvents(rows){
         call("apiWriteEvents", [rows]);
         window.__nyEvents = true;
@@ -2231,6 +2237,99 @@ ok("入口（まだ何も開いていない）では出さない", await p.evalu
      const hid = $("tallyWrap").hidden;
      view = keep; drawTallyPanel();
      return hid;
+   }) === true);
+
+console.log("\n■ 時数集計シート（押したときだけ）");
+await p.evaluate(() => { openView({kind:"class", cls:"5-1"}); });
+await p.waitForTimeout(500); await closeDlgs();
+ok("ボタンと、時間がかかる断りが出る", await p.evaluate(() =>
+   !!$("tlySheet") && /1〜3分/.test($("tlySheetNote").textContent)) === true,
+   await p.evaluate(() => $("tlySheetNote").textContent));
+ok("？の説明にも、時間がかかると書いてある", await p.evaluate(() =>
+   !!document.querySelector('[data-help="tally2"] .helpq')
+   && /1〜3分/.test(HELP.tally2.b.join("")) ) === true);
+/* **押し間違いで1〜3分待たせない。** 既定は「やめる」 */
+await p.locator("#tlySheet").click();
+await p.waitForTimeout(300);
+ok("押すと、先に確かめる窓が出る", await p.evaluate(() =>
+   $("okDlg").open === true) === true);
+ok("既定は「やめる」", await p.evaluate(() =>
+   document.activeElement === $("okNo")) === true);
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator("#okNo").click();
+await p.waitForTimeout(400); await closeDlgs();
+ok("やめれば、1本も呼ばない", (await calls()).indexOf("apiWriteTally") < 0, await calls());
+/* 数えて置く */
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator("#tlySheet").click();
+await p.waitForTimeout(300);
+await p.locator("#okYes").click();
+await p.waitForTimeout(2500); await closeDlgs();
+ok("数えると、時数集計シートへ置く",
+   (await calls()).indexOf("apiWriteTally") >= 0, await calls());
+const tly = await p.evaluate(() => window.__tally || null);
+ok("見出しは 年度・クラス・月 → 教科 → 合計",
+   !!tly && tly.head[0] === "年度" && tly.head[1] === "クラス" && tly.head[2] === "月"
+   && tly.head.indexOf("合計") > 3, tly && tly.head);
+ok("教科の列は、教科シートの順（1文字）", await p.evaluate(() => {
+     const want = SUBJECTS.filter(s => s.count && s.short).map(s => s.short)
+       .filter((x, i, a) => a.indexOf(x) === i);
+     const got = (window.__tally.head || []).slice(3, 3 + want.length);
+     return want.join(",") === got.join(",");
+   }) === true, tly && tly.head);
+ok("行は クラス × 月 のぶん", await p.evaluate(() => {
+     const m0 = new Date(monday.getFullYear(), monday.getMonth(), 1);
+     return window.__tally.rows.length
+         === allClasses().length * tallyMonths(m0).length;
+   }) === true, tly && tly.rows.length);
+/* **数えるのは画面。** シートの数と、右メニューに出ている数が一致すること */
+ok("シートに置いた数は、画面の数と同じ", await p.evaluate(() => {
+     const t = window.__tally, m = new Date(monday.getFullYear(), monday.getMonth(), 1);
+     const row = t.rows.find(r => r[1] === view.cls && r[2] === (m.getMonth() + 1) + "月");
+     if(!row) return "その月の行が無い";
+     const now = calCount(m);
+     return t.head.slice(3, t.head.indexOf("合計")).every((k, i) =>
+       String(now[k] || 0) === row[3 + i]);
+   }) === true, await p.evaluate(() => {
+     const t = window.__tally, m = new Date(monday.getFullYear(), monday.getMonth(), 1);
+     const row = t.rows.find(r => r[1] === view.cls && r[2] === (m.getMonth() + 1) + "月");
+     return [t.head, row];
+   }));
+ok("合計の列は、教科の数の合計", await p.evaluate(() => {
+     const t = window.__tally, at = t.head.indexOf("合計");
+     return t.rows.every(r => {
+       let n = 0;
+       for(let i = 3; i < at; i++) n += +r[i] || 0;
+       return String(n) === r[at];
+     });
+   }) === true);
+/* **休みの日は数えない**（時数集計表へのコピーと同じ決まり） */
+ok("数え方は時数集計表と同じ（休みの日は数えない）", await p.evaluate(() => {
+     const m = new Date(monday.getFullYear(), monday.getMonth(), 1);
+     /* **数えられるクラスを選ぶ。** 見本の基本時間割は全クラスぶんは無いので、
+        1つ目のクラスを決め打ちにすると、はじめから 0 のまま通ってしまう */
+     let cls = null, n = 0;
+     for(const c of allClasses()){
+       const x = tallyClassMonth(c, m);
+       const t = Object.keys(x).reduce((a, k) => a + x[k], 0);
+       if(t > 0){ cls = c; n = t; break; }
+     }
+     if(!cls) return "数えられるクラスが無い";
+     /* この月の平日を全部「休み」にして数え直す（この端末の控えだけ直す） */
+     const keep = monday, touched = [];
+     for(const dt of calDates(m)){
+       monday = mondayOf(dt);
+       const d = Math.round((dt - monday) / 86400000);
+       if(d < 0 || d >= DAYS) continue;
+       const w = week(), key = d + "|" + DAY_SLOT;
+       touched.push([w, key, w.school[key]]);
+       w.school[key] = {title:"休み", note:"", subject:null,
+                        at:Date.now(), by:"a@edu.nishi.or.jp"};
+     }
+     const after = tallyClassMonth(cls, m);
+     for(const [w, key, was] of touched){ if(was) w.school[key] = was; else delete w.school[key]; }
+     monday = keep; calCache = {}; calMonthCache = {}; calMark = "";
+     return n > 0 && Object.keys(after).length === 0;
    }) === true);
 
 console.log("\n■ 出どころの四角（週案の紙だけ）");

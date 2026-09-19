@@ -1192,10 +1192,12 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 累計は小さく薄く。手前に出るのは今月の数のほう（紙の集計と同じ扱い） */
 .tlyrow>span:last-child{color:var(--tx-sub)}
 #tlyNote{margin:6px 0 0}
-#tlyRead{margin-top:6px;background:var(--card);border:1px solid var(--line);
+#tlyRead,#tlySheet{margin-top:6px;background:var(--card);border:1px solid var(--line);
   border-radius:var(--r-sm);padding:4px 10px;font-size:12px;cursor:pointer}
-#tlyRead:hover{background:var(--band)}
+#tlyRead:hover,#tlySheet:hover{background:var(--band)}
 #tlyRead[hidden]{display:none!important}
+/* 時間がかかることを、押す前に読めるところへ置く（？の説明にも書いてある） */
+#tlySheetNote{margin-top:4px}
 /* ▲ src/css/app.css ▲ */
 /* ▼ src/css/sheet.css ▼ */
 /* 紙。**刷られる面はここだけ。** 印刷の版面は動かさない。
@@ -1918,10 +1920,16 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
            **まだ読んでいない週の数を字で言い、読み直す口を添える**。
            読めていない週は「基本時間割どおり」として数えている -->
       <div id="tallyWrap" hidden>
-        <h3>時数</h3>
+        <h3 data-help="tally2">時数</h3>
         <div class="tly" id="tlyBox"></div>
         <p class="hint" id="tlyNote"></p>
         <button class="mini" id="tlyRead">年度はじめから読み直す</button>
+        <!-- 時数集計シートへ置く。**押したときだけ動く。**
+             全クラス × 4月からこの月まで を数えるので時間がかかる。
+             そのことはボタンの下にも、？の説明にも書く -->
+        <button class="mini" id="tlySheet">時数集計シートを作る</button>
+        <p class="hint" id="tlySheetNote">全クラスぶんを数えて、スプレッドシートの
+          <b>「時数集計」シート</b>に置きます。<b>1〜3分かかります</b>（年度の後半ほど長い）。</p>
       </div>
 
       <!-- ③ その日の形。**全学年の面にだけ出る。** 効く範囲が全クラスなので、
@@ -2435,7 +2443,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.32.0";
+let APP_VERSION = "1.33.0";
 let BUILD_DATE  = "2026-09-19";
 
 /* 時程。行を固定しない（学校ごとに違う）。
@@ -3869,6 +3877,28 @@ const Backend = (function(){
     for(let i = 0; i < AT_ONCE && i < todo.length; i++) fire();
   }
   const AT_ONCE = 8;
+  /* **全クラスぶんの週を読む。** 時数集計は27クラス全部を数えるので、
+     いま開いている面（3枚）だけでは足りない。
+     時数集計のボタンからしか呼ばない ── ふだんの画面では読みすぎになる。 */
+  function readWeeksAll(mons, after){
+    if(!onGas) return after();
+    const want = allTargets();
+    const year = fy(), epoch = editEpoch;
+    const todo = (mons || []).filter(m => want.some(t => !fresh_(weekTag(t, year, m))));
+    if(!todo.length) return after();
+    let left = todo.length, next = 0;
+    const done = () => { if(--left <= 0) after(); else fire(); };
+    function fire(){
+      if(next >= todo.length) return;
+      const m = todo[next++];
+      google.script.run
+        .withSuccessHandler(w => { mergeWeek(want, w, year, m, epoch); done(); })
+        .withFailureHandler(() => done())
+        .apiReadWeek(year, m, want);
+    }
+    for(let i = 0; i < AT_ONCE && i < todo.length; i++) fire();
+  }
+
   /* 渡した月曜のうち、**まだ読んでいない週の数**。
      時数の集計は、読めていない週を「基本時間割どおり」として数えるので、
      出している数がどれだけ見込みなのかを、画面で言えるようにする。 */
@@ -4100,6 +4130,19 @@ const Backend = (function(){
      どのクラスのどの校時が何かを決めるのは画面（層の重ね方を知っている）。
      どんな形のシートを作るかを決めるのはシート側（実物の形を知っている）。
      cols = [{cls, group}] の並び。**並びと組をこちらで決めて渡す。** */
+  /* 時数集計シートへ置く。**数えたのは画面のほう**（合成は1か所のまま）。
+     手元だけで使っているときは置く先が無いので、そのまま済にする。 */
+  function saveTally(year, head, rows, then){
+    if(!onGas) return then && then({name:"（手元）", rows:rows.length, kept:0});
+    google.script.run
+      .withSuccessHandler(r => then && then(r))
+      .withFailureHandler(e => {
+        notify("時数集計を書けなかった（" + escText(String(e && e.message)) + "）");
+        then && then(null);
+      })
+      .apiWriteTally(year, head, rows);
+  }
+
   function exportWeek(titles, cols, slots, name, url, ok, ng){
     if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
     const w = week(), year = fy(), mon = wkKey();
@@ -4222,7 +4265,8 @@ const Backend = (function(){
   return {isGas, info, saved: () => acknowledged && !unsaved() && !sending,
           /* 書いたのに、まだシートに入っていない。画面の地の色はこれで決める */
           touched: () => touched || !!lastErr, setNotifier, setDirtyWatcher, setConflictWatcher,
-          unsaved, prefetchWeek, readWeeks, unread, watch, stale, heldCells, dropHeld, reloadWeek,
+          unsaved, prefetchWeek, readWeeks, readWeeksAll, unread, saveTally,
+          watch, stale, heldCells, dropHeld, reloadWeek,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveSubjects, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,
@@ -7268,6 +7312,108 @@ function tallyReadAll(){
     redrawCenter(true);
   });
 }
+
+/* ── 時数集計シートへ書き出す ─────────────────────
+   **押したときだけ動く。** 全クラス × 4月からこの月まで を数えて、
+   スプレッドシートの「時数集計」シートへ置く。
+
+   *押したときだけにした理由*：保存のたびに書くと、全校・学年の層を直したときに
+   27クラスぶんを数え直すことになる。時数は月末・学期末に見る数なので、
+   **見るときに1回**で足りる。
+
+   *時間がかかる*：3月に押すと、全クラス（27枚）× 45週ぶんを読む。
+   読みは8本ずつなので、回線しだいで1〜3分かかる。？の説明にもそう書いてある。
+
+   *ここで数える理由*：合成（どの層が勝つか・休み・校外・特別校時・合同体育の
+   元教科・時数に数えるか）は compose.js の1か所にある。GAS 側で数え直すと
+   2つ目の実装ができ、画面の数とシートの数が食い違う。
+   **数えるのは画面、置くのはシート。** */
+
+/* 1クラス・1ヶ月ぶんを数える。**時数集計表へのコピー（tallyGrid）と同じ決まり。**
+   休みの日は数えない。紙に出ていない校時も数えない。 */
+function tallyClassMonth(cls, m){
+  const out = {}, keep = monday;
+  try{
+    for(const dt of calDates(m)){
+      monday = mondayOf(dt);
+      const d = Math.round((dt - monday) / 86400000);
+      if(d < 0 || d >= DAYS) continue;
+      if(isDayOff(d)) continue;
+      for(const s of calCols()){
+        if(!slotShown(d, s)) continue;
+        const sub = countSub(compose(cls, d, s.id));
+        if(sub) out[sub.short] = (out[sub.short] || 0) + 1;
+      }
+    }
+  } finally{ monday = keep; }
+  return out;
+}
+
+/* 見出しに出す教科。**教科シートの順**（1文字が同じものは1つにまとめる）。
+   0 のものも列としては置く ── 表として読むので、月によって列がずれない */
+function tallyHeadSubs(){
+  const out = [], seen = {};
+  for(const sub of SUBJECTS){
+    if(!sub.count || !sub.short || seen[sub.short]) continue;
+    seen[sub.short] = 1;
+    out.push(sub.short);
+  }
+  return out;
+}
+
+function tallySheetAll(){
+  const m0 = new Date(monday.getFullYear(), monday.getMonth(), 1);
+  const months = tallyMonths(m0);
+  const classes = allClasses();
+  if(!classes.length) return toast("クラスがありません");
+  const w = Wait.begin("全クラスぶんの週を読んでいます（時間がかかります）");
+  /* 全クラスぶんを、年度ごとに分けて読む。readWeeksAll は
+     いま開いている面ではなく、全クラス・全学年・全校を読む */
+  const g = tallyWeeks(m0);
+  const ys = Object.keys(g);
+  let left = ys.length;
+  if(!left){ Wait.end(w); return; }
+  const keep = monday;
+  const done = () => {
+    if(--left > 0) return;
+    Wait.end(w);
+    tallyWriteRows(months, classes);
+  };
+  for(const y of ys){
+    const list = Object.keys(g[y]).sort();
+    monday = parseISO(list[0]);
+    Backend.readWeeksAll(list, done);
+  }
+  monday = keep;
+}
+
+function tallyWriteRows(months, classes){
+  const subs = tallyHeadSubs();
+  const head = ["年度", "クラス", "月"].concat(subs).concat(["合計", "集計日時", "集計者"]);
+  const when = new Date().toLocaleString("ja-JP");
+  const who = (Backend.info() || {}).me || "";
+  const rows = [];
+  const w = Wait.begin("数えています");
+  const keep = monday;
+  try{
+    for(const cls of classes) for(const m of months){
+      monday = mondayOf(new Date(m.getFullYear(), m.getMonth(), 15));
+      const n = tallyClassMonth(cls, m);
+      let sum = 0;
+      const line = [String(fyOf(m)), cls, (m.getMonth() + 1) + "月"];
+      for(const k of subs){ line.push(String(n[k] || 0)); sum += (n[k] || 0); }
+      line.push(String(sum), when, who);
+      rows.push(line);
+    }
+  } finally{ monday = keep; Wait.end(w); }
+  const w2 = Wait.begin("時数集計シートへ書いています");
+  Backend.saveTally(fy(), head, rows, r => {
+    Wait.end(w2);
+    drawTallyPanel();
+    if(r) toast("「" + r.name + "」シートに "
+                + classes.length + "クラス × " + months.length + "ヶ月ぶんを置きました");
+  });
+}
 /* ▲ src/js/panel.js ▲ */
 /* ▼ src/js/tanpopo.js ▼ */
 /* たんぽぽ時間割に書き入れるところ。
@@ -8759,6 +8905,21 @@ const HELP = {
        "<b>白い紙に出ているものだけが刷られます。</b>まわりのボタンや左の並びは刷られません。",
        "<i>はじめの人がつまずくところ：</i>紙のサイズや余白は"
        + "「用紙・印刷」で変えられます。刷ってみて合わなければ、そちらで直します。"]},
+  tally2: {t:"時数",
+    b:["<b>いま開いているクラスの授業を、教科ごとに数えたものです。</b>"
+       + "左が「今月」、右が「累計」（年度はじめ 4/1 からの合計）です。",
+       "<b>まだ書いていない日は、基本時間割どおりとして数えます。</b>"
+       + "だから先の月ぶんも、見通しの数として入っています。",
+       "<b>「時数集計シートを作る」を押すと、全クラスぶんを数えて、"
+       + "スプレッドシートの「時数集計」シートに置きます。</b>"
+       + "そこを見れば、Excel へ打ち直さずに月ごとの時数が読めます。",
+       "<b>この集計は 1〜3分かかります。</b>全クラス（学年・全校のぶんも）× "
+       + "4月からこの月までの週を、ぜんぶ読んでから数えるためです。"
+       + "<b>年度の後半ほど長くかかります</b> ── 3月には45週ぶんを読みます。"
+       + "月末・学期末に1回押す使い方を考えています。",
+       "<i>はじめの人がつまずくところ：</i>押しているあいだは待つ表示が出ます。"
+       + "途中で画面を閉じると、書き終わっていない集計は残りません。"
+       + "その場合は、もう一度押してください（何度押しても作り直すだけです）。"]},
   tally: {t:"時数をコピー",
     b:["<b>いま見ている1週間の授業を、時数集計表に貼れる形でコピーします。</b>",
        "押すとコピーされるので、Excel の時数集計表を開いて<b>貼り付け</b>てください。",
@@ -10031,6 +10192,19 @@ function wire(){
   /* 時数。**年度はじめからの週を読み直してから数え直す。**
      見込みで出していた数を、確かな数に入れ替える口 */
   on("tlyRead", "click", tallyReadAll);
+  /* 時数集計シート。**時間がかかるので、押す前に言う。**
+     押し間違いで1〜3分待たせない（やめる側に落ちる窓で受ける） */
+  on("tlySheet", "click", () => askOk({
+    title: "全クラスぶんの時数を数えますか",
+    lines: ["4月からこの月までを、<b>全クラスぶん</b>数えて、スプレッドシートの"
+            + "<b>「時数集計」シート</b>に置きます。",
+            "<b>1〜3分かかります。</b>年度の後半ほど長くかかります"
+            + "（読む週が増えるため）。",
+            "置いたものは、押すたびに作り直します。"
+            + "ほかの年度のぶんは残ります。"],
+    goLabel: "数える",
+    onYes: tallySheetAll
+  }));
 
   /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */
   on("dayDlg","close", () => { dayPick = 0; });

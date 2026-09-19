@@ -1902,6 +1902,70 @@ const Store = (function(){
     return Sheets.readGrid(Sheets.PASTE);
   }
 
+  /* ── 時数集計シート ────────────────────────────
+     **画面が数えたものを、そのまま置くだけ。**
+
+     *ここで数えない理由*：どのコマが何の授業になるかは、層の重ね（最後に書いた
+     ものが勝つ）・休み・校外行事・特別校時・合同体育の元教科・時数に数えるか、を
+     すべて見てはじめて決まる。この決まりは src/js/compose.js の1か所にあり、
+     GAS には無い。ここで数え直すと**2つ目の実装**ができ、必ずずれる。
+     ずれた結果は「画面の時数とシートの時数が違う」── 公簿に書く数が2つある状態。
+
+     *列が年度で変わる*：教科は「教科」シートが正本で、学校が足したり削ったりする。
+     だから見出しも中身と一緒に書く（SPEC の決め打ちにしない）。
+
+     *まるごと入れ替える*：一部だけ直すと、消した教科の列や、無くなったクラスの行が
+     残る。押すたびに、その年度ぶんを作り直す。 */
+  const TALLY_NAME = "時数集計";
+
+  function tallySheet_(){
+    const ss = Sheets.book();
+    return ss.getSheetByName(TALLY_NAME) || ss.insertSheet(TALLY_NAME);
+  }
+
+  /* head = 見出しの行（配列）、rows = 中身の行（配列の配列）。
+     **その年度の行だけを入れ替える**（前の年度の集計は残す）。 */
+  function writeTally(year, head, rows){
+    if(!Array.isArray(head) || !head.length) throw new Error("見出しがありません");
+    if(!Array.isArray(rows)) throw new Error("中身がありません");
+    const y = String(year);
+    const sh = tallySheet_();
+    const old = sh.getDataRange().getValues();
+    /* いまある行のうち、**ほかの年度のぶんだけ**を残す（1列目が年度） */
+    const keep = [];
+    for(let i = 1; i < old.length; i++){
+      if(String(old[i][0]).trim() && String(old[i][0]).trim() !== y) keep.push(old[i]);
+    }
+    const body = keep.concat(rows.map(function(r){ return r.map(function(v){ return v; }); }));
+    const cols = Math.max(head.length, body.reduce(function(a, r){
+      return Math.max(a, r.length); }, 0));
+    const rect = [head].concat(body).map(function(r){
+      const x = r.slice();
+      while(x.length < cols) x.push("");
+      return x;
+    });
+    sh.clear();
+    /* **数式として走らせない。** 教科の1文字や「=」で始まる字が来ても、
+       ウェブアプリは設置者として動くので、走らせると設置者の権限で引いてしまう */
+    sh.getRange(1, 1, rect.length, cols).setNumberFormat("@").setValues(rect);
+    sh.setFrozenRows(1);
+    sh.getRange(1, 1, 1, cols).setFontWeight("bold");
+    return {name: TALLY_NAME, rows: rows.length, kept: keep.length};
+  }
+
+  /* その年度ぶんを読む。{head, rows}。無ければ空 */
+  function readTally(year){
+    const ss = Sheets.book();
+    const sh = ss.getSheetByName(TALLY_NAME);
+    if(!sh) return {head: [], rows: []};
+    const v = sh.getDataRange().getValues();
+    if(!v.length) return {head: [], rows: []};
+    const y = String(year), out = [];
+    for(let i = 1; i < v.length; i++)
+      if(String(v[i][0]).trim() === y) out.push(v[i].map(function(x){ return String(x); }));
+    return {head: v[0].map(function(x){ return String(x); }), rows: out};
+  }
+
   /* ChatへURLを貼って共有できる週案。権限は作成者のDrive設定のままにし、
      リンク公開へ勝手に変えない。 */
   function exportPlanSheet(name, sheets){
@@ -1930,6 +1994,7 @@ const Store = (function(){
 
   return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects, writeSubjects,
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste, exportPlanSheet,
+          writeTally, readTally, TALLY_NAME,
           exportWeek, weekSheetName, weekOrder, migratePlan, checkYear, readEvents,
           archiveCount, archiveVerify, archivePurge, archivedAll, ymd,
           tpTargets, writeTargets, testTarget, tpSubmits, tpSubmit,
@@ -2125,6 +2190,18 @@ function apiWriteEvents(rows){
   Gate.checkAdmin();
   return Store.writeEvents(rows);
 }
+/* 時数集計シートへ書く。**数えたのは画面のほう。**
+   ここは置くだけなので、教職員なら誰でも押せる（いまの Excel への貼り付けと同じ役）。
+   中身は derived なので、間違って押しても、もう一度押せば直る。 */
+function apiWriteTally(year, head, rows){
+  Gate.check();
+  return Store.writeTally(year, head, rows);
+}
+function apiReadTally(year){
+  Gate.check();
+  return Store.readTally(year);
+}
+
 function apiExportPlanSheet(name, sheets){
   Gate.check();
   return Store.exportPlanSheet(name, sheets);

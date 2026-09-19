@@ -300,10 +300,16 @@
            **まだ読んでいない週の数を字で言い、読み直す口を添える**。
            読めていない週は「基本時間割どおり」として数えている -->
       <div id="tallyWrap" hidden>
-        <h3>時数</h3>
+        <h3 data-help="tally2">時数</h3>
         <div class="tly" id="tlyBox"></div>
         <p class="hint" id="tlyNote"></p>
         <button class="mini" id="tlyRead">年度はじめから読み直す</button>
+        <!-- 時数集計シートへ置く。**押したときだけ動く。**
+             全クラス × 4月からこの月まで を数えるので時間がかかる。
+             そのことはボタンの下にも、？の説明にも書く -->
+        <button class="mini" id="tlySheet">時数集計シートを作る</button>
+        <p class="hint" id="tlySheetNote">全クラスぶんを数えて、スプレッドシートの
+          <b>「時数集計」シート</b>に置きます。<b>1〜3分かかります</b>（年度の後半ほど長い）。</p>
       </div>
 
       <!-- ③ その日の形。**全学年の面にだけ出る。** 効く範囲が全クラスなので、

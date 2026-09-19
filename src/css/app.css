@@ -1078,7 +1078,9 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 累計は小さく薄く。手前に出るのは今月の数のほう（紙の集計と同じ扱い） */
 .tlyrow>span:last-child{color:var(--tx-sub)}
 #tlyNote{margin:6px 0 0}
-#tlyRead{margin-top:6px;background:var(--card);border:1px solid var(--line);
+#tlyRead,#tlySheet{margin-top:6px;background:var(--card);border:1px solid var(--line);
   border-radius:var(--r-sm);padding:4px 10px;font-size:12px;cursor:pointer}
-#tlyRead:hover{background:var(--band)}
+#tlyRead:hover,#tlySheet:hover{background:var(--band)}
 #tlyRead[hidden]{display:none!important}
+/* 時間がかかることを、押す前に読めるところへ置く（？の説明にも書いてある） */
+#tlySheetNote{margin-top:4px}

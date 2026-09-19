@@ -509,3 +509,105 @@ function tallyReadAll(){
     redrawCenter(true);
   });
 }
+
+/* ── 時数集計シートへ書き出す ─────────────────────
+   **押したときだけ動く。** 全クラス × 4月からこの月まで を数えて、
+   スプレッドシートの「時数集計」シートへ置く。
+
+   *押したときだけにした理由*：保存のたびに書くと、全校・学年の層を直したときに
+   27クラスぶんを数え直すことになる。時数は月末・学期末に見る数なので、
+   **見るときに1回**で足りる。
+
+   *時間がかかる*：3月に押すと、全クラス（27枚）× 45週ぶんを読む。
+   読みは8本ずつなので、回線しだいで1〜3分かかる。？の説明にもそう書いてある。
+
+   *ここで数える理由*：合成（どの層が勝つか・休み・校外・特別校時・合同体育の
+   元教科・時数に数えるか）は compose.js の1か所にある。GAS 側で数え直すと
+   2つ目の実装ができ、画面の数とシートの数が食い違う。
+   **数えるのは画面、置くのはシート。** */
+
+/* 1クラス・1ヶ月ぶんを数える。**時数集計表へのコピー（tallyGrid）と同じ決まり。**
+   休みの日は数えない。紙に出ていない校時も数えない。 */
+function tallyClassMonth(cls, m){
+  const out = {}, keep = monday;
+  try{
+    for(const dt of calDates(m)){
+      monday = mondayOf(dt);
+      const d = Math.round((dt - monday) / 86400000);
+      if(d < 0 || d >= DAYS) continue;
+      if(isDayOff(d)) continue;
+      for(const s of calCols()){
+        if(!slotShown(d, s)) continue;
+        const sub = countSub(compose(cls, d, s.id));
+        if(sub) out[sub.short] = (out[sub.short] || 0) + 1;
+      }
+    }
+  } finally{ monday = keep; }
+  return out;
+}
+
+/* 見出しに出す教科。**教科シートの順**（1文字が同じものは1つにまとめる）。
+   0 のものも列としては置く ── 表として読むので、月によって列がずれない */
+function tallyHeadSubs(){
+  const out = [], seen = {};
+  for(const sub of SUBJECTS){
+    if(!sub.count || !sub.short || seen[sub.short]) continue;
+    seen[sub.short] = 1;
+    out.push(sub.short);
+  }
+  return out;
+}
+
+function tallySheetAll(){
+  const m0 = new Date(monday.getFullYear(), monday.getMonth(), 1);
+  const months = tallyMonths(m0);
+  const classes = allClasses();
+  if(!classes.length) return toast("クラスがありません");
+  const w = Wait.begin("全クラスぶんの週を読んでいます（時間がかかります）");
+  /* 全クラスぶんを、年度ごとに分けて読む。readWeeksAll は
+     いま開いている面ではなく、全クラス・全学年・全校を読む */
+  const g = tallyWeeks(m0);
+  const ys = Object.keys(g);
+  let left = ys.length;
+  if(!left){ Wait.end(w); return; }
+  const keep = monday;
+  const done = () => {
+    if(--left > 0) return;
+    Wait.end(w);
+    tallyWriteRows(months, classes);
+  };
+  for(const y of ys){
+    const list = Object.keys(g[y]).sort();
+    monday = parseISO(list[0]);
+    Backend.readWeeksAll(list, done);
+  }
+  monday = keep;
+}
+
+function tallyWriteRows(months, classes){
+  const subs = tallyHeadSubs();
+  const head = ["年度", "クラス", "月"].concat(subs).concat(["合計", "集計日時", "集計者"]);
+  const when = new Date().toLocaleString("ja-JP");
+  const who = (Backend.info() || {}).me || "";
+  const rows = [];
+  const w = Wait.begin("数えています");
+  const keep = monday;
+  try{
+    for(const cls of classes) for(const m of months){
+      monday = mondayOf(new Date(m.getFullYear(), m.getMonth(), 15));
+      const n = tallyClassMonth(cls, m);
+      let sum = 0;
+      const line = [String(fyOf(m)), cls, (m.getMonth() + 1) + "月"];
+      for(const k of subs){ line.push(String(n[k] || 0)); sum += (n[k] || 0); }
+      line.push(String(sum), when, who);
+      rows.push(line);
+    }
+  } finally{ monday = keep; Wait.end(w); }
+  const w2 = Wait.begin("時数集計シートへ書いています");
+  Backend.saveTally(fy(), head, rows, r => {
+    Wait.end(w2);
+    drawTallyPanel();
+    if(r) toast("「" + r.name + "」シートに "
+                + classes.length + "クラス × " + months.length + "ヶ月ぶんを置きました");
+  });
+}

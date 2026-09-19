@@ -584,6 +584,28 @@ const Backend = (function(){
     for(let i = 0; i < AT_ONCE && i < todo.length; i++) fire();
   }
   const AT_ONCE = 8;
+  /* **全クラスぶんの週を読む。** 時数集計は27クラス全部を数えるので、
+     いま開いている面（3枚）だけでは足りない。
+     時数集計のボタンからしか呼ばない ── ふだんの画面では読みすぎになる。 */
+  function readWeeksAll(mons, after){
+    if(!onGas) return after();
+    const want = allTargets();
+    const year = fy(), epoch = editEpoch;
+    const todo = (mons || []).filter(m => want.some(t => !fresh_(weekTag(t, year, m))));
+    if(!todo.length) return after();
+    let left = todo.length, next = 0;
+    const done = () => { if(--left <= 0) after(); else fire(); };
+    function fire(){
+      if(next >= todo.length) return;
+      const m = todo[next++];
+      google.script.run
+        .withSuccessHandler(w => { mergeWeek(want, w, year, m, epoch); done(); })
+        .withFailureHandler(() => done())
+        .apiReadWeek(year, m, want);
+    }
+    for(let i = 0; i < AT_ONCE && i < todo.length; i++) fire();
+  }
+
   /* 渡した月曜のうち、**まだ読んでいない週の数**。
      時数の集計は、読めていない週を「基本時間割どおり」として数えるので、
      出している数がどれだけ見込みなのかを、画面で言えるようにする。 */
@@ -815,6 +837,19 @@ const Backend = (function(){
      どのクラスのどの校時が何かを決めるのは画面（層の重ね方を知っている）。
      どんな形のシートを作るかを決めるのはシート側（実物の形を知っている）。
      cols = [{cls, group}] の並び。**並びと組をこちらで決めて渡す。** */
+  /* 時数集計シートへ置く。**数えたのは画面のほう**（合成は1か所のまま）。
+     手元だけで使っているときは置く先が無いので、そのまま済にする。 */
+  function saveTally(year, head, rows, then){
+    if(!onGas) return then && then({name:"（手元）", rows:rows.length, kept:0});
+    google.script.run
+      .withSuccessHandler(r => then && then(r))
+      .withFailureHandler(e => {
+        notify("時数集計を書けなかった（" + escText(String(e && e.message)) + "）");
+        then && then(null);
+      })
+      .apiWriteTally(year, head, rows);
+  }
+
   function exportWeek(titles, cols, slots, name, url, ok, ng){
     if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
     const w = week(), year = fy(), mon = wkKey();
@@ -937,7 +972,8 @@ const Backend = (function(){
   return {isGas, info, saved: () => acknowledged && !unsaved() && !sending,
           /* 書いたのに、まだシートに入っていない。画面の地の色はこれで決める */
           touched: () => touched || !!lastErr, setNotifier, setDirtyWatcher, setConflictWatcher,
-          unsaved, prefetchWeek, readWeeks, unread, watch, stale, heldCells, dropHeld, reloadWeek,
+          unsaved, prefetchWeek, readWeeks, readWeeksAll, unread, saveTally,
+          watch, stale, heldCells, dropHeld, reloadWeek,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveSubjects, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,
