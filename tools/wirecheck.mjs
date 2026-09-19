@@ -2246,8 +2246,21 @@ ok("ボタンと、時間がかかる断りが出る", await p.evaluate(() =>
    !!$("tlySheet") && /1〜3分/.test($("tlySheetNote").textContent)) === true,
    await p.evaluate(() => $("tlySheetNote").textContent));
 ok("？の説明にも、時間がかかると書いてある", await p.evaluate(() =>
-   !!document.querySelector('[data-help="tally2"] .helpq')
-   && /1〜3分/.test(HELP.tally2.b.join("")) ) === true);
+   /1〜3分/.test(HELP.tally2.b.join("")) ) === true);
+/* **？はボタンのすぐ右。** 見出しの横だと、押そうとしている人の目に入らない */
+ok("？は「時数を集計する」のすぐ右にある", await p.evaluate(() => {
+     const q = document.querySelector('[data-help="tally2"] .helpq');
+     const btn = $("tlySheet");
+     if(!q || !btn) return "？かボタンが無い";
+     const a = btn.getBoundingClientRect(), b = q.getBoundingClientRect();
+     /* 同じ高さで、ボタンより右。見出しの横に付いていたら上にずれる */
+     return b.left >= a.right - 1 && Math.abs(b.top - a.top) < a.height;
+   }) === true, await p.evaluate(() => {
+     const q = document.querySelector('[data-help="tally2"] .helpq');
+     const btn = $("tlySheet");
+     return q && btn ? [btn.getBoundingClientRect().toJSON(),
+                        q.getBoundingClientRect().toJSON()] : null;
+   }));
 /* **押し間違いで1〜3分待たせない。** 既定は「やめる」 */
 await p.locator("#tlySheet").click();
 await p.waitForTimeout(300);

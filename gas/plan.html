@@ -1198,6 +1198,12 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 #tlyRead[hidden]{display:none!important}
 /* 時間がかかることを、押す前に読めるところへ置く（？の説明にも書いてある） */
 #tlySheetNote{margin-top:4px}
+/* ？は「時数を集計する」のすぐ右。**押す口のとなりに置く** ──
+   見出しの横だと、押そうとしている人の目に入らない。
+   .helpq は既定で margin-left:auto（並びの右端へ寄せる作り）なので、
+   ここでは 0 に戻して、ボタンとの間は gap で取る */
+.tlybtn{display:flex;align-items:center;gap:6px}
+.tlybtn>.helpq{margin-left:0}
 /* ▲ src/css/app.css ▲ */
 /* ▼ src/css/sheet.css ▼ */
 /* 紙。**刷られる面はここだけ。** 印刷の版面は動かさない。
@@ -1920,14 +1926,18 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
            **まだ読んでいない週の数を字で言い、読み直す口を添える**。
            読めていない週は「基本時間割どおり」として数えている -->
       <div id="tallyWrap" hidden>
-        <h3 data-help="tally2">時数</h3>
+        <h3>時数</h3>
         <div class="tly" id="tlyBox"></div>
         <p class="hint" id="tlyNote"></p>
         <button class="mini" id="tlyRead">年度はじめから読み直す</button>
         <!-- 時数集計シートへ置く。**押したときだけ動く。**
              全クラス × 4月からこの月まで を数えるので時間がかかる。
-             そのことはボタンの下にも、？の説明にも書く -->
-        <button class="mini" id="tlySheet">時数集計シートを作る</button>
+             そのことはボタンの下にも、？の説明にも書く。
+             **？はこのボタンのすぐ右**（見出しではなく、押す口のとなりに置く。
+             時間がかかると知りたいのは、押そうとしている人） -->
+        <div class="tlybtn" data-help="tally2">
+          <button class="mini" id="tlySheet">時数を集計する</button>
+        </div>
         <p class="hint" id="tlySheetNote">全クラスぶんを数えて、スプレッドシートの
           <b>「時数集計」シート</b>に置きます。<b>1〜3分かかります</b>（年度の後半ほど長い）。</p>
       </div>
@@ -2443,7 +2453,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.33.0";
+let APP_VERSION = "1.33.1";
 let BUILD_DATE  = "2026-09-19";
 
 /* 時程。行を固定しない（学校ごとに違う）。
@@ -8905,12 +8915,12 @@ const HELP = {
        "<b>白い紙に出ているものだけが刷られます。</b>まわりのボタンや左の並びは刷られません。",
        "<i>はじめの人がつまずくところ：</i>紙のサイズや余白は"
        + "「用紙・印刷」で変えられます。刷ってみて合わなければ、そちらで直します。"]},
-  tally2: {t:"時数",
+  tally2: {t:"時数を集計する",
     b:["<b>いま開いているクラスの授業を、教科ごとに数えたものです。</b>"
        + "左が「今月」、右が「累計」（年度はじめ 4/1 からの合計）です。",
        "<b>まだ書いていない日は、基本時間割どおりとして数えます。</b>"
        + "だから先の月ぶんも、見通しの数として入っています。",
-       "<b>「時数集計シートを作る」を押すと、全クラスぶんを数えて、"
+       "<b>「時数を集計する」を押すと、全クラスぶんを数えて、"
        + "スプレッドシートの「時数集計」シートに置きます。</b>"
        + "そこを見れば、Excel へ打ち直さずに月ごとの時数が読めます。",
        "<b>この集計は 1〜3分かかります。</b>全クラス（学年・全校のぶんも）× "

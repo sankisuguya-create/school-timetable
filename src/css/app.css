@@ -1084,3 +1084,9 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 #tlyRead[hidden]{display:none!important}
 /* 時間がかかることを、押す前に読めるところへ置く（？の説明にも書いてある） */
 #tlySheetNote{margin-top:4px}
+/* ？は「時数を集計する」のすぐ右。**押す口のとなりに置く** ──
+   見出しの横だと、押そうとしている人の目に入らない。
+   .helpq は既定で margin-left:auto（並びの右端へ寄せる作り）なので、
+   ここでは 0 に戻して、ボタンとの間は gap で取る */
+.tlybtn{display:flex;align-items:center;gap:6px}
+.tlybtn>.helpq{margin-left:0}
