@@ -401,7 +401,13 @@ function paintCell(e, c, d, s, mine){
   const src = (!sheetRO && !e.dataset.one) ? srcLabel(c, mine) : "";
   let box = e.querySelector(".src");
   if(src && !box){ box = el("span", "src"); e.insertBefore(box, e.firstChild); }
-  if(box){ box.hidden = !src; box.textContent = src; }
+  if(box){
+    box.hidden = !src;
+    /* **字は1つずつ積む。** writing-mode の縦書きは、フォント側に縦組みの
+       情報が無い環境で字が同じ場所に重なる（校外行事のチップで実測済み） */
+    const want = [...src].map(ch => "<i>" + escText(ch) + "</i>").join("");
+    if(box.innerHTML !== want) box.innerHTML = want;
+  }
   e.classList.toggle("has-src", !!src);
 
   const tag = e.querySelector(".tag");
@@ -483,10 +489,7 @@ function drawMonth(){
   const ws = mWeeks();
   $("mTitle").textContent = viewName() + "　"
     + md(ws[0]) + " → " + md(addDays(ws[MONTH_WEEKS - 1], 5));
-  $("mHint").innerHTML = "いま見ている週から <b>" + MONTH_WEEKS + "週間</b>。"
-    + "左上から右へ、上の段・下の段の順に並びます。"
-    + "<b>詳細と放課後は薄くしてあります</b>（4枚を1枚に収めるため）。"
-    + "直すのは週の紙のほうで。ここは見るだけです。";
+  /* 説明は ？ の中（HELP.month） */
   /* **見るだけの紙として組む。** 紙が4枚あるので、書けるままにしておくと
      打った字が「いま見ている週」に入る（打った本人には、見ている紙に入って見える）。
      面は変えない ── 見ているのは同じクラスの4週ぶん */
@@ -875,7 +878,12 @@ function fitMonth(cell){
    面倒を見るので、先の月は見通しの数として出る。
 
    **見るだけの面。** 直すのは週の紙のほうで。 */
-const CAL_MONTHS = 4;
+/* **A4 よこ1枚に2ヶ月。** 前は4ヶ月を 2×2 で並べ、1日は 12.8mm 角だった。
+   1日の時間割を縦に積むには、6校時ぶんの行が要る。12.8mm から日付を引くと
+   1校時 1.63mm で、7.5pt の字（2.6mm）が入らない（実測ではなく版面の計算）。
+   横に2枚だけにすると1日が 22.9×29.5mm になり、1校時 3.9mm ── 字と
+   書き込み欄が並ぶ。**4ヶ月を見たいときは2枚繰る。** */
+const CAL_MONTHS = 2;
 let calFrom = null;              /* 左上の月の1日 */
 
 const calMonths = () => {
@@ -902,15 +910,36 @@ function calDay(dt){
     const d = Math.round((dt - monday) / 86400000);
     if(d < 0 || d >= DAYS) return null;
     const off = isDayOff(d);
-    const out = {d, form:dayForm(d), ev:hasEvents(d), subs:[], count:{}};
+    /* subs ＝ 左の欄に出す字、note ＝ 週案の備考、from ＝ 出どころ（層）。
+
+       **専科の面では、コマの中身は「どのクラスへ行くか」。**
+       教科の1文字に落とすと、クラス名（4-3）の頭の「4」だけが出て読めない
+       ── 音楽専科のカレンダーが「6 6 2 5 2 …」と並んでいた。
+       専科のときはクラス名をそのまま出す（左の欄はそのために2倍の幅がある）。
+
+       **出どころも持つ。** 週案の紙と同じ線をここでも引くため
+       （学年・全校から降りてきたコマを、カレンダーの上でも見つけられる） */
+    const sp = view.kind === "special";
+    const out = {d, form:dayForm(d), ev:hasEvents(d),
+                 subs:[], note:[], from:[], count:{}};
     for(const s of calCols()){
-      if(!slotShown(d, s)){ out.subs.push(""); continue; }
+      if(!slotShown(d, s)){ out.subs.push(""); out.note.push(""); out.from.push(""); continue; }
       const c = cellFor(d, s.id);
       const t = plain(c.title).trim();
-      out.subs.push(!t ? "" : t === NO_LESSON ? "／" : shortOf(c.subject, c.title));
+      out.subs.push(!t ? "" : t === NO_LESSON ? "／"
+                            : sp ? calCls(t) : shortOf(c.subject, c.title));
+      out.note.push(plain(c.note || "").trim());
+      /* 線を引くのは**自分の面より上から降りてきたコマ**だけ。
+         全学年の面では全部が「全校」になり、何も区別しない印になる
+         （週案の紙の出どころの帯と同じ決まり ── compose.js srcLabel）。 */
+      out.from.push(RANK[c.layer] > RANK[layerOf()] ? c.layer : "");
       /* **休みの日は数えない。** 斜め線を引いた日の授業を数えると、
          その月の時数だけが多くなる（時数集計表へのコピーと同じ決まり） */
       if(off) continue;
+      /* **専科は、クラスごとに数える。** 教科はぜんぶ同じ（音楽なら音楽）なので、
+         教科で数えても月の合計ひとつにしかならない。知りたいのは
+         「どのクラスへ何コマ行ったか」のほう */
+      if(sp){ if(t && t !== NO_LESSON) out.count[t] = (out.count[t] || 0) + 1; continue; }
       const sub = countSub(c);
       if(sub) out.count[sub.short] = (out.count[sub.short] || 0) + 1;
     }
@@ -1032,6 +1061,13 @@ function readByFy(byFy, after){
    その4ヶ月と累計のどちらにも出てこない教科は出さない ──
    0 ばかりの行で、月の枠の下が埋まる。 */
 function calSubs(rows){
+  /* **専科はクラスごとに数えている**（教科はぜんぶ同じなので）。
+     並べる順は SUBJECTS ではなく、クラスの並び（学年・組の順）。 */
+  if(view.kind === "special"){
+    const seen = {};
+    for(const r of rows) for(const k in r) seen[k] = 1;
+    return allClasses().filter(c => seen[c]);
+  }
   const out = [], seen = {};
   for(const sub of SUBJECTS){
     if(!sub.count || !sub.short || seen[sub.short]) continue;
@@ -1042,6 +1078,21 @@ function calSubs(rows){
   return out;
 }
 
+/* 専科の1コマを、カレンダーの枠に収まる字にする。
+   **1コマに2クラス以上入ることがある**（合同・２クラス同時）。
+   「2-3・5-1」は 6.8mm の欄に入らず切れるので、
+   **先頭のクラス＋残りの数**にする（2-3+1）。何クラスあるかは残る。 */
+function calCls(t){
+  const list = String(t).split(/[・,、\s]+/).filter(Boolean);
+  if(list.length <= 1) return list[0] || "";
+  return list[0] + "+" + (list.length - 1);
+}
+
+/* 備考を出すか。**既定は出さない**（手で書き込む欄として刷るのが元の形）。
+   週案に書いた備考をそのまま出したい週もあるので、押して切り替えられるようにした。
+   学校で1つの設定にする（db.settings）── 紙は職員室で見せ合うもの。 */
+const calShowNote = () => !!db.settings.calNote;
+
 function openCal(){
   if(!centerOk()) return toast("クラスや学年を開いてから押す");
   setCenter("cal");
@@ -1051,12 +1102,14 @@ function drawCalView(){
   $("cvTitle").textContent = viewName() + "　"
     + ms[0].getFullYear() + "年" + (ms[0].getMonth() + 1) + "月 → "
     + (ms[CAL_MONTHS - 1].getMonth() + 1) + "月";
-  $("cvHint").innerHTML = "<b>" + CAL_MONTHS + "ヶ月</b>を A4 よこ1枚に。"
-    + "1日は<b>日付／時間割／備考</b>の3段。時間割は教科の1文字（時数表と同じ字）、"
-    + "<b>備考は空のまま刷る</b>（手で書き込む欄）。"
-    + "月の下は教科ごとの<b>その月のコマ数（年度はじめからの累計）</b>。"
-    + "直すのは週の紙のほうで。";
+  /* 説明は ？ に入れてある（HELP.cal）。ここに置くと、毎回読み飛ばす字が
+     紙の上に居座る ── 4ヶ月ぶんの枠より説明のほうが高い、ということが起きた */
+  $("cvNote").setAttribute("aria-pressed", String(calShowNote()));
+  $("cvNote").textContent = calShowNote() ? "備考：出す" : "備考：空欄";
   const box = $("cvPaper");
+  /* 専科の面かどうかを紙の側に渡す。クラス名（4-3）は1文字より広いので、
+     そこだけ字を落として枠に収める（→ src/css/app.css .cvpaper[data-face]） */
+  box.dataset.face = view.kind;
   /* **描き直しのたびには捨てない。** 中身が変わっていなければ取り置きを使う
      （4ヶ月を繰り戻すたびに数え直さない）── calFreshen が要否を見る */
   calFreshen();
@@ -1101,15 +1154,22 @@ function calMonthEl(m){
   for(let i = 0; i < lead && i < DAYS; i++) grid.appendChild(el("div", "cday none"));
   for(const dt of calDates(m)){
     const info = calDayC(dt);
-    /* ①日付（中央ぞろえ）／②時間割（6等分）／③備考（6等分・空欄）。
-       ③は **空のまま刷る**。手で書き込むための欄なので、字を入れない */
+    /* ①日付（枠いっぱい）／②校時を**上から順に1行ずつ**。
+       1行は「教科の1文字｜書き込み欄」。**書き込み欄は空のまま刷る。**
+
+       *横に並べない理由*：横並びだと1校時ぶんが 2.6mm 幅の升になり、
+       何校時のことか位置でしか分からない。縦に積めば上から1・2・3…と
+       読めて、週案の紙（校時が行）と目の動きがそろう。
+
+       *出どころの線*：降りてきたコマの左端に、週案の紙と同じ色の線を引く。 */
+    const subs = info ? info.subs : [], from = (info && info.from) || [];
+    const notes = (info && info.note) || [], showN = calShowNote();
     const cell = el("div", "cday" + (info && info.form ? " form-" + info.form : ""),
       "<span class='cnum'>" + dt.getDate() + "</span>"
-      + "<span class='csubs'>"
-      + (info ? info.subs : []).map(x => "<i>" + escText(x) + "</i>").join("")
-      + "</span>"
-      + "<span class='cnote'>"
-      + new Array(calCols().length + 1).join("<i></i>")
+      + "<span class='cper'>"
+      + subs.map((x, i) => "<i" + (from[i] ? " data-from='" + escText(from[i]) + "'" : "")
+          + "><b>" + escText(x) + "</b><u>"
+          + (showN ? escText(notes[i] || "") : "") + "</u></i>").join("")
       + "</span>");
     if(info && info.ev) cell.classList.add("hasev");
     if(info && info.form) cell.title = DAY_FORM[info.form].label;
@@ -1144,18 +1204,19 @@ function calFootEl(m){
    画面の px で測った倍率のまま刷ると、紙からはみ出すか、すかすかになる。 */
 const CAL_PAGE = {w:297, h:210, mg:8};
 function calCellMM(){
+  /* **横に2枚、縦は1枚。** 縦を割らないぶん、1日が倍の高さになる */
   return {w:(CAL_PAGE.w - CAL_PAGE.mg * 2 - 6) / 2 + "mm",
-          h:(CAL_PAGE.h - CAL_PAGE.mg * 2 - 6) / 2 + "mm"};
+          h:(CAL_PAGE.h - CAL_PAGE.mg * 2) + "mm"};
 }
 function fitCal(cell){
   const box = $("cvPaper"), one = box && box.querySelector(".cmonth");
   if(!box || !one) return;
   const c = cell || {w:((box.clientWidth - 6) / 2) + "px",
-                     h:((box.clientHeight - 6) / 2) + "px"};
+                     h:box.clientHeight + "px"};
   if(!cell && (box.clientWidth < 2 || box.clientHeight < 2)) return;
   if(cell){
     box.style.gridTemplateColumns = "repeat(2," + c.w + ")";
-    box.style.gridTemplateRows    = "repeat(2," + c.h + ")";
+    box.style.gridTemplateRows    = c.h;
     box.style.width = "calc(" + c.w + "*2 + 6mm)";
   }else{
     box.style.removeProperty("grid-template-columns");

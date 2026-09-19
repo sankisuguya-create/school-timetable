@@ -52,14 +52,13 @@ async function check(gas, failure=false, guide='new'){
     assert.ok(d.getElementById('gate').hidden,'週切替なしで学級表示');
     assert.ok(d.querySelectorAll('#sheet .cell').length>0,'週案セル');
     assert.ok(d.querySelectorAll('#pals .pal').length>0,'右の授業チップ');
+    /* 教科チップ。**押す口は画面から消えた**（「教科の表し方」に移った）ので、
+       棚（chipModes）を直して組み直す。見たいのは「棚の値が紙に出るか」。
+       中身は const/let の素の大域なので window には付かない。w.eval で触る。 */
     assert.equal(d.getElementById('sheet').classList.contains('chips-screen'),false);
-    d.getElementById('chipOpen').click();
-    d.querySelector('[name="chipMode"][value="screen"]').checked=true;
-    d.getElementById('chipSave').click();
-    assert.ok(d.getElementById('sheet').classList.contains('chips-screen'));
-    d.getElementById('chipOpen').click();
-    d.querySelector('[name="chipMode"][value="off"]').checked=true;
-    d.getElementById('chipSave').click();
+    w.eval("Y().chipModes[view.cls]='screen'; buildSheet();");
+    assert.ok(d.getElementById('sheet').classList.contains('chips-screen'),'棚の値が紙に出る');
+    w.eval("Y().chipModes[view.cls]='off'; buildSheet();");
     assert.equal(d.getElementById('sheet').classList.contains('chips-screen'),false);
     d.getElementById('gridBtn').click();
     assert.equal(d.getElementById('gate').hidden,false);

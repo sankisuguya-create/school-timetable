@@ -16,6 +16,8 @@ function app(storage=new Map()){
     addDays:(d,n)=>new Date(+d+n*864e5),monday:new Date(mon),gradeOf:()=> '1',
     targetsForView:()=>[{layer:'home',target:'1-1'}],
     setTimeout:()=>1,clearTimeout(){},addEventListener(){},escText:x=>x,
+    /* 取り込みのたびに上がる版。カレンダーの取り置きがここを見る */
+    dataTick:0,
     localStorage:{setItem:(k,v)=>storage.set(k,v),getItem:k=>storage.get(k),removeItem:k=>storage.delete(k)}};
   vm.createContext(c);vm.runInContext(source+'\nglobalThis.B=Backend;',c);
   c.B.setDirtyWatcher(n=>states.push(n));

@@ -51,15 +51,8 @@ function drawPalette(){
     + " data-v='" + escText(o.v) + "'>" + escText(o.t) + "</button>").join("");
 
   if(typeof applyLock === "function") setTimeout(applyLock, 0);
-  $("palHint").innerHTML = (view.kind === "special")
-    ? "コマへ<b>引っぱって入れる</b>。その時間に行くクラスを選ぶ。"
-    : "コマへ<b>引っぱって入れる</b>。コマを選んでから押しても入る。"
-      + "<br><b>校外行事</b>を落とすと、そのコマに薄く「校外学習」が出る"
-      + "（題名・備考には入らない。続けて置くと枠がつながる）。"
-      + "<br><b>授業なし</b>を落とすと、そのコマに斜め線を引く"
-      + "（授業は入らなくなる。備考は書ける。もう一度落とすと外れる）。"
-      + (canClear ? "<br><b>リセット</b>を落とすと、そのコマをここから取り消す"
-                  + "（各クラスの予定が出るようになる）。" : "");
+  /* 使い方は ？ の中（HELP.pals）。押す口のとなりに5行の説明を置くと、
+     教科の並びより説明のほうが高くなり、毎回それを越えて押すことになる */
   paintChipSeg();
   drawTallyPanel();               /* 面が変われば数も変わる */
 
@@ -90,6 +83,27 @@ function paintChipSeg(){
   const m = chipMode();
   for(const b of document.querySelectorAll("#chipSeg [data-chip]"))
     b.setAttribute("aria-pressed", String(b.dataset.chip === m));
+}
+
+/* 紙の字の大きさ。**題名 12〜20pt・備考 8〜14pt**（設定のスライダーと同じ幅）。
+   0.5pt 刻み。端では押せなくする ── 押しても何も起きない状態にすると、
+   壊れているのか端なのかが分からない。 */
+const FONT_PT = {titlePt:{min:12, max:20, def:16}, notePt:{min:8, max:14, def:12}};
+const fontPt = k => {
+  const r = FONT_PT[k];
+  return Math.min(r.max, Math.max(r.min, +db.settings[k] || r.def));
+};
+function paintFontBtns(){
+  const w = $("fontWrap");
+  if(!w) return;
+  const v = {titlePt:fontPt("titlePt"), notePt:fontPt("notePt")};
+  $("fsTitleV").textContent = v.titlePt;
+  $("fsNoteV").textContent  = v.notePt;
+  for(const b of w.querySelectorAll(".fsb")){
+    const k = b.dataset.fs, r = FONT_PT[k];
+    const next = v[k] + (+b.dataset.step);
+    b.disabled = next < r.min || next > r.max;
+  }
 }
 
 /* ── この週の日の形（全学年の面だけ） ──────────
@@ -489,13 +503,25 @@ function drawTallyPanel(){
     }
     monday = keep;
   }
-  $("tlyNote").innerHTML = "「累計」は<b>年度はじめ（4/1）から</b>。"
-    + "書いていない日は<b>基本時間割</b>で数えます。"
-    + (!Backend.isGas() ? ""
-     : left ? "<br><b>" + left + "週ぶんをまだ読んでいません。</b>"
-            + "そのぶんは基本時間割どおりとして数えています。"
-            : "<br>4月からの週は読みこみ済みです。");
+  /* **ここに残すのは「いまの状態」だけ。** 決まりごと（累計は4/1から・
+     書いていない日は基本時間割で数える）は ？ の中（HELP.tally3）へ移した。
+     毎回同じ字が数の下に居座ると、変わったところが埋もれる。 */
+  $("tlyNote").innerHTML = !Backend.isGas() ? ""
+    : left ? "<b>" + left + "週ぶんをまだ読んでいません。</b>"
+           + "そのぶんは基本時間割どおりとして数えています。"
+           : "4月からの週は読みこみ済みです。";
+  $("tlyNote").hidden = !$("tlyNote").innerHTML;
   $("tlyRead").hidden = !left;
+
+  /* 畳んだときも、開かずに分かるように見出しへ一言。
+     **開き閉じは覚えておく**（既定は畳む。毎日見るものではない） */
+  const fold = $("tallyFold");
+  if(fold){
+    if(fold.open !== !!db.settings.tallyOpen) fold.open = !!db.settings.tallyOpen;
+    $("tlyPeek").textContent = subs.length
+      ? (m.getMonth() + 1) + "月 " + subs.reduce((n, k) => n + (now[k] || 0), 0) + "コマ"
+      : "";
+  }
 }
 
 /* 4月からの週を読み直してから、数え直す。読む段取りは
@@ -558,14 +584,25 @@ function tallyHeadSubs(){
   return out;
 }
 
+/* 集計するクラス。**開いている面のぶんだけ。**
+   前は allClasses()（27クラス）を数えていて、担任が自分のクラスの時数を
+   見たいだけでも 1〜3分待たされた。**そのほとんどは他人のクラスの計算。**
+   開いた面が層を決めるのと同じ決まりで、数える範囲も面が決める。 */
+function tallyScope(){
+  if(view.kind === "class") return [view.cls];
+  if(view.kind === "grade") return classesOfGrade(view.grade);
+  /* 専科は行き先が全学年に散る。全学年の面も、面そのものが全クラス */
+  return allClasses();
+}
+
 function tallySheetAll(){
   const m0 = new Date(monday.getFullYear(), monday.getMonth(), 1);
   const months = tallyMonths(m0);
-  const classes = allClasses();
+  const classes = tallyScope();
   if(!classes.length) return toast("クラスがありません");
-  const w = Wait.begin("全クラスぶんの週を読んでいます（時間がかかります）");
-  /* 全クラスぶんを、年度ごとに分けて読む。readWeeksAll は
-     いま開いている面ではなく、全クラス・全学年・全校を読む */
+  const one = classes.length === 1;
+  const w = Wait.begin(one ? classes[0] + " の週を読んでいます"
+                           : classes.length + "クラスぶんの週を読んでいます（時間がかかります）");
   const g = tallyWeeks(m0);
   const ys = Object.keys(g);
   let left = ys.length;
@@ -579,7 +616,12 @@ function tallySheetAll(){
   for(const y of ys){
     const list = Object.keys(g[y]).sort();
     monday = parseISO(list[0]);
-    Backend.readWeeksAll(list, done);
+    /* **1クラスだけなら、その面のぶんだけ読む。** readWeeks は
+       いま開いている面（全校・学年・そのクラス）を読む ── 1クラスの時数は
+       その3枚で決まる。readWeeksAll は27クラス全部を読むので、
+       1クラスのために使うと、読む量が20倍以上になる。 */
+    if(one) Backend.readWeeks(list, done);
+    else    Backend.readWeeksAll(list, done);
   }
   monday = keep;
 }

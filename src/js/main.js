@@ -594,22 +594,51 @@ function wire(){
       save(); paintChipSeg(); redrawCenter(true);
     });
 
+  /* 紙の字の大きさ。**設定と同じ棚を直す**（db.settings.titlePt / notePt）。
+     窓の中のスライダーと、ここの ＋− は、同じ値の別の触り方。 */
+  for(const b of document.querySelectorAll("#fontWrap .fsb"))
+    b.addEventListener("click", () => {
+      const k = b.dataset.fs, r = FONT_PT[k];
+      const next = fontPt(k) + (+b.dataset.step);
+      if(next < r.min || next > r.max) return;
+      db.settings[k] = next;
+      save(); applyPaper(); buildSheet();
+    });
+
   /* 時数。**年度はじめからの週を読み直してから数え直す。**
      見込みで出していた数を、確かな数に入れ替える口 */
   on("tlyRead", "click", tallyReadAll);
   /* 時数集計シート。**時間がかかるので、押す前に言う。**
      押し間違いで1〜3分待たせない（やめる側に落ちる窓で受ける） */
-  on("tlySheet", "click", () => askOk({
-    title: "全クラスぶんの時数を数えますか",
-    lines: ["4月からこの月までを、<b>全クラスぶん</b>数えて、スプレッドシートの"
-            + "<b>「時数集計」シート</b>に置きます。",
-            "<b>1〜3分かかります。</b>年度の後半ほど長くかかります"
-            + "（読む週が増えるため）。",
-            "置いたものは、押すたびに作り直します。"
-            + "ほかの年度のぶんは残ります。"],
-    goLabel: "数える",
-    onYes: tallySheetAll
-  }));
+  on("tlySheet", "click", () => {
+    const cs = tallyScope(), one = cs.length === 1;
+    askOk({
+      title: one ? cs[0] + " の時数を数えますか"
+                 : cs.length + "クラスぶんの時数を数えますか",
+      lines: ["4月からこの月までを、<b>" + (one ? cs[0] : cs.length + "クラスぶん")
+              + "</b>数えて、スプレッドシートの<b>「時数集計」シート</b>に置きます。",
+              one ? "<b>たいてい数十秒で終わります。</b>年度の後半ほど長くかかります"
+                    + "（読む週が増えるため）。"
+                  : "<b>1〜3分かかります。</b>年度の後半ほど長くかかります"
+                    + "（読む週が増えるため）。",
+              "置いたものは、押すたびに<b>そのぶんの行だけ</b>作り直します。"
+              + "ほかのクラスや、ほかの年度のぶんは残ります。"],
+      goLabel: "数える",
+      onYes: tallySheetAll
+    });
+  });
+
+  /* カレンダーの備考。**空欄で刷るか、週案の備考を出すか。** */
+  on("cvNote", "click", () => {
+    db.settings.calNote = !db.settings.calNote;
+    save(); redrawCenter();
+  });
+
+  /* 時数の畳み。**開き閉じを覚えておく**（毎回たたみ直させない） */
+  on("tallyFold", "toggle", () => {
+    db.settings.tallyOpen = $("tallyFold").open;
+    save();
+  });
 
   /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */
   on("dayDlg","close", () => { dayPick = 0; });
@@ -632,6 +661,15 @@ function wire(){
   on("tpNo","click",  () => $("tpDlg").close());
   on("tpYes","click", () => { $("tpDlg").close(); doExportTanpopo(); });
   on("baseImp","click", openImpDlg);
+
+  /* 表からコマを取り込む。**押す口は3つ、窓は1つ。**
+     右メニュー（時数表）と、設定のカード2枚。運び方は同じ */
+  on("tlyImp",     "click", () => openImpPlan("tally"));
+  on("setImpTally","click", () => { $("settingsDlg").close(); openImpPlan("tally"); });
+  on("setImpEv",   "click", () => { $("settingsDlg").close(); openImpPlan("events"); });
+  on("ipTpl",  "click", impPlanTemplate);
+  on("ipRead", "click", impPlanRead);
+  on("ipGo",   "click", impPlanGo);
 
   /* 固定時間割の取り込み */
   for(const b of $("impSrc").querySelectorAll("button"))

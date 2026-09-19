@@ -172,7 +172,7 @@
       <!-- 月の面。**4週ぶんを 2×2 に並べて、B4 に1枚で刷る。**
            紙の代わりにここを出す（紙と入れ替える） -->
       <div class="mview" id="monthView" hidden>
-        <div class="mbar">
+        <div class="mbar" data-help="month">
           <button class="btn" id="mPrev">◀ 前の4週</button>
           <b id="mTitle"></b>
           <button class="btn" id="mNext">次の4週 ▶</button>
@@ -182,7 +182,7 @@
           <button class="btn" id="mSheet">Google Sheet</button>
           <button class="btn" id="mClose">週の紙へ戻る</button>
         </div>
-        <p class="hint" id="mHint"></p>
+
         <div class="mpaper" id="mPaper">
           <div class="sheet mini" id="mS0"></div><div class="sheet mini" id="mS1"></div>
           <div class="sheet mini" id="mS2"></div><div class="sheet mini" id="mS3"></div>
@@ -207,16 +207,20 @@
       <!-- カレンダーの面。**4ヶ月を A4 よこ1枚に。**
            1日の上はその日の教科を1文字ずつ、下は放課後の備考。**見るだけ** -->
       <div class="cvview" id="calView" hidden>
-        <div class="mbar">
-          <button class="btn" id="cvPrev">◀ 前の4ヶ月</button>
+        <!-- 説明は ？ の中（HELP.cal）。帯に置くと、毎回読み飛ばす字が
+             紙のとなりに居座る ── 4ヶ月ぶんの枠より説明のほうが高くなっていた -->
+        <div class="mbar" data-help="cal">
+          <button class="btn" id="cvPrev">◀ 前の2ヶ月</button>
           <b id="cvTitle"></b>
-          <button class="btn" id="cvNext">次の4ヶ月 ▶</button>
+          <button class="btn" id="cvNext">次の2ヶ月 ▶</button>
           <span class="grow"></span>
+          <!-- 備考を出すか。**既定は空欄**（手で書き込む欄として刷る形）。
+               週案に書いた備考をそのまま出したい週もあるので、ここで切り替える -->
+          <button class="btn tgl" id="cvNote" aria-pressed="false">備考：空欄</button>
           <button class="btn go" id="cvPrint">印刷</button>
           <button class="btn" id="cvImage">画像</button>
           <button class="btn" id="cvClose">週の紙へ戻る</button>
         </div>
-        <p class="hint" id="cvHint"></p>
         <div class="cvpaper" id="cvPaper"></div>
       </div>
 
@@ -276,9 +280,8 @@
         <b>この画面はロック中。</b>直すには右上の「ロック中」を押す。</p>
 
       <div>
-        <h3>教科・行事</h3>
+        <h3 data-help="pals">教科・行事</h3>
         <div class="pals" id="pals"></div>
-        <p class="hint" id="palHint" style="margin-top:8px"></p>
         <!-- 教科の色。**紙の上では、題名の欄の地だけを変える。**
              前は丸い枠のチップを紙に埋め込んでいたが、枠と地の2つで言うぶん
              コマの中が混み、長い教科名は枠に入らなかった。
@@ -292,6 +295,30 @@
             ><button data-chip="output" aria-pressed="false">紙にも</button>
           </div>
         </div>
+
+        <!-- 紙の字の大きさ。**紙のとなりで直せるところに置く。**
+             設定（印刷と文字）にもあるが、あちらは窓を開かないと届かない。
+             **字が入りきらないと気づくのは、いつも紙を見ているとき。**
+             押しやすさで ＋−。スライダーは 0.5pt 単位を指で狙えなかった。 -->
+        <div class="chipset" id="fontWrap" data-help="fontsize">
+          <span class="flab">フォントサイズ</span>
+          <div class="fsz" role="group" aria-label="題名の字の大きさ">
+            <span>題名</span>
+            <button class="fsb" data-fs="titlePt" data-step="-0.5"
+                    aria-label="題名の字を小さく">−</button>
+            <b id="fsTitleV" aria-live="polite">16</b>
+            <button class="fsb" data-fs="titlePt" data-step="0.5"
+                    aria-label="題名の字を大きく">＋</button>
+          </div>
+          <div class="fsz" role="group" aria-label="詳細・備考の字の大きさ">
+            <span>備考</span>
+            <button class="fsb" data-fs="notePt" data-step="-0.5"
+                    aria-label="備考の字を小さく">−</button>
+            <b id="fsNoteV" aria-live="polite">12</b>
+            <button class="fsb" data-fs="notePt" data-step="0.5"
+                    aria-label="備考の字を大きく">＋</button>
+          </div>
+        </div>
       </div>
 
       <!-- 時数。**カレンダーの面と同じ数**（compose.js countSub で数える）。
@@ -300,7 +327,15 @@
            **まだ読んでいない週の数を字で言い、読み直す口を添える**。
            読めていない週は「基本時間割どおり」として数えている -->
       <div id="tallyWrap" hidden>
-        <h3>時数</h3>
+        <!-- **畳んでおく。** 時数は毎日見るものではなく、月末に確かめるもの。
+             開いたままだと、その下の「コマの中身を直す欄」が画面の外へ出る
+             （13教科ぶんの表が入るので縦に長い）。開き閉じは覚えておく。 -->
+        <details id="tallyFold">
+          <!-- ？ は見出しに置く。**畳んでいても押せる**ところに要る
+               （中に置くと、開かないと説明が読めない）。
+               ？ を押しても開き閉じはしない（wireHelp が伝播を止める） -->
+          <summary data-help="tally3"><span>時数</span><i id="tlyPeek"></i></summary>
+        <div class="tlyin">
         <div class="tly" id="tlyBox"></div>
         <p class="hint" id="tlyNote"></p>
         <button class="mini" id="tlyRead">年度はじめから読み直す</button>
@@ -312,8 +347,14 @@
         <div class="tlybtn" data-help="tally2">
           <button class="mini" id="tlySheet">時数を集計する</button>
         </div>
-        <p class="hint" id="tlySheetNote">全クラスぶんを数えて、スプレッドシートの
-          <b>「時数集計」シート</b>に置きます。<b>1〜3分かかります</b>（年度の後半ほど長い）。</p>
+        <!-- 時数表から取り込む。**時数のとなりに置く** ── 時数表を見ながら
+             使うものなので、設定の窓の中にあると往復になる。
+             入る先は「いま開いているクラスの、この週」 -->
+        <div class="tlybtn" data-help="imptally">
+          <button class="mini" id="tlyImp">時数表からインポート</button>
+        </div>
+        </div>
+        </details>
       </div>
 
       <!-- ③ その日の形。**全学年の面にだけ出る。** 効く範囲が全クラスなので、
@@ -458,6 +499,8 @@
     <button class="settingcard" id="setTanpopo"><b>たんぽぽ組分け</b><span>交流級と人数を組へ分ける</span></button>
     <button class="settingcard" id="setSub"><b>教科の表し方</b><span>紙の字・時数の1文字・たんぽぽの字</span></button>
     <button class="settingcard" id="setPaper"><b>印刷と文字</b><span id="setPaperNow">用紙・文字の大きさ</span></button>
+    <button class="settingcard" id="setImpTally"><b>時数表から取り込む</b><span>雛形を出して、貼り戻す</span></button>
+    <button class="settingcard" id="setImpEv"><b>年間行事からコマを作る</b><span>校時と対象を足して、全校・学年へ</span></button>
     <button class="settingcard" id="setNewYear"><b>新年度の準備</b><span>4月1日から、上から順に確認</span></button>
   </div>
 </div></dialog>
@@ -690,6 +733,26 @@
     <button class="btn danger" id="evGo" disabled>貼り替える</button></div>
 </div></dialog>
 
+<!-- 表からコマを取り込む（時数表・年間行事計画表）。**窓は1つ。**
+     運び方（雛形 → 貼る → 微修正 → 取り込む）が同じなので、
+     2つ作ると片方だけ直した版が出る。中身の違いは js/impplan.js が持つ -->
+<dialog id="impPlanDlg"><div class="dlg wide">
+  <h2 id="ipTtl">表から取り込む</h2>
+  <p id="ipLead"></p>
+  <div class="row">
+    <button class="btn" id="ipTpl">雛形を出す（コピー）</button>
+    <span class="hint">いまの中身が入った形で出ます。表に貼って、
+      <b>変えるところだけ</b>直してください。</span></div>
+  <textarea id="ipText" rows="7"
+    placeholder="雛形を直したら、見出しの行ごとコピーして貼る（Ctrl+V）"></textarea>
+  <div class="row"><button class="btn" id="ipRead">読む</button>
+    <span class="hint" id="ipStat"></span></div>
+  <div id="ipWarn" class="tpwarn"></div>
+  <div id="ipGrid" class="tpwrap"></div>
+  <div class="end"><button class="btn" data-close="impPlanDlg">やめる</button>
+    <button class="btn go" id="ipGo" disabled>入れる</button></div>
+</div></dialog>
+
 <dialog id="adminDlg"><div class="dlg">
   <h2>管理・システム</h2>
   <p><b>担任の操作はここにありません。</b>版と置き場所を確かめるところです。<br>
@@ -826,6 +889,7 @@
 /* @include js/store.js */
 /* @include js/backend.js */
 /* @include js/fixed.js */
+/* @include js/impplan.js */
 /* @include js/compose.js */
 /* @include js/sheet.js */
 /* @include js/panel.js */
