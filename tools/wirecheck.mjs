@@ -155,6 +155,7 @@ await p.addInitScript(() => {
       withSuccessHandler(f){ okFn = f; return api; },
       withFailureHandler(f){ ngFn = f; return api; },
       apiBoot(y){
+        DATA.boot.isAdmin = (window.__isAdmin === undefined) ? true : !!window.__isAdmin;
         /* 本番と同じく、年度を渡されたら学級編成と基本時間割も一緒に返す */
         const r = Object.assign({}, DATA.boot,
                     y ? {year:y, roster:DATA.year.roster, base:DATA.year.base,
@@ -2051,6 +2052,62 @@ ok("刷る手順は月の面と1つ（printSpread）", await p.evaluate(() =>
    typeof printSpread === "function" && typeof printCal === "function") === true);
 await p.locator('#centerTabs [data-center="week"]').click();
 await p.waitForTimeout(400); await closeDlgs();
+
+console.log("\n■ 出どころの四角（週案の紙だけ）");
+await p.evaluate(() => {
+  const w = week(), now = Date.now();
+  w.school["0|p1"] = {title:"全校朝会", note:"", subject:null, at:now, by:"a@edu.nishi.or.jp"};
+  (w.grade["5"] || (w.grade["5"] = {}))["1|p1"] =
+    {title:"学年集会", note:"", subject:"gakunen_shukai", at:now, by:"a@edu.nishi.or.jp"};
+  save(); openView({kind:"class", cls:"5-1"});
+});
+await p.waitForTimeout(500); await closeDlgs();
+const srcAt = (d, s2) => p.evaluate(([d, s2]) => {
+  const e = document.querySelector(`#sheet .cell[data-d="${d}"][data-s="${s2}"] .src`);
+  return e && !e.hidden ? e.textContent : "";
+}, [d, s2]);
+ok("全校から降りたコマは「全校」", await srcAt(0, "p1") === "全校", await srcAt(0, "p1"));
+ok("学年から降りたコマは「◯年」（層の名前ではなく学年の数字）",
+   await srcAt(1, "p1") === "5年", await srcAt(1, "p1"));
+ok("自分で書いたコマには出さない", await p.evaluate(() => {
+     writeCell(2, "p1", {title:"国語", subject:"kokugo"});
+     paintSheet();
+     const e = document.querySelector('#sheet .cell[data-d="2"][data-s="p1"] .src');
+     return !e || e.hidden;
+   }) === true);
+ok("右上の札と二重に言わない（層は四角が言う）", await p.evaluate(() => {
+     const e = document.querySelector('#sheet .cell[data-d="0"][data-s="p1"] .tag');
+     return e.hidden || e.textContent === "";
+   }) === true);
+ok("重なりは右上に残す（四角が言えないもの）", await p.evaluate(() => {
+     const w = week(), now = Date.now() + 1000;
+     (w.home["5-1"] || (w.home["5-1"] = {}))["0|p1"] =
+       {title:"国語", note:"", subject:"kokugo", at:now, by:"b@edu.nishi.or.jp"};
+     save(); paintSheet();
+     return document.querySelector('#sheet .cell[data-d="0"][data-s="p1"] .tag').textContent;
+   }) === "！重なり");
+/* **全学年の面では出さない。** 全部が「全校」になり、何も区別しない印になる */
+ok("全学年の面では出さない", await p.evaluate(() => {
+     openView({kind:"school"});
+     return [...document.querySelectorAll("#sheet .src")].every(e => e.hidden);
+   }) === true);
+await p.waitForTimeout(400); await closeDlgs();
+ok("4週の面には出さない", await p.evaluate(() => {
+     openView({kind:"class", cls:"5-1"});
+     setCenter("month");
+     return document.querySelectorAll("#mPaper .src:not([hidden])").length;
+   }) === 0);
+await p.waitForTimeout(600); await closeDlgs();
+await p.evaluate(() => setCenter("week"));
+await p.waitForTimeout(400); await closeDlgs();
+
+console.log("\n■ 管理操作は、押す前にサーバが止める");
+ok("管理者なら、設定と管理を出す", await p.evaluate(() =>
+   !document.querySelector('[data-act="settings"]').hidden) === true);
+ok("画面は関門ではない（本体はサーバの checkAdmin）", await p.evaluate(() => {
+     /* 隠れていても google.script.run は呼べる。だからサーバ側で止める */
+     return typeof Backend.info().isAdmin === "boolean";
+   }) === true);
 
 console.log(errs.length ? "\n【エラー】\n" + errs.join("\n") : "\nJSエラーなし");
 if(errs.length) ng += errs.length;

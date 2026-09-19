@@ -381,7 +381,9 @@ const Backend = (function(){
   const waiters = [];
   /* 立ち上がりでもらった、**自分と置き場所のこと**。管理画面に出す。
      手元で開いているときは空のまま（サーバに聞いていないので分からない）。 */
-  let bootInfo = {me:"", file:"", archived:{}};
+  /* isAdmin は**画面を隠すためだけ**。関門はサーバの checkAdmin が持つ。
+     手元（GASでない）では隠さない ── 触れるものが無いと、直せているか確かめられない */
+  let bootInfo = {me:"", file:"", archived:{}, isAdmin:!onGas};
 
   /* **保存にかかった時間を、最近のぶんだけ覚える。**
      長くなってきたことに、誰かが困る前に気づくため。
@@ -406,6 +408,7 @@ const Backend = (function(){
             cells: worst(pick(x => x.cells)), sheets: worst(pick(x => x.sheets))};
   }
   const info = () => ({me: bootInfo.me, file: bootInfo.file, gas: !!onGas,
+                      isAdmin: !!bootInfo.isAdmin,
                       archived: bootInfo.archived || {}, times: saveTimes()});
   /* その年度は退避ずみか。**退避ずみの年度に、何も言わずに紙を出さない。**
      週案の行はもう本体に無いので、基本時間割だけの紙が出る。
@@ -432,7 +435,8 @@ const Backend = (function(){
     }, 15000);
     google.script.run
       .withSuccessHandler(b => {
-        bootInfo = {me: b.me || "", file: b.file || "", archived: b.archived || {}};
+        bootInfo = {me: b.me || "", file: b.file || "", archived: b.archived || {},
+                    isAdmin: !!b.isAdmin};
         if(b.slots    && b.slots.length)    setSlots(b.slots);
         if(b.subjects && b.subjects.length) setSubjects(b.subjects);
         if(b.config)  applyConfig(b.config);

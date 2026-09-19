@@ -94,6 +94,31 @@ ok("児童が呼ぶと Gate.check() が止める", threw === true, "止まらな
 EMAIL = "tanaka@edu.nishi.or.jp";
 ok("教職員は Gate.check() を通る", ev("Gate.check().ok") === true, ev("Gate.check()"));
 
+console.log("\n■ 管理操作は、名指しした人と設置者だけ");
+SETTINGS = [["キー","値"],["管理者メール","admin@edu.nishi.or.jp, sub@edu.nishi.or.jp"]];
+EMAIL = "tanaka@edu.nishi.or.jp";
+threw = false;
+try{ ev("Gate.checkAdmin()"); }catch(e){ threw = /管理者/.test(e.message); }
+ok("一般の教職員は止める", threw === true, "止まらなかった");
+EMAIL = "ADMIN@EDU.NISHI.OR.JP";
+ok("名指しした人は通す（大小・全角を寄せる）", ev("Gate.checkAdmin().ok") === true, "通らなかった");
+/* **まっさらな学校でも立ち上がる。** 設定シートがまだ無い＝管理者メールも読めない。
+   ここで設置者まで止めると setupSheets が永久に実行できず、誰も始められない */
+SETTINGS = [["キー","値"]];
+EMAIL = "deployer@edu.nishi.or.jp";
+ok("管理者メールが空でも、設置者は通す", ev("Gate.checkAdmin().ok") === true, "止まった");
+EMAIL = "tanaka@edu.nishi.or.jp";
+threw = false;
+try{ ev("Gate.checkAdmin()"); }catch(e){ threw = /管理者/.test(e.message); }
+ok("管理者メールが空なら、設置者以外は止める", threw === true, "止まらなかった");
+/* 管理者でも、児童なら通らない。**順番を間違えない** */
+SETTINGS = [["キー","値"],["管理者メール","12345678@kyoiku.edu.nishi.or.jp"]];
+EMAIL = "12345678@kyoiku.edu.nishi.or.jp";
+threw = false;
+try{ ev("Gate.checkAdmin()"); }catch(e){ threw = /教職員/.test(e.message); }
+ok("管理者に書いても、児童は教職員の関門で止まる", threw === true, "素通りした");
+SETTINGS = [["キー","値"],["学級","3年3組"]];
+
 console.log("\n■ 弾いた画面にデータを載せない");
 EMAIL = "12345678@kyoiku.edu.nishi.or.jp";
 const html = ev("Gate.denyPage(Gate.judge(Gate.activeEmail())).getContent()");

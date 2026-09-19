@@ -213,6 +213,25 @@
 .cell[data-layer=grade]::before {background:var(--cat-grade)}
 .cell[data-layer=special]::before{background:var(--cat-special)}
 .cell.clash::before{background:var(--cat-clash)}
+/* 出どころの四角。**題名の欄の左上。** 週案の紙だけに出る。
+   左端の層の線（1.6mm）の右どなりに置く ── 線の上に重ねると、
+   どちらも読めなくなる。**刷っても残す**：紙の上で「これは降りてきた予定だ」と
+   分かることが、教務必携に貼ったあとでいちばん効く。 */
+.src{position:absolute;left:calc(1.6mm*var(--k));top:0;z-index:2;
+  font-size:calc(5pt*var(--k));line-height:1.3;padding:0 .3em;
+  border:.7px solid var(--ink-sub);border-top:0;border-left:0;
+  border-bottom-right-radius:3px;
+  background:var(--sheet);color:var(--ink-sub);
+  letter-spacing:.02em;white-space:nowrap;font-weight:600}
+.src[hidden]{display:none!important}
+/* 四角のぶんだけ、題名の字を右へ逃がす。**字と札を重ねない** */
+/* **左だけ空ける。** 両側を空けると 28mm のコマで題名に 15mm しか残らず、
+   「全校朝会」が2行になって枠からはみ出した（実測）。左に札があるぶん
+   右へ寄せたほうが、見た目の重さも釣り合う。
+   **折り返させない** ── 折り返すと fitTitles が幅ではなく高さで測ることになり、
+   下限（45%）で止まったまま2行目が備考の欄へ落ちる。 */
+.cell.has-src .t{padding-left:calc(7mm*var(--k));white-space:nowrap}
+
 .tag{position:absolute;right:0;top:0;font-size:calc(5pt*var(--k));line-height:1.35;
   padding:0 .35em;color:#fff;background:var(--cat-none);border-bottom-left-radius:3px;
   letter-spacing:.02em;z-index:1;max-width:70%;overflow:hidden;

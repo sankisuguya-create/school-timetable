@@ -79,7 +79,8 @@ function buildSheet_(sh){
 
   const foot = put(el("div", "foot",
     "<div class='lab'><span>週の</span><span>メモ</span></div>"
-    + "<div class='t'" + (sheetRO ? "" : " contenteditable") + "></div>"), "1 / 8", 3);
+    + "<div class='t'" + (sheetRO ? "" : " contenteditable role='textbox'"
+       + " aria-label='週のメモ' aria-multiline='true'") + "></div>"), "1 / 8", 3);
   const ft = foot.querySelector(".t");
   /* **週メモは画面（学級）ごとに持ち、シートへも送る**（compose.js の setMemo）。
      前は週にひとつしか無く、この端末にしか残らなかったので、
@@ -192,12 +193,12 @@ function cellEl(d, s){
   /* lesson は題名＋備考、note は**備考だけ**（放課後）、brk は題名だけ */
   const kls = s.kind === "lesson" ? "lesson" : s.kind === "note" ? "note row-break"
                                              : "brk row-break";
-  const ce = sheetRO ? "" : " contenteditable";
+  const ce = sheetRO ? "" : " contenteditable role='textbox'";
   const e = el("div", "cell " + kls,
     "<span class='tag' hidden></span>"
     + (s.kind === "note" ? "" : "<div class='t'" + ce + "></div>")
     + (s.kind === "lesson" || s.kind === "note"
-         ? "<div class='n'" + ce + "></div>" : ""));
+         ? "<div class='n'" + ce + (ce ? " aria-multiline='true'" : "") + "></div>" : ""));
   e.dataset.d = d; e.dataset.s = s.id;
   /* **休みの日の授業には書かせない。** 斜め線を引いた欄に字が入ると、
      刷った紙で「休みなのか、授業があるのか」が読めなくなる。
@@ -208,6 +209,13 @@ function cellEl(d, s){
      ここで返さずに CSS だけで止めると、キーボードの移動で欄に入れてしまい、
      打った字が別のクラス・別の週へ入る */
   if(sheetRO) return e;
+
+  /* contenteditable は、そのままでは支援技術に「どの欄か」を伝えない。
+     **同じ形の66マス**を聞き分けられるよう、日付・曜日・校時・欄の種類まで付ける */
+  const where = md(addDays(monday, d)) + "（" + DOW[d] + "） " + s.name
+              + (s.kind === "lesson" ? "校時" : "");
+  if(t) t.setAttribute("aria-label", where + " 教科名・行事名");
+  if(n) n.setAttribute("aria-label", where + " 詳細・備考");
 
   const focus = () => selectCell(d, s.id, e);
   if(t) t.addEventListener("focus", focus);
@@ -388,9 +396,19 @@ function paintCell(e, c, d, s, mine){
   if(mine) e.classList.toggle("upper", RANK[c.layer] > RANK[mine] && !c.clash);
   e.classList.toggle("clash", !!c.clash);
 
+  /* 出どころの四角。**週案の紙だけ**（4週・学年・カレンダーには出さない）。
+     あちらは見るための面で、1コマが小さく、札を置く場所がもう無い。 */
+  const src = (!sheetRO && !e.dataset.one) ? srcLabel(c, mine) : "";
+  let box = e.querySelector(".src");
+  if(src && !box){ box = el("span", "src"); e.insertBefore(box, e.firstChild); }
+  if(box){ box.hidden = !src; box.textContent = src; }
+  e.classList.toggle("has-src", !!src);
+
   const tag = e.querySelector(".tag");
   if(tag){
-    let name = c.clash ? "！重なり" : LAYER_NAME[c.layer];
+    /* **同じことを2か所に置かない。** 層そのものは左上の四角が言うので、
+       右上の札は四角が言えないものだけを出す（重なり・誰が変えたか・2クラス） */
+    let name = c.clash ? "！重なり" : (src ? "" : LAYER_NAME[c.layer]);
     if(c.over && c.over.length) name = c.over.join("・") + " が変更";
     /* 専科の面で、基本時間割が2クラス以上に当たったとき。**隠さずに言う。**
        「専科」シートの担当学年を書けば消える */

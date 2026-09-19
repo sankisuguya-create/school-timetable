@@ -32,6 +32,8 @@ const Sheets = (function(){
                                    "時程ID:左からの列数。実物に合わせて直す"],
         ["例外で通すメール", "",   "8桁の数字が本名のアドレスになっている職員だけ。"
                                  + "教職員ドメインの中でしか効かない"],
+        ["管理者メール",     "",   "設定・管理・学級編成・基本時間割・年度退避を使える教職員。"
+                                 + "カンマ区切り。空でも、このファイルを置いた人は使える"],
         ["たんぽぽファイルID", "", "たんぽぽ時間割のURL（そのまま貼ってよい）"],
         ["A週の起点の月曜", "2026-09-07", "この週がA週。あとは1週ごとに入れ替わる"],
         ["たんぽぽ支援員",     "", "たんぽぽ時間割に列を作る支援員。カンマ区切り"],
@@ -198,6 +200,12 @@ const Sheets = (function(){
   const PLAN_COLS = ["年度", "日付", "曜日", "時程", "題名", "詳細",
                      "教科コード", "層", "対象", "担当", "更新者", "更新時刻"];
   const PLAN_CLASS_COLS = ["対象"];
+  /* **人が入れた「=…」を数式として走らせない。** 題名や詳細に IMPORTXML のような
+     式を書かれると、ウェブアプリは設置者として動くので、設置者が見られるものを
+     引いてきてシートに置いてしまう。字を入れる列は、はじめから text にしておく。
+     （クラス名が日付に化けるのを止めているのと同じ手当て） */
+  const PLAN_TEXT_COLS = ["曜日", "時程", "題名", "詳細", "教科コード", "層",
+                          "対象", "担当", "更新者"];
 
   /* 層と対象から、どのシートに置くかを決める。
      専科がクラスに入れたコマも、そのクラスのシートに置く。
@@ -211,12 +219,14 @@ const Sheets = (function(){
   function ensurePlan(name){
     const ss = book();
     let sh = ss.getSheetByName(name);
-    if(sh) return sh;
-    sh = ss.insertSheet(name);
-    sh.getRange(1, 1, 1, PLAN_COLS.length).setValues([PLAN_COLS]).setFontWeight("bold");
-    sh.setFrozenRows(1);
-    /* 対象の列は書式なしテキスト。**3-3 が「3月3日」に化けるのを止める。** */
-    for(const col of PLAN_CLASS_COLS){
+    if(!sh){
+      sh = ss.insertSheet(name);
+      sh.getRange(1, 1, 1, PLAN_COLS.length).setValues([PLAN_COLS]).setFontWeight("bold");
+      sh.setFrozenRows(1);
+    }
+    /* **既にあるシートにも掛け直す。** 前の版で作ったシートは字の列が
+       書式なしテキストになっていない（3-3 が日付に化け、= が式として走る） */
+    for(const col of PLAN_TEXT_COLS){
       const i = PLAN_COLS.indexOf(col);
       if(i >= 0) sh.getRange(1, i + 1, sh.getMaxRows(), 1).setNumberFormat("@");
     }
@@ -647,7 +657,9 @@ const Sheets = (function(){
 
 /* シートを作る。エディタから1回実行する。 */
 function setupSheets(){
-  Gate.check();                 /* URL を開ける人は直接叩ける。ここも関門を通す */
+  /* **まっさらな学校でも通る。** 設定シートがまだ無いので「管理者メール」は
+     読めないが、設置者（この人のアカウントでスクリプトが動く）は常に管理者 */
+  Gate.checkAdmin();            /* シートを作るのも、直接叩ける管理操作 */
   const r = Sheets.setup();
   /* **あとから足した列と行は、setup では入らない。** ここで面倒を見る。
      放課後の行が無いと、画面に放課後の欄そのものが出ない。

@@ -789,6 +789,12 @@ function start(){
   /* 設定・時程・教科・その年度は、立ち上がりの1回でまとめてもらう。
      別々に取りに行くと、その回数だけ待つことになる。 */
   Backend.boot(() => {
+    /* **隠すのは目隠しであって関門ではない。** 本体はサーバの checkAdmin。
+       ここで伏せるのは、押しても断られるものを毎日目に入れないため */
+    if(Backend.isGas() && !Backend.info().isAdmin)
+      for(const e of document.querySelectorAll(
+            '[data-act="settings"],[data-act="admin"],[data-act="newyear"]'))
+        e.hidden = true;
     Backend.watch();              /* 開きっぱなしの画面も、たまに読み直す */
     applyPaper();
     /* **本番では、古い週の控えをここで間引く。** 溢れてから慌てない。
@@ -797,7 +803,7 @@ function start(){
     if(view.kind === "gate") drawGate();
     /* 新年度の設定が未了なら、左メニューに出す。**4/1 から、済むまで。**
        立ち上がりの1回だけ見に行く（週を繰るたびに見に行かない） */
-    pollNewYear();
+    if(!Backend.isGas() || Backend.info().isAdmin) pollNewYear();
   });
   // 案内の有無でデータ初期化の成否を変えない。
   setTimeout(() => openGuide(true), 250);

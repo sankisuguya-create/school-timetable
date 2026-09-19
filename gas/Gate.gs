@@ -53,6 +53,34 @@ const Gate = (function(){
     }catch(err){ return []; }   /* 読めなければ例外なし。閉じる側に倒す */
   }
 
+  /* ── 管理操作は、名指しした人だけ ──────────────────
+     **シートの共有権限では判定できない。** ウェブアプリは設置者として動くので、
+     開いた人がシートの権限を持っていなくても書ける（そういう作りにしてある）。
+     だから「シートを3人だけに共有する」は、画面を隠すのと同じで関門ではない。
+     URL を開ける教職員は google.script.run で apiArchivePurge まで直接叩ける。
+
+     **設置者はいつでも管理者。** その人は Apps Script エディタからシートも
+     コードも直せるので、ここで閉め出す意味が無い。閉め出すと、まっさらな学校が
+     `setupSheets` すら実行できなくなる ── 設定シートがまだ無いので
+     「管理者メール」も読めず、永久に立ち上がらない。 */
+  function deployer(){
+    try{ return norm(Session.getEffectiveUser().getEmail()); }catch(err){ return ""; }
+  }
+  function adminEmails(){
+    try{
+      const sh = SpreadsheetApp.getActive().getSheetByName("設定");
+      if(!sh) return [];
+      const v = sh.getDataRange().getValues(), out = [];
+      for(let i = 1; i < v.length; i++){
+        if(String(v[i][0]).trim() !== "管理者メール") continue;
+        String(v[i][1]).split(/[,\s]+/).forEach(function(x){
+          x = norm(x); if(x && out.indexOf(x) < 0) out.push(x);
+        });
+      }
+      return out;
+    }catch(err){ return []; }   /* 読めなければ空。閉じる側に倒す */
+  }
+
   function norm(raw){
     let e;
     try{ e = String(raw == null ? "" : raw); }catch(err){ return ""; }
@@ -97,6 +125,24 @@ const Gate = (function(){
     return j;
   }
 
+  /* **まず教職員か**を見て、そのうえで管理者かを見る。
+     一般の教職員には「管理者だけ」と言う ── 児童に出す文と混ぜない
+     （児童には、そもそも週案があることを知らせない）。 */
+  function isAdmin(email){
+    const e = norm(email);
+    if(!e) return false;
+    const d = deployer();
+    if(d && e === d) return true;          /* 設置者。シートもコードも直せる人 */
+    return adminEmails().indexOf(e) >= 0;
+  }
+  function checkAdmin(){
+    const j = check();
+    if(!isAdmin(j.email))
+      throw new Error("この操作は管理者だけが使えます。"
+                    + "「設定」シートの『管理者メール』を確かめてください。");
+    return j;
+  }
+
   /* 通らなかった人に出す画面。データは1つも載せない。 */
   function denyPage(j){
     const msg = (j.code === "student-form" || j.code === "not-staff")
@@ -117,8 +163,8 @@ const Gate = (function(){
     });
   }
 
-  return {judge:judge, check:check, activeEmail:activeEmail,
-          denyPage:denyPage, STAFF_DOMAIN:STAFF_DOMAIN};
+  return {judge:judge, check:check, checkAdmin:checkAdmin, isAdmin:isAdmin,
+          activeEmail:activeEmail, denyPage:denyPage, STAFF_DOMAIN:STAFF_DOMAIN};
 })();
 
 /* ------------------------------------------------------------------
