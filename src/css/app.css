@@ -573,6 +573,24 @@ span.tpin{cursor:default}
 /* 紙の字の大きさ（＋−）。**数は真ん中に出す。**
    押したものと変わったものが並んでいないと、効いたかどうか分からない。
    端まで来たら押せなくする（無反応にすると、壊れたのか端なのか読めない） */
+/* 畳める見出し。**押せると分かる形にする**（▸ と、押せる地）。
+   中身は毎日見るものではないので、既定は畳んでおく */
+#tallyFold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;
+  padding:7px 9px;border:1px solid var(--line);border-radius:var(--r-sm);
+  background:var(--card);font-size:13px;font-weight:700;color:var(--tx)}
+#tallyFold>summary::-webkit-details-marker{display:none}
+#tallyFold>summary::before{content:"▸";font-size:11px;color:var(--tx-sub);
+  transition:transform .12s}
+#tallyFold[open]>summary::before{transform:rotate(90deg)}
+#tallyFold>summary:hover{border-color:var(--ink-link)}
+#tallyFold>summary i{font-style:normal;font-weight:400;font-size:12px;
+  color:var(--tx-sub);margin-left:auto}
+.tlyin{padding-top:9px}
+/* 押して切り替える帯のボタン（カレンダーの「備考：空欄／出す」）。
+   **いまどちらかを字で言う。** 押せる／押されているを色だけに持たせない */
+.btn.tgl[aria-pressed=true]{border-color:var(--ink-link);color:var(--ink-link);
+  font-weight:700}
+
 .fsz{display:flex;align-items:center;gap:3px;font-size:12px;color:var(--tx-sub)}
 .fsz>span{margin-right:2px}
 .fsz>b{min-width:2.4em;text-align:center;font-size:12.5px;color:var(--tx);
@@ -1014,7 +1032,10 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 月〜土の6列。**日曜は置かない**（週の紙と同じ。1列ぶん広く取れる） */
 /* 週の行は**均等に伸ばす**。月によって5行だったり6行だったりするので、
    行の高さを決め打ちにすると、5行の月に1行ぶんの余白が残る */
-.cgrid{display:grid;grid-template-columns:repeat(6,1fr);
+/* **土は半分の幅。** 土に入るのは行事とオープンスクールだけで、
+   ふだんは空のまま。同じ幅を取ると、月〜金が1日あたり 1.9mm 痩せる
+   （週の紙が土の列を 20mm に絞っているのと同じ考え） */
+.cgrid{display:grid;grid-template-columns:repeat(5,1fr) .5fr;
   grid-template-rows:auto;grid-auto-rows:1fr;flex:1;min-height:0}
 .cdow{font-size:calc(5.5pt*var(--k));text-align:center;color:var(--ink-sub);
   padding:calc(.5mm*var(--k)) 0;background:var(--band);
@@ -1039,13 +1060,24 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .cper>i{font-style:normal;display:grid;
   /* 左＝1文字ぶん（字の幅で決め打ちにせず、行の高さに合わせる）。
      残りが書き込み欄。**欄のほうを広く取る** ── 書くのは人の手なので */
-  grid-template-columns:calc(3.4mm*var(--k)) 1fr;
+  /* 左＝題名の欄。**2倍に広げた**（3.4 → 6.8mm）。1文字ぶんだと
+     専科の面のクラス名（4-3）が入らず、教科名も1文字に潰れていた。
+     広げたぶんは書き込み欄から取る ── 書き込みは1〜2文字か丸印が大半 */
+  grid-template-columns:calc(6.8mm*var(--k)) 1fr;
   align-items:center;min-width:0;overflow:hidden;
   border-top:.6px solid var(--rule-soft)}
 .cper>i:first-child{border-top:0}
 .cper b{font-weight:600;font-size:calc(7.5pt*var(--k));line-height:1;
-  text-align:center;overflow:hidden}
+  text-align:center;overflow:hidden;white-space:nowrap}
+/* 専科の面はクラス名（4-3）。**枠に収める**ため、そこだけ字を落とす */
+.cvpaper[data-face=special] .cper b{font-size:calc(6pt*var(--k));letter-spacing:-.02em}
+/* 備考を出しているとき。**枠から出さない。** 1行に収め、あふれたら切る
+   （紙の上で2行目が隣の校時に食い込むと、何校時のことか読めなくなる） */
+.cper u{font-size:calc(5.5pt*var(--k));color:var(--ink-sub);line-height:1.1;
+  padding:0 calc(.6mm*var(--k));overflow:hidden;white-space:nowrap;
+  display:flex;align-items:center}
 .cper u{text-decoration:none;border-left:.6px solid var(--rule-soft);height:100%}
+
 /* 出どころの線。**週案の紙と同じ色・同じ左端。**
    降りてきたコマを、カレンダーの上でも見つけられるようにする。
    紙にも残す（色が飛んでも、行の左が詰まっているのは見える）。 */
@@ -1083,6 +1115,10 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .ct{display:grid;grid-template-columns:1.4em max-content;
   justify-content:center;align-items:baseline;column-gap:.2em;
   min-width:0;white-space:nowrap;font-variant-numeric:tabular-nums}
+/* **専科はクラス名（3文字）。** 1.4em のままだと札からはみ出して
+   数とくっつき、「1-23(13)」が「1-23」に読めた（実測）。
+   名前の欄を広げ、あいだも空ける。 */
+.cvpaper[data-face=special] .ct{grid-template-columns:2.6em max-content;column-gap:.45em}
 .ct>b{text-align:right;font-weight:700;color:var(--ink-sub)}
 /* 累計は**小さく薄く**。手前に出るのはその月の数のほう */
 .ct i{font-style:normal;font-size:.85em;color:var(--ink-sub)}

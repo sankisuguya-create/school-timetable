@@ -2299,9 +2299,29 @@ ok("カレンダーの月の下と同じ数", await p.evaluate(() => {
            && String(sum[k] || 0) === r.children[2].textContent;
      });
    }) === true);
-ok("見込みで数えているぶんを字で言う", await p.evaluate(() =>
-   /基本時間割/.test($("tlyNote").textContent)) === true,
-   await p.evaluate(() => $("tlyNote").textContent));
+/* **決まりごとは ？ の中**（毎回同じ字が数の下に居座ると、変わった数が埋もれる）。
+   欄に残すのは「いまの状態」だけ ── 何週ぶんをまだ読んでいないか */
+ok("決まりごとは ？ の中にある", await p.evaluate(() =>
+   /基本時間割/.test(HELP.tally3.b.join(""))) === true);
+ok("欄に残すのは、いまの状態だけ", await p.evaluate(() => {
+     const t = $("tlyNote").textContent;
+     return t === "" || /読み/.test(t);
+   }) === true, await p.evaluate(() => $("tlyNote").textContent));
+/* **畳んでおける。** 毎日見るものではないので、既定は畳む。
+   開き閉じは覚える（毎回たたみ直させない） */
+ok("時数は畳める", await p.evaluate(() => !!$("tallyFold")) === true);
+ok("？は畳んだままでも押せる（見出しに置く）", await p.evaluate(() =>
+   !!document.querySelector('#tallyFold > summary .helpq')) === true);
+ok("開き閉じを覚える", await p.evaluate(() => {
+     const f = $("tallyFold");
+     f.open = true; f.dispatchEvent(new Event("toggle"));
+     const a = !!db.settings.tallyOpen;
+     f.open = false; f.dispatchEvent(new Event("toggle"));
+     return a && !db.settings.tallyOpen;
+   }) === true);
+ok("畳んでいても、今月のコマ数は見える", await p.evaluate(() =>
+   /コマ/.test($("tlyPeek").textContent)) === true,
+   await p.evaluate(() => $("tlyPeek").textContent));
 ok("入口（まだ何も開いていない）では出さない", await p.evaluate(() => {
      const keep = view;
      view = {kind:"gate"};
@@ -2314,11 +2334,28 @@ ok("入口（まだ何も開いていない）では出さない", await p.evalu
 console.log("\n■ 時数集計シート（押したときだけ）");
 await p.evaluate(() => { openView({kind:"class", cls:"5-1"}); });
 await p.waitForTimeout(500); await closeDlgs();
-ok("ボタンと、時間がかかる断りが出る", await p.evaluate(() =>
-   !!$("tlySheet") && /1〜3分/.test($("tlySheetNote").textContent)) === true,
-   await p.evaluate(() => $("tlySheetNote").textContent));
-ok("？の説明にも、時間がかかると書いてある", await p.evaluate(() =>
-   /1〜3分/.test(HELP.tally2.b.join("")) ) === true);
+/* 時数は畳んである（既定）。**中のボタンを押すには、まず開く** */
+await p.evaluate(() => { $("tallyFold").open = true; });
+await p.waitForTimeout(200);
+ok("ボタンが出る", await p.evaluate(() => !!$("tlySheet")) === true);
+/* 断りは ？ の中だけにする。ボタンの下に置くと、押す前に読むとは限らない字が
+   時数の表の下に積み上がる（畳んだときに見えなくなる場所でもある） */
+ok("？の説明に、時間がかかると書いてある", await p.evaluate(() =>
+   /分/.test(HELP.tally2.b.join("")) ) === true);
+/* **数えるのは開いている面のぶんだけ。** 前は全27クラスを数えていて、
+   担任が自分のクラスを見たいだけでも 1〜3分待たされた */
+ok("学級を開いていれば、そのクラス1つだけ数える", await p.evaluate(() => {
+     openView({kind:"class", cls:"5-1"});
+     return JSON.stringify(tallyScope());
+   }) === JSON.stringify(["5-1"]));
+ok("学年を開いていれば、その学年のクラス", await p.evaluate(() => {
+     openView({kind:"grade", grade:"5"});
+     const a = JSON.stringify(tallyScope()), b = JSON.stringify(classesOfGrade("5"));
+     openView({kind:"class", cls:"5-1"});
+     return a === b;
+   }) === true);
+ok("？の説明も、開いている面のぶんだと言っている", await p.evaluate(() =>
+   /開いている/.test(HELP.tally2.b.join("")) ) === true);
 /* **？はボタンのすぐ右。** 見出しの横だと、押そうとしている人の目に入らない */
 ok("？は「時数を集計する」のすぐ右にある", await p.evaluate(() => {
      const q = document.querySelector('[data-help="tally2"] .helpq');
@@ -2362,11 +2399,15 @@ ok("教科の列は、教科シートの順（1文字）", await p.evaluate(() =
      const got = (window.__tally.head || []).slice(3, 3 + want.length);
      return want.join(",") === got.join(",");
    }) === true, tly && tly.head);
-ok("行は クラス × 月 のぶん", await p.evaluate(() => {
+/* **開いている面のぶんだけ。** 学級を開いていれば1クラス × 月の数 */
+ok("行は 開いている面のクラス × 月 のぶん", await p.evaluate(() => {
      const m0 = new Date(monday.getFullYear(), monday.getMonth(), 1);
      return window.__tally.rows.length
-         === allClasses().length * tallyMonths(m0).length;
+         === tallyScope().length * tallyMonths(m0).length;
    }) === true, tly && tly.rows.length);
+ok("ほかのクラスの行は作らない", await p.evaluate(() =>
+   window.__tally.rows.every(r => tallyScope().indexOf(r[1]) >= 0)) === true,
+   await p.evaluate(() => [...new Set(window.__tally.rows.map(r => r[1]))]));
 /* **数えるのは画面。** シートの数と、右メニューに出ている数が一致すること */
 ok("シートに置いた数は、画面の数と同じ", await p.evaluate(() => {
      const t = window.__tally, m = new Date(monday.getFullYear(), monday.getMonth(), 1);

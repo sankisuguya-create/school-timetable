@@ -610,17 +610,35 @@ function wire(){
   on("tlyRead", "click", tallyReadAll);
   /* 時数集計シート。**時間がかかるので、押す前に言う。**
      押し間違いで1〜3分待たせない（やめる側に落ちる窓で受ける） */
-  on("tlySheet", "click", () => askOk({
-    title: "全クラスぶんの時数を数えますか",
-    lines: ["4月からこの月までを、<b>全クラスぶん</b>数えて、スプレッドシートの"
-            + "<b>「時数集計」シート</b>に置きます。",
-            "<b>1〜3分かかります。</b>年度の後半ほど長くかかります"
-            + "（読む週が増えるため）。",
-            "置いたものは、押すたびに作り直します。"
-            + "ほかの年度のぶんは残ります。"],
-    goLabel: "数える",
-    onYes: tallySheetAll
-  }));
+  on("tlySheet", "click", () => {
+    const cs = tallyScope(), one = cs.length === 1;
+    askOk({
+      title: one ? cs[0] + " の時数を数えますか"
+                 : cs.length + "クラスぶんの時数を数えますか",
+      lines: ["4月からこの月までを、<b>" + (one ? cs[0] : cs.length + "クラスぶん")
+              + "</b>数えて、スプレッドシートの<b>「時数集計」シート</b>に置きます。",
+              one ? "<b>たいてい数十秒で終わります。</b>年度の後半ほど長くかかります"
+                    + "（読む週が増えるため）。"
+                  : "<b>1〜3分かかります。</b>年度の後半ほど長くかかります"
+                    + "（読む週が増えるため）。",
+              "置いたものは、押すたびに<b>そのぶんの行だけ</b>作り直します。"
+              + "ほかのクラスや、ほかの年度のぶんは残ります。"],
+      goLabel: "数える",
+      onYes: tallySheetAll
+    });
+  });
+
+  /* カレンダーの備考。**空欄で刷るか、週案の備考を出すか。** */
+  on("cvNote", "click", () => {
+    db.settings.calNote = !db.settings.calNote;
+    save(); redrawCenter();
+  });
+
+  /* 時数の畳み。**開き閉じを覚えておく**（毎回たたみ直させない） */
+  on("tallyFold", "toggle", () => {
+    db.settings.tallyOpen = $("tallyFold").open;
+    save();
+  });
 
   /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */
   on("dayDlg","close", () => { dayPick = 0; });
