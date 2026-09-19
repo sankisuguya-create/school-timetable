@@ -347,6 +347,12 @@
         <div class="tlybtn" data-help="tally2">
           <button class="mini" id="tlySheet">時数を集計する</button>
         </div>
+        <!-- 時数表から取り込む。**時数のとなりに置く** ── 時数表を見ながら
+             使うものなので、設定の窓の中にあると往復になる。
+             入る先は「いま開いているクラスの、この週」 -->
+        <div class="tlybtn" data-help="imptally">
+          <button class="mini" id="tlyImp">時数表からインポート</button>
+        </div>
         </div>
         </details>
       </div>
@@ -493,6 +499,8 @@
     <button class="settingcard" id="setTanpopo"><b>たんぽぽ組分け</b><span>交流級と人数を組へ分ける</span></button>
     <button class="settingcard" id="setSub"><b>教科の表し方</b><span>紙の字・時数の1文字・たんぽぽの字</span></button>
     <button class="settingcard" id="setPaper"><b>印刷と文字</b><span id="setPaperNow">用紙・文字の大きさ</span></button>
+    <button class="settingcard" id="setImpTally"><b>時数表から取り込む</b><span>雛形を出して、貼り戻す</span></button>
+    <button class="settingcard" id="setImpEv"><b>年間行事からコマを作る</b><span>校時と対象を足して、全校・学年へ</span></button>
     <button class="settingcard" id="setNewYear"><b>新年度の準備</b><span>4月1日から、上から順に確認</span></button>
   </div>
 </div></dialog>
@@ -725,6 +733,26 @@
     <button class="btn danger" id="evGo" disabled>貼り替える</button></div>
 </div></dialog>
 
+<!-- 表からコマを取り込む（時数表・年間行事計画表）。**窓は1つ。**
+     運び方（雛形 → 貼る → 微修正 → 取り込む）が同じなので、
+     2つ作ると片方だけ直した版が出る。中身の違いは js/impplan.js が持つ -->
+<dialog id="impPlanDlg"><div class="dlg wide">
+  <h2 id="ipTtl">表から取り込む</h2>
+  <p id="ipLead"></p>
+  <div class="row">
+    <button class="btn" id="ipTpl">雛形を出す（コピー）</button>
+    <span class="hint">いまの中身が入った形で出ます。表に貼って、
+      <b>変えるところだけ</b>直してください。</span></div>
+  <textarea id="ipText" rows="7"
+    placeholder="雛形を直したら、見出しの行ごとコピーして貼る（Ctrl+V）"></textarea>
+  <div class="row"><button class="btn" id="ipRead">読む</button>
+    <span class="hint" id="ipStat"></span></div>
+  <div id="ipWarn" class="tpwarn"></div>
+  <div id="ipGrid" class="tpwrap"></div>
+  <div class="end"><button class="btn" data-close="impPlanDlg">やめる</button>
+    <button class="btn go" id="ipGo" disabled>入れる</button></div>
+</div></dialog>
+
 <dialog id="adminDlg"><div class="dlg">
   <h2>管理・システム</h2>
   <p><b>担任の操作はここにありません。</b>版と置き場所を確かめるところです。<br>
@@ -861,6 +889,7 @@
 /* @include js/store.js */
 /* @include js/backend.js */
 /* @include js/fixed.js */
+/* @include js/impplan.js */
 /* @include js/compose.js */
 /* @include js/sheet.js */
 /* @include js/panel.js */

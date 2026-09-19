@@ -2458,6 +2458,132 @@ ok("数え方は時数集計表と同じ（休みの日は数えない）", awai
      return n > 0 && Object.keys(after).length === 0;
    }) === true);
 
+console.log("\n■ 表から取り込む（時数表・年間行事計画表）");
+await p.evaluate(() => { openView({kind:"class", cls:"5-1"}); });
+await p.waitForTimeout(500); await closeDlgs();
+/* ── 時数表。**いま開いているクラスの、この週だけ** ── */
+await p.evaluate(() => openImpPlan("tally"));
+await p.waitForTimeout(250);
+await p.locator("#ipTpl").click(); await p.waitForTimeout(300);
+ok("雛形は 見出し＋月〜金 の5行", await p.evaluate(() => {
+     const r = $("ipText").value.split("\n");
+     return r.length === 6 && r[0].split("\t")[0] === "曜日" && r[1].split("\t")[0] === "月";
+   }) === true, await p.evaluate(() => $("ipText").value.split("\n")[0]));
+ok("雛形にいまの中身が入っている", await p.evaluate(() => {
+     const r = $("ipText").value.split("\n").map(x => x.split("\t"));
+     const les = SLOTS.filter(s => s.kind === "lesson");
+     const c = cellFor(0, les[0].id), t = plain(c.title).trim();
+     return r[1][1] === (!t ? "" : t === NO_LESSON ? "／" : shortOf(c.subject, c.title));
+   }) === true);
+/* **変えていない欄は入れない。** 貼り戻しただけで全欄を書くと、
+   学年・全校から降りてきたコマが担任の層に化ける（紙の見た目は同じ） */
+await p.locator("#ipRead").click(); await p.waitForTimeout(300);
+ok("そのまま貼り戻しても、1件も入れない", await p.evaluate(() =>
+   /同じでした/.test($("ipWarn").textContent) && $("ipGo").disabled) === true,
+   await p.evaluate(() => $("ipStat").textContent + " / " + $("ipWarn").textContent));
+await p.evaluate(() => {
+  const r = $("ipText").value.split("\n").map(x => x.split("\t"));
+  r[1][1] = "国"; r[1][2] = "算"; r[1][3] = "むにゃ";
+  $("ipText").value = r.map(x => x.join("\t")).join("\n");
+});
+await p.locator("#ipRead").click(); await p.waitForTimeout(300);
+ok("読めない字は、入れずに名指しする", await p.evaluate(() =>
+   /むにゃ/.test($("ipWarn").textContent)) === true);
+ok("入れる前に「どの曜日の何校時に何が入るか」を出す", await p.evaluate(() =>
+   /国語/.test($("ipGrid").innerText) && /月/.test($("ipGrid").innerText)) === true,
+   await p.evaluate(() => $("ipGrid").innerText.slice(0, 60)));
+const impBefore = await p.evaluate(() => {
+  const les = SLOTS.filter(s => s.kind === "lesson");
+  return JSON.stringify([0,1].map(i => plain(cellFor(0, les[i].id).title).trim()));
+});
+await p.locator("#ipGo").click(); await p.waitForTimeout(700); await closeDlgs();
+ok("開いているクラスの、担任の層に入る", await p.evaluate(() => {
+     const les = SLOTS.filter(s => s.kind === "lesson");
+     const a = cellFor(0, les[0].id), b = cellFor(0, les[1].id);
+     return plain(a.title).trim() === "国語" && a.layer === "home"
+         && plain(b.title).trim() === "算数" && b.layer === "home";
+   }) === true, impBefore);
+ok("ほかの週には入らない", await p.evaluate(() => {
+     const other = Y().weeks[iso(addDays(monday, 7))];
+     return !other || !other.home || !other.home["5-1"]
+         || Object.keys(other.home["5-1"]).length === 0;
+   }) === true);
+/* ── 年間行事。**全校・学年へ。日付は週をまたぐ** ── */
+await p.evaluate(() => {
+  const y = Y();
+  y.events = y.events || {};
+  y.events[iso(addDays(monday, 2))]  = {c:"避難訓練"};
+  y.events[iso(addDays(monday, 16))] = {c:"社会見学"};
+  save(); openView({kind:"school"});
+});
+await p.waitForTimeout(600); await closeDlgs();
+await p.evaluate(() => openImpPlan("events"));
+await p.waitForTimeout(250);
+await p.locator("#ipTpl").click(); await p.waitForTimeout(300);
+ok("雛形の見出しは 日付／校時／対象／行事名／備考", await p.evaluate(() =>
+   $("ipText").value.split("\n")[0]) === "日付\t校時\t対象\t行事名\t備考");
+ok("雛形に、年間行事の行が並ぶ", await p.evaluate(() =>
+   /避難訓練/.test($("ipText").value) && /社会見学/.test($("ipText").value)) === true);
+/* **校時と対象が空の行は入れない。** 雛形には行事のある日がぜんぶ並ぶので、
+   コマにしないものが残っているのがふつう */
+await p.locator("#ipRead").click(); await p.waitForTimeout(300);
+ok("校時と対象が空なら、1件も入れない", await p.evaluate(() =>
+   $("ipGo").disabled) === true, await p.evaluate(() => $("ipStat").textContent));
+await p.evaluate(() => {
+  const r = $("ipText").value.split("\n").map(x => x.split("\t"));
+  const hit = t => r.findIndex(x => x[3] === t);
+  r[hit("避難訓練")][1] = "2"; r[hit("避難訓練")][2] = "全校";
+  /* **学級編成にある学年を使う。** 無い学年は「誰の紙にも出ない」ので入らない */
+  window.__g = gradesAll()[0];
+  r[hit("社会見学")][1] = "3"; r[hit("社会見学")][2] = window.__g + "年";
+  $("ipText").value = r.map(x => x.join("\t")).join("\n");
+});
+await p.locator("#ipRead").click(); await p.waitForTimeout(300);
+ok("対象を 全校／◯年 で読む", await p.evaluate(() =>
+   /全校/.test($("ipGrid").innerText)
+   && new RegExp(window.__g + "年").test($("ipGrid").innerText)) === true,
+   await p.evaluate(() => $("ipGrid").innerText.slice(0, 80)));
+await p.locator("#ipGo").click(); await p.waitForTimeout(400);
+/* **押す前に、当たる範囲を言う**（ほかの先生の紙に出るため） */
+ok("全校・学年へ入れる前に、範囲を言って聞く", await p.evaluate(() =>
+   $("okDlg") && $("okDlg").open) === true);
+await p.locator("#okYes").click(); await p.waitForTimeout(2000); await closeDlgs();
+ok("全校の層に入る", await p.evaluate(() => {
+     const w = Y().weeks[iso(monday)], les = SLOTS.filter(s => s.kind === "lesson");
+     return plain(((w.school || {})[ck(2, les[1].id)] || {}).title || "") === "避難訓練";
+   }) === true);
+/* **週をまたいでも入る。** 入れる前に、当たる週をぜんぶ読んでから書く */
+ok("2週先のコマも、学年の層に入る", await p.evaluate(() => {
+     const w = Y().weeks[iso(addDays(monday, 14))], les = SLOTS.filter(s => s.kind === "lesson");
+     const g = w && w.grade && w.grade[window.__g];
+     return !!g && plain((g[ck(2, les[2].id)] || {}).title || "") === "社会見学";
+   }) === true, await p.evaluate(() => {
+     const w = Y().weeks[iso(addDays(monday, 14))];
+     return w && w.grade ? Object.keys(w.grade).map(g =>
+       g + ":" + Object.keys(w.grade[g]).join(",")) : "その週が無い";
+   }));
+/* **後片付け。** ここで入れたコマは、あとの検査が見る週に残る
+   （5-1 の 0|p1 に担任の層で入れたままだと、次の「出どころ」の検査で
+   全校のコマを覆ってしまう）。検査どうしが順番で結ばれないようにする。 */
+await p.evaluate(() => {
+  const les = SLOTS.filter(s => s.kind === "lesson");
+  const key = (d, i) => les[i] ? ck(d, les[i].id) : null;
+  const drop = (o, k) => { if(o && k) delete o[k]; };
+  const wipe = (w, g) => { if(!w) return;
+    for(const i of [0, 1, 2, 3]) drop(w.home && w.home["5-1"], key(0, i));
+    drop(w.school, key(2, 1));
+    drop(g && w.grade && w.grade[g], key(2, 2));
+  };
+  wipe(Y().weeks[iso(monday)], window.__g);
+  wipe(Y().weeks[iso(addDays(monday, 14))], window.__g);
+  const ev = Y().events || {};
+  delete ev[iso(addDays(monday, 2))];
+  delete ev[iso(addDays(monday, 16))];
+  save();
+  openView({kind:"class", cls:"5-1"});
+});
+await p.waitForTimeout(600); await closeDlgs();
+
 console.log("\n■ 出どころの四角（週案の紙だけ）");
 await p.evaluate(() => {
   const w = week(), now = Date.now();

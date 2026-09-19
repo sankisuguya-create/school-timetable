@@ -662,6 +662,15 @@ function wire(){
   on("tpYes","click", () => { $("tpDlg").close(); doExportTanpopo(); });
   on("baseImp","click", openImpDlg);
 
+  /* 表からコマを取り込む。**押す口は3つ、窓は1つ。**
+     右メニュー（時数表）と、設定のカード2枚。運び方は同じ */
+  on("tlyImp",     "click", () => openImpPlan("tally"));
+  on("setImpTally","click", () => { $("settingsDlg").close(); openImpPlan("tally"); });
+  on("setImpEv",   "click", () => { $("settingsDlg").close(); openImpPlan("events"); });
+  on("ipTpl",  "click", impPlanTemplate);
+  on("ipRead", "click", impPlanRead);
+  on("ipGo",   "click", impPlanGo);
+
   /* 固定時間割の取り込み */
   for(const b of $("impSrc").querySelectorAll("button"))
     b.onclick = () => setImpSrc(b.dataset.s);
