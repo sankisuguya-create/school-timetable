@@ -143,7 +143,14 @@ function saveNow(){
    **戻り値は「保存が止まっていないか」**で、「いま書けたか」ではない
    （まだ書いていないので言えない）。呼ぶ側はどこも戻り値で分岐していない。
    分岐させたくなったら saveNow を使う。 */
+/* **中身が変わった印。** 数えたものを取り置く側（時数の集計）が、
+   「前に数えたときから変わったか」をこれ1つで見る。
+   日付や時刻ではなく数にする ── 同じミリ秒に2回変わることがある。
+   書き込み（save）と、シートから読んだぶんの取り込み（Backend.mergeWeek）で上がる。 */
+let dataTick = 0;
+
 function save(){
+  dataTick++;
   if(!saveT) saveT = setTimeout(saveNow, SAVE_WAIT);
   return !storeBroken;
 }

@@ -2141,8 +2141,97 @@ ok("刷るのは A4 よこ", await p.evaluate(() =>
    CAL_PAGE.w === 297 && CAL_PAGE.h === 210) === true);
 ok("刷る手順は月の面と1つ（printSpread）", await p.evaluate(() =>
    typeof printSpread === "function" && typeof printCal === "function") === true);
+
+/* **月ごとに数えたものを取り置き、累計は足し算だけにする。**
+   4ヶ月ぶんの累計は、4月を4回・5月を3回…と同じ月を何度も通るので、
+   月の合計を1度だけ出せば数え直しが消える */
+ok("月ごとの数を取り置く", await p.evaluate(() =>
+   Object.keys(calMonthCache).length > 0) === true,
+   await p.evaluate(() => Object.keys(calMonthCache).length));
+ok("累計は取り置いた月を足すだけ（日を数え直さない）", await p.evaluate(() => {
+     for(const m of calMonths()) calSum(m);        /* 取り置きを温める */
+     const days = Object.keys(calCache).length;
+     const months = Object.keys(calMonthCache).length;
+     for(const m of calMonths()) calSum(m);        /* 2回目 */
+     /* 日も月も増えない＝組み直していない */
+     return days > 0 && Object.keys(calCache).length === days
+                     && Object.keys(calMonthCache).length === months;
+   }) === true);
+ok("中身が変わると取り置きを捨てる", await p.evaluate(() => {
+     for(const m of calMonths()) calSum(m);
+     const had = Object.keys(calMonthCache).length;
+     dataTick++;                     /* 書き込み・読み込みで上がる印 */
+     calFreshen();
+     return had > 0 && Object.keys(calMonthCache).length === 0;
+   }) === true);
+/* **面ごとに数が違う。** openView は捨てたあとすぐ数え直す（右メニューの時数を
+   描くため）ので、捨てる決まりそのものを見る */
+ok("面が変わると取り置きを捨てる（クラスごとに数が違う）", await p.evaluate(() => {
+     const keep = view;
+     view = {kind:"class", cls:"5-1"};
+     calFreshen();
+     calCount(new Date(2026, 3, 1));
+     const had = Object.keys(calMonthCache).length;
+     view = {kind:"class", cls:"5-2"};
+     calFreshen();
+     const after = Object.keys(calMonthCache).length;
+     view = keep; calFreshen();
+     return had > 0 && after === 0;
+   }) === true, await p.evaluate(() => Object.keys(calMonthCache).length));
+/* **週の年度は、その週の月曜で決まる。** 4月1日を含む週の月曜は3月にあることが
+   あり、その週は前の年度のシートに入っている。月の年度でまとめるとそこがずれ、
+   その年度ぶんを丸ごと違う年の箱へ読みに行っていた */
+ok("4/1 を含む週は、前の年度の箱に入れて読む", await p.evaluate(() => {
+     const g = fyWeeks([new Date(2026, 3, 1)]);      /* 2026年4月 */
+     return Object.keys(g).sort().join(",") === "2025,2026"
+         && Object.keys(g["2025"]).join(",") === "2026-03-30";
+   }) === true, await p.evaluate(() => {
+     const g = fyWeeks([new Date(2026, 3, 1)]);
+     return Object.keys(g).map(y => y + ":" + Object.keys(g[y]).join("/"));
+   }));
+ok("年度ごとの先頭の月曜が、その年度に入っている", await p.evaluate(() => {
+     const g = fyWeeks([new Date(2026, 3, 1), new Date(2026, 4, 1)]);
+     return Object.keys(g).every(y =>
+       String(fyOf(parseISO(Object.keys(g[y]).sort()[0]))) === y);
+   }) === true);
 await p.locator('#centerTabs [data-center="week"]').click();
 await p.waitForTimeout(400); await closeDlgs();
+
+console.log("\n■ 右メニューの時数");
+await p.evaluate(() => { openView({kind:"class", cls:"5-1"}); });
+await p.waitForTimeout(500); await closeDlgs();
+ok("学級を開くと出る", await p.evaluate(() =>
+   $("tallyWrap").hidden === false) === true);
+ok("教科ごとに「今月」と「累計」の3列", await p.evaluate(() => {
+     const r = document.querySelector("#tlyBox .tlyrow");
+     return !!r && r.children.length === 3
+         && /^\d+$/.test(r.children[1].textContent)
+         && /^\d+$/.test(r.children[2].textContent);
+   }) === true, await p.evaluate(() => {
+     const r = document.querySelector("#tlyBox .tlyrow");
+     return r ? [...r.children].map(e => e.textContent) : null;
+   }));
+/* **カレンダーの面と同じ数。** 数え方は countSub 1つなので、見る場所で違わない */
+ok("カレンダーの月の下と同じ数", await p.evaluate(() => {
+     const m = new Date(monday.getFullYear(), monday.getMonth(), 1);
+     const now = calCount(m), sum = calSum(m);
+     return [...document.querySelectorAll("#tlyBox .tlyrow")].every(r => {
+       const k = r.children[0].textContent;
+       return String(now[k] || 0) === r.children[1].textContent
+           && String(sum[k] || 0) === r.children[2].textContent;
+     });
+   }) === true);
+ok("見込みで数えているぶんを字で言う", await p.evaluate(() =>
+   /基本時間割/.test($("tlyNote").textContent)) === true,
+   await p.evaluate(() => $("tlyNote").textContent));
+ok("入口（まだ何も開いていない）では出さない", await p.evaluate(() => {
+     const keep = view;
+     view = {kind:"gate"};
+     drawTallyPanel();
+     const hid = $("tallyWrap").hidden;
+     view = keep; drawTallyPanel();
+     return hid;
+   }) === true);
 
 console.log("\n■ 出どころの四角（週案の紙だけ）");
 await p.evaluate(() => {

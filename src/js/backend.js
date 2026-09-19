@@ -584,6 +584,15 @@ const Backend = (function(){
     for(let i = 0; i < AT_ONCE && i < todo.length; i++) fire();
   }
   const AT_ONCE = 8;
+  /* 渡した月曜のうち、**まだ読んでいない週の数**。
+     時数の集計は、読めていない週を「基本時間割どおり」として数えるので、
+     出している数がどれだけ見込みなのかを、画面で言えるようにする。 */
+  function unread(mons, year){
+    if(!onGas) return 0;
+    const want = targetsForView(), y = year === undefined ? fy() : year;
+    if(!want.length) return 0;
+    return (mons || []).filter(m => want.some(t => !fresh_(weekTag(t, y, m)))).length;
+  }
   const weekTag = (t, year, mon) =>
     (year === undefined ? fy() : year) + "/" + (mon === undefined ? wkKey() : mon)
     + "/" + t.layer + "/" + (t.target || "");
@@ -635,6 +644,7 @@ const Backend = (function(){
      返事が遅れたぶんだけ別の週の中身が消える。 */
   function mergeWeek(want, w, year, mon, epoch){
     if(epoch !== undefined && epoch !== editEpoch) return;
+    dataTick++;                      /* 数えたものの取り置きを古くする */
     const y = (year === undefined) ? fy() : year;
     const m = (mon  === undefined) ? wkKey() : mon;
     const Yr = db.years[String(y)];
@@ -927,7 +937,7 @@ const Backend = (function(){
   return {isGas, info, saved: () => acknowledged && !unsaved() && !sending,
           /* 書いたのに、まだシートに入っていない。画面の地の色はこれで決める */
           touched: () => touched || !!lastErr, setNotifier, setDirtyWatcher, setConflictWatcher,
-          unsaved, prefetchWeek, readWeeks, watch, stale, heldCells, dropHeld, reloadWeek,
+          unsaved, prefetchWeek, readWeeks, unread, watch, stale, heldCells, dropHeld, reloadWeek,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveSubjects, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,

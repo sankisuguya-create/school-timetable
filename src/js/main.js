@@ -192,6 +192,7 @@ function refreshWeek(){
   $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
   drawDayPanel();                 /* この週の日の形。週をまたぐと中身が変わる */
+  drawTallyPanel();               /* 時数。週をまたぐと「今月」が変わる */
   paintArchive();                 /* 週をまたぐと年度が変わる。**そのつど見る** */
   paintTpSub();                   /* 提出の印は週ごと。週をまたぐと未に戻る */
   if(view.kind === "tanpopo"){
@@ -592,6 +593,10 @@ function wire(){
       (Y().chipModes || (Y().chipModes = {}))[view.cls] = b.dataset.chip;
       save(); paintChipSeg(); redrawCenter(true);
     });
+
+  /* 時数。**年度はじめからの週を読み直してから数え直す。**
+     見込みで出していた数を、確かな数に入れ替える口 */
+  on("tlyRead", "click", tallyReadAll);
 
   /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */
   on("dayDlg","close", () => { dayPick = 0; });

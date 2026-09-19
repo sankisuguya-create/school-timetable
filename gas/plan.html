@@ -1172,6 +1172,30 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 累計は**小さく薄く**。手前に出るのはその月の数のほう */
 .ct i{font-style:normal;font-size:.85em;color:var(--ink-sub)}
 .ctnone{grid-column:1/-1;color:var(--ink-sub)}
+
+/* ── 右メニューの時数 ───────────────────────────
+   **3列の表。** 教科の1文字／今月／累計。
+   カレンダーの月の下と同じ数で、同じ並び（教科シートの順）。
+   ここは縦に読む（右メニューは細長い）ので、月の下のように4列へは折り返さない。 */
+.tly{border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;
+  background:var(--card)}
+.tlyhd,.tlyrow{display:grid;grid-template-columns:2.6em 1fr 1fr;
+  align-items:baseline;gap:6px;padding:3px 8px;
+  font-variant-numeric:tabular-nums}
+.tlyhd{background:var(--band);color:var(--tx-sub);font-size:11px;
+  border-bottom:1px solid var(--line)}
+.tlyrow{font-size:12.5px;border-top:1px solid var(--line)}
+.tlyrow:first-of-type{border-top:0}
+.tlyhd>span:first-child,.tlyrow>span:first-child{font-weight:700}
+/* 数は**右ぞろえ**。桁がそろわないと、多い少ないが縦に読めない */
+.tlyhd>span:not(:first-child),.tlyrow>span:not(:first-child){text-align:right}
+/* 累計は小さく薄く。手前に出るのは今月の数のほう（紙の集計と同じ扱い） */
+.tlyrow>span:last-child{color:var(--tx-sub)}
+#tlyNote{margin:6px 0 0}
+#tlyRead{margin-top:6px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r-sm);padding:4px 10px;font-size:12px;cursor:pointer}
+#tlyRead:hover{background:var(--band)}
+#tlyRead[hidden]{display:none!important}
 /* ▲ src/css/app.css ▲ */
 /* ▼ src/css/sheet.css ▼ */
 /* 紙。**刷られる面はここだけ。** 印刷の版面は動かさない。
@@ -1888,6 +1912,18 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
         </div>
       </div>
 
+      <!-- 時数。**カレンダーの面と同じ数**（compose.js countSub で数える）。
+           カレンダーを開かなくても、書きながら横目で見られるところに置く。
+           年度はじめからの累計は、4月からの週をぜんぶ読まないと確かにならないので、
+           **まだ読んでいない週の数を字で言い、読み直す口を添える**。
+           読めていない週は「基本時間割どおり」として数えている -->
+      <div id="tallyWrap" hidden>
+        <h3>時数</h3>
+        <div class="tly" id="tlyBox"></div>
+        <p class="hint" id="tlyNote"></p>
+        <button class="mini" id="tlyRead">年度はじめから読み直す</button>
+      </div>
+
       <!-- ③ その日の形。**全学年の面にだけ出る。** 効く範囲が全クラスなので、
            担任の画面からは押せない。紙の日付の見出しに置いていたころは、
            押せることに気づかれず「休みの日を入れる口が無い」と言われた。
@@ -2399,7 +2435,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.31.0";
+let APP_VERSION = "1.32.0";
 let BUILD_DATE  = "2026-09-19";
 
 /* 時程。行を固定しない（学校ごとに違う）。
@@ -2958,7 +2994,14 @@ function saveNow(){
    **戻り値は「保存が止まっていないか」**で、「いま書けたか」ではない
    （まだ書いていないので言えない）。呼ぶ側はどこも戻り値で分岐していない。
    分岐させたくなったら saveNow を使う。 */
+/* **中身が変わった印。** 数えたものを取り置く側（時数の集計）が、
+   「前に数えたときから変わったか」をこれ1つで見る。
+   日付や時刻ではなく数にする ── 同じミリ秒に2回変わることがある。
+   書き込み（save）と、シートから読んだぶんの取り込み（Backend.mergeWeek）で上がる。 */
+let dataTick = 0;
+
 function save(){
+  dataTick++;
   if(!saveT) saveT = setTimeout(saveNow, SAVE_WAIT);
   return !storeBroken;
 }
@@ -3826,6 +3869,15 @@ const Backend = (function(){
     for(let i = 0; i < AT_ONCE && i < todo.length; i++) fire();
   }
   const AT_ONCE = 8;
+  /* 渡した月曜のうち、**まだ読んでいない週の数**。
+     時数の集計は、読めていない週を「基本時間割どおり」として数えるので、
+     出している数がどれだけ見込みなのかを、画面で言えるようにする。 */
+  function unread(mons, year){
+    if(!onGas) return 0;
+    const want = targetsForView(), y = year === undefined ? fy() : year;
+    if(!want.length) return 0;
+    return (mons || []).filter(m => want.some(t => !fresh_(weekTag(t, y, m)))).length;
+  }
   const weekTag = (t, year, mon) =>
     (year === undefined ? fy() : year) + "/" + (mon === undefined ? wkKey() : mon)
     + "/" + t.layer + "/" + (t.target || "");
@@ -3877,6 +3929,7 @@ const Backend = (function(){
      返事が遅れたぶんだけ別の週の中身が消える。 */
   function mergeWeek(want, w, year, mon, epoch){
     if(epoch !== undefined && epoch !== editEpoch) return;
+    dataTick++;                      /* 数えたものの取り置きを古くする */
     const y = (year === undefined) ? fy() : year;
     const m = (mon  === undefined) ? wkKey() : mon;
     const Yr = db.years[String(y)];
@@ -4169,7 +4222,7 @@ const Backend = (function(){
   return {isGas, info, saved: () => acknowledged && !unsaved() && !sending,
           /* 書いたのに、まだシートに入っていない。画面の地の色はこれで決める */
           touched: () => touched || !!lastErr, setNotifier, setDirtyWatcher, setConflictWatcher,
-          unsaved, prefetchWeek, readWeeks, watch, stale, heldCells, dropHeld, reloadWeek,
+          unsaved, prefetchWeek, readWeeks, unread, watch, stale, heldCells, dropHeld, reloadWeek,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveSubjects, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,
@@ -6453,12 +6506,36 @@ function calDay(dt){
   } finally{ monday = keep; }
 }
 
-/* 1回の描き直しのあいだ、日の中身を取り置く。
-   **同じ日を何度も組み直さない** ── 月の枠を作るときと、累計を足すときと、
-   同じ日を2回以上通る。`cellFor` は層を重ねるので、1日 6回の合成が
-   12ヶ月ぶんだと効いてくる。描き直しのたびに捨てる（古い数を出さない）。 */
-let calCache = {};
+/* ── 数えたものを取り置く ────────────────────────
+   **日ごと**（calCache）と**月ごと**（calMonthCache）の2段。
+
+   *月ごとを持つ理由*：累計は4月からの足し算なので、4ヶ月ぶんの累計を出すと
+   4月を4回、5月を3回…と同じ月を何度も通る。月の合計を1度だけ出して
+   **足し算だけにする**と、2回目からは数え直しが消える
+   （実測：4ヶ月ぶんの累計 13.4ms → 0.3ms）。
+
+   *日ごとも残す理由*：月の枠を組むときは日ごとの中身（教科の1文字）が要る。
+   月の合計だけでは紙が組めない。
+
+   **捨てるのは、面が変わったときと、中身が変わったとき。**
+   面（開いているクラス・学年）が違えば数も違う。中身は `dataTick` で見る
+   ── 書き込みと、シートから読んだぶんの取り込みで上がる。
+   描き直しのたびに捨てると、4ヶ月を繰り戻すたび数え直しになる。 */
+let calCache = {}, calMonthCache = {}, calMark = "";
+
+/* いま数えている面。クラス・学年・専科で数が変わる */
+const calFace = () => [view.kind, view.cls || "", view.grade || "",
+                       view.sp || ""].join("|");
+
+function calFreshen(){
+  const mark = calFace() + "|" + dataTick;
+  if(mark === calMark) return;
+  calMark = mark;
+  calCache = {};
+  calMonthCache = {};
+}
 function calDayC(dt){
+  calFreshen();
   const k = iso(dt);
   if(!(k in calCache)) calCache[k] = calDay(dt);
   return calCache[k];
@@ -6474,18 +6551,22 @@ function calDates(m){
   return out;
 }
 
-/* その月の教科ごとのコマ数。{1文字: 数} */
+/* その月の教科ごとのコマ数。{1文字: 数}。**月ごとに取り置く** */
 function calCount(m){
+  calFreshen();
+  const key = m.getFullYear() + "-" + m.getMonth();
+  if(key in calMonthCache) return calMonthCache[key];
   const out = {};
   for(const dt of calDates(m)){
     const info = calDayC(dt);
     if(!info) continue;
     for(const k in info.count) out[k] = (out[k] || 0) + info.count[k];
   }
-  return out;
+  return calMonthCache[key] = out;
 }
 
-/* 年度はじめ（4/1）からその月の終わりまでの累計。**年度で切る** ──
+/* 年度はじめ（4/1）からその月の終わりまでの累計。**月の合計を足すだけ**
+   （calCount が月ごとに取り置いてある）。**年度で切る** ──
    3月と4月をつなげて数えると、標準授業時数と比べられない数になる。 */
 function calSum(m){
   const out = {}, y = fyOf(m);
@@ -6496,6 +6577,42 @@ function calSum(m){
     for(const k in one) out[k] = (out[k] || 0) + one[k];
   }
   return out;
+}
+
+/* 4月からその月までの週の月曜を、**年度ごとに分ける**。
+
+   *週の年度は、その週の月曜で決まる*。週案はシート1枚が1週なので、
+   4月1日を含む週の月曜が3月にあるとき、**その週は前の年度のシートに入っている**。
+   月の年度でまとめると、そこがずれる。
+
+   *年度ごとに分ける理由*：`Backend.readWeeks` は「いま開いている週の年度」で読む。
+   渡すときに `monday` をその年度の月曜へ差し替えるので、group の中の月曜を
+   そのまま使えるようにしておく（4月1日の月曜を使うと、それが3月30日だったときに
+   前の年度として読みに行ってしまう）。 */
+function fyWeeks(months){
+  const out = {};
+  for(const m of months){
+    const last = new Date(m.getFullYear(), m.getMonth() + 1, 0);
+    for(let x = mondayOf(m); x <= last; x = addDays(x, 7))
+      (out[fyOf(x)] || (out[fyOf(x)] = {}))[iso(x)] = true;
+  }
+  return out;
+}
+
+/* 年度ごとに分けた週を読む。**その年度に入っている月曜へ差し替えてから呼ぶ。**
+   読み終えたら after（ぜんぶの年度ぶんが終わってから1回）。 */
+function readByFy(byFy, after){
+  const ys = Object.keys(byFy);
+  let left = ys.length;
+  if(!left) return after();
+  const done = () => { if(--left <= 0) after(); };
+  const keep = monday;
+  for(const y of ys){
+    const list = Object.keys(byFy[y]).sort();
+    monday = parseISO(list[0]);      /* この年度の月曜（fy() をそろえる） */
+    Backend.readWeeks(list, done);
+  }
+  monday = keep;
 }
 
 /* 集計に出す教科の並び。**教科シートの順**（時数集計表と同じ並び）。
@@ -6528,7 +6645,9 @@ function drawCalView(){
     + "月の下は教科ごとの<b>その月のコマ数（年度はじめからの累計）</b>。"
     + "直すのは週の紙のほうで。";
   const box = $("cvPaper");
-  calCache = {};
+  /* **描き直しのたびには捨てない。** 中身が変わっていなければ取り置きを使う
+     （4ヶ月を繰り戻すたびに数え直さない）── calFreshen が要否を見る */
+  calFreshen();
   box.textContent = "";
   for(const m of ms) box.appendChild(calMonthEl(m));
   fitCal();
@@ -6543,30 +6662,17 @@ function drawCalView(){
     const y = fyOf(m), upto = (m.getMonth() - 3 + 12) % 12;
     for(let i = 0; i <= upto; i++) need[y + "/" + (3 + i)] = new Date(y, 3 + i, 1);
   }
-  const byFy = {};
-  for(const k in need){
-    const m = need[k], last = new Date(m.getFullYear(), m.getMonth() + 1, 0);
-    const g = byFy[fyOf(m)] || (byFy[fyOf(m)] = {});
-    for(let x = mondayOf(m); x <= last; x = addDays(x, 7)) g[iso(x)] = true;
-  }
-  let sync = true, left = Object.keys(byFy).length;
+  let sync = true;
   const w = Wait.begin("年度はじめからの週を読んでいます");
-  const done = () => {
-    if(--left > 0) return;
+  readByFy(fyWeeks(Object.keys(need).map(k => need[k])), () => {
     Wait.end(w);
     if(sync || $("calView").hidden) return;
-    calCache = {};
+    /* 週を取り込んだぶん dataTick が上がっているので、ここで捨てられる */
+    calFreshen();
     box.textContent = "";
     for(const m of ms) box.appendChild(calMonthEl(m));
     fitCal();
-  };
-  const keep = monday;
-  for(const y in byFy){
-    const list = Object.keys(byFy[y]);
-    monday = mondayOf(new Date(+y, 3, 1));
-    Backend.readWeeks(list, done);
-  }
-  monday = keep;
+  });
   sync = false;
 }
 
@@ -6714,6 +6820,7 @@ function drawPalette(){
       + (canClear ? "<br><b>リセット</b>を落とすと、そのコマをここから取り消す"
                   + "（各クラスの予定が出るようになる）。" : "");
   paintChipSeg();
+  drawTallyPanel();               /* 面が変われば数も変わる */
 
   for(const b of $("pals").querySelectorAll(".pal")){
     b.addEventListener("dragstart", ev => {
@@ -7075,6 +7182,91 @@ function doAddLink(){
   writeCell(a.at.d, a.at.s, isNote ? {note:a.fld.innerHTML} : {title:a.fld.innerHTML});
   paintSheet(); fillPanel();
   toast("リンクを付けた。<b>その文字を押すと開く</b>");
+}
+
+/* ── 右メニューの時数 ───────────────────────────
+   **カレンダーの面と同じ数。** 数え方は compose.js の countSub 1つで、
+   時数集計表へのコピーとも揃う。別々に数えると、見る場所で数が違う。
+
+   *ここにも置く理由*：カレンダーの面は4ヶ月を見るための面で、
+   紙を書いているあいだは開いていない。「あと何時間で終わるか」は
+   **書きながら**見たい数なので、書く手の隣にも出す。
+
+   *出す数*：今月と、年度はじめ（4/1）からの累計。
+   カレンダーの月の下と同じ並び（教科シートの順）。
+
+   *読めていない週*：累計は4月からの週をぜんぶ読まないと確かにならない。
+   読んでいない週は「基本時間割どおり」として数える（書いていない日と同じ扱い）。
+   **見込みで数えているぶんを字で言う** ── 黙って出すと、
+   出張で潰したコマが数に残ったまま「足りている」と読める。 */
+function tallyOn(){
+  return view.kind === "class" || view.kind === "grade" || view.kind === "special";
+}
+
+/* 4月からこの月までの月。週の並べ方と年度分けは sheet.js の fyWeeks が持つ
+   （カレンダーの面と同じ決まりで読む。2つ持つと片方だけ直した版が出る） */
+function tallyMonths(m){
+  const y = fyOf(m), upto = (m.getMonth() - 3 + 12) % 12, out = [];
+  for(let i = 0; i <= upto; i++) out.push(new Date(y, 3 + i, 1));
+  return out;
+}
+const tallyWeeks = m => fyWeeks(tallyMonths(m));
+const tallyMons  = m => {
+  const g = tallyWeeks(m), out = [];
+  for(const y in g) for(const k in g[y]) out.push(k);
+  return out;
+};
+
+function drawTallyPanel(){
+  const wrap = $("tallyWrap");
+  if(!wrap) return;
+  wrap.hidden = !tallyOn();
+  if(wrap.hidden) return;
+  const m = new Date(monday.getFullYear(), monday.getMonth(), 1);
+  const now = calCount(m), sum = calSum(m);
+  const subs = calSubs([now, sum]);
+  $("tlyBox").innerHTML = subs.length
+    ? "<div class='tlyhd'><span>教科</span><span>" + (m.getMonth() + 1)
+      + "月</span><span>累計</span></div>"
+      + subs.map(k => "<div class='tlyrow'><span>" + escText(k) + "</span>"
+        + "<span>" + (now[k] || 0) + "</span>"
+        + "<span>" + (sum[k] || 0) + "</span></div>").join("")
+    : "<p class='hint'>時数に数えるコマがありません</p>";
+  /* まだ読んでいない週。**数でなく、確かさの話として書く。**
+     手元だけで使っているときは読む先が無い（この端末が正本）ので、
+     読み込みの話はしない ── 無い仕組みのことを書くと、探しに行かせてしまう。
+
+     年度ごとに数える ── readWeeks は年度ごとに見るので、
+     1つの塊で数えると、年度をまたぐ週を数え落とす。 */
+  let left = 0;
+  if(Backend.isGas() && Backend.unread){
+    const g = tallyWeeks(m), keep = monday;
+    for(const y in g){
+      const list = Object.keys(g[y]).sort();
+      monday = parseISO(list[0]);
+      left += Backend.unread(list);
+    }
+    monday = keep;
+  }
+  $("tlyNote").innerHTML = "「累計」は<b>年度はじめ（4/1）から</b>。"
+    + "書いていない日は<b>基本時間割</b>で数えます。"
+    + (!Backend.isGas() ? ""
+     : left ? "<br><b>" + left + "週ぶんをまだ読んでいません。</b>"
+            + "そのぶんは基本時間割どおりとして数えています。"
+            : "<br>4月からの週は読みこみ済みです。");
+  $("tlyRead").hidden = !left;
+}
+
+/* 4月からの週を読み直してから、数え直す。読む段取りは
+   sheet.js の readByFy（カレンダーの面と同じもの）。 */
+function tallyReadAll(){
+  const m = new Date(monday.getFullYear(), monday.getMonth(), 1);
+  const w = Wait.begin("年度はじめからの週を読んでいます");
+  readByFy(tallyWeeks(m), () => {
+    Wait.end(w);
+    drawTallyPanel();
+    redrawCenter(true);
+  });
 }
 /* ▲ src/js/panel.js ▲ */
 /* ▼ src/js/tanpopo.js ▼ */
@@ -9434,6 +9626,7 @@ function refreshWeek(){
   $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
   drawDayPanel();                 /* この週の日の形。週をまたぐと中身が変わる */
+  drawTallyPanel();               /* 時数。週をまたぐと「今月」が変わる */
   paintArchive();                 /* 週をまたぐと年度が変わる。**そのつど見る** */
   paintTpSub();                   /* 提出の印は週ごと。週をまたぐと未に戻る */
   if(view.kind === "tanpopo"){
@@ -9834,6 +10027,10 @@ function wire(){
       (Y().chipModes || (Y().chipModes = {}))[view.cls] = b.dataset.chip;
       save(); paintChipSeg(); redrawCenter(true);
     });
+
+  /* 時数。**年度はじめからの週を読み直してから数え直す。**
+     見込みで出していた数を、確かな数に入れ替える口 */
+  on("tlyRead", "click", tallyReadAll);
 
   /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */
   on("dayDlg","close", () => { dayPick = 0; });

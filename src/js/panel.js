@@ -61,6 +61,7 @@ function drawPalette(){
       + (canClear ? "<br><b>リセット</b>を落とすと、そのコマをここから取り消す"
                   + "（各クラスの予定が出るようになる）。" : "");
   paintChipSeg();
+  drawTallyPanel();               /* 面が変われば数も変わる */
 
   for(const b of $("pals").querySelectorAll(".pal")){
     b.addEventListener("dragstart", ev => {
@@ -422,4 +423,89 @@ function doAddLink(){
   writeCell(a.at.d, a.at.s, isNote ? {note:a.fld.innerHTML} : {title:a.fld.innerHTML});
   paintSheet(); fillPanel();
   toast("リンクを付けた。<b>その文字を押すと開く</b>");
+}
+
+/* ── 右メニューの時数 ───────────────────────────
+   **カレンダーの面と同じ数。** 数え方は compose.js の countSub 1つで、
+   時数集計表へのコピーとも揃う。別々に数えると、見る場所で数が違う。
+
+   *ここにも置く理由*：カレンダーの面は4ヶ月を見るための面で、
+   紙を書いているあいだは開いていない。「あと何時間で終わるか」は
+   **書きながら**見たい数なので、書く手の隣にも出す。
+
+   *出す数*：今月と、年度はじめ（4/1）からの累計。
+   カレンダーの月の下と同じ並び（教科シートの順）。
+
+   *読めていない週*：累計は4月からの週をぜんぶ読まないと確かにならない。
+   読んでいない週は「基本時間割どおり」として数える（書いていない日と同じ扱い）。
+   **見込みで数えているぶんを字で言う** ── 黙って出すと、
+   出張で潰したコマが数に残ったまま「足りている」と読める。 */
+function tallyOn(){
+  return view.kind === "class" || view.kind === "grade" || view.kind === "special";
+}
+
+/* 4月からこの月までの月。週の並べ方と年度分けは sheet.js の fyWeeks が持つ
+   （カレンダーの面と同じ決まりで読む。2つ持つと片方だけ直した版が出る） */
+function tallyMonths(m){
+  const y = fyOf(m), upto = (m.getMonth() - 3 + 12) % 12, out = [];
+  for(let i = 0; i <= upto; i++) out.push(new Date(y, 3 + i, 1));
+  return out;
+}
+const tallyWeeks = m => fyWeeks(tallyMonths(m));
+const tallyMons  = m => {
+  const g = tallyWeeks(m), out = [];
+  for(const y in g) for(const k in g[y]) out.push(k);
+  return out;
+};
+
+function drawTallyPanel(){
+  const wrap = $("tallyWrap");
+  if(!wrap) return;
+  wrap.hidden = !tallyOn();
+  if(wrap.hidden) return;
+  const m = new Date(monday.getFullYear(), monday.getMonth(), 1);
+  const now = calCount(m), sum = calSum(m);
+  const subs = calSubs([now, sum]);
+  $("tlyBox").innerHTML = subs.length
+    ? "<div class='tlyhd'><span>教科</span><span>" + (m.getMonth() + 1)
+      + "月</span><span>累計</span></div>"
+      + subs.map(k => "<div class='tlyrow'><span>" + escText(k) + "</span>"
+        + "<span>" + (now[k] || 0) + "</span>"
+        + "<span>" + (sum[k] || 0) + "</span></div>").join("")
+    : "<p class='hint'>時数に数えるコマがありません</p>";
+  /* まだ読んでいない週。**数でなく、確かさの話として書く。**
+     手元だけで使っているときは読む先が無い（この端末が正本）ので、
+     読み込みの話はしない ── 無い仕組みのことを書くと、探しに行かせてしまう。
+
+     年度ごとに数える ── readWeeks は年度ごとに見るので、
+     1つの塊で数えると、年度をまたぐ週を数え落とす。 */
+  let left = 0;
+  if(Backend.isGas() && Backend.unread){
+    const g = tallyWeeks(m), keep = monday;
+    for(const y in g){
+      const list = Object.keys(g[y]).sort();
+      monday = parseISO(list[0]);
+      left += Backend.unread(list);
+    }
+    monday = keep;
+  }
+  $("tlyNote").innerHTML = "「累計」は<b>年度はじめ（4/1）から</b>。"
+    + "書いていない日は<b>基本時間割</b>で数えます。"
+    + (!Backend.isGas() ? ""
+     : left ? "<br><b>" + left + "週ぶんをまだ読んでいません。</b>"
+            + "そのぶんは基本時間割どおりとして数えています。"
+            : "<br>4月からの週は読みこみ済みです。");
+  $("tlyRead").hidden = !left;
+}
+
+/* 4月からの週を読み直してから、数え直す。読む段取りは
+   sheet.js の readByFy（カレンダーの面と同じもの）。 */
+function tallyReadAll(){
+  const m = new Date(monday.getFullYear(), monday.getMonth(), 1);
+  const w = Wait.begin("年度はじめからの週を読んでいます");
+  readByFy(tallyWeeks(m), () => {
+    Wait.end(w);
+    drawTallyPanel();
+    redrawCenter(true);
+  });
 }

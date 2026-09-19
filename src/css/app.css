@@ -1058,3 +1058,27 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 累計は**小さく薄く**。手前に出るのはその月の数のほう */
 .ct i{font-style:normal;font-size:.85em;color:var(--ink-sub)}
 .ctnone{grid-column:1/-1;color:var(--ink-sub)}
+
+/* ── 右メニューの時数 ───────────────────────────
+   **3列の表。** 教科の1文字／今月／累計。
+   カレンダーの月の下と同じ数で、同じ並び（教科シートの順）。
+   ここは縦に読む（右メニューは細長い）ので、月の下のように4列へは折り返さない。 */
+.tly{border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;
+  background:var(--card)}
+.tlyhd,.tlyrow{display:grid;grid-template-columns:2.6em 1fr 1fr;
+  align-items:baseline;gap:6px;padding:3px 8px;
+  font-variant-numeric:tabular-nums}
+.tlyhd{background:var(--band);color:var(--tx-sub);font-size:11px;
+  border-bottom:1px solid var(--line)}
+.tlyrow{font-size:12.5px;border-top:1px solid var(--line)}
+.tlyrow:first-of-type{border-top:0}
+.tlyhd>span:first-child,.tlyrow>span:first-child{font-weight:700}
+/* 数は**右ぞろえ**。桁がそろわないと、多い少ないが縦に読めない */
+.tlyhd>span:not(:first-child),.tlyrow>span:not(:first-child){text-align:right}
+/* 累計は小さく薄く。手前に出るのは今月の数のほう（紙の集計と同じ扱い） */
+.tlyrow>span:last-child{color:var(--tx-sub)}
+#tlyNote{margin:6px 0 0}
+#tlyRead{margin-top:6px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r-sm);padding:4px 10px;font-size:12px;cursor:pointer}
+#tlyRead:hover{background:var(--band)}
+#tlyRead[hidden]{display:none!important}
