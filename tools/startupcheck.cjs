@@ -26,6 +26,9 @@ const context = vm.createContext({
   $:id => nodes.get(id),
   Backend:{flush(){}, ready(fn){fn();}, isGas(){return true;},
     setNotifier(){}, setDirtyWatcher(){}, setConflictWatcher(){},
+    /* 管理の関門が start() から見る。**管理者として通す** ──
+       ここで見たいのは起動順序で、関門そのものは gatecheck が見る */
+    info(){ return {me:'a@edu.nishi.or.jp', isAdmin:true}; },
     boot(fn){bootCount++; fn();}, watch(){}},
   view:{kind:'gate'}, selCell:null, storeBroken:'', onStoreError:null,
   loadDb(){}, applyPaper(){}, paintArchive(){}, pollNewYear(){},

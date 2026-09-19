@@ -401,7 +401,13 @@ function paintCell(e, c, d, s, mine){
   const src = (!sheetRO && !e.dataset.one) ? srcLabel(c, mine) : "";
   let box = e.querySelector(".src");
   if(src && !box){ box = el("span", "src"); e.insertBefore(box, e.firstChild); }
-  if(box){ box.hidden = !src; box.textContent = src; }
+  if(box){
+    box.hidden = !src;
+    /* **字は1つずつ積む。** writing-mode の縦書きは、フォント側に縦組みの
+       情報が無い環境で字が同じ場所に重なる（校外行事のチップで実測済み） */
+    const want = [...src].map(ch => "<i>" + escText(ch) + "</i>").join("");
+    if(box.innerHTML !== want) box.innerHTML = want;
+  }
   e.classList.toggle("has-src", !!src);
 
   const tag = e.querySelector(".tag");

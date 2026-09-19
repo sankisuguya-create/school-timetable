@@ -1421,10 +1421,18 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .cell[data-layer=grade]::before {background:var(--cat-grade)}
 .cell[data-layer=special]::before{background:var(--cat-special)}
 .cell.clash::before{background:var(--cat-clash)}
-/* 出どころの四角。**題名の欄の左上。縦長。** 週案の紙だけに出る。
-   左端の層の線（1.6mm）の右どなりに置く ── 線の上に重ねると、
-   どちらも読めなくなる。**刷っても残す**：紙の上で「これは降りてきた予定だ」と
-   分かることが、教務必携に貼ったあとでいちばん効く。
+/* 出どころの帯。**左端の線と札を1本にまとめた。** 週案の紙だけに出る。
+
+   *まとめた理由*：前は 1.6mm の色の線がコマの左端に、白い縦長の札がその
+   右どなりにあった。**同じことを2か所で言うと、目は2回探す。**
+   出かたも揃っていなかった ── 線は「自分より上の層から降りたコマ」だけ、
+   札も同じ条件だが、線は画面だけで札は紙にも出た。1本にすれば、
+   画面と紙で同じところに同じ印が立つ。
+
+   **刷っても残す**：紙の上で「これは降りてきた予定だ」と分かることが、
+   教務必携に貼ったあとでいちばん効く。ただし**紙は白地に枠線と黒い字**にする
+   ── 地の色は、トナーを節約する設定のプリンタで飛ぶ（休みの斜め線を図形で
+   描いたのと同じ理由）。飛んでも枠線と字が残る。
 
    **縦に組む。** 題名の欄は高さ 8mm あって余るが、横幅 28mm は題名と
    取り合いになる。横長だと「全校」で 5mm 取られるところ、縦なら 2.6mm で済む。
@@ -1432,27 +1440,35 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
    縦書き（writing-mode）は使わない。**位置を決め打ちにした枠では潰れる** ──
    top と left だけを当てた絶対配置の箱に縦書きを掛けると、字の並ぶ向きと
    箱の大きさの決まり方が入れ替わり、Chromium で 6×3px まで縮んで読めなくなった
-   （実測）。**幅を1文字ぶんに決めて、折り返させる。** 1行1文字で縦に積み上がり、
+   （実測）。**字を1つずつ積む**（校外行事のチップと同じ描き方）。
    「5年」の 5 も立ったままになる。 */
-.src{position:absolute;left:calc(1.6mm*var(--k));top:0;z-index:2;
-  width:1em;font-size:calc(5pt*var(--k));line-height:1.05;
-  padding:calc(.2mm*var(--k)) calc(.2mm*var(--k));
-  border:.7px solid var(--ink-sub);border-top:0;border-left:0;
-  border-bottom-right-radius:3px;
-  background:var(--sheet);color:var(--ink-sub);
-  text-align:center;white-space:normal;word-break:break-all;
-  letter-spacing:0;font-weight:600}
+.src{position:absolute;left:0;top:0;bottom:0;z-index:2;
+  width:calc(2.6mm*var(--k));
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  overflow:hidden;
+  background:var(--cat-none);color:#fff}
+.src i{font-style:normal;font-weight:700;line-height:1.05;letter-spacing:0;
+  font-size:calc(5pt*var(--k))}
+/* **display を持たせたので、hidden を自分で効かせる。**
+   ブラウザ既定の [hidden]{display:none} は、この display:flex に負ける */
 .src[hidden]{display:none!important}
-/* 四角のぶんだけ、題名の字を右へ逃がす。**字と札を重ねない** */
-/* **左だけ空ける。** 両側を空けると 28mm のコマで題名に 15mm しか残らず、
-   「全校朝会」が2行になって枠からはみ出した（実測）。左に札があるぶん
-   右へ寄せたほうが、見た目の重さも釣り合う。
+.cell[data-layer=school] .src{background:var(--cat-school)}
+.cell[data-layer=grade]  .src{background:var(--cat-grade)}
+.cell[data-layer=special] .src{background:var(--cat-special)}
+.cell.clash .src{background:var(--cat-clash)}
+/* **帯が立っているコマでは、線を引かない。** 帯が線を兼ねる。
+   線のほうは、札を置く場所が無い面（4週・学年）のために残してある */
+.cell.has-src::before{display:none}
+
+/* 帯のぶんだけ、字を右へ逃がす。**字と帯を重ねない**
    **折り返させない** ── 折り返すと fitTitles が幅ではなく高さで測ることになり、
    下限（45%）で止まったまま2行目が備考の欄へ落ちる。
-   縦なので 1文字ぶん（5pt≒1.8mm）＋枠線と余白で 2.6mm。
-   左端の層の線 1.6mm と合わせて 4.4mm 空ければ足りる ──
-   横書きだったときの 7mm より 2.6mm ぶん題名が広く取れる。 */
-.cell.has-src .t{padding-left:calc(4.4mm*var(--k));white-space:nowrap}
+   帯 2.6mm ＋ 字とのすきま 0.8mm。線と札が別々だったころの 4.4mm より
+   1mm ぶん題名が広く取れる。
+   **備考も逃がす。** 帯がコマの高さいっぱいに立つので、逃がさないと
+   備考の1文字目が帯の下に潜る（札が題名の欄だけだったころは要らなかった）。 */
+.cell.has-src .t{padding-left:calc(3.4mm*var(--k));white-space:nowrap}
+.cell.has-src .n{padding-left:calc(3.4mm*var(--k))}
 
 .tag{position:absolute;right:0;top:0;font-size:calc(5pt*var(--k));line-height:1.35;
   padding:0 .35em;color:#fff;background:var(--cat-none);border-bottom-left-radius:3px;
@@ -1590,6 +1606,11 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   .cell.upper,.cell.clash,.cell.drop{background:transparent;outline:none}
   .row-break,.row-break .lab{background:#EFEFEF}
   .cell.upper::before,.cell.clash::before,.tag{display:none}
+  /* 出どころの帯は**刷っても残す**（紙の上で「降りてきた予定」と分かる）。
+     ただし**白地に枠線と黒い字**へ着替える ── 地の色は、トナーを節約する
+     設定のプリンタで飛ぶ。飛んでも枠線と字が残るようにしておく。 */
+  .cell .src{background:#fff!important;color:#1A1A1A;
+    border-right:.7px solid #1A1A1A}
   .cell.from-base .t{color:#1A1A1A;font-weight:600}
   .cell a,.foot a{color:#1A1A1A;text-decoration-color:#1A1A1A}
 }
@@ -6043,7 +6064,13 @@ function paintCell(e, c, d, s, mine){
   const src = (!sheetRO && !e.dataset.one) ? srcLabel(c, mine) : "";
   let box = e.querySelector(".src");
   if(src && !box){ box = el("span", "src"); e.insertBefore(box, e.firstChild); }
-  if(box){ box.hidden = !src; box.textContent = src; }
+  if(box){
+    box.hidden = !src;
+    /* **字は1つずつ積む。** writing-mode の縦書きは、フォント側に縦組みの
+       情報が無い環境で字が同じ場所に重なる（校外行事のチップで実測済み） */
+    const want = [...src].map(ch => "<i>" + escText(ch) + "</i>").join("");
+    if(box.innerHTML !== want) box.innerHTML = want;
+  }
   e.classList.toggle("has-src", !!src);
 
   const tag = e.querySelector(".tag");
