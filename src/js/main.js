@@ -192,6 +192,7 @@ function refreshWeek(){
   $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
   drawDayPanel();                 /* この週の日の形。週をまたぐと中身が変わる */
+  drawTallyPanel();               /* 時数。週をまたぐと「今月」が変わる */
   paintArchive();                 /* 週をまたぐと年度が変わる。**そのつど見る** */
   paintTpSub();                   /* 提出の印は週ごと。週をまたぐと未に戻る */
   if(view.kind === "tanpopo"){
@@ -593,6 +594,23 @@ function wire(){
       save(); paintChipSeg(); redrawCenter(true);
     });
 
+  /* 時数。**年度はじめからの週を読み直してから数え直す。**
+     見込みで出していた数を、確かな数に入れ替える口 */
+  on("tlyRead", "click", tallyReadAll);
+  /* 時数集計シート。**時間がかかるので、押す前に言う。**
+     押し間違いで1〜3分待たせない（やめる側に落ちる窓で受ける） */
+  on("tlySheet", "click", () => askOk({
+    title: "全クラスぶんの時数を数えますか",
+    lines: ["4月からこの月までを、<b>全クラスぶん</b>数えて、スプレッドシートの"
+            + "<b>「時数集計」シート</b>に置きます。",
+            "<b>1〜3分かかります。</b>年度の後半ほど長くかかります"
+            + "（読む週が増えるため）。",
+            "置いたものは、押すたびに作り直します。"
+            + "ほかの年度のぶんは残ります。"],
+    goLabel: "数える",
+    onYes: tallySheetAll
+  }));
+
   /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */
   on("dayDlg","close", () => { dayPick = 0; });
 
@@ -789,6 +807,12 @@ function start(){
   /* 設定・時程・教科・その年度は、立ち上がりの1回でまとめてもらう。
      別々に取りに行くと、その回数だけ待つことになる。 */
   Backend.boot(() => {
+    /* **隠すのは目隠しであって関門ではない。** 本体はサーバの checkAdmin。
+       ここで伏せるのは、押しても断られるものを毎日目に入れないため */
+    if(Backend.isGas() && !Backend.info().isAdmin)
+      for(const e of document.querySelectorAll(
+            '[data-act="settings"],[data-act="admin"],[data-act="newyear"]'))
+        e.hidden = true;
     Backend.watch();              /* 開きっぱなしの画面も、たまに読み直す */
     applyPaper();
     /* **本番では、古い週の控えをここで間引く。** 溢れてから慌てない。
@@ -797,7 +821,7 @@ function start(){
     if(view.kind === "gate") drawGate();
     /* 新年度の設定が未了なら、左メニューに出す。**4/1 から、済むまで。**
        立ち上がりの1回だけ見に行く（週を繰るたびに見に行かない） */
-    pollNewYear();
+    if(!Backend.isGas() || Backend.info().isAdmin) pollNewYear();
   });
   // 案内の有無でデータ初期化の成否を変えない。
   setTimeout(() => openGuide(true), 250);

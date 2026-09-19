@@ -381,7 +381,9 @@ const Backend = (function(){
   const waiters = [];
   /* 立ち上がりでもらった、**自分と置き場所のこと**。管理画面に出す。
      手元で開いているときは空のまま（サーバに聞いていないので分からない）。 */
-  let bootInfo = {me:"", file:"", archived:{}};
+  /* isAdmin は**画面を隠すためだけ**。関門はサーバの checkAdmin が持つ。
+     手元（GASでない）では隠さない ── 触れるものが無いと、直せているか確かめられない */
+  let bootInfo = {me:"", file:"", archived:{}, isAdmin:!onGas};
 
   /* **保存にかかった時間を、最近のぶんだけ覚える。**
      長くなってきたことに、誰かが困る前に気づくため。
@@ -406,6 +408,7 @@ const Backend = (function(){
             cells: worst(pick(x => x.cells)), sheets: worst(pick(x => x.sheets))};
   }
   const info = () => ({me: bootInfo.me, file: bootInfo.file, gas: !!onGas,
+                      isAdmin: !!bootInfo.isAdmin,
                       archived: bootInfo.archived || {}, times: saveTimes()});
   /* その年度は退避ずみか。**退避ずみの年度に、何も言わずに紙を出さない。**
      週案の行はもう本体に無いので、基本時間割だけの紙が出る。
@@ -432,7 +435,8 @@ const Backend = (function(){
     }, 15000);
     google.script.run
       .withSuccessHandler(b => {
-        bootInfo = {me: b.me || "", file: b.file || "", archived: b.archived || {}};
+        bootInfo = {me: b.me || "", file: b.file || "", archived: b.archived || {},
+                    isAdmin: !!b.isAdmin};
         if(b.slots    && b.slots.length)    setSlots(b.slots);
         if(b.subjects && b.subjects.length) setSubjects(b.subjects);
         if(b.config)  applyConfig(b.config);
@@ -563,17 +567,53 @@ const Backend = (function(){
     const year = fy(), epoch = editEpoch;
     const todo = (mons || []).filter(m => want.some(t => !fresh_(weekTag(t, year, m))));
     if(!todo.length || !want.length) return after();
-    let left = todo.length;
-    const done = () => { if(--left <= 0) after(); };
-    for(const m of todo){
+    /* **一度に投げる数を抑える。** カレンダーの面は年度はじめからの累計を出すので、
+       3月には 45 週ぶんになる。45 本を同時に投げると GAS 側で詰まり、
+       どれも返らないまま待ちの表示が残る。 */
+    let left = todo.length, next = 0;
+    const done = () => { if(--left <= 0) after(); else fire(); };
+    function fire(){
+      if(next >= todo.length) return;
+      const m = todo[next++];
       google.script.run
-        .withSuccessHandler((function(mm){
-          return w => { mergeWeek(want, w, year, mm, epoch); done(); };
-        })(m))
+        .withSuccessHandler(w => { mergeWeek(want, w, year, m, epoch); done(); })
         /* **読めなくても先へ進む。** 進まないと、開いたつもりの面が出ない */
         .withFailureHandler(() => done())
         .apiReadWeek(year, m, want);
     }
+    for(let i = 0; i < AT_ONCE && i < todo.length; i++) fire();
+  }
+  const AT_ONCE = 8;
+  /* **全クラスぶんの週を読む。** 時数集計は27クラス全部を数えるので、
+     いま開いている面（3枚）だけでは足りない。
+     時数集計のボタンからしか呼ばない ── ふだんの画面では読みすぎになる。 */
+  function readWeeksAll(mons, after){
+    if(!onGas) return after();
+    const want = allTargets();
+    const year = fy(), epoch = editEpoch;
+    const todo = (mons || []).filter(m => want.some(t => !fresh_(weekTag(t, year, m))));
+    if(!todo.length) return after();
+    let left = todo.length, next = 0;
+    const done = () => { if(--left <= 0) after(); else fire(); };
+    function fire(){
+      if(next >= todo.length) return;
+      const m = todo[next++];
+      google.script.run
+        .withSuccessHandler(w => { mergeWeek(want, w, year, m, epoch); done(); })
+        .withFailureHandler(() => done())
+        .apiReadWeek(year, m, want);
+    }
+    for(let i = 0; i < AT_ONCE && i < todo.length; i++) fire();
+  }
+
+  /* 渡した月曜のうち、**まだ読んでいない週の数**。
+     時数の集計は、読めていない週を「基本時間割どおり」として数えるので、
+     出している数がどれだけ見込みなのかを、画面で言えるようにする。 */
+  function unread(mons, year){
+    if(!onGas) return 0;
+    const want = targetsForView(), y = year === undefined ? fy() : year;
+    if(!want.length) return 0;
+    return (mons || []).filter(m => want.some(t => !fresh_(weekTag(t, y, m)))).length;
   }
   const weekTag = (t, year, mon) =>
     (year === undefined ? fy() : year) + "/" + (mon === undefined ? wkKey() : mon)
@@ -626,6 +666,7 @@ const Backend = (function(){
      返事が遅れたぶんだけ別の週の中身が消える。 */
   function mergeWeek(want, w, year, mon, epoch){
     if(epoch !== undefined && epoch !== editEpoch) return;
+    dataTick++;                      /* 数えたものの取り置きを古くする */
     const y = (year === undefined) ? fy() : year;
     const m = (mon  === undefined) ? wkKey() : mon;
     const Yr = db.years[String(y)];
@@ -796,6 +837,19 @@ const Backend = (function(){
      どのクラスのどの校時が何かを決めるのは画面（層の重ね方を知っている）。
      どんな形のシートを作るかを決めるのはシート側（実物の形を知っている）。
      cols = [{cls, group}] の並び。**並びと組をこちらで決めて渡す。** */
+  /* 時数集計シートへ置く。**数えたのは画面のほう**（合成は1か所のまま）。
+     手元だけで使っているときは置く先が無いので、そのまま済にする。 */
+  function saveTally(year, head, rows, then){
+    if(!onGas) return then && then({name:"（手元）", rows:rows.length, kept:0});
+    google.script.run
+      .withSuccessHandler(r => then && then(r))
+      .withFailureHandler(e => {
+        notify("時数集計を書けなかった（" + escText(String(e && e.message)) + "）");
+        then && then(null);
+      })
+      .apiWriteTally(year, head, rows);
+  }
+
   function exportWeek(titles, cols, slots, name, url, ok, ng){
     if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
     const w = week(), year = fy(), mon = wkKey();
@@ -918,7 +972,8 @@ const Backend = (function(){
   return {isGas, info, saved: () => acknowledged && !unsaved() && !sending,
           /* 書いたのに、まだシートに入っていない。画面の地の色はこれで決める */
           touched: () => touched || !!lastErr, setNotifier, setDirtyWatcher, setConflictWatcher,
-          unsaved, prefetchWeek, readWeeks, watch, stale, heldCells, dropHeld, reloadWeek,
+          unsaved, prefetchWeek, readWeeks, readWeeksAll, unread, saveTally,
+          watch, stale, heldCells, dropHeld, reloadWeek,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveSubjects, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,

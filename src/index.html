@@ -294,6 +294,28 @@
         </div>
       </div>
 
+      <!-- 時数。**カレンダーの面と同じ数**（compose.js countSub で数える）。
+           カレンダーを開かなくても、書きながら横目で見られるところに置く。
+           年度はじめからの累計は、4月からの週をぜんぶ読まないと確かにならないので、
+           **まだ読んでいない週の数を字で言い、読み直す口を添える**。
+           読めていない週は「基本時間割どおり」として数えている -->
+      <div id="tallyWrap" hidden>
+        <h3>時数</h3>
+        <div class="tly" id="tlyBox"></div>
+        <p class="hint" id="tlyNote"></p>
+        <button class="mini" id="tlyRead">年度はじめから読み直す</button>
+        <!-- 時数集計シートへ置く。**押したときだけ動く。**
+             全クラス × 4月からこの月まで を数えるので時間がかかる。
+             そのことはボタンの下にも、？の説明にも書く。
+             **？はこのボタンのすぐ右**（見出しではなく、押す口のとなりに置く。
+             時間がかかると知りたいのは、押そうとしている人） -->
+        <div class="tlybtn" data-help="tally2">
+          <button class="mini" id="tlySheet">時数を集計する</button>
+        </div>
+        <p class="hint" id="tlySheetNote">全クラスぶんを数えて、スプレッドシートの
+          <b>「時数集計」シート</b>に置きます。<b>1〜3分かかります</b>（年度の後半ほど長い）。</p>
+      </div>
+
       <!-- ③ その日の形。**全学年の面にだけ出る。** 効く範囲が全クラスなので、
            担任の画面からは押せない。紙の日付の見出しに置いていたころは、
            押せることに気づかれず「休みの日を入れる口が無い」と言われた。
@@ -317,11 +339,13 @@
         </div>
         <div id="pTitleWrap">
           <label id="pTitleLabel" for="pTitle">教科名・行事名</label>
-          <div class="fld" id="pTitle" contenteditable></div>
+          <div class="fld" id="pTitle" contenteditable role="textbox"
+               aria-labelledby="pTitleLabel"></div>
         </div>
         <div id="pNoteWrap">
           <label for="pNote">詳細・備考</label>
-          <div class="fld tall" id="pNote" contenteditable></div>
+          <div class="fld tall" id="pNote" contenteditable role="textbox"
+               aria-label="詳細・備考" aria-multiline="true"></div>
         </div>
         <!-- 校外行事の名前。**選んでいるコマを覆っている行事**のぶんを直す。
              1本のチップ（続けて置いたコマ）は同じ名前になる。

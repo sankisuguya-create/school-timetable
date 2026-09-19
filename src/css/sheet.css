@@ -213,6 +213,39 @@
 .cell[data-layer=grade]::before {background:var(--cat-grade)}
 .cell[data-layer=special]::before{background:var(--cat-special)}
 .cell.clash::before{background:var(--cat-clash)}
+/* 出どころの四角。**題名の欄の左上。縦長。** 週案の紙だけに出る。
+   左端の層の線（1.6mm）の右どなりに置く ── 線の上に重ねると、
+   どちらも読めなくなる。**刷っても残す**：紙の上で「これは降りてきた予定だ」と
+   分かることが、教務必携に貼ったあとでいちばん効く。
+
+   **縦に組む。** 題名の欄は高さ 8mm あって余るが、横幅 28mm は題名と
+   取り合いになる。横長だと「全校」で 5mm 取られるところ、縦なら 2.6mm で済む。
+
+   縦書き（writing-mode）は使わない。**位置を決め打ちにした枠では潰れる** ──
+   top と left だけを当てた絶対配置の箱に縦書きを掛けると、字の並ぶ向きと
+   箱の大きさの決まり方が入れ替わり、Chromium で 6×3px まで縮んで読めなくなった
+   （実測）。**幅を1文字ぶんに決めて、折り返させる。** 1行1文字で縦に積み上がり、
+   「5年」の 5 も立ったままになる。 */
+.src{position:absolute;left:calc(1.6mm*var(--k));top:0;z-index:2;
+  width:1em;font-size:calc(5pt*var(--k));line-height:1.05;
+  padding:calc(.2mm*var(--k)) calc(.2mm*var(--k));
+  border:.7px solid var(--ink-sub);border-top:0;border-left:0;
+  border-bottom-right-radius:3px;
+  background:var(--sheet);color:var(--ink-sub);
+  text-align:center;white-space:normal;word-break:break-all;
+  letter-spacing:0;font-weight:600}
+.src[hidden]{display:none!important}
+/* 四角のぶんだけ、題名の字を右へ逃がす。**字と札を重ねない** */
+/* **左だけ空ける。** 両側を空けると 28mm のコマで題名に 15mm しか残らず、
+   「全校朝会」が2行になって枠からはみ出した（実測）。左に札があるぶん
+   右へ寄せたほうが、見た目の重さも釣り合う。
+   **折り返させない** ── 折り返すと fitTitles が幅ではなく高さで測ることになり、
+   下限（45%）で止まったまま2行目が備考の欄へ落ちる。
+   縦なので 1文字ぶん（5pt≒1.8mm）＋枠線と余白で 2.6mm。
+   左端の層の線 1.6mm と合わせて 4.4mm 空ければ足りる ──
+   横書きだったときの 7mm より 2.6mm ぶん題名が広く取れる。 */
+.cell.has-src .t{padding-left:calc(4.4mm*var(--k));white-space:nowrap}
+
 .tag{position:absolute;right:0;top:0;font-size:calc(5pt*var(--k));line-height:1.35;
   padding:0 .35em;color:#fff;background:var(--cat-none);border-bottom-left-radius:3px;
   letter-spacing:.02em;z-index:1;max-width:70%;overflow:hidden;
@@ -300,6 +333,10 @@
   body.printing-cal .cvpaper{gap:6mm;align-items:start;justify-items:stretch}
   body.printing-cal .cmonth{width:var(--cw);height:var(--ch);box-shadow:none;
     border-radius:0;border-color:#000}
+  /* 手で書き込む欄の区切り。**地の色は刷られない**ので、枠線を濃くする。
+     薄いままだと、どこまでが1校時ぶんか紙の上で分からない */
+  body.printing-cal .csubs>i,body.printing-cal .cnote>i{border-right-color:var(--rule)}
+  body.printing-cal .csubs,body.printing-cal .cnote{border-top-color:var(--rule)}
   body:not(.printing-cal) .cvview{display:none!important}
   /* 空き枠さがしの印も刷らない。**枠を探している最中の作業**であって、
      刷って残す情報ではない（年間行事の印と同じ扱い） */

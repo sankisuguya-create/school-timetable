@@ -155,6 +155,7 @@ await p.addInitScript(() => {
       withSuccessHandler(f){ okFn = f; return api; },
       withFailureHandler(f){ ngFn = f; return api; },
       apiBoot(y){
+        DATA.boot.isAdmin = (window.__isAdmin === undefined) ? true : !!window.__isAdmin;
         /* 本番と同じく、年度を渡されたら学級編成と基本時間割も一緒に返す */
         const r = Object.assign({}, DATA.boot,
                     y ? {year:y, roster:DATA.year.roster, base:DATA.year.base,
@@ -301,6 +302,12 @@ await p.addInitScript(() => {
         DATA.boot.subjects = out;
         call("apiWriteSubjects", [rows]);
         setTimeout(() => okFn({n:(rows || []).length, subjects:out}), 0);
+      },
+      apiWriteTally(year, head, rows){
+        /* シートのかわりに、この端末へ置く（形だけ本番と同じにする） */
+        window.__tally = {year:year, head:head, rows:rows};
+        call("apiWriteTally", [year, head, rows]);
+        setTimeout(() => okFn({name:"時数集計", rows:(rows || []).length, kept:0}), 0);
       },
       apiWriteEvents(rows){
         call("apiWriteEvents", [rows]);
@@ -2041,6 +2048,97 @@ ok("教科は1文字ずつ並ぶ", await p.evaluate(() =>
    [...document.querySelectorAll("#cvPaper .csubs")].some(e => e.textContent.trim().length > 1)) === true);
 ok("見るだけ（書ける欄を作らない）", await p.evaluate(() =>
    document.querySelectorAll("#cvPaper [contenteditable]").length) === 0);
+/* 時間割の欄と備考の欄は、どちらも**横幅を等分した枠**。数は時程の「授業」の数。
+   6と決め打ちにすると、5校時までの学校で枠が1つ余る */
+ok("時間割の欄は、授業の数だけ枠に分かれる", await p.evaluate(() => {
+     const n = SLOTS.filter(s => s.kind === "lesson").length;
+     const d = document.querySelector("#cvPaper .cday:not(.none)");
+     return d.querySelectorAll(".csubs > i").length === n && n > 1;
+   }) === true, await p.evaluate(() =>
+     document.querySelector("#cvPaper .cday:not(.none)").querySelectorAll(".csubs > i").length));
+ok("備考の欄も同じ数の枠（上下がそろう）", await p.evaluate(() => {
+     const d = document.querySelector("#cvPaper .cday:not(.none)");
+     return d.querySelectorAll(".cnote > i").length
+         === d.querySelectorAll(".csubs > i").length;
+   }) === true);
+ok("備考は空のまま刷る（手で書き込む欄）", await p.evaluate(() =>
+   [...document.querySelectorAll("#cvPaper .cnote")].every(e => e.textContent === "")) === true,
+   await p.evaluate(() => [...document.querySelectorAll("#cvPaper .cnote")]
+     .map(e => e.textContent).filter(Boolean).slice(0, 3)));
+ok("出ない校時のぶんも枠は置く（詰めると校時がずれる）", await p.evaluate(() => {
+     const n = SLOTS.filter(s => s.kind === "lesson").length;
+     return [...document.querySelectorAll("#cvPaper .csubs")]
+       .every(e => e.querySelectorAll("i").length === n);
+   }) === true);
+ok("1枠は1文字まで", await p.evaluate(() =>
+   [...document.querySelectorAll("#cvPaper .csubs > i")]
+     .every(e => e.textContent.length <= 1)) === true);
+
+/* 月の下の時数集計。**その月のコマ数（年度はじめからの累計）** */
+ok("月の下に時数集計が出る", await p.evaluate(() =>
+   document.querySelectorAll("#cvPaper .cmonth .ctally").length) === 4);
+/* **教科ごと。** 合計ひとつなら、日数×コマ数でほぼ決まる数にしかならない。
+   月ごとに何教科出るかは、その学校の教科シート次第なので数では縛らない ──
+   **出ている札が教科の1文字かどうか**で見る */
+ok("教科ごとに出す（合計ひとつではない）", await p.evaluate(() => {
+     const shorts = SUBJECTS.filter(s => s.count && s.short).map(s => s.short);
+     const bs = [...document.querySelectorAll("#cvPaper .ct > b")];
+     return bs.length > 0 && bs.every(e => shorts.indexOf(e.textContent) >= 0);
+   }) === true, await p.evaluate(() =>
+     [...document.querySelectorAll("#cvPaper .ct > b")].map(e => e.textContent)));
+ok("「1文字 その月(累計)」の形", await p.evaluate(() => {
+     const e = document.querySelector("#cvPaper .cmonth:first-child .ct");
+     return /^.\d+\(\d+\)$/.test(e.textContent.replace(/\s/g, ""));
+   }) === true, await p.evaluate(() =>
+     document.querySelector("#cvPaper .cmonth:first-child .ct").textContent));
+ok("累計は、その月のぶんを下回らない", await p.evaluate(() =>
+   [...document.querySelectorAll("#cvPaper .ct")].every(e => {
+     const m = e.textContent.replace(/\s/g, "").match(/^.(\d+)\((\d+)\)$/);
+     return m && +m[2] >= +m[1];
+   })) === true);
+/* 数え方は時数集計表へのコピーと1つ（compose.js countSub）。
+   **時数に数えない教科は数に入らない** */
+/* 教科はシートが正本なので、名前を決め打ちにせず**いまの教科シートから取る** */
+ok("数え方は時数集計表と同じ（countSub 1つ）", await p.evaluate(() => {
+     const yes = SUBJECTS.filter(s => s.count && s.short)[0];
+     const no  = SUBJECTS.filter(s => !s.count || !s.short)[0];
+     return typeof countSub === "function"
+       && countSub({title:yes.name, subject:yes.code}).short === yes.short
+       /* 教科コードが無くても、題名の字で引く（手で書いたぶんも数える） */
+       && countSub({title:yes.name, subject:null}).short === yes.short
+       && (!no || countSub({title:no.name, subject:no.code}) === null)
+       && countSub({title:"授業なし", subject:null}) === null
+       && countSub({title:"", subject:null}) === null
+       && countSub(null) === null;
+   }) === true, await p.evaluate(() =>
+     SUBJECTS.map(s => [s.code, s.short, !!s.count])));
+ok("累計は年度で切る（4月はその月＝累計）", await p.evaluate(() => {
+     const apr = calCount(new Date(2026, 3, 1)), sum = calSum(new Date(2026, 3, 1));
+     return JSON.stringify(apr) === JSON.stringify(sum);
+   }) === true);
+ok("休みの日は数えない", await p.evaluate(() => {
+     /* 4月の、授業が数えられる最初の日を休みにして数え直す。
+        シートへは送らず、この端末の控えだけを直す（送ると後の検査に混ざる） */
+     let dt = null;
+     for(const d of calDates(new Date(2026, 3, 1))){
+       const c = calDayC(d);
+       if(c && Object.keys(c.count).length){ dt = d; break; }
+     }
+     if(!dt) return "4月に数えられる日が無い";
+     const before = calDayC(dt);
+     const n = Object.keys(before.count).reduce((a, k) => a + before.count[k], 0);
+     const keep = monday;
+     monday = mondayOf(dt);
+     const d0 = Math.round((dt - monday) / 86400000);
+     const w = week(), key = d0 + "|" + DAY_SLOT, was = w.school[key];
+     w.school[key] = {title:"休み", note:"", subject:null, at:Date.now(), by:"a@edu.nishi.or.jp"};
+     calCache = {};
+     const m = Object.keys(calDayC(dt).count).reduce((a, k) => a + calDayC(dt).count[k], 0);
+     if(was) w.school[key] = was; else delete w.school[key];
+     monday = keep;
+     calCache = {};
+     return n > 0 && m === 0;
+   }) === true, await p.evaluate(() => "上を見よ"));
 const calT0 = await p.locator("#cvTitle").innerText();
 await p.locator("#cvNext").click(); await p.waitForTimeout(700); await closeDlgs();
 ok("4ヶ月ずつ繰れる", (await p.locator("#cvTitle").innerText()) !== calT0,
@@ -2049,8 +2147,277 @@ ok("刷るのは A4 よこ", await p.evaluate(() =>
    CAL_PAGE.w === 297 && CAL_PAGE.h === 210) === true);
 ok("刷る手順は月の面と1つ（printSpread）", await p.evaluate(() =>
    typeof printSpread === "function" && typeof printCal === "function") === true);
+
+/* **月ごとに数えたものを取り置き、累計は足し算だけにする。**
+   4ヶ月ぶんの累計は、4月を4回・5月を3回…と同じ月を何度も通るので、
+   月の合計を1度だけ出せば数え直しが消える */
+ok("月ごとの数を取り置く", await p.evaluate(() =>
+   Object.keys(calMonthCache).length > 0) === true,
+   await p.evaluate(() => Object.keys(calMonthCache).length));
+ok("累計は取り置いた月を足すだけ（日を数え直さない）", await p.evaluate(() => {
+     for(const m of calMonths()) calSum(m);        /* 取り置きを温める */
+     const days = Object.keys(calCache).length;
+     const months = Object.keys(calMonthCache).length;
+     for(const m of calMonths()) calSum(m);        /* 2回目 */
+     /* 日も月も増えない＝組み直していない */
+     return days > 0 && Object.keys(calCache).length === days
+                     && Object.keys(calMonthCache).length === months;
+   }) === true);
+ok("中身が変わると取り置きを捨てる", await p.evaluate(() => {
+     for(const m of calMonths()) calSum(m);
+     const had = Object.keys(calMonthCache).length;
+     dataTick++;                     /* 書き込み・読み込みで上がる印 */
+     calFreshen();
+     return had > 0 && Object.keys(calMonthCache).length === 0;
+   }) === true);
+/* **面ごとに数が違う。** openView は捨てたあとすぐ数え直す（右メニューの時数を
+   描くため）ので、捨てる決まりそのものを見る */
+ok("面が変わると取り置きを捨てる（クラスごとに数が違う）", await p.evaluate(() => {
+     const keep = view;
+     view = {kind:"class", cls:"5-1"};
+     calFreshen();
+     calCount(new Date(2026, 3, 1));
+     const had = Object.keys(calMonthCache).length;
+     view = {kind:"class", cls:"5-2"};
+     calFreshen();
+     const after = Object.keys(calMonthCache).length;
+     view = keep; calFreshen();
+     return had > 0 && after === 0;
+   }) === true, await p.evaluate(() => Object.keys(calMonthCache).length));
+/* **週の年度は、その週の月曜で決まる。** 4月1日を含む週の月曜は3月にあることが
+   あり、その週は前の年度のシートに入っている。月の年度でまとめるとそこがずれ、
+   その年度ぶんを丸ごと違う年の箱へ読みに行っていた */
+ok("4/1 を含む週は、前の年度の箱に入れて読む", await p.evaluate(() => {
+     const g = fyWeeks([new Date(2026, 3, 1)]);      /* 2026年4月 */
+     return Object.keys(g).sort().join(",") === "2025,2026"
+         && Object.keys(g["2025"]).join(",") === "2026-03-30";
+   }) === true, await p.evaluate(() => {
+     const g = fyWeeks([new Date(2026, 3, 1)]);
+     return Object.keys(g).map(y => y + ":" + Object.keys(g[y]).join("/"));
+   }));
+ok("年度ごとの先頭の月曜が、その年度に入っている", await p.evaluate(() => {
+     const g = fyWeeks([new Date(2026, 3, 1), new Date(2026, 4, 1)]);
+     return Object.keys(g).every(y =>
+       String(fyOf(parseISO(Object.keys(g[y]).sort()[0]))) === y);
+   }) === true);
 await p.locator('#centerTabs [data-center="week"]').click();
 await p.waitForTimeout(400); await closeDlgs();
+
+console.log("\n■ 右メニューの時数");
+await p.evaluate(() => { openView({kind:"class", cls:"5-1"}); });
+await p.waitForTimeout(500); await closeDlgs();
+ok("学級を開くと出る", await p.evaluate(() =>
+   $("tallyWrap").hidden === false) === true);
+ok("教科ごとに「今月」と「累計」の3列", await p.evaluate(() => {
+     const r = document.querySelector("#tlyBox .tlyrow");
+     return !!r && r.children.length === 3
+         && /^\d+$/.test(r.children[1].textContent)
+         && /^\d+$/.test(r.children[2].textContent);
+   }) === true, await p.evaluate(() => {
+     const r = document.querySelector("#tlyBox .tlyrow");
+     return r ? [...r.children].map(e => e.textContent) : null;
+   }));
+/* **カレンダーの面と同じ数。** 数え方は countSub 1つなので、見る場所で違わない */
+ok("カレンダーの月の下と同じ数", await p.evaluate(() => {
+     const m = new Date(monday.getFullYear(), monday.getMonth(), 1);
+     const now = calCount(m), sum = calSum(m);
+     return [...document.querySelectorAll("#tlyBox .tlyrow")].every(r => {
+       const k = r.children[0].textContent;
+       return String(now[k] || 0) === r.children[1].textContent
+           && String(sum[k] || 0) === r.children[2].textContent;
+     });
+   }) === true);
+ok("見込みで数えているぶんを字で言う", await p.evaluate(() =>
+   /基本時間割/.test($("tlyNote").textContent)) === true,
+   await p.evaluate(() => $("tlyNote").textContent));
+ok("入口（まだ何も開いていない）では出さない", await p.evaluate(() => {
+     const keep = view;
+     view = {kind:"gate"};
+     drawTallyPanel();
+     const hid = $("tallyWrap").hidden;
+     view = keep; drawTallyPanel();
+     return hid;
+   }) === true);
+
+console.log("\n■ 時数集計シート（押したときだけ）");
+await p.evaluate(() => { openView({kind:"class", cls:"5-1"}); });
+await p.waitForTimeout(500); await closeDlgs();
+ok("ボタンと、時間がかかる断りが出る", await p.evaluate(() =>
+   !!$("tlySheet") && /1〜3分/.test($("tlySheetNote").textContent)) === true,
+   await p.evaluate(() => $("tlySheetNote").textContent));
+ok("？の説明にも、時間がかかると書いてある", await p.evaluate(() =>
+   /1〜3分/.test(HELP.tally2.b.join("")) ) === true);
+/* **？はボタンのすぐ右。** 見出しの横だと、押そうとしている人の目に入らない */
+ok("？は「時数を集計する」のすぐ右にある", await p.evaluate(() => {
+     const q = document.querySelector('[data-help="tally2"] .helpq');
+     const btn = $("tlySheet");
+     if(!q || !btn) return "？かボタンが無い";
+     const a = btn.getBoundingClientRect(), b = q.getBoundingClientRect();
+     /* 同じ高さで、ボタンより右。見出しの横に付いていたら上にずれる */
+     return b.left >= a.right - 1 && Math.abs(b.top - a.top) < a.height;
+   }) === true, await p.evaluate(() => {
+     const q = document.querySelector('[data-help="tally2"] .helpq');
+     const btn = $("tlySheet");
+     return q && btn ? [btn.getBoundingClientRect().toJSON(),
+                        q.getBoundingClientRect().toJSON()] : null;
+   }));
+/* **押し間違いで1〜3分待たせない。** 既定は「やめる」 */
+await p.locator("#tlySheet").click();
+await p.waitForTimeout(300);
+ok("押すと、先に確かめる窓が出る", await p.evaluate(() =>
+   $("okDlg").open === true) === true);
+ok("既定は「やめる」", await p.evaluate(() =>
+   document.activeElement === $("okNo")) === true);
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator("#okNo").click();
+await p.waitForTimeout(400); await closeDlgs();
+ok("やめれば、1本も呼ばない", (await calls()).indexOf("apiWriteTally") < 0, await calls());
+/* 数えて置く */
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator("#tlySheet").click();
+await p.waitForTimeout(300);
+await p.locator("#okYes").click();
+await p.waitForTimeout(2500); await closeDlgs();
+ok("数えると、時数集計シートへ置く",
+   (await calls()).indexOf("apiWriteTally") >= 0, await calls());
+const tly = await p.evaluate(() => window.__tally || null);
+ok("見出しは 年度・クラス・月 → 教科 → 合計",
+   !!tly && tly.head[0] === "年度" && tly.head[1] === "クラス" && tly.head[2] === "月"
+   && tly.head.indexOf("合計") > 3, tly && tly.head);
+ok("教科の列は、教科シートの順（1文字）", await p.evaluate(() => {
+     const want = SUBJECTS.filter(s => s.count && s.short).map(s => s.short)
+       .filter((x, i, a) => a.indexOf(x) === i);
+     const got = (window.__tally.head || []).slice(3, 3 + want.length);
+     return want.join(",") === got.join(",");
+   }) === true, tly && tly.head);
+ok("行は クラス × 月 のぶん", await p.evaluate(() => {
+     const m0 = new Date(monday.getFullYear(), monday.getMonth(), 1);
+     return window.__tally.rows.length
+         === allClasses().length * tallyMonths(m0).length;
+   }) === true, tly && tly.rows.length);
+/* **数えるのは画面。** シートの数と、右メニューに出ている数が一致すること */
+ok("シートに置いた数は、画面の数と同じ", await p.evaluate(() => {
+     const t = window.__tally, m = new Date(monday.getFullYear(), monday.getMonth(), 1);
+     const row = t.rows.find(r => r[1] === view.cls && r[2] === (m.getMonth() + 1) + "月");
+     if(!row) return "その月の行が無い";
+     const now = calCount(m);
+     return t.head.slice(3, t.head.indexOf("合計")).every((k, i) =>
+       String(now[k] || 0) === row[3 + i]);
+   }) === true, await p.evaluate(() => {
+     const t = window.__tally, m = new Date(monday.getFullYear(), monday.getMonth(), 1);
+     const row = t.rows.find(r => r[1] === view.cls && r[2] === (m.getMonth() + 1) + "月");
+     return [t.head, row];
+   }));
+ok("合計の列は、教科の数の合計", await p.evaluate(() => {
+     const t = window.__tally, at = t.head.indexOf("合計");
+     return t.rows.every(r => {
+       let n = 0;
+       for(let i = 3; i < at; i++) n += +r[i] || 0;
+       return String(n) === r[at];
+     });
+   }) === true);
+/* **休みの日は数えない**（時数集計表へのコピーと同じ決まり） */
+ok("数え方は時数集計表と同じ（休みの日は数えない）", await p.evaluate(() => {
+     const m = new Date(monday.getFullYear(), monday.getMonth(), 1);
+     /* **数えられるクラスを選ぶ。** 見本の基本時間割は全クラスぶんは無いので、
+        1つ目のクラスを決め打ちにすると、はじめから 0 のまま通ってしまう */
+     let cls = null, n = 0;
+     for(const c of allClasses()){
+       const x = tallyClassMonth(c, m);
+       const t = Object.keys(x).reduce((a, k) => a + x[k], 0);
+       if(t > 0){ cls = c; n = t; break; }
+     }
+     if(!cls) return "数えられるクラスが無い";
+     /* この月の平日を全部「休み」にして数え直す（この端末の控えだけ直す） */
+     const keep = monday, touched = [];
+     for(const dt of calDates(m)){
+       monday = mondayOf(dt);
+       const d = Math.round((dt - monday) / 86400000);
+       if(d < 0 || d >= DAYS) continue;
+       const w = week(), key = d + "|" + DAY_SLOT;
+       touched.push([w, key, w.school[key]]);
+       w.school[key] = {title:"休み", note:"", subject:null,
+                        at:Date.now(), by:"a@edu.nishi.or.jp"};
+     }
+     const after = tallyClassMonth(cls, m);
+     for(const [w, key, was] of touched){ if(was) w.school[key] = was; else delete w.school[key]; }
+     monday = keep; calCache = {}; calMonthCache = {}; calMark = "";
+     return n > 0 && Object.keys(after).length === 0;
+   }) === true);
+
+console.log("\n■ 出どころの四角（週案の紙だけ）");
+await p.evaluate(() => {
+  const w = week(), now = Date.now();
+  w.school["0|p1"] = {title:"全校朝会", note:"", subject:null, at:now, by:"a@edu.nishi.or.jp"};
+  (w.grade["5"] || (w.grade["5"] = {}))["1|p1"] =
+    {title:"学年集会", note:"", subject:"gakunen_shukai", at:now, by:"a@edu.nishi.or.jp"};
+  save(); openView({kind:"class", cls:"5-1"});
+});
+await p.waitForTimeout(500); await closeDlgs();
+const srcAt = (d, s2) => p.evaluate(([d, s2]) => {
+  const e = document.querySelector(`#sheet .cell[data-d="${d}"][data-s="${s2}"] .src`);
+  return e && !e.hidden ? e.textContent : "";
+}, [d, s2]);
+ok("全校から降りたコマは「全校」", await srcAt(0, "p1") === "全校", await srcAt(0, "p1"));
+/* **縦長。** 題名の欄は高さが余り、横幅が題名と取り合いになる。
+   横長だと「全校」で 5mm 取られるところ、縦なら 2.6mm で済む。
+   **見た目の形で見る**（縦書きの指定ではなく）── 指定が効いていても
+   箱が潰れていたら読めない */
+ok("四角は縦長（1行1文字で積む）", await p.evaluate(() => {
+     const e = document.querySelector('#sheet .cell[data-d="0"][data-s="p1"] .src');
+     const r = e.getBoundingClientRect(), fs = parseFloat(getComputedStyle(e).fontSize);
+     /* 2文字ぶんの高さがあり、幅は1文字ぶん。字が入りきっていること */
+     return r.height > r.width * 1.5
+         && r.height >= fs * 1.8
+         && e.scrollHeight <= e.clientHeight + 1;
+   }) === true, await p.evaluate(() => {
+     const e = document.querySelector('#sheet .cell[data-d="0"][data-s="p1"] .src');
+     const r = e.getBoundingClientRect();
+     return {w:+r.width.toFixed(1), h:+r.height.toFixed(1),
+             fs:getComputedStyle(e).fontSize,
+             scroll:e.scrollHeight, client:e.clientHeight};
+   }));
+ok("学年から降りたコマは「◯年」（層の名前ではなく学年の数字）",
+   await srcAt(1, "p1") === "5年", await srcAt(1, "p1"));
+ok("自分で書いたコマには出さない", await p.evaluate(() => {
+     writeCell(2, "p1", {title:"国語", subject:"kokugo"});
+     paintSheet();
+     const e = document.querySelector('#sheet .cell[data-d="2"][data-s="p1"] .src');
+     return !e || e.hidden;
+   }) === true);
+ok("右上の札と二重に言わない（層は四角が言う）", await p.evaluate(() => {
+     const e = document.querySelector('#sheet .cell[data-d="0"][data-s="p1"] .tag');
+     return e.hidden || e.textContent === "";
+   }) === true);
+ok("重なりは右上に残す（四角が言えないもの）", await p.evaluate(() => {
+     const w = week(), now = Date.now() + 1000;
+     (w.home["5-1"] || (w.home["5-1"] = {}))["0|p1"] =
+       {title:"国語", note:"", subject:"kokugo", at:now, by:"b@edu.nishi.or.jp"};
+     save(); paintSheet();
+     return document.querySelector('#sheet .cell[data-d="0"][data-s="p1"] .tag').textContent;
+   }) === "！重なり");
+/* **全学年の面では出さない。** 全部が「全校」になり、何も区別しない印になる */
+ok("全学年の面では出さない", await p.evaluate(() => {
+     openView({kind:"school"});
+     return [...document.querySelectorAll("#sheet .src")].every(e => e.hidden);
+   }) === true);
+await p.waitForTimeout(400); await closeDlgs();
+ok("4週の面には出さない", await p.evaluate(() => {
+     openView({kind:"class", cls:"5-1"});
+     setCenter("month");
+     return document.querySelectorAll("#mPaper .src:not([hidden])").length;
+   }) === 0);
+await p.waitForTimeout(600); await closeDlgs();
+await p.evaluate(() => setCenter("week"));
+await p.waitForTimeout(400); await closeDlgs();
+
+console.log("\n■ 管理操作は、押す前にサーバが止める");
+ok("管理者なら、設定と管理を出す", await p.evaluate(() =>
+   !document.querySelector('[data-act="settings"]').hidden) === true);
+ok("画面は関門ではない（本体はサーバの checkAdmin）", await p.evaluate(() => {
+     /* 隠れていても google.script.run は呼べる。だからサーバ側で止める */
+     return typeof Backend.info().isAdmin === "boolean";
+   }) === true);
 
 console.log(errs.length ? "\n【エラー】\n" + errs.join("\n") : "\nJSエラーなし");
 if(errs.length) ng += errs.length;

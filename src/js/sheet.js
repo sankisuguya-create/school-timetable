@@ -79,7 +79,8 @@ function buildSheet_(sh){
 
   const foot = put(el("div", "foot",
     "<div class='lab'><span>週の</span><span>メモ</span></div>"
-    + "<div class='t'" + (sheetRO ? "" : " contenteditable") + "></div>"), "1 / 8", 3);
+    + "<div class='t'" + (sheetRO ? "" : " contenteditable role='textbox'"
+       + " aria-label='週のメモ' aria-multiline='true'") + "></div>"), "1 / 8", 3);
   const ft = foot.querySelector(".t");
   /* **週メモは画面（学級）ごとに持ち、シートへも送る**（compose.js の setMemo）。
      前は週にひとつしか無く、この端末にしか残らなかったので、
@@ -192,12 +193,12 @@ function cellEl(d, s){
   /* lesson は題名＋備考、note は**備考だけ**（放課後）、brk は題名だけ */
   const kls = s.kind === "lesson" ? "lesson" : s.kind === "note" ? "note row-break"
                                              : "brk row-break";
-  const ce = sheetRO ? "" : " contenteditable";
+  const ce = sheetRO ? "" : " contenteditable role='textbox'";
   const e = el("div", "cell " + kls,
     "<span class='tag' hidden></span>"
     + (s.kind === "note" ? "" : "<div class='t'" + ce + "></div>")
     + (s.kind === "lesson" || s.kind === "note"
-         ? "<div class='n'" + ce + "></div>" : ""));
+         ? "<div class='n'" + ce + (ce ? " aria-multiline='true'" : "") + "></div>" : ""));
   e.dataset.d = d; e.dataset.s = s.id;
   /* **休みの日の授業には書かせない。** 斜め線を引いた欄に字が入ると、
      刷った紙で「休みなのか、授業があるのか」が読めなくなる。
@@ -208,6 +209,13 @@ function cellEl(d, s){
      ここで返さずに CSS だけで止めると、キーボードの移動で欄に入れてしまい、
      打った字が別のクラス・別の週へ入る */
   if(sheetRO) return e;
+
+  /* contenteditable は、そのままでは支援技術に「どの欄か」を伝えない。
+     **同じ形の66マス**を聞き分けられるよう、日付・曜日・校時・欄の種類まで付ける */
+  const where = md(addDays(monday, d)) + "（" + DOW[d] + "） " + s.name
+              + (s.kind === "lesson" ? "校時" : "");
+  if(t) t.setAttribute("aria-label", where + " 教科名・行事名");
+  if(n) n.setAttribute("aria-label", where + " 詳細・備考");
 
   const focus = () => selectCell(d, s.id, e);
   if(t) t.addEventListener("focus", focus);
@@ -388,9 +396,19 @@ function paintCell(e, c, d, s, mine){
   if(mine) e.classList.toggle("upper", RANK[c.layer] > RANK[mine] && !c.clash);
   e.classList.toggle("clash", !!c.clash);
 
+  /* 出どころの四角。**週案の紙だけ**（4週・学年・カレンダーには出さない）。
+     あちらは見るための面で、1コマが小さく、札を置く場所がもう無い。 */
+  const src = (!sheetRO && !e.dataset.one) ? srcLabel(c, mine) : "";
+  let box = e.querySelector(".src");
+  if(src && !box){ box = el("span", "src"); e.insertBefore(box, e.firstChild); }
+  if(box){ box.hidden = !src; box.textContent = src; }
+  e.classList.toggle("has-src", !!src);
+
   const tag = e.querySelector(".tag");
   if(tag){
-    let name = c.clash ? "！重なり" : LAYER_NAME[c.layer];
+    /* **同じことを2か所に置かない。** 層そのものは左上の四角が言うので、
+       右上の札は四角が言えないものだけを出す（重なり・誰が変えたか・2クラス） */
+    let name = c.clash ? "！重なり" : (src ? "" : LAYER_NAME[c.layer]);
     if(c.over && c.over.length) name = c.over.join("・") + " が変更";
     /* 専科の面で、基本時間割が2クラス以上に当たったとき。**隠さずに言う。**
        「専科」シートの担当学年を書けば消える */
@@ -843,8 +861,18 @@ function fitMonth(cell){
    *日曜を置かない理由*：週の紙と同じ。この学校の年間行事計画表に日曜登校は無い。
    月〜土の6列なので、1列 15.7mm 取れる（7列なら 13.4mm）。
 
-   *備考に何が出るか*：その日の**放課後の備考**。週の紙で放課後に書いた
-   会議・行事の準備が、そのままここに出る。新しい入力は作らない。
+   *1日の作り*：上から **①日付（中央ぞろえ）／②時間割／③備考** の3段。
+   ②と③は、どちらも**横幅を6等分した枠**で、上下がそろう。
+   ②に教科の1文字が入り、③は**空のまま刷る** ── 手で書き込む欄。
+
+   *③を空にした理由*：前はここに放課後の備考を出していた。**紙に刷って手で
+   書き足す使い方**を優先する。画面の備考は週の紙で読める（同じことを2か所に
+   置かない）。1枠は 2.6mm × 約5mm ── 丸や「テ」1文字ぶん。文は入らない。
+
+   *月の下の時数集計*：教科ごとに **その月のコマ数（年度はじめからの累計）**。
+   数え方は時数集計表へのコピーと同じ（compose.js countSub）。
+   **まだ書いていない日は基本時間割で数える** ── cellFor が固定時間割まで
+   面倒を見るので、先の月は見通しの数として出る。
 
    **見るだけの面。** 直すのは週の紙のほうで。 */
 const CAL_MONTHS = 4;
@@ -857,25 +885,161 @@ const calMonths = () => {
   return out;
 };
 
+/* 1日に置く枠の数。**時程の「授業」の数**（既定は6）。
+   6と決め打ちにすると、5校時までの学校で枠が1つ余る。 */
+const calCols = () => SLOTS.filter(s => s.kind === "lesson");
+
 /* その日の1コマ。**週の紙と同じ `cellFor` を通す。**
-   日付から月曜を出して `monday` を差し替えれば、層の重ね方も行事も揃って動く。 */
+   日付から月曜を出して `monday` を差し替えれば、層の重ね方も行事も揃って動く。
+   `fy()` も `monday` から決まるので、**年度をまたいでも正しい年の週を読む**。
+
+   枠の数ぶん必ず返す（出ない校時は空文字）。**位置で校時が分かる**ように
+   詰めない ── 詰めると、4校時までの日の「算」が5校時の位置に来る。 */
 function calDay(dt){
   const keep = monday;
   monday = mondayOf(dt);
   try{
     const d = Math.round((dt - monday) / 86400000);
     if(d < 0 || d >= DAYS) return null;
-    const out = {d, form:dayForm(d), ev:hasEvents(d), subs:[], note:""};
-    for(const s of SLOTS){
-      if(s.kind === "note"){ out.note = plain(cellFor(d, s.id).note || "").trim(); continue; }
-      if(s.kind !== "lesson" || !slotShown(d, s)) continue;
+    const off = isDayOff(d);
+    const out = {d, form:dayForm(d), ev:hasEvents(d), subs:[], count:{}};
+    for(const s of calCols()){
+      if(!slotShown(d, s)){ out.subs.push(""); continue; }
       const c = cellFor(d, s.id);
       const t = plain(c.title).trim();
-      if(!t) { out.subs.push(""); continue; }
-      out.subs.push(t === NO_LESSON ? "／" : shortOf(c.subject, c.title));
+      out.subs.push(!t ? "" : t === NO_LESSON ? "／" : shortOf(c.subject, c.title));
+      /* **休みの日は数えない。** 斜め線を引いた日の授業を数えると、
+         その月の時数だけが多くなる（時数集計表へのコピーと同じ決まり） */
+      if(off) continue;
+      const sub = countSub(c);
+      if(sub) out.count[sub.short] = (out.count[sub.short] || 0) + 1;
     }
     return out;
   } finally{ monday = keep; }
+}
+
+/* ── 数えたものを取り置く ────────────────────────
+   **日ごと**（calCache）と**月ごと**（calMonthCache）の2段。
+
+   *月ごとを持つ理由*：累計は4月からの足し算なので、4ヶ月ぶんの累計を出すと
+   4月を4回、5月を3回…と同じ月を何度も通る。月の合計を1度だけ出して
+   **足し算だけにする**と、2回目からは数え直しが消える
+   （実測：4ヶ月ぶんの累計 13.4ms → 0.3ms）。
+
+   *日ごとも残す理由*：月の枠を組むときは日ごとの中身（教科の1文字）が要る。
+   月の合計だけでは紙が組めない。
+
+   **捨てるのは、面が変わったときと、中身が変わったとき。**
+   面（開いているクラス・学年）が違えば数も違う。中身は `dataTick` で見る
+   ── 書き込みと、シートから読んだぶんの取り込みで上がる。
+   描き直しのたびに捨てると、4ヶ月を繰り戻すたび数え直しになる。 */
+let calCache = {}, calMonthCache = {}, calMark = "";
+
+/* いま数えている面。クラス・学年・専科で数が変わる */
+const calFace = () => [view.kind, view.cls || "", view.grade || "",
+                       view.sp || ""].join("|");
+
+function calFreshen(){
+  const mark = calFace() + "|" + dataTick;
+  if(mark === calMark) return;
+  calMark = mark;
+  calCache = {};
+  calMonthCache = {};
+}
+function calDayC(dt){
+  calFreshen();
+  const k = iso(dt);
+  if(!(k in calCache)) calCache[k] = calDay(dt);
+  return calCache[k];
+}
+
+/* その月の、月〜土の日を順に。日曜は置かない（週の紙と同じ） */
+function calDates(m){
+  const out = [], last = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
+  for(let n = 1; n <= last; n++){
+    const dt = new Date(m.getFullYear(), m.getMonth(), n);
+    if((dt.getDay() + 6) % 7 < DAYS) out.push(dt);
+  }
+  return out;
+}
+
+/* その月の教科ごとのコマ数。{1文字: 数}。**月ごとに取り置く** */
+function calCount(m){
+  calFreshen();
+  const key = m.getFullYear() + "-" + m.getMonth();
+  if(key in calMonthCache) return calMonthCache[key];
+  const out = {};
+  for(const dt of calDates(m)){
+    const info = calDayC(dt);
+    if(!info) continue;
+    for(const k in info.count) out[k] = (out[k] || 0) + info.count[k];
+  }
+  return calMonthCache[key] = out;
+}
+
+/* 年度はじめ（4/1）からその月の終わりまでの累計。**月の合計を足すだけ**
+   （calCount が月ごとに取り置いてある）。**年度で切る** ──
+   3月と4月をつなげて数えると、標準授業時数と比べられない数になる。 */
+function calSum(m){
+  const out = {}, y = fyOf(m);
+  const upto = (m.getMonth() - 3 + 12) % 12;        /* 4月=0 … 3月=11 */
+  for(let i = 0; i <= upto; i++){
+    /* Date は月の繰り上がりを見てくれる（3+11 = 翌年の3月） */
+    const one = calCount(new Date(y, 3 + i, 1));
+    for(const k in one) out[k] = (out[k] || 0) + one[k];
+  }
+  return out;
+}
+
+/* 4月からその月までの週の月曜を、**年度ごとに分ける**。
+
+   *週の年度は、その週の月曜で決まる*。週案はシート1枚が1週なので、
+   4月1日を含む週の月曜が3月にあるとき、**その週は前の年度のシートに入っている**。
+   月の年度でまとめると、そこがずれる。
+
+   *年度ごとに分ける理由*：`Backend.readWeeks` は「いま開いている週の年度」で読む。
+   渡すときに `monday` をその年度の月曜へ差し替えるので、group の中の月曜を
+   そのまま使えるようにしておく（4月1日の月曜を使うと、それが3月30日だったときに
+   前の年度として読みに行ってしまう）。 */
+function fyWeeks(months){
+  const out = {};
+  for(const m of months){
+    const last = new Date(m.getFullYear(), m.getMonth() + 1, 0);
+    for(let x = mondayOf(m); x <= last; x = addDays(x, 7))
+      (out[fyOf(x)] || (out[fyOf(x)] = {}))[iso(x)] = true;
+  }
+  return out;
+}
+
+/* 年度ごとに分けた週を読む。**その年度に入っている月曜へ差し替えてから呼ぶ。**
+   読み終えたら after（ぜんぶの年度ぶんが終わってから1回）。 */
+function readByFy(byFy, after){
+  const ys = Object.keys(byFy);
+  let left = ys.length;
+  if(!left) return after();
+  const done = () => { if(--left <= 0) after(); };
+  const keep = monday;
+  for(const y of ys){
+    const list = Object.keys(byFy[y]).sort();
+    monday = parseISO(list[0]);      /* この年度の月曜（fy() をそろえる） */
+    Backend.readWeeks(list, done);
+  }
+  monday = keep;
+}
+
+/* 集計に出す教科の並び。**教科シートの順**（時数集計表と同じ並び）。
+   1文字が同じもの（体育と合同体育）は1つにまとめる。
+   その4ヶ月と累計のどちらにも出てこない教科は出さない ──
+   0 ばかりの行で、月の枠の下が埋まる。 */
+function calSubs(rows){
+  const out = [], seen = {};
+  for(const sub of SUBJECTS){
+    if(!sub.count || !sub.short || seen[sub.short]) continue;
+    if(!rows.some(r => r[sub.short])) continue;
+    seen[sub.short] = 1;
+    out.push(sub.short);
+  }
+  return out;
 }
 
 function openCal(){
@@ -888,23 +1052,35 @@ function drawCalView(){
     + ms[0].getFullYear() + "年" + (ms[0].getMonth() + 1) + "月 → "
     + (ms[CAL_MONTHS - 1].getMonth() + 1) + "月";
   $("cvHint").innerHTML = "<b>" + CAL_MONTHS + "ヶ月</b>を A4 よこ1枚に。"
-    + "1日の上は<b>その日の教科を1文字ずつ</b>（時数表と同じ字）、下は<b>放課後の備考</b>。"
-    + "直すのは週の紙のほうで。ここは見るだけです。";
+    + "1日は<b>日付／時間割／備考</b>の3段。時間割は教科の1文字（時数表と同じ字）、"
+    + "<b>備考は空のまま刷る</b>（手で書き込む欄）。"
+    + "月の下は教科ごとの<b>その月のコマ数（年度はじめからの累計）</b>。"
+    + "直すのは週の紙のほうで。";
   const box = $("cvPaper");
+  /* **描き直しのたびには捨てない。** 中身が変わっていなければ取り置きを使う
+     （4ヶ月を繰り戻すたびに数え直さない）── calFreshen が要否を見る */
+  calFreshen();
   box.textContent = "";
   for(const m of ms) box.appendChild(calMonthEl(m));
   fitCal();
-  /* その4ヶ月ぶんの週を読む。**まだ読んでいなければ**（月曜の並びで渡す） */
-  const mons = {};
+  /* **年度はじめから読む。** 括弧の累計は 4/1 からなので、見えている4ヶ月だけ
+     読んでも数が足りない（読めていない月は基本時間割の数になる）。
+
+     **年度ごとに分けて渡す** ── Backend.readWeeks は「いま開いている週の年度」で
+     読むので、3月と4月をまたぐときに違う年の箱へ入ってしまう。
+     monday を差し替えてから呼び、すぐ戻す（readWeeks は年度をその場で控える）。 */
+  const need = {};
   for(const m of ms){
-    const last = new Date(m.getFullYear(), m.getMonth() + 1, 0);
-    for(let x = mondayOf(m); x <= last; x = addDays(x, 7)) mons[iso(x)] = true;
+    const y = fyOf(m), upto = (m.getMonth() - 3 + 12) % 12;
+    for(let i = 0; i <= upto; i++) need[y + "/" + (3 + i)] = new Date(y, 3 + i, 1);
   }
   let sync = true;
-  const w = Wait.begin(CAL_MONTHS + "ヶ月ぶんを読んでいます");
-  Backend.readWeeks(Object.keys(mons), () => {
+  const w = Wait.begin("年度はじめからの週を読んでいます");
+  readByFy(fyWeeks(Object.keys(need).map(k => need[k])), () => {
     Wait.end(w);
     if(sync || $("calView").hidden) return;
+    /* 週を取り込んだぶん dataTick が上がっているので、ここで捨てられる */
+    calFreshen();
     box.textContent = "";
     for(const m of ms) box.appendChild(calMonthEl(m));
     fitCal();
@@ -915,6 +1091,7 @@ function drawCalView(){
 function calMonthEl(m){
   const wrap = el("div", "cmonth",
     "<div class='cmhd'>" + (m.getMonth() + 1) + "月</div>");
+  wrap.style.setProperty("--np", calCols().length);
   const grid = el("div", "cgrid");
   for(let d = 0; d < DAYS; d++)
     grid.appendChild(el("div", "cdow" + (d === DAYS - 1 ? " sat" : ""), DOW[d]));
@@ -922,21 +1099,45 @@ function calMonthEl(m){
   const first = new Date(m.getFullYear(), m.getMonth(), 1);
   const lead = (first.getDay() + 6) % 7;
   for(let i = 0; i < lead && i < DAYS; i++) grid.appendChild(el("div", "cday none"));
-  const last = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate();
-  for(let n = 1; n <= last; n++){
-    const dt = new Date(m.getFullYear(), m.getMonth(), n);
-    if((dt.getDay() + 6) % 7 >= DAYS) continue;      /* 日曜は置かない */
-    const info = calDay(dt);
+  for(const dt of calDates(m)){
+    const info = calDayC(dt);
+    /* ①日付（中央ぞろえ）／②時間割（6等分）／③備考（6等分・空欄）。
+       ③は **空のまま刷る**。手で書き込むための欄なので、字を入れない */
     const cell = el("div", "cday" + (info && info.form ? " form-" + info.form : ""),
-      "<span class='cnum'>" + n + "</span>"
-      + "<span class='csubs'>" + escText((info ? info.subs : []).join("")) + "</span>"
-      + "<span class='cnote'>" + escText(info ? info.note : "") + "</span>");
+      "<span class='cnum'>" + dt.getDate() + "</span>"
+      + "<span class='csubs'>"
+      + (info ? info.subs : []).map(x => "<i>" + escText(x) + "</i>").join("")
+      + "</span>"
+      + "<span class='cnote'>"
+      + new Array(calCols().length + 1).join("<i></i>")
+      + "</span>");
     if(info && info.ev) cell.classList.add("hasev");
     if(info && info.form) cell.title = DAY_FORM[info.form].label;
     grid.appendChild(cell);
   }
   wrap.appendChild(grid);
+  wrap.appendChild(calFootEl(m));
   return wrap;
+}
+
+/* 月の下の時数集計。**その月のコマ数（年度はじめからの累計）**。
+   数えるのは時数表に出す教科だけ（compose.js countSub）。
+   まだ書いていない日は基本時間割で数えるので、先の月も見通しとして出る。 */
+function calFootEl(m){
+  const now = calCount(m), sum = calSum(m);
+  const subs = calSubs([now, sum]);
+  const foot = el("div", "ctally");
+  if(!subs.length){
+    foot.appendChild(el("span", "ctnone", "時数に数えるコマがありません"));
+    return foot;
+  }
+  /* 1文字と数を2つの枠に分けて、列の中でかたまりごと置く
+     （→ src/css/app.css .ct）。分けないと、行をまたいで数の位置がずれる */
+  for(const k of subs)
+    foot.appendChild(el("span", "ct",
+      "<b>" + escText(k) + "</b>"
+      + "<span>" + (now[k] || 0) + "<i>(" + (sum[k] || 0) + ")</i></span>"));
+  return foot;
 }
 
 /* A4 よこ1枚。**枠の大きさは mm で決め、刷るときはそれをそのまま使う。**

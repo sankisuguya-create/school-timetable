@@ -142,6 +142,30 @@ function rootSubject(code){
   return root ? root.code : code;
 }
 
+/* ── 出どころの四角 ────────────────────────────
+   **どこから降りてきたコマか**を、題名の欄の左上に小さく出す。
+
+   *「学年」ではなく「3年」と出す理由*：担任の面で「学年」とだけ出ても、
+   自分の学年だと分かっているので何も足さない。**学年の数字**まで出せば、
+   ほかの学年の予定が混ざったときに気づける（専科の面では実際に混ざる）。
+
+   *降りてきたコマにだけ出す理由*：全学年の面では全部が「全校」、学年の面では
+   全部が「◯年」になる ── 面ぜんぶが同じ札で埋まり、**何も区別しない印**になる。
+   自分の面より上から来たものだけに出せば、そこだけが目に入る。 */
+function srcLabel(c, mine){
+  if(!c || !mine || !c.layer) return "";
+  if(!(RANK[c.layer] > RANK[mine])) return "";
+  if(c.layer === "school")  return "全校";
+  if(c.layer === "special") return "専科";
+  if(c.layer === "grade"){
+    /* いま出している紙のクラスから学年を引く。**マスターの面では view から** */
+    const g = view.kind === "class" ? gradeOf(view.cls)
+            : view.kind === "grade" ? view.grade : "";
+    return g ? g + "年" : "学年";
+  }
+  return "";
+}
+
 /* 教科の1文字。**「時数表の1文字」を正本にする。**
    学年の面とカレンダーの面が同じ字を出すので、設定でそこを直せば両方が変わる。
    別に持つと、片方だけ直した版が出る。
@@ -154,6 +178,20 @@ function shortOf(code, title){
   if(s && s.short) return s.short;
   const t = plain((s && s.name) || title || "").trim();
   return t ? t.slice(0, 1) : "";
+}
+
+/* そのコマを時数に数えるか。数えるなら教科を返す。**数え方はここ1か所。**
+   時数集計表へのコピー（dialogs.js tallyGrid）と、カレンダーの月ごとの集計が、
+   同じ決まりで数える。別々に書くと、Excel に貼った数と紙の数が食い違う。
+
+   教科コードが入っていればそれで、無ければ題名の字で引く（手で書いた「算数」も
+   数える）。`count:false` の教科（図書・行事・給食・クラブ・委員会）と
+   「授業なし」と空欄は数えない。 */
+function countSub(c){
+  if(!c) return null;
+  const t = plain(c.title).trim();
+  const sub = c.subject ? SUB_BY_CODE[c.subject] : SUB_BY_NAME[t];
+  return (sub && sub.count && sub.short) ? sub : null;
 }
 
 /* その専科が受け持つ学年。**空なら null＝全学年。**
