@@ -2029,54 +2029,87 @@ await p.evaluate(() => {
   setSubjects(S); save();
 });
 
-console.log("\n■ カレンダーの面（4ヶ月・A4よこ1枚）");
+console.log("\n■ カレンダーの面（2ヶ月・A4よこ1枚）");
 await p.evaluate(() => { openView({kind:"class", cls:"5-1"}); });
 await p.waitForTimeout(400); await closeDlgs();
 await p.locator('#centerTabs [data-center="cal"]').click();
 await p.waitForTimeout(900); await closeDlgs();
 ok("カレンダーの面に入れ替わる", await p.evaluate(() =>
    $("calView").hidden === false && $("stage").hidden === true) === true);
-ok("4ヶ月ぶん出る", await p.evaluate(() =>
-   document.querySelectorAll("#cvPaper .cmonth").length) === 4);
+/* **2ヶ月。** 1日の時間割を縦に積むと、4ヶ月では1校時 1.63mm にしかならず
+   字が入らない（版面の計算）。横に2枚だけにして、1日を倍の高さにした */
+ok("2ヶ月ぶん出る", await p.evaluate(() =>
+   document.querySelectorAll("#cvPaper .cmonth").length) === 2);
+ok("横に2枚（縦は割らない）", await p.evaluate(() =>
+   getComputedStyle($("cvPaper")).gridTemplateRows.split(" ").length) === 1);
 ok("月〜土の6列（日曜は置かない）", await p.evaluate(() =>
    document.querySelectorAll("#cvPaper .cmonth:first-child .cdow").length) === 6);
-ok("1日は「日付・教科の1文字・備考」の3段", await p.evaluate(() => {
+ok("1日は「日付」の下に、校時が縦に並ぶ", await p.evaluate(() => {
      const d = document.querySelector("#cvPaper .cday:not(.none)");
-     return !!d.querySelector(".cnum") && !!d.querySelector(".csubs") && !!d.querySelector(".cnote");
+     return !!d.querySelector(".cnum") && !!d.querySelector(".cper");
+   }) === true);
+/* **縦に積む。** 横並びだと1校時が 2.6mm 幅の升になり、何校時のことか
+   位置でしか分からない。縦なら上から1・2・3…と読める */
+ok("校時は縦に積む（横に並べない）", await p.evaluate(() => {
+     const r = [...document.querySelectorAll("#cvPaper .cday:not(.none) .cper > i")]
+       .slice(0, 2).map(e => e.getBoundingClientRect());
+     return r.length === 2 && r[1].top > r[0].top + 1
+         && Math.abs(r[1].left - r[0].left) < 1;
    }) === true);
 ok("教科は1文字ずつ並ぶ", await p.evaluate(() =>
-   [...document.querySelectorAll("#cvPaper .csubs")].some(e => e.textContent.trim().length > 1)) === true);
+   [...document.querySelectorAll("#cvPaper .cper")].some(e => e.textContent.trim().length > 1)) === true);
 ok("見るだけ（書ける欄を作らない）", await p.evaluate(() =>
    document.querySelectorAll("#cvPaper [contenteditable]").length) === 0);
-/* 時間割の欄と備考の欄は、どちらも**横幅を等分した枠**。数は時程の「授業」の数。
-   6と決め打ちにすると、5校時までの学校で枠が1つ余る */
-ok("時間割の欄は、授業の数だけ枠に分かれる", await p.evaluate(() => {
+/* 校時の行の数は時程の「授業」の数。6と決め打ちにすると、5校時までの学校で1つ余る */
+ok("校時の行は、授業の数だけ置く", await p.evaluate(() => {
      const n = SLOTS.filter(s => s.kind === "lesson").length;
      const d = document.querySelector("#cvPaper .cday:not(.none)");
-     return d.querySelectorAll(".csubs > i").length === n && n > 1;
+     return d.querySelectorAll(".cper > i").length === n && n > 1;
    }) === true, await p.evaluate(() =>
-     document.querySelector("#cvPaper .cday:not(.none)").querySelectorAll(".csubs > i").length));
-ok("備考の欄も同じ数の枠（上下がそろう）", await p.evaluate(() => {
+     document.querySelector("#cvPaper .cday:not(.none)").querySelectorAll(".cper > i").length));
+ok("1行に書き込む欄が1つ（教科の右）", await p.evaluate(() => {
      const d = document.querySelector("#cvPaper .cday:not(.none)");
-     return d.querySelectorAll(".cnote > i").length
-         === d.querySelectorAll(".csubs > i").length;
+     return d.querySelectorAll(".cper > i > u").length
+         === d.querySelectorAll(".cper > i").length;
    }) === true);
-ok("備考は空のまま刷る（手で書き込む欄）", await p.evaluate(() =>
-   [...document.querySelectorAll("#cvPaper .cnote")].every(e => e.textContent === "")) === true,
-   await p.evaluate(() => [...document.querySelectorAll("#cvPaper .cnote")]
-     .map(e => e.textContent).filter(Boolean).slice(0, 3)));
-ok("出ない校時のぶんも枠は置く（詰めると校時がずれる）", await p.evaluate(() => {
+ok("書き込む欄は空のまま刷る", await p.evaluate(() =>
+   [...document.querySelectorAll("#cvPaper .cper u")].every(e => e.textContent === "")) === true);
+ok("出ない校時のぶんも行は置く（詰めると校時がずれる）", await p.evaluate(() => {
      const n = SLOTS.filter(s => s.kind === "lesson").length;
-     return [...document.querySelectorAll("#cvPaper .csubs")]
-       .every(e => e.querySelectorAll("i").length === n);
+     return [...document.querySelectorAll("#cvPaper .cper")]
+       .every(e => e.querySelectorAll(":scope > i").length === n);
    }) === true);
-ok("1枠は1文字まで", await p.evaluate(() =>
-   [...document.querySelectorAll("#cvPaper .csubs > i")]
+ok("1行の教科は1文字まで", await p.evaluate(() =>
+   [...document.querySelectorAll("#cvPaper .cper > i > b")]
      .every(e => e.textContent.length <= 1)) === true);
+/* **日付がいちばん大きい字。** カレンダーは「何日か」を先に探す面なので、
+   教科の1文字より日付が目に入らないと、日を数え直すことになる */
+ok("日付は教科の字より大きく、濃い", await p.evaluate(() => {
+     const d = document.querySelector("#cvPaper .cday:not(.none)");
+     const n = d.querySelector(".cnum"), b = d.querySelector(".cper > i > b");
+     const fs = e => parseFloat(getComputedStyle(e).fontSize);
+     return fs(n) > fs(b) && +getComputedStyle(n).fontWeight >= 700;
+   }) === true, await p.evaluate(() => {
+     const d = document.querySelector("#cvPaper .cday:not(.none)");
+     return {num:getComputedStyle(d.querySelector(".cnum")).fontSize,
+             sub:getComputedStyle(d.querySelector(".cper > i > b")).fontSize};
+   }));
+/* **降りてきたコマには、週案の紙と同じ左端の線。** 視覚的に見つけるための印 */
+ok("学年・全校から降りたコマに左端の線が付く", await p.evaluate(() => {
+     const w = week(), now = Date.now();
+     w.school["0|p1"] = {title:"全校朝会", note:"", subject:"gyoji", at:now, by:"a@edu.nishi.or.jp"};
+     save(); redrawCenter();
+     return true;
+   }) === true);
+await p.waitForTimeout(900); await closeDlgs();
+ok("線は出どころの色（全校＝青）", await p.evaluate(() => {
+     const e = document.querySelector("#cvPaper .cper > i[data-from=school]");
+     return !!e && getComputedStyle(e).boxShadow.indexOf("inset") >= 0;
+   }) === true);
 
 /* 月の下の時数集計。**その月のコマ数（年度はじめからの累計）** */
 ok("月の下に時数集計が出る", await p.evaluate(() =>
-   document.querySelectorAll("#cvPaper .cmonth .ctally").length) === 4);
+   document.querySelectorAll("#cvPaper .cmonth .ctally").length) === 2);
 /* **教科ごと。** 合計ひとつなら、日数×コマ数でほぼ決まる数にしかならない。
    月ごとに何教科出るかは、その学校の教科シート次第なので数では縛らない ──
    **出ている札が教科の1文字かどうか**で見る */
@@ -2141,7 +2174,7 @@ ok("休みの日は数えない", await p.evaluate(() => {
    }) === true, await p.evaluate(() => "上を見よ"));
 const calT0 = await p.locator("#cvTitle").innerText();
 await p.locator("#cvNext").click(); await p.waitForTimeout(700); await closeDlgs();
-ok("4ヶ月ずつ繰れる", (await p.locator("#cvTitle").innerText()) !== calT0,
+ok("2ヶ月ずつ繰れる", (await p.locator("#cvTitle").innerText()) !== calT0,
    [calT0, await p.locator("#cvTitle").innerText()]);
 ok("刷るのは A4 よこ", await p.evaluate(() =>
    CAL_PAGE.w === 297 && CAL_PAGE.h === 210) === true);

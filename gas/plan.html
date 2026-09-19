@@ -1091,13 +1091,18 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .subrow input[data-f=short],.subrow input[data-f=tp]{text-align:center}
 
 /* ── カレンダーの面 ──────────────────────────────
-   **4ヶ月を 2×2。** 月の面と同じ並べ方（A4 よこ1枚）。
-   1日は「日付／教科の1文字の並び／放課後の備考」の3段。 */
-.cvpaper{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
+   **2ヶ月を、横に2枚。** A4 よこ1枚。前は4ヶ月を 2×2 に並べていたが、
+   1日の時間割を縦に積むと 1校時 1.63mm にしかならず字が入らなかった。
+   縦を割るのをやめて、1日を 22.9×29.5mm にした（1校時 3.9mm）。
+   **4ヶ月を見たいときは2枚繰る。**
+
+   1日は「日付」の下に、**校時を上から順に1行ずつ**。
+   1行は「教科の1文字｜書き込み欄」。 */
+.cvpaper{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr;
   gap:6px;min-height:0;min-width:0;justify-items:center;align-items:start}
 .cmonth{--k:1;--cw:100%;--ch:auto;
   /* **枠いっぱいに伸ばす。** 伸ばさないと中身の高さで止まり、
-     1日の欄が潰れたまま下に余白が残る（備考が2行も入らない） */
+     1日の欄が潰れたまま下に余白が残る */
   width:var(--cw);height:var(--ch);
   background:var(--sheet);color:var(--ink);font-feature-settings:"palt" 1;
   border:1.2px solid var(--rule-week);border-radius:2px;
@@ -1110,42 +1115,52 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 週の行は**均等に伸ばす**。月によって5行だったり6行だったりするので、
    行の高さを決め打ちにすると、5行の月に1行ぶんの余白が残る */
 .cgrid{display:grid;grid-template-columns:repeat(6,1fr);
-  /* 曜日の行は字のぶんだけ。**週の行だけを均等に伸ばす**
-     （grid-auto-rows だけだと、曜日の行も1週ぶんの高さになる） */
   grid-template-rows:auto;grid-auto-rows:1fr;flex:1;min-height:0}
 .cdow{font-size:calc(5.5pt*var(--k));text-align:center;color:var(--ink-sub);
   padding:calc(.5mm*var(--k)) 0;background:var(--band);
   border-right:.6px solid var(--rule);border-bottom:.6px solid var(--rule)}
 .cdow.sat{color:var(--ink-link)}
-/* 1日は**①日付／②時間割／③備考**の3段。②と③は横幅を等分した枠で、
-   上下の枠がそろう（3校時の字の真下が、3校時の書き込み欄になる）。 */
 .cday{position:relative;min-width:0;overflow:hidden;
   display:flex;flex-direction:column;
-  padding:calc(.3mm*var(--k)) 0 0;
   border-right:.6px solid var(--rule);border-bottom:.6px solid var(--rule)}
 .cday.none{background:var(--band)}
-/* ①日付。**中央ぞろえ。** 左に寄せると、下の等分した枠の線と目の動きがぶつかる */
-.cnum{font-size:calc(5.5pt*var(--k));color:var(--ink-sub);line-height:1;
-  text-align:center;padding-bottom:calc(.3mm*var(--k))}
-/* ②時間割・③備考。**同じ等分**。--np は時程の「授業」の数（既定6） */
-.csubs,.cnote{display:grid;grid-template-columns:repeat(var(--np,6),1fr);
-  border-top:.6px solid var(--rule)}
-.csubs>i,.cnote>i{font-style:normal;min-width:0;overflow:hidden;
-  text-align:center;border-right:.6px solid var(--rule-soft)}
-.csubs>i:last-child,.cnote>i:last-child{border-right:0}
-/* ②教科の1文字。**枠の幅は 2.6mm**（15.7mm を6等分）。
-   1文字ちょうどなので字間は要らない */
-.csubs{font-size:calc(7.5pt*var(--k));font-weight:600;line-height:1.25}
-/* ③備考は**空のまま**。手で書き込む欄なので、高さだけ取る。
-   残りの高さを全部渡す（1枠 2.6mm × 約5mm ── 丸や1文字ぶん） */
-.cnote{flex:1;min-height:calc(3.5mm*var(--k))}
-/* 休みの日は1文字の並びを出さない（授業が無いので）。
+/* ①日付。**枠いっぱいの大きさで、濃く太く。**
+   カレンダーは「何日か」を先に探す面なので、いちばん大きい字を日付に渡す。
+   前は 5.5pt の灰色で、教科の1文字（7.5pt）より小さかった ──
+   日付より教科のほうが目に付き、日を数え直すことになっていた。
+   高さは日付の行ぶん（--cnh）。字はその 92% まで。 */
+.cday{--cnh:calc(4.6mm*var(--k))}
+.cnum{height:var(--cnh);display:flex;align-items:center;justify-content:center;
+  font-size:calc(var(--cnh)*.92);font-weight:700;color:var(--ink);line-height:1;
+  background:var(--band);border-bottom:.6px solid var(--rule)}
+/* ②校時。**上から順に1行ずつ。** 行は残りの高さを等分する。
+   1行は「教科の1文字｜書き込み欄」。**書き込み欄は空のまま刷る。** */
+.cper{flex:1;min-height:0;display:grid;grid-auto-rows:1fr}
+.cper>i{font-style:normal;display:grid;
+  /* 左＝1文字ぶん（字の幅で決め打ちにせず、行の高さに合わせる）。
+     残りが書き込み欄。**欄のほうを広く取る** ── 書くのは人の手なので */
+  grid-template-columns:calc(3.4mm*var(--k)) 1fr;
+  align-items:center;min-width:0;overflow:hidden;
+  border-top:.6px solid var(--rule-soft)}
+.cper>i:first-child{border-top:0}
+.cper b{font-weight:600;font-size:calc(7.5pt*var(--k));line-height:1;
+  text-align:center;overflow:hidden}
+.cper u{text-decoration:none;border-left:.6px solid var(--rule-soft);height:100%}
+/* 出どころの線。**週案の紙と同じ色・同じ左端。**
+   降りてきたコマを、カレンダーの上でも見つけられるようにする。
+   紙にも残す（色が飛んでも、行の左が詰まっているのは見える）。 */
+.cper>i[data-from]{box-shadow:inset calc(.7mm*var(--k)) 0 0 0 var(--cat-none)}
+.cper>i[data-from=school] {box-shadow:inset calc(.7mm*var(--k)) 0 0 0 var(--cat-school)}
+.cper>i[data-from=grade]  {box-shadow:inset calc(.7mm*var(--k)) 0 0 0 var(--cat-grade)}
+.cper>i[data-from=special]{box-shadow:inset calc(.7mm*var(--k)) 0 0 0 var(--cat-special)}
+.cper>i[data-from] b{padding-left:calc(.7mm*var(--k))}
+/* 休みの日は教科を出さない（授業が無いので）。
    **書き込む欄は残す** ── 休みの日にも行事の覚えを書く */
-.cday.form-off .csubs>i{visibility:hidden}
+.cday.form-off .cper b{visibility:hidden}
 .cday.form-off{background:var(--band)}
-.cday.form-special .cnum::after{content:"特";font-size:.85em;margin-left:.2em}
+.cday.form-special .cnum::after{content:"特";font-size:.7em;margin-left:.2em}
 /* 年間行事のある日。**画面だけ**（週の紙と同じ扱い） */
-.cday.hasev .cnum::before{content:"●";color:var(--ink-link);font-size:.7em;
+.cday.hasev .cnum::before{content:"●";color:var(--ink-link);font-size:.5em;
   margin-right:.15em}
 @media print{ .cday.hasev .cnum::before{display:none} }
 
@@ -1557,10 +1572,12 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   body.printing-cal .cvpaper{gap:6mm;align-items:start;justify-items:stretch}
   body.printing-cal .cmonth{width:var(--cw);height:var(--ch);box-shadow:none;
     border-radius:0;border-color:#000}
-  /* 手で書き込む欄の区切り。**地の色は刷られない**ので、枠線を濃くする。
-     薄いままだと、どこまでが1校時ぶんか紙の上で分からない */
-  body.printing-cal .csubs>i,body.printing-cal .cnote>i{border-right-color:var(--rule)}
-  body.printing-cal .csubs,body.printing-cal .cnote{border-top-color:var(--rule)}
+  /* 校時の区切り。**地の色は刷られない**ので、枠線を濃くする。
+     薄いままだと、どこからどこまでが1校時ぶんか紙の上で分からない */
+  body.printing-cal .cper>i{border-top-color:var(--rule)}
+  body.printing-cal .cper u{border-left-color:var(--rule)}
+  /* 日付の帯も、地が飛んでも分かるように下の線を残す */
+  body.printing-cal .cnum{background:transparent;border-bottom-color:var(--rule)}
   body:not(.printing-cal) .cvview{display:none!important}
   /* 空き枠さがしの印も刷らない。**枠を探している最中の作業**であって、
      刷って残す情報ではない（年間行事の印と同じ扱い） */
@@ -6544,7 +6561,12 @@ function fitMonth(cell){
    面倒を見るので、先の月は見通しの数として出る。
 
    **見るだけの面。** 直すのは週の紙のほうで。 */
-const CAL_MONTHS = 4;
+/* **A4 よこ1枚に2ヶ月。** 前は4ヶ月を 2×2 で並べ、1日は 12.8mm 角だった。
+   1日の時間割を縦に積むには、6校時ぶんの行が要る。12.8mm から日付を引くと
+   1校時 1.63mm で、7.5pt の字（2.6mm）が入らない（実測ではなく版面の計算）。
+   横に2枚だけにすると1日が 22.9×29.5mm になり、1校時 3.9mm ── 字と
+   書き込み欄が並ぶ。**4ヶ月を見たいときは2枚繰る。** */
+const CAL_MONTHS = 2;
 let calFrom = null;              /* 左上の月の1日 */
 
 const calMonths = () => {
@@ -6571,12 +6593,19 @@ function calDay(dt){
     const d = Math.round((dt - monday) / 86400000);
     if(d < 0 || d >= DAYS) return null;
     const off = isDayOff(d);
-    const out = {d, form:dayForm(d), ev:hasEvents(d), subs:[], count:{}};
+    /* subs ＝ 教科の1文字、from ＝ そのコマの出どころ（層）。
+       **出どころも持つ。** 週案の紙と同じ線をここでも引くため
+       （学年・全校から降りてきたコマを、カレンダーの上でも見つけられる） */
+    const out = {d, form:dayForm(d), ev:hasEvents(d), subs:[], from:[], count:{}};
     for(const s of calCols()){
-      if(!slotShown(d, s)){ out.subs.push(""); continue; }
+      if(!slotShown(d, s)){ out.subs.push(""); out.from.push(""); continue; }
       const c = cellFor(d, s.id);
       const t = plain(c.title).trim();
       out.subs.push(!t ? "" : t === NO_LESSON ? "／" : shortOf(c.subject, c.title));
+      /* 線を引くのは**自分の面より上から降りてきたコマ**だけ。
+         全学年の面では全部が「全校」になり、何も区別しない印になる
+         （週案の紙の出どころの帯と同じ決まり ── compose.js srcLabel）。 */
+      out.from.push(RANK[c.layer] > RANK[layerOf()] ? c.layer : "");
       /* **休みの日は数えない。** 斜め線を引いた日の授業を数えると、
          その月の時数だけが多くなる（時数集計表へのコピーと同じ決まり） */
       if(off) continue;
@@ -6721,8 +6750,9 @@ function drawCalView(){
     + ms[0].getFullYear() + "年" + (ms[0].getMonth() + 1) + "月 → "
     + (ms[CAL_MONTHS - 1].getMonth() + 1) + "月";
   $("cvHint").innerHTML = "<b>" + CAL_MONTHS + "ヶ月</b>を A4 よこ1枚に。"
-    + "1日は<b>日付／時間割／備考</b>の3段。時間割は教科の1文字（時数表と同じ字）、"
-    + "<b>備考は空のまま刷る</b>（手で書き込む欄）。"
+    + "1日は<b>日付の下に、校時を上から順に</b>。左が教科の1文字（時数表と同じ字）、"
+    + "<b>右は空のまま刷る</b>（手で書き込む欄）。"
+    + "学年・全校から降りてきたコマは、週案の紙と同じく<b>左端に線</b>が付きます。"
     + "月の下は教科ごとの<b>その月のコマ数（年度はじめからの累計）</b>。"
     + "直すのは週の紙のほうで。";
   const box = $("cvPaper");
@@ -6770,15 +6800,20 @@ function calMonthEl(m){
   for(let i = 0; i < lead && i < DAYS; i++) grid.appendChild(el("div", "cday none"));
   for(const dt of calDates(m)){
     const info = calDayC(dt);
-    /* ①日付（中央ぞろえ）／②時間割（6等分）／③備考（6等分・空欄）。
-       ③は **空のまま刷る**。手で書き込むための欄なので、字を入れない */
+    /* ①日付（枠いっぱい）／②校時を**上から順に1行ずつ**。
+       1行は「教科の1文字｜書き込み欄」。**書き込み欄は空のまま刷る。**
+
+       *横に並べない理由*：横並びだと1校時ぶんが 2.6mm 幅の升になり、
+       何校時のことか位置でしか分からない。縦に積めば上から1・2・3…と
+       読めて、週案の紙（校時が行）と目の動きがそろう。
+
+       *出どころの線*：降りてきたコマの左端に、週案の紙と同じ色の線を引く。 */
+    const subs = info ? info.subs : [], from = (info && info.from) || [];
     const cell = el("div", "cday" + (info && info.form ? " form-" + info.form : ""),
       "<span class='cnum'>" + dt.getDate() + "</span>"
-      + "<span class='csubs'>"
-      + (info ? info.subs : []).map(x => "<i>" + escText(x) + "</i>").join("")
-      + "</span>"
-      + "<span class='cnote'>"
-      + new Array(calCols().length + 1).join("<i></i>")
+      + "<span class='cper'>"
+      + subs.map((x, i) => "<i" + (from[i] ? " data-from='" + escText(from[i]) + "'" : "")
+          + "><b>" + escText(x) + "</b><u></u></i>").join("")
       + "</span>");
     if(info && info.ev) cell.classList.add("hasev");
     if(info && info.form) cell.title = DAY_FORM[info.form].label;
@@ -6813,18 +6848,19 @@ function calFootEl(m){
    画面の px で測った倍率のまま刷ると、紙からはみ出すか、すかすかになる。 */
 const CAL_PAGE = {w:297, h:210, mg:8};
 function calCellMM(){
+  /* **横に2枚、縦は1枚。** 縦を割らないぶん、1日が倍の高さになる */
   return {w:(CAL_PAGE.w - CAL_PAGE.mg * 2 - 6) / 2 + "mm",
-          h:(CAL_PAGE.h - CAL_PAGE.mg * 2 - 6) / 2 + "mm"};
+          h:(CAL_PAGE.h - CAL_PAGE.mg * 2) + "mm"};
 }
 function fitCal(cell){
   const box = $("cvPaper"), one = box && box.querySelector(".cmonth");
   if(!box || !one) return;
   const c = cell || {w:((box.clientWidth - 6) / 2) + "px",
-                     h:((box.clientHeight - 6) / 2) + "px"};
+                     h:box.clientHeight + "px"};
   if(!cell && (box.clientWidth < 2 || box.clientHeight < 2)) return;
   if(cell){
     box.style.gridTemplateColumns = "repeat(2," + c.w + ")";
-    box.style.gridTemplateRows    = "repeat(2," + c.h + ")";
+    box.style.gridTemplateRows    = c.h;
     box.style.width = "calc(" + c.w + "*2 + 6mm)";
   }else{
     box.style.removeProperty("grid-template-columns");

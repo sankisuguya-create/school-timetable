@@ -349,10 +349,12 @@
   body.printing-cal .cvpaper{gap:6mm;align-items:start;justify-items:stretch}
   body.printing-cal .cmonth{width:var(--cw);height:var(--ch);box-shadow:none;
     border-radius:0;border-color:#000}
-  /* 手で書き込む欄の区切り。**地の色は刷られない**ので、枠線を濃くする。
-     薄いままだと、どこまでが1校時ぶんか紙の上で分からない */
-  body.printing-cal .csubs>i,body.printing-cal .cnote>i{border-right-color:var(--rule)}
-  body.printing-cal .csubs,body.printing-cal .cnote{border-top-color:var(--rule)}
+  /* 校時の区切り。**地の色は刷られない**ので、枠線を濃くする。
+     薄いままだと、どこからどこまでが1校時ぶんか紙の上で分からない */
+  body.printing-cal .cper>i{border-top-color:var(--rule)}
+  body.printing-cal .cper u{border-left-color:var(--rule)}
+  /* 日付の帯も、地が飛んでも分かるように下の線を残す */
+  body.printing-cal .cnum{background:transparent;border-bottom-color:var(--rule)}
   body:not(.printing-cal) .cvview{display:none!important}
   /* 空き枠さがしの印も刷らない。**枠を探している最中の作業**であって、
      刷って残す情報ではない（年間行事の印と同じ扱い） */

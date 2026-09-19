@@ -881,7 +881,12 @@ function fitMonth(cell){
    面倒を見るので、先の月は見通しの数として出る。
 
    **見るだけの面。** 直すのは週の紙のほうで。 */
-const CAL_MONTHS = 4;
+/* **A4 よこ1枚に2ヶ月。** 前は4ヶ月を 2×2 で並べ、1日は 12.8mm 角だった。
+   1日の時間割を縦に積むには、6校時ぶんの行が要る。12.8mm から日付を引くと
+   1校時 1.63mm で、7.5pt の字（2.6mm）が入らない（実測ではなく版面の計算）。
+   横に2枚だけにすると1日が 22.9×29.5mm になり、1校時 3.9mm ── 字と
+   書き込み欄が並ぶ。**4ヶ月を見たいときは2枚繰る。** */
+const CAL_MONTHS = 2;
 let calFrom = null;              /* 左上の月の1日 */
 
 const calMonths = () => {
@@ -908,12 +913,19 @@ function calDay(dt){
     const d = Math.round((dt - monday) / 86400000);
     if(d < 0 || d >= DAYS) return null;
     const off = isDayOff(d);
-    const out = {d, form:dayForm(d), ev:hasEvents(d), subs:[], count:{}};
+    /* subs ＝ 教科の1文字、from ＝ そのコマの出どころ（層）。
+       **出どころも持つ。** 週案の紙と同じ線をここでも引くため
+       （学年・全校から降りてきたコマを、カレンダーの上でも見つけられる） */
+    const out = {d, form:dayForm(d), ev:hasEvents(d), subs:[], from:[], count:{}};
     for(const s of calCols()){
-      if(!slotShown(d, s)){ out.subs.push(""); continue; }
+      if(!slotShown(d, s)){ out.subs.push(""); out.from.push(""); continue; }
       const c = cellFor(d, s.id);
       const t = plain(c.title).trim();
       out.subs.push(!t ? "" : t === NO_LESSON ? "／" : shortOf(c.subject, c.title));
+      /* 線を引くのは**自分の面より上から降りてきたコマ**だけ。
+         全学年の面では全部が「全校」になり、何も区別しない印になる
+         （週案の紙の出どころの帯と同じ決まり ── compose.js srcLabel）。 */
+      out.from.push(RANK[c.layer] > RANK[layerOf()] ? c.layer : "");
       /* **休みの日は数えない。** 斜め線を引いた日の授業を数えると、
          その月の時数だけが多くなる（時数集計表へのコピーと同じ決まり） */
       if(off) continue;
@@ -1058,8 +1070,9 @@ function drawCalView(){
     + ms[0].getFullYear() + "年" + (ms[0].getMonth() + 1) + "月 → "
     + (ms[CAL_MONTHS - 1].getMonth() + 1) + "月";
   $("cvHint").innerHTML = "<b>" + CAL_MONTHS + "ヶ月</b>を A4 よこ1枚に。"
-    + "1日は<b>日付／時間割／備考</b>の3段。時間割は教科の1文字（時数表と同じ字）、"
-    + "<b>備考は空のまま刷る</b>（手で書き込む欄）。"
+    + "1日は<b>日付の下に、校時を上から順に</b>。左が教科の1文字（時数表と同じ字）、"
+    + "<b>右は空のまま刷る</b>（手で書き込む欄）。"
+    + "学年・全校から降りてきたコマは、週案の紙と同じく<b>左端に線</b>が付きます。"
     + "月の下は教科ごとの<b>その月のコマ数（年度はじめからの累計）</b>。"
     + "直すのは週の紙のほうで。";
   const box = $("cvPaper");
@@ -1107,15 +1120,20 @@ function calMonthEl(m){
   for(let i = 0; i < lead && i < DAYS; i++) grid.appendChild(el("div", "cday none"));
   for(const dt of calDates(m)){
     const info = calDayC(dt);
-    /* ①日付（中央ぞろえ）／②時間割（6等分）／③備考（6等分・空欄）。
-       ③は **空のまま刷る**。手で書き込むための欄なので、字を入れない */
+    /* ①日付（枠いっぱい）／②校時を**上から順に1行ずつ**。
+       1行は「教科の1文字｜書き込み欄」。**書き込み欄は空のまま刷る。**
+
+       *横に並べない理由*：横並びだと1校時ぶんが 2.6mm 幅の升になり、
+       何校時のことか位置でしか分からない。縦に積めば上から1・2・3…と
+       読めて、週案の紙（校時が行）と目の動きがそろう。
+
+       *出どころの線*：降りてきたコマの左端に、週案の紙と同じ色の線を引く。 */
+    const subs = info ? info.subs : [], from = (info && info.from) || [];
     const cell = el("div", "cday" + (info && info.form ? " form-" + info.form : ""),
       "<span class='cnum'>" + dt.getDate() + "</span>"
-      + "<span class='csubs'>"
-      + (info ? info.subs : []).map(x => "<i>" + escText(x) + "</i>").join("")
-      + "</span>"
-      + "<span class='cnote'>"
-      + new Array(calCols().length + 1).join("<i></i>")
+      + "<span class='cper'>"
+      + subs.map((x, i) => "<i" + (from[i] ? " data-from='" + escText(from[i]) + "'" : "")
+          + "><b>" + escText(x) + "</b><u></u></i>").join("")
       + "</span>");
     if(info && info.ev) cell.classList.add("hasev");
     if(info && info.form) cell.title = DAY_FORM[info.form].label;
@@ -1150,18 +1168,19 @@ function calFootEl(m){
    画面の px で測った倍率のまま刷ると、紙からはみ出すか、すかすかになる。 */
 const CAL_PAGE = {w:297, h:210, mg:8};
 function calCellMM(){
+  /* **横に2枚、縦は1枚。** 縦を割らないぶん、1日が倍の高さになる */
   return {w:(CAL_PAGE.w - CAL_PAGE.mg * 2 - 6) / 2 + "mm",
-          h:(CAL_PAGE.h - CAL_PAGE.mg * 2 - 6) / 2 + "mm"};
+          h:(CAL_PAGE.h - CAL_PAGE.mg * 2) + "mm"};
 }
 function fitCal(cell){
   const box = $("cvPaper"), one = box && box.querySelector(".cmonth");
   if(!box || !one) return;
   const c = cell || {w:((box.clientWidth - 6) / 2) + "px",
-                     h:((box.clientHeight - 6) / 2) + "px"};
+                     h:box.clientHeight + "px"};
   if(!cell && (box.clientWidth < 2 || box.clientHeight < 2)) return;
   if(cell){
     box.style.gridTemplateColumns = "repeat(2," + c.w + ")";
-    box.style.gridTemplateRows    = "repeat(2," + c.h + ")";
+    box.style.gridTemplateRows    = c.h;
     box.style.width = "calc(" + c.w + "*2 + 6mm)";
   }else{
     box.style.removeProperty("grid-template-columns");
