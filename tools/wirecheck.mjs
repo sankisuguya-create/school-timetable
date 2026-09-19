@@ -2042,6 +2042,97 @@ ok("教科は1文字ずつ並ぶ", await p.evaluate(() =>
    [...document.querySelectorAll("#cvPaper .csubs")].some(e => e.textContent.trim().length > 1)) === true);
 ok("見るだけ（書ける欄を作らない）", await p.evaluate(() =>
    document.querySelectorAll("#cvPaper [contenteditable]").length) === 0);
+/* 時間割の欄と備考の欄は、どちらも**横幅を等分した枠**。数は時程の「授業」の数。
+   6と決め打ちにすると、5校時までの学校で枠が1つ余る */
+ok("時間割の欄は、授業の数だけ枠に分かれる", await p.evaluate(() => {
+     const n = SLOTS.filter(s => s.kind === "lesson").length;
+     const d = document.querySelector("#cvPaper .cday:not(.none)");
+     return d.querySelectorAll(".csubs > i").length === n && n > 1;
+   }) === true, await p.evaluate(() =>
+     document.querySelector("#cvPaper .cday:not(.none)").querySelectorAll(".csubs > i").length));
+ok("備考の欄も同じ数の枠（上下がそろう）", await p.evaluate(() => {
+     const d = document.querySelector("#cvPaper .cday:not(.none)");
+     return d.querySelectorAll(".cnote > i").length
+         === d.querySelectorAll(".csubs > i").length;
+   }) === true);
+ok("備考は空のまま刷る（手で書き込む欄）", await p.evaluate(() =>
+   [...document.querySelectorAll("#cvPaper .cnote")].every(e => e.textContent === "")) === true,
+   await p.evaluate(() => [...document.querySelectorAll("#cvPaper .cnote")]
+     .map(e => e.textContent).filter(Boolean).slice(0, 3)));
+ok("出ない校時のぶんも枠は置く（詰めると校時がずれる）", await p.evaluate(() => {
+     const n = SLOTS.filter(s => s.kind === "lesson").length;
+     return [...document.querySelectorAll("#cvPaper .csubs")]
+       .every(e => e.querySelectorAll("i").length === n);
+   }) === true);
+ok("1枠は1文字まで", await p.evaluate(() =>
+   [...document.querySelectorAll("#cvPaper .csubs > i")]
+     .every(e => e.textContent.length <= 1)) === true);
+
+/* 月の下の時数集計。**その月のコマ数（年度はじめからの累計）** */
+ok("月の下に時数集計が出る", await p.evaluate(() =>
+   document.querySelectorAll("#cvPaper .cmonth .ctally").length) === 4);
+/* **教科ごと。** 合計ひとつなら、日数×コマ数でほぼ決まる数にしかならない。
+   月ごとに何教科出るかは、その学校の教科シート次第なので数では縛らない ──
+   **出ている札が教科の1文字かどうか**で見る */
+ok("教科ごとに出す（合計ひとつではない）", await p.evaluate(() => {
+     const shorts = SUBJECTS.filter(s => s.count && s.short).map(s => s.short);
+     const bs = [...document.querySelectorAll("#cvPaper .ct > b")];
+     return bs.length > 0 && bs.every(e => shorts.indexOf(e.textContent) >= 0);
+   }) === true, await p.evaluate(() =>
+     [...document.querySelectorAll("#cvPaper .ct > b")].map(e => e.textContent)));
+ok("「1文字 その月(累計)」の形", await p.evaluate(() => {
+     const e = document.querySelector("#cvPaper .cmonth:first-child .ct");
+     return /^.\d+\(\d+\)$/.test(e.textContent.replace(/\s/g, ""));
+   }) === true, await p.evaluate(() =>
+     document.querySelector("#cvPaper .cmonth:first-child .ct").textContent));
+ok("累計は、その月のぶんを下回らない", await p.evaluate(() =>
+   [...document.querySelectorAll("#cvPaper .ct")].every(e => {
+     const m = e.textContent.replace(/\s/g, "").match(/^.(\d+)\((\d+)\)$/);
+     return m && +m[2] >= +m[1];
+   })) === true);
+/* 数え方は時数集計表へのコピーと1つ（compose.js countSub）。
+   **時数に数えない教科は数に入らない** */
+/* 教科はシートが正本なので、名前を決め打ちにせず**いまの教科シートから取る** */
+ok("数え方は時数集計表と同じ（countSub 1つ）", await p.evaluate(() => {
+     const yes = SUBJECTS.filter(s => s.count && s.short)[0];
+     const no  = SUBJECTS.filter(s => !s.count || !s.short)[0];
+     return typeof countSub === "function"
+       && countSub({title:yes.name, subject:yes.code}).short === yes.short
+       /* 教科コードが無くても、題名の字で引く（手で書いたぶんも数える） */
+       && countSub({title:yes.name, subject:null}).short === yes.short
+       && (!no || countSub({title:no.name, subject:no.code}) === null)
+       && countSub({title:"授業なし", subject:null}) === null
+       && countSub({title:"", subject:null}) === null
+       && countSub(null) === null;
+   }) === true, await p.evaluate(() =>
+     SUBJECTS.map(s => [s.code, s.short, !!s.count])));
+ok("累計は年度で切る（4月はその月＝累計）", await p.evaluate(() => {
+     const apr = calCount(new Date(2026, 3, 1)), sum = calSum(new Date(2026, 3, 1));
+     return JSON.stringify(apr) === JSON.stringify(sum);
+   }) === true);
+ok("休みの日は数えない", await p.evaluate(() => {
+     /* 4月の、授業が数えられる最初の日を休みにして数え直す。
+        シートへは送らず、この端末の控えだけを直す（送ると後の検査に混ざる） */
+     let dt = null;
+     for(const d of calDates(new Date(2026, 3, 1))){
+       const c = calDayC(d);
+       if(c && Object.keys(c.count).length){ dt = d; break; }
+     }
+     if(!dt) return "4月に数えられる日が無い";
+     const before = calDayC(dt);
+     const n = Object.keys(before.count).reduce((a, k) => a + before.count[k], 0);
+     const keep = monday;
+     monday = mondayOf(dt);
+     const d0 = Math.round((dt - monday) / 86400000);
+     const w = week(), key = d0 + "|" + DAY_SLOT, was = w.school[key];
+     w.school[key] = {title:"休み", note:"", subject:null, at:Date.now(), by:"a@edu.nishi.or.jp"};
+     calCache = {};
+     const m = Object.keys(calDayC(dt).count).reduce((a, k) => a + calDayC(dt).count[k], 0);
+     if(was) w.school[key] = was; else delete w.school[key];
+     monday = keep;
+     calCache = {};
+     return n > 0 && m === 0;
+   }) === true, await p.evaluate(() => "上を見よ"));
 const calT0 = await p.locator("#cvTitle").innerText();
 await p.locator("#cvNext").click(); await p.waitForTimeout(700); await closeDlgs();
 ok("4ヶ月ずつ繰れる", (await p.locator("#cvTitle").innerText()) !== calT0,
@@ -2067,6 +2158,24 @@ const srcAt = (d, s2) => p.evaluate(([d, s2]) => {
   return e && !e.hidden ? e.textContent : "";
 }, [d, s2]);
 ok("全校から降りたコマは「全校」", await srcAt(0, "p1") === "全校", await srcAt(0, "p1"));
+/* **縦長。** 題名の欄は高さが余り、横幅が題名と取り合いになる。
+   横長だと「全校」で 5mm 取られるところ、縦なら 2.6mm で済む。
+   **見た目の形で見る**（縦書きの指定ではなく）── 指定が効いていても
+   箱が潰れていたら読めない */
+ok("四角は縦長（1行1文字で積む）", await p.evaluate(() => {
+     const e = document.querySelector('#sheet .cell[data-d="0"][data-s="p1"] .src');
+     const r = e.getBoundingClientRect(), fs = parseFloat(getComputedStyle(e).fontSize);
+     /* 2文字ぶんの高さがあり、幅は1文字ぶん。字が入りきっていること */
+     return r.height > r.width * 1.5
+         && r.height >= fs * 1.8
+         && e.scrollHeight <= e.clientHeight + 1;
+   }) === true, await p.evaluate(() => {
+     const e = document.querySelector('#sheet .cell[data-d="0"][data-s="p1"] .src');
+     const r = e.getBoundingClientRect();
+     return {w:+r.width.toFixed(1), h:+r.height.toFixed(1),
+             fs:getComputedStyle(e).fontSize,
+             scroll:e.scrollHeight, client:e.clientHeight};
+   }));
 ok("学年から降りたコマは「◯年」（層の名前ではなく学年の数字）",
    await srcAt(1, "p1") === "5年", await srcAt(1, "p1"));
 ok("自分で書いたコマには出さない", await p.evaluate(() => {

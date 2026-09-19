@@ -574,9 +574,8 @@ function tallyGrid(){
         if(!(s.id in t.cols)) continue;
         /* 特別校時の日は朝学習が無い。紙に出ていないものを数えない */
         if(!slotShown(d, s)) continue;
-        const c = compose(list[r], d, s.id);
-        const sub = c.subject ? SUB_BY_CODE[c.subject] : SUB_BY_NAME[plain(c.title).trim()];
-        line[t.cols[s.id]] = (sub && sub.count) ? sub.short : "";
+        const sub = countSub(compose(list[r], d, s.id));
+        line[t.cols[s.id]] = sub ? sub.short : "";
       }
     }
     rows.push(line);

@@ -567,18 +567,23 @@ const Backend = (function(){
     const year = fy(), epoch = editEpoch;
     const todo = (mons || []).filter(m => want.some(t => !fresh_(weekTag(t, year, m))));
     if(!todo.length || !want.length) return after();
-    let left = todo.length;
-    const done = () => { if(--left <= 0) after(); };
-    for(const m of todo){
+    /* **一度に投げる数を抑える。** カレンダーの面は年度はじめからの累計を出すので、
+       3月には 45 週ぶんになる。45 本を同時に投げると GAS 側で詰まり、
+       どれも返らないまま待ちの表示が残る。 */
+    let left = todo.length, next = 0;
+    const done = () => { if(--left <= 0) after(); else fire(); };
+    function fire(){
+      if(next >= todo.length) return;
+      const m = todo[next++];
       google.script.run
-        .withSuccessHandler((function(mm){
-          return w => { mergeWeek(want, w, year, mm, epoch); done(); };
-        })(m))
+        .withSuccessHandler(w => { mergeWeek(want, w, year, m, epoch); done(); })
         /* **読めなくても先へ進む。** 進まないと、開いたつもりの面が出ない */
         .withFailureHandler(() => done())
         .apiReadWeek(year, m, want);
     }
+    for(let i = 0; i < AT_ONCE && i < todo.length; i++) fire();
   }
+  const AT_ONCE = 8;
   const weekTag = (t, year, mon) =>
     (year === undefined ? fy() : year) + "/" + (mon === undefined ? wkKey() : mon)
     + "/" + t.layer + "/" + (t.target || "");

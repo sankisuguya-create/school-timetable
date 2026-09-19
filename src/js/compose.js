@@ -180,6 +180,20 @@ function shortOf(code, title){
   return t ? t.slice(0, 1) : "";
 }
 
+/* そのコマを時数に数えるか。数えるなら教科を返す。**数え方はここ1か所。**
+   時数集計表へのコピー（dialogs.js tallyGrid）と、カレンダーの月ごとの集計が、
+   同じ決まりで数える。別々に書くと、Excel に貼った数と紙の数が食い違う。
+
+   教科コードが入っていればそれで、無ければ題名の字で引く（手で書いた「算数」も
+   数える）。`count:false` の教科（図書・行事・給食・クラブ・委員会）と
+   「授業なし」と空欄は数えない。 */
+function countSub(c){
+  if(!c) return null;
+  const t = plain(c.title).trim();
+  const sub = c.subject ? SUB_BY_CODE[c.subject] : SUB_BY_NAME[t];
+  return (sub && sub.count && sub.short) ? sub : null;
+}
+
 /* その専科が受け持つ学年。**空なら null＝全学年。**
    書いていない学校を、どの学年も受け持たない専科にしない。 */
 function spGradesOf(code){

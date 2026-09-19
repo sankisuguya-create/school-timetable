@@ -1003,22 +1003,58 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   padding:calc(.5mm*var(--k)) 0;background:var(--band);
   border-right:.6px solid var(--rule);border-bottom:.6px solid var(--rule)}
 .cdow.sat{color:var(--ink-link)}
+/* 1日は**①日付／②時間割／③備考**の3段。②と③は横幅を等分した枠で、
+   上下の枠がそろう（3校時の字の真下が、3校時の書き込み欄になる）。 */
 .cday{position:relative;min-width:0;overflow:hidden;
-  display:flex;flex-direction:column;gap:calc(.2mm*var(--k));
-  padding:calc(.4mm*var(--k)) calc(.5mm*var(--k));
+  display:flex;flex-direction:column;
+  padding:calc(.3mm*var(--k)) 0 0;
   border-right:.6px solid var(--rule);border-bottom:.6px solid var(--rule)}
 .cday.none{background:var(--band)}
-.cnum{font-size:calc(5.5pt*var(--k));color:var(--ink-sub);line-height:1}
-/* 教科の1文字。**字間を詰めて、6コマを1行に収める** */
-.csubs{font-size:calc(7.5pt*var(--k));font-weight:600;line-height:1.1;
-  letter-spacing:-.04em;white-space:nowrap;overflow:hidden}
-.cnote{flex:1;font-size:calc(5.5pt*var(--k));color:var(--ink-sub);line-height:1.2;
-  overflow:hidden;word-break:break-word}
-/* 休みの日は1文字の並びを出さない（授業が無いので） */
-.cday.form-off .csubs{visibility:hidden}
+/* ①日付。**中央ぞろえ。** 左に寄せると、下の等分した枠の線と目の動きがぶつかる */
+.cnum{font-size:calc(5.5pt*var(--k));color:var(--ink-sub);line-height:1;
+  text-align:center;padding-bottom:calc(.3mm*var(--k))}
+/* ②時間割・③備考。**同じ等分**。--np は時程の「授業」の数（既定6） */
+.csubs,.cnote{display:grid;grid-template-columns:repeat(var(--np,6),1fr);
+  border-top:.6px solid var(--rule)}
+.csubs>i,.cnote>i{font-style:normal;min-width:0;overflow:hidden;
+  text-align:center;border-right:.6px solid var(--rule-soft)}
+.csubs>i:last-child,.cnote>i:last-child{border-right:0}
+/* ②教科の1文字。**枠の幅は 2.6mm**（15.7mm を6等分）。
+   1文字ちょうどなので字間は要らない */
+.csubs{font-size:calc(7.5pt*var(--k));font-weight:600;line-height:1.25}
+/* ③備考は**空のまま**。手で書き込む欄なので、高さだけ取る。
+   残りの高さを全部渡す（1枠 2.6mm × 約5mm ── 丸や1文字ぶん） */
+.cnote{flex:1;min-height:calc(3.5mm*var(--k))}
+/* 休みの日は1文字の並びを出さない（授業が無いので）。
+   **書き込む欄は残す** ── 休みの日にも行事の覚えを書く */
+.cday.form-off .csubs>i{visibility:hidden}
 .cday.form-off{background:var(--band)}
 .cday.form-special .cnum::after{content:"特";font-size:.85em;margin-left:.2em}
 /* 年間行事のある日。**画面だけ**（週の紙と同じ扱い） */
 .cday.hasev .cnum::before{content:"●";color:var(--ink-link);font-size:.7em;
   margin-right:.15em}
 @media print{ .cday.hasev .cnum::before{display:none} }
+
+/* ── 月の下の時数集計 ────────────────────────
+   教科ごとに **その月のコマ数（年度はじめからの累計）**。
+   **教科ごとに出す。** 合計1つでは日数×コマ数でほぼ決まる数にしかならず、
+   標準授業時数と突き合わせられない。
+
+   **4列に折り返す。** 13教科を1行に並べると字が読めない大きさになる。
+   その4ヶ月にも累計にも出てこない教科は行ごと出さない（0 で埋めない）。 */
+.ctally{display:grid;grid-template-columns:repeat(4,1fr);
+  gap:0 calc(1mm*var(--k));padding:calc(.6mm*var(--k)) calc(1mm*var(--k));
+  border-top:1.2px solid var(--rule-week);background:var(--band);
+  font-size:calc(5.5pt*var(--k));line-height:1.35;color:var(--ink)}
+/* **1文字と数をくっつける。** 列の幅（140mm ÷ 4 ＝ 35mm）に対して
+   「国22(128)」は 15mm しかないので、左右へ振り分けると 20mm の空きが入り、
+   どの数がどの教科のものか読めなくなる（実測）。
+   列の中で**かたまりごと中央**に置き、1文字は右ぞろえ・数は左ぞろえにして、
+   行をまたいでも縦がそろうようにする。 */
+.ct{display:grid;grid-template-columns:1.4em max-content;
+  justify-content:center;align-items:baseline;column-gap:.2em;
+  min-width:0;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ct>b{text-align:right;font-weight:700;color:var(--ink-sub)}
+/* 累計は**小さく薄く**。手前に出るのはその月の数のほう */
+.ct i{font-style:normal;font-size:.85em;color:var(--ink-sub)}
+.ctnone{grid-column:1/-1;color:var(--ink-sub)}
