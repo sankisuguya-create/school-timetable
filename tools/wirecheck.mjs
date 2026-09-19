@@ -1968,6 +1968,45 @@ ok("「紙にも」を選ぶと紙の印が立つ", await p.evaluate(() =>
 ok("クラスごとに持つ", await p.evaluate(() =>
    (Y().chipModes || {})["5-1"]) === "output");
 
+console.log("\n■ 紙の字の大きさ（右メニューの ＋−）");
+/* 設定（印刷と文字）のスライダーと**同じ棚**を触る。窓を開かないと届かない
+   ところにしか無いと、紙を見ていて字が入らないと気づいたときに遠い */
+ok("右メニューに ＋− が出る", await p.evaluate(() =>
+   $("fontWrap") && !$("fontWrap").hidden) === true);
+const fsNow = () => p.evaluate(() => ({
+  shown:$("fsTitleV").textContent,
+  css:getComputedStyle($("sheet")).getPropertyValue("--fs-t").trim(),
+  stored:db.settings.titlePt}));
+await p.evaluate(() => { db.settings.titlePt = 16; save(); applyPaper(); buildSheet(); });
+await p.waitForTimeout(200);
+await p.locator('#fontWrap .fsb[data-fs="titlePt"][data-step="0.5"]').click();
+await p.waitForTimeout(250);
+ok("＋で 0.5pt 大きくなり、紙にも効く",
+   JSON.stringify(await fsNow()) === JSON.stringify({shown:"16.5", css:"16.5pt", stored:16.5}),
+   await fsNow());
+await p.locator('#fontWrap .fsb[data-fs="titlePt"][data-step="-0.5"]').click();
+await p.waitForTimeout(250);
+ok("−で戻る", JSON.stringify(await fsNow())
+   === JSON.stringify({shown:"16", css:"16pt", stored:16}), await fsNow());
+/* **端では押せなくする。** 押しても何も起きない状態にすると、
+   壊れているのか端なのかが分からない */
+ok("上限（題名 20pt）で ＋ が押せなくなる", await p.evaluate(async () => {
+     db.settings.titlePt = 20; save(); applyPaper(); paintFontBtns();
+     return document.querySelector('#fontWrap .fsb[data-fs="titlePt"][data-step="0.5"]').disabled;
+   }) === true);
+ok("下限（備考 8pt）で − が押せなくなる", await p.evaluate(() => {
+     db.settings.notePt = 8; save(); applyPaper(); paintFontBtns();
+     return document.querySelector('#fontWrap .fsb[data-fs="notePt"][data-step="-0.5"]').disabled;
+   }) === true);
+/* 設定の窓と ＋− は同じ棚を見る。片方で直したら、もう片方の数もそろう */
+ok("設定の窓で直すと ＋− の数もそろう", await p.evaluate(() => {
+     db.settings.titlePt = 14; db.settings.notePt = 12; save(); applyPaper();
+     return $("fsTitleV").textContent + "/" + $("fsNoteV").textContent;
+   }) === "14/12");
+await p.evaluate(() => { db.settings.titlePt = 16; db.settings.notePt = 12;
+                         save(); applyPaper(); buildSheet(); });
+await p.waitForTimeout(250);
+
 console.log("\n■ 学年の面は1文字（時数表と同じ字）");
 await p.evaluate(() => {
   const Yr = Y();

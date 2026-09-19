@@ -594,6 +594,17 @@ function wire(){
       save(); paintChipSeg(); redrawCenter(true);
     });
 
+  /* 紙の字の大きさ。**設定と同じ棚を直す**（db.settings.titlePt / notePt）。
+     窓の中のスライダーと、ここの ＋− は、同じ値の別の触り方。 */
+  for(const b of document.querySelectorAll("#fontWrap .fsb"))
+    b.addEventListener("click", () => {
+      const k = b.dataset.fs, r = FONT_PT[k];
+      const next = fontPt(k) + (+b.dataset.step);
+      if(next < r.min || next > r.max) return;
+      db.settings[k] = next;
+      save(); applyPaper(); buildSheet();
+    });
+
   /* 時数。**年度はじめからの週を読み直してから数え直す。**
      見込みで出していた数を、確かな数に入れ替える口 */
   on("tlyRead", "click", tallyReadAll);

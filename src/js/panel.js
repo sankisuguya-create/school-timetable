@@ -92,6 +92,27 @@ function paintChipSeg(){
     b.setAttribute("aria-pressed", String(b.dataset.chip === m));
 }
 
+/* 紙の字の大きさ。**題名 12〜20pt・備考 8〜14pt**（設定のスライダーと同じ幅）。
+   0.5pt 刻み。端では押せなくする ── 押しても何も起きない状態にすると、
+   壊れているのか端なのかが分からない。 */
+const FONT_PT = {titlePt:{min:12, max:20, def:16}, notePt:{min:8, max:14, def:12}};
+const fontPt = k => {
+  const r = FONT_PT[k];
+  return Math.min(r.max, Math.max(r.min, +db.settings[k] || r.def));
+};
+function paintFontBtns(){
+  const w = $("fontWrap");
+  if(!w) return;
+  const v = {titlePt:fontPt("titlePt"), notePt:fontPt("notePt")};
+  $("fsTitleV").textContent = v.titlePt;
+  $("fsNoteV").textContent  = v.notePt;
+  for(const b of w.querySelectorAll(".fsb")){
+    const k = b.dataset.fs, r = FONT_PT[k];
+    const next = v[k] + (+b.dataset.step);
+    b.disabled = next < r.min || next > r.max;
+  }
+}
+
 /* ── この週の日の形（全学年の面だけ） ──────────
    **紙の上ではなく、押すものが並ぶここに置く。**
    紙の日付の見出しに置いていたころは、押せることに気づかれず

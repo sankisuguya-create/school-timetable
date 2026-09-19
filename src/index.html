@@ -292,6 +292,30 @@
             ><button data-chip="output" aria-pressed="false">紙にも</button>
           </div>
         </div>
+
+        <!-- 紙の字の大きさ。**紙のとなりで直せるところに置く。**
+             設定（印刷と文字）にもあるが、あちらは窓を開かないと届かない。
+             **字が入りきらないと気づくのは、いつも紙を見ているとき。**
+             押しやすさで ＋−。スライダーは 0.5pt 単位を指で狙えなかった。 -->
+        <div class="chipset" id="fontWrap">
+          <span class="flab">紙の字</span>
+          <div class="fsz" role="group" aria-label="題名の字の大きさ">
+            <span>題名</span>
+            <button class="fsb" data-fs="titlePt" data-step="-0.5"
+                    aria-label="題名の字を小さく">−</button>
+            <b id="fsTitleV" aria-live="polite">16</b>
+            <button class="fsb" data-fs="titlePt" data-step="0.5"
+                    aria-label="題名の字を大きく">＋</button>
+          </div>
+          <div class="fsz" role="group" aria-label="詳細・備考の字の大きさ">
+            <span>備考</span>
+            <button class="fsb" data-fs="notePt" data-step="-0.5"
+                    aria-label="備考の字を小さく">−</button>
+            <b id="fsNoteV" aria-live="polite">12</b>
+            <button class="fsb" data-fs="notePt" data-step="0.5"
+                    aria-label="備考の字を大きく">＋</button>
+          </div>
+        </div>
       </div>
 
       <!-- 時数。**カレンダーの面と同じ数**（compose.js countSub で数える）。

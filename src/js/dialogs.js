@@ -549,6 +549,9 @@ function applyPaper(){
   $("stK").value  = s.k;       $("stKV").textContent  = (+s.k).toFixed(2);
   $("stTitle").value = +s.titlePt || 16; $("stTitleV").textContent = +s.titlePt || 16;
   $("stNote").value = +s.notePt || 12; $("stNoteV").textContent = +s.notePt || 12;
+  /* 右メニューの ＋− も同じ値を出す。**2か所が同じ棚を見る**ので、
+     どちらから直しても、もう片方の数がすぐ合う */
+  if(typeof paintFontBtns === "function") paintFontBtns();
   autoFit();
 }
 

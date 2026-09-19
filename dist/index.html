@@ -684,6 +684,20 @@ span.tpin{cursor:default}
    紙のとなりで切り替えられるようにする */
 .chipset{margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .chipset[hidden]{display:none!important}
+/* 紙の字の大きさ（＋−）。**数は真ん中に出す。**
+   押したものと変わったものが並んでいないと、効いたかどうか分からない。
+   端まで来たら押せなくする（無反応にすると、壊れたのか端なのか読めない） */
+.fsz{display:flex;align-items:center;gap:3px;font-size:12px;color:var(--tx-sub)}
+.fsz>span{margin-right:2px}
+.fsz>b{min-width:2.4em;text-align:center;font-size:12.5px;color:var(--tx);
+  font-variant-numeric:tabular-nums}
+.fsb{width:26px;height:26px;padding:0;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);
+  color:var(--tx);font-size:14px;line-height:1;cursor:pointer;font-family:inherit}
+.fsb:hover:not(:disabled){border-color:var(--ink-link);color:var(--ink-link)}
+.fsb:disabled{opacity:.38;cursor:default}
+.fsb:focus-visible{outline:2px solid var(--ink-link);outline-offset:1px}
 /* リセット。**入れるものではないと、押す前に分かる形にする。**
    教科の並びの中にあるので、色だけでなく枠の形でも分ける */
 .pal.clear{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff;
@@ -1954,6 +1968,30 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
             <button data-chip="off" aria-pressed="true">なし</button
             ><button data-chip="screen" aria-pressed="false">画面だけ</button
             ><button data-chip="output" aria-pressed="false">紙にも</button>
+          </div>
+        </div>
+
+        <!-- 紙の字の大きさ。**紙のとなりで直せるところに置く。**
+             設定（印刷と文字）にもあるが、あちらは窓を開かないと届かない。
+             **字が入りきらないと気づくのは、いつも紙を見ているとき。**
+             押しやすさで ＋−。スライダーは 0.5pt 単位を指で狙えなかった。 -->
+        <div class="chipset" id="fontWrap">
+          <span class="flab">紙の字</span>
+          <div class="fsz" role="group" aria-label="題名の字の大きさ">
+            <span>題名</span>
+            <button class="fsb" data-fs="titlePt" data-step="-0.5"
+                    aria-label="題名の字を小さく">−</button>
+            <b id="fsTitleV" aria-live="polite">16</b>
+            <button class="fsb" data-fs="titlePt" data-step="0.5"
+                    aria-label="題名の字を大きく">＋</button>
+          </div>
+          <div class="fsz" role="group" aria-label="詳細・備考の字の大きさ">
+            <span>備考</span>
+            <button class="fsb" data-fs="notePt" data-step="-0.5"
+                    aria-label="備考の字を小さく">−</button>
+            <b id="fsNoteV" aria-live="polite">12</b>
+            <button class="fsb" data-fs="notePt" data-step="0.5"
+                    aria-label="備考の字を大きく">＋</button>
           </div>
         </div>
       </div>
@@ -6968,6 +7006,27 @@ function paintChipSeg(){
     b.setAttribute("aria-pressed", String(b.dataset.chip === m));
 }
 
+/* 紙の字の大きさ。**題名 12〜20pt・備考 8〜14pt**（設定のスライダーと同じ幅）。
+   0.5pt 刻み。端では押せなくする ── 押しても何も起きない状態にすると、
+   壊れているのか端なのかが分からない。 */
+const FONT_PT = {titlePt:{min:12, max:20, def:16}, notePt:{min:8, max:14, def:12}};
+const fontPt = k => {
+  const r = FONT_PT[k];
+  return Math.min(r.max, Math.max(r.min, +db.settings[k] || r.def));
+};
+function paintFontBtns(){
+  const w = $("fontWrap");
+  if(!w) return;
+  const v = {titlePt:fontPt("titlePt"), notePt:fontPt("notePt")};
+  $("fsTitleV").textContent = v.titlePt;
+  $("fsNoteV").textContent  = v.notePt;
+  for(const b of w.querySelectorAll(".fsb")){
+    const k = b.dataset.fs, r = FONT_PT[k];
+    const next = v[k] + (+b.dataset.step);
+    b.disabled = next < r.min || next > r.max;
+  }
+}
+
 /* ── この週の日の形（全学年の面だけ） ──────────
    **紙の上ではなく、押すものが並ぶここに置く。**
    紙の日付の見出しに置いていたころは、押せることに気づかれず
@@ -8854,6 +8913,9 @@ function applyPaper(){
   $("stK").value  = s.k;       $("stKV").textContent  = (+s.k).toFixed(2);
   $("stTitle").value = +s.titlePt || 16; $("stTitleV").textContent = +s.titlePt || 16;
   $("stNote").value = +s.notePt || 12; $("stNoteV").textContent = +s.notePt || 12;
+  /* 右メニューの ＋− も同じ値を出す。**2か所が同じ棚を見る**ので、
+     どちらから直しても、もう片方の数がすぐ合う */
+  if(typeof paintFontBtns === "function") paintFontBtns();
   autoFit();
 }
 
@@ -10260,6 +10322,17 @@ function wire(){
       if(view.kind !== "class") return;
       (Y().chipModes || (Y().chipModes = {}))[view.cls] = b.dataset.chip;
       save(); paintChipSeg(); redrawCenter(true);
+    });
+
+  /* 紙の字の大きさ。**設定と同じ棚を直す**（db.settings.titlePt / notePt）。
+     窓の中のスライダーと、ここの ＋− は、同じ値の別の触り方。 */
+  for(const b of document.querySelectorAll("#fontWrap .fsb"))
+    b.addEventListener("click", () => {
+      const k = b.dataset.fs, r = FONT_PT[k];
+      const next = fontPt(k) + (+b.dataset.step);
+      if(next < r.min || next > r.max) return;
+      db.settings[k] = next;
+      save(); applyPaper(); buildSheet();
     });
 
   /* 時数。**年度はじめからの週を読み直してから数え直す。**

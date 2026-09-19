@@ -570,6 +570,20 @@ span.tpin{cursor:default}
    紙のとなりで切り替えられるようにする */
 .chipset{margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .chipset[hidden]{display:none!important}
+/* 紙の字の大きさ（＋−）。**数は真ん中に出す。**
+   押したものと変わったものが並んでいないと、効いたかどうか分からない。
+   端まで来たら押せなくする（無反応にすると、壊れたのか端なのか読めない） */
+.fsz{display:flex;align-items:center;gap:3px;font-size:12px;color:var(--tx-sub)}
+.fsz>span{margin-right:2px}
+.fsz>b{min-width:2.4em;text-align:center;font-size:12.5px;color:var(--tx);
+  font-variant-numeric:tabular-nums}
+.fsb{width:26px;height:26px;padding:0;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);
+  color:var(--tx);font-size:14px;line-height:1;cursor:pointer;font-family:inherit}
+.fsb:hover:not(:disabled){border-color:var(--ink-link);color:var(--ink-link)}
+.fsb:disabled{opacity:.38;cursor:default}
+.fsb:focus-visible{outline:2px solid var(--ink-link);outline-offset:1px}
 /* リセット。**入れるものではないと、押す前に分かる形にする。**
    教科の並びの中にあるので、色だけでなく枠の形でも分ける */
 .pal.clear{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff;
