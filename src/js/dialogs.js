@@ -308,12 +308,83 @@ function openRosterDlg(){
   drawRoster();
   $("rosterDlg").showModal();
 }
+/* ── 教科の表し方 ────────────────────────────
+   **紙の字・時数の1文字・たんぽぽの字を、1つの表で直す。**
+   3つはシートの別々の列にあるので、並べて見せないと
+   「どれを直せばどこが変わるか」が分からない。
+
+   **コードは出さない。** 行の身元なので触らせない ── 直せると、
+   週案のコマが指す先がどの行にも当たらなくなり、書いた予定の教科が消える。 */
+function openSubDlg(){
+  $("subFy").textContent = fy() + "年度";
+  $("subStat").textContent = "";
+  drawSubTable();
+  $("subDlg").showModal();
+}
+function drawSubTable(){
+  const box = $("subRows");
+  box.innerHTML =
+    "<div class='subhead'><span>教科</span><span>紙の字</span>"
+    + "<span>1文字</span><span>たんぽぽ</span></div>"
+    + SUBJECTS.map(s =>
+      "<div class='subrow' data-code='" + escText(s.code) + "'>"
+      + "<span class='subname'>" + escText(s.name) + "</span>"
+      + "<input type='text' data-f='name'  value='" + escText(s.name) + "'>"
+      + "<input type='text' data-f='short' maxlength='2' value='" + escText(s.short || "") + "'>"
+      + "<input type='text' data-f='tp'    maxlength='4' value='" + escText(s.tp || "") + "'>"
+      + "</div>").join("");
+  for(const inp of box.querySelectorAll("input[data-f]"))
+    inp.onchange = () => saveSubTable();
+}
+function saveSubTable(){
+  const rows = [...$("subRows").querySelectorAll(".subrow")].map(r => ({
+    code:  r.dataset.code,
+    name:  r.querySelector("[data-f=name]").value.trim(),
+    short: r.querySelector("[data-f=short]").value.trim(),
+    tp:    r.querySelector("[data-f=tp]").value.trim()
+  }));
+  /* **紙の字が空の行は送らない。** 空にすると、その教科が画面から消えて
+     入れ直す口も無くなる（コードは出していないので、シートを開かないと戻せない） */
+  const bad = rows.filter(r => !r.name);
+  if(bad.length){
+    $("subStat").textContent = "紙の字が空の行があります。空にはできません。";
+    return drawSubTable();
+  }
+  /* 画面の側を先に入れ替える。**待たせない**（送るのは後ろで進む） */
+  setSubjects(SUBJECTS.map(s => {
+    const r = rows.find(x => x.code === s.code);
+    return r ? Object.assign({}, s, {name:r.name, short:r.short, tp:r.tp}) : s;
+  }));
+  save();
+  drawPalette();
+  if(view.kind !== "gate") redrawCenter(true);
+  $("subStat").textContent = "直しました。シートにも送っています。";
+  Backend.saveSubjects(rows, ok => {
+    $("subStat").textContent = ok ? "シートに入れました。"
+                                  : "シートに送れませんでした。もう一度直すと送り直します。";
+  });
+}
+
 function drawRoster(){
   const Yr = Y();
   $("rsFy").textContent = fy() + "年度";
   $("rsW1").value = Yr.week1 || firstMonday(fy());
   $("rsAbNow").textContent = "いまは " + (db.settings.abAnchor || AB_ANCHOR);
   $("rsSp").value = (Yr.specials || []).map(s => s.label).join(", ");
+  /* 専科ごとの担当学年。**空欄は全学年。** ここを書くと、基本時間割の
+     その教科のコマが、その学年ぶんだけ専科の週に出る（compose.js spBaseClasses） */
+  $("rsSpRows").innerHTML = (Yr.specials || []).map(s =>
+    "<div class='row'><span>" + escText(s.label) + " の担当学年</span>"
+    + "<input type='text' data-sp='" + escText(s.code) + "' style='flex:1;min-width:10em'"
+    + " placeholder='空欄＝全学年' value='" + escText((s.grades || []).join(",")) + "'>"
+    + "</div>").join("");
+  for(const e of $("rsSpRows").querySelectorAll("input[data-sp]"))
+    e.onchange = () => {
+      const t = (Y().specials || []).find(x => x.code === e.dataset.sp);
+      if(!t) return;
+      t.grades = spGrades_(e.value);
+      save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+    };
 
   $("rsRows").innerHTML = grades().map(g =>
     "<div class='row'><span>" + escText(g) + "年</span>"
@@ -429,26 +500,32 @@ function drawDayForms(){
 /* 月の面を刷る。**B4 のよこ（364×257mm）に1枚。**
    週の紙とは用紙が違うので、刷る直前に @page を書き替え、
    刷り終わったら元へ戻す（戻さないと、次に週の紙を刷るとき B4 で出る）。 */
-function printMonth(){
+/* 複数枚を並べた面を刷る。**月の面とカレンダーの面で1つ。**
+   違うのは「紙の大きさ」「本文に付ける印」「組み直し方」の3つだけ。
+   2つ持つと、当たりを変えたとき片方しか直らない。
+
+   **紙の大きさで組み直してから刷る。** 画面の広さで合わせた倍率のまま刷ると、
+   紙からはみ出すか、すかすかになる。刷り終わり（またはやめた）を拾って戻す
+   ── 拾えない環境のために保険も置く。 */
+function printSpread(page, mark, fit, cellMM){
   const st = $("pagecss");
   const had = st ? st.textContent : "";
-  if(st) st.textContent = "@page{size:" + M_PAGE.w + "mm " + M_PAGE.h + "mm;margin:"
-                        + M_PAGE.mg + "mm}";
-  document.body.classList.add("printing-month");
-  /* **紙の大きさで組み直してから刷る。** 画面の広さで合わせた倍率のまま
-     刷ると、紙からはみ出すか、すかすかになる */
-  fitMonth(mCellMM());
+  if(st) st.textContent = "@page{size:" + page.w + "mm " + page.h + "mm;margin:"
+                        + page.mg + "mm}";
+  document.body.classList.add(mark);
+  fit(cellMM());
   const back = () => {
-    document.body.classList.remove("printing-month");
+    document.body.classList.remove(mark);
     if(st) st.textContent = had;
-    fitMonth();
+    fit();
   };
-  /* 刷り終わり（またはやめた）を拾って戻す。拾えない環境のために保険も置く */
   const once = () => { removeEventListener("afterprint", once); back(); };
   addEventListener("afterprint", once);
-  setTimeout(() => { if(document.body.classList.contains("printing-month")) back(); }, 4000);
+  setTimeout(() => { if(document.body.classList.contains(mark)) back(); }, 4000);
   window.print();
 }
+const printMonth = () => printSpread(M_PAGE,   "printing-month", fitMonth, mCellMM);
+const printCal   = () => printSpread(CAL_PAGE, "printing-cal",   fitCal,   calCellMM);
 
 function applyPaper(){
   const s = db.settings, sh = $("sheet");
@@ -497,9 +574,8 @@ function tallyGrid(){
         if(!(s.id in t.cols)) continue;
         /* 特別校時の日は朝学習が無い。紙に出ていないものを数えない */
         if(!slotShown(d, s)) continue;
-        const c = compose(list[r], d, s.id);
-        const sub = c.subject ? SUB_BY_CODE[c.subject] : SUB_BY_NAME[plain(c.title).trim()];
-        line[t.cols[s.id]] = (sub && sub.count) ? sub.short : "";
+        const sub = countSub(compose(list[r], d, s.id));
+        line[t.cols[s.id]] = sub ? sub.short : "";
       }
     }
     rows.push(line);
@@ -597,6 +673,21 @@ const HELP = {
        "<b>白い紙に出ているものだけが刷られます。</b>まわりのボタンや左の並びは刷られません。",
        "<i>はじめの人がつまずくところ：</i>紙のサイズや余白は"
        + "「用紙・印刷」で変えられます。刷ってみて合わなければ、そちらで直します。"]},
+  tally2: {t:"時数を集計する",
+    b:["<b>いま開いているクラスの授業を、教科ごとに数えたものです。</b>"
+       + "左が「今月」、右が「累計」（年度はじめ 4/1 からの合計）です。",
+       "<b>まだ書いていない日は、基本時間割どおりとして数えます。</b>"
+       + "だから先の月ぶんも、見通しの数として入っています。",
+       "<b>「時数を集計する」を押すと、全クラスぶんを数えて、"
+       + "スプレッドシートの「時数集計」シートに置きます。</b>"
+       + "そこを見れば、Excel へ打ち直さずに月ごとの時数が読めます。",
+       "<b>この集計は 1〜3分かかります。</b>全クラス（学年・全校のぶんも）× "
+       + "4月からこの月までの週を、ぜんぶ読んでから数えるためです。"
+       + "<b>年度の後半ほど長くかかります</b> ── 3月には45週ぶんを読みます。"
+       + "月末・学期末に1回押す使い方を考えています。",
+       "<i>はじめの人がつまずくところ：</i>押しているあいだは待つ表示が出ます。"
+       + "途中で画面を閉じると、書き終わっていない集計は残りません。"
+       + "その場合は、もう一度押してください（何度押しても作り直すだけです）。"]},
   tally: {t:"時数をコピー",
     b:["<b>いま見ている1週間の授業を、時数集計表に貼れる形でコピーします。</b>",
        "押すとコピーされるので、Excel の時数集計表を開いて<b>貼り付け</b>てください。",

@@ -197,14 +197,35 @@ const Store = (function(){
     for(const k in tanpopo) tanpopo[k].sort(function(x, y){ return rank(x) - rank(y); });
     const specials = pickYear_("専科", year)
       .map(r => ({code: String(r["教科コード"] || "").trim(),
-                  label: String(r["表示名"] || "").trim()}))
+                  label: String(r["表示名"] || "").trim(),
+                  grades: gradeList_(r["担当学年"])}))
       .filter(s => s.code)
-      .map(s => ({code: s.code, label: s.label || s.code}));
+      .map(s => ({code: s.code, label: s.label || s.code, grades: s.grades}));
     let week1 = "";
     for(const r of Sheets.readAll("年設定").rows)
       if(String(r["年度"]) === String(year) && r["第1週の月曜"]) week1 = ymd(r["第1週の月曜"]);
     return {classes, specials, week1, tanpopo};
   }
+  /* 「担当学年」の書き方をそろえる。`3,4,5,6` `3・4` `3〜6` `3年〜6年` を通す。
+     **画面側にも同じものがある**（src/js/store.js の spGrades_）。GAS と画面は
+     別のランタイムなので1本にできない。**片方を直したら、もう片方も直す。**
+     **空なら空の配列を返す＝全学年を受け持つ。** 書いていない学校を、
+     どの学年も受け持たない専科にしてしまわない。 */
+  function gradeList_(v){
+    const s = String(v == null ? "" : v).trim();
+    if(!s) return [];
+    const out = {}, put = g => { if(g >= 1 && g <= 9) out[String(g)] = true; };
+    /* まず範囲（3〜6）を開く。開いてから1つずつを拾う */
+    const rest = s.replace(/([1-9])\s*年?\s*[〜～~\-ー－]\s*([1-9])/g, function(_, a, b){
+      const lo = Math.min(+a, +b), hi = Math.max(+a, +b);
+      for(let g = lo; g <= hi; g++) put(g);
+      return " ";
+    });
+    const m = rest.match(/[1-9]/g);
+    if(m) m.forEach(x => put(+x));
+    return Object.keys(out).sort();
+  }
+
   function pickYear_(name, year){
     const rows = Sheets.readAll(name).rows;
     const mine = rows.filter(r => String(r["年度"] || "").trim() === String(year));
@@ -243,6 +264,36 @@ const Store = (function(){
       tp:    String(r["たんぽぽ表記"] || ""),
       only:  String(r["出す面"] || "").trim()
     })).filter(s => s.code);
+  }
+
+  /* 教科の表し方を書き戻す。**直せるのは「表し方」の3列だけ。**
+     コードは行の身元なので触らない ── 直せると、週案のコマが指す先が
+     どの行にも当たらなくなり、既に書いた予定の教科が消える。
+     時数に数えるか・出す面も、ここからは触らない（別の決まりごと）。 */
+  function writeSubjects(rows){
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try{
+      const cur = Sheets.readAll("教科");
+      const by = {};
+      for(const r of (rows || [])) if(r && r.code) by[String(r.code).trim()] = r;
+      let n = 0;
+      for(const r of cur.rows){
+        const want = by[String(r["コード"]).trim()];
+        if(!want) continue;
+        /* **無いものは書かない。** 送られてこなかった欄をここで空にすると、
+           古い画面から1列ぶん送られただけで、ほかの列が消える */
+        const patch = {};
+        if(want.name  !== undefined) patch["表示名"]         = String(want.name);
+        if(want.short !== undefined) patch["時数表の1文字"]   = String(want.short);
+        if(want.tp    !== undefined) patch["たんぽぽ表記"]     = String(want.tp);
+        if(Object.keys(patch).length){ Sheets.patchRow("教科", r.__row, patch); n++; }
+      }
+      SpreadsheetApp.flush();
+      return {n: n, subjects: readSubjects()};
+    } finally {
+      lock.releaseLock();
+    }
   }
 
   /* ── 年間行事計画表 ────────────────────────────
@@ -1072,9 +1123,9 @@ const Store = (function(){
   function tpOpen(url){
     const cfg = readConfig();
     let want = String(url || "").trim(), label = "たんぽぽ出力先のURL", where = "";
+    const targets = tpTargets();
     if(!want){
-      const list = tpTargets();
-      const def = list.filter(function(x){ return x.def; })[0] || list[0];
+      const def = targets.filter(function(x){ return x.def; })[0] || targets[0];
       if(!def) throw new Error("たんぽぽ時間割の出す先が1つもありません。"
                              + "たんぽぽの面で出す先を足してください");
       want = def.url;
@@ -1083,6 +1134,16 @@ const Store = (function(){
       if(def.legacy){ label = "たんぽぽファイルID"; where = undefined; }
     }
     const id = fileId(want, label, where);
+    /* **画面から来たURLを、そのまま開かない。** ウェブアプリは設置者として動くので、
+       任意のURLを許すと、一般の教職員が「設置者が開けるどのファイルでも」
+       書き替えられることになる。登録してある出す先と突き合わせる。 */
+    const allowed = targets.some(function(x){
+      try{ return fileId(x.url, "URL", "たんぽぽの出す先の") === id; }
+      catch(e){ return false; }
+    });
+    if(!allowed)
+      throw new Error("登録されていない出す先には書き込めません。"
+                    + "たんぽぽの面で出す先を足してから、もう一度お試しください");
     let ss;
     try{ ss = SpreadsheetApp.openById(id); }
     catch(e){
@@ -1723,8 +1784,11 @@ const Store = (function(){
           "たんぽぽ交流級": tp[c] ? tp[c] : ""
         });
       replaceYear_("クラス", year, clsRows);
+      /* **担当学年を書き戻す。** 落とすと、学級編成をいじるたびに
+         シートの「担当学年」が空になり、専科の基本時間割が全学年に広がる */
       replaceYear_("専科", year, (specials || []).map(s =>
-        ({"年度":year, "教科コード":s.code, "表示名":s.label, "メール": spMail[s.code] || ""})));
+        ({"年度":year, "教科コード":s.code, "表示名":s.label, "メール": spMail[s.code] || "",
+          "担当学年": (s.grades || []).join(",")})));
       if(week1) replaceYear_("年設定", year, [{"年度":year, "第1週の月曜":week1}]);
       SpreadsheetApp.flush();
       return readRoster(year);
@@ -1838,6 +1902,70 @@ const Store = (function(){
     return Sheets.readGrid(Sheets.PASTE);
   }
 
+  /* ── 時数集計シート ────────────────────────────
+     **画面が数えたものを、そのまま置くだけ。**
+
+     *ここで数えない理由*：どのコマが何の授業になるかは、層の重ね（最後に書いた
+     ものが勝つ）・休み・校外行事・特別校時・合同体育の元教科・時数に数えるか、を
+     すべて見てはじめて決まる。この決まりは src/js/compose.js の1か所にあり、
+     GAS には無い。ここで数え直すと**2つ目の実装**ができ、必ずずれる。
+     ずれた結果は「画面の時数とシートの時数が違う」── 公簿に書く数が2つある状態。
+
+     *列が年度で変わる*：教科は「教科」シートが正本で、学校が足したり削ったりする。
+     だから見出しも中身と一緒に書く（SPEC の決め打ちにしない）。
+
+     *まるごと入れ替える*：一部だけ直すと、消した教科の列や、無くなったクラスの行が
+     残る。押すたびに、その年度ぶんを作り直す。 */
+  const TALLY_NAME = "時数集計";
+
+  function tallySheet_(){
+    const ss = Sheets.book();
+    return ss.getSheetByName(TALLY_NAME) || ss.insertSheet(TALLY_NAME);
+  }
+
+  /* head = 見出しの行（配列）、rows = 中身の行（配列の配列）。
+     **その年度の行だけを入れ替える**（前の年度の集計は残す）。 */
+  function writeTally(year, head, rows){
+    if(!Array.isArray(head) || !head.length) throw new Error("見出しがありません");
+    if(!Array.isArray(rows)) throw new Error("中身がありません");
+    const y = String(year);
+    const sh = tallySheet_();
+    const old = sh.getDataRange().getValues();
+    /* いまある行のうち、**ほかの年度のぶんだけ**を残す（1列目が年度） */
+    const keep = [];
+    for(let i = 1; i < old.length; i++){
+      if(String(old[i][0]).trim() && String(old[i][0]).trim() !== y) keep.push(old[i]);
+    }
+    const body = keep.concat(rows.map(function(r){ return r.map(function(v){ return v; }); }));
+    const cols = Math.max(head.length, body.reduce(function(a, r){
+      return Math.max(a, r.length); }, 0));
+    const rect = [head].concat(body).map(function(r){
+      const x = r.slice();
+      while(x.length < cols) x.push("");
+      return x;
+    });
+    sh.clear();
+    /* **数式として走らせない。** 教科の1文字や「=」で始まる字が来ても、
+       ウェブアプリは設置者として動くので、走らせると設置者の権限で引いてしまう */
+    sh.getRange(1, 1, rect.length, cols).setNumberFormat("@").setValues(rect);
+    sh.setFrozenRows(1);
+    sh.getRange(1, 1, 1, cols).setFontWeight("bold");
+    return {name: TALLY_NAME, rows: rows.length, kept: keep.length};
+  }
+
+  /* その年度ぶんを読む。{head, rows}。無ければ空 */
+  function readTally(year){
+    const ss = Sheets.book();
+    const sh = ss.getSheetByName(TALLY_NAME);
+    if(!sh) return {head: [], rows: []};
+    const v = sh.getDataRange().getValues();
+    if(!v.length) return {head: [], rows: []};
+    const y = String(year), out = [];
+    for(let i = 1; i < v.length; i++)
+      if(String(v[i][0]).trim() === y) out.push(v[i].map(function(x){ return String(x); }));
+    return {head: v[0].map(function(x){ return String(x); }), rows: out};
+  }
+
   /* ChatへURLを貼って共有できる週案。権限は作成者のDrive設定のままにし、
      リンク公開へ勝手に変えない。 */
   function exportPlanSheet(name, sheets){
@@ -1850,7 +1978,9 @@ const Store = (function(){
       if(values.length){
         const cols = Math.max.apply(null, values.map(r => r.length));
         const rect = values.map(r => { const x = r.slice(); while(x.length < cols) x.push(""); return x; });
-        sh.getRange(1, 1, rect.length, cols).setValues(rect).setWrap(true).setVerticalAlignment("middle");
+        /* **週案の字を数式として走らせない。** 先に text にしてから値を置く */
+        sh.getRange(1, 1, rect.length, cols).setNumberFormat("@")
+          .setValues(rect).setWrap(true).setVerticalAlignment("middle");
         sh.setFrozenRows(1); sh.setFrozenColumns(1);
       }
     });
@@ -1862,8 +1992,9 @@ const Store = (function(){
     return new Date(+p[0], +p[1] - 1, +p[2] + n);
   }
 
-  return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects,
+  return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects, writeSubjects,
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste, exportPlanSheet,
+          writeTally, readTally, TALLY_NAME,
           exportWeek, weekSheetName, weekOrder, migratePlan, checkYear, readEvents,
           archiveCount, archiveVerify, archivePurge, archivedAll, ymd,
           tpTargets, writeTargets, testTarget, tpSubmits, tpSubmit,
@@ -1877,15 +2008,27 @@ const Store = (function(){
 /* 立ち上がりの1回で、要るものを全部返す。
    **往復の回数がそのまま待ち時間になる。** 設定・時程・教科・その年度を
    別々に取りに行くと、入口が出るまでに3回待つことになる。 */
+/* 立ち上がりで画面へ渡す設定。**「設定」シートを丸ごと渡さない。**
+   あそこには関門の例外リスト・管理者メール・たんぽぽと行事のファイルIDがある。
+   画面が要るのは版面と時数の当たりだけなので、その名前だけを写す。
+   **ここに足し忘れると、その設定は黙って効かなくなる**（画面は空として読む）。 */
+const BOOT_CONFIG = ["印刷用紙", "印刷余白mm", "印刷倍率",
+                     "タイトル文字pt", "詳細文字pt",
+                     "時数_貼る先", "時数_クラスの順", "時数_1日の行数", "時数_列のずれ",
+                     "A週の起点の月曜", "場所を取る教科"];
+
 function apiBoot(year){
   const me = Gate.check();
+  const all = Store.readConfig(), pub = {};
+  BOOT_CONFIG.forEach(function(k){ if(k in all) pub[k] = all[k]; });
   const out = {
     me:       me.email,
+    isAdmin:  Gate.isAdmin(me.email),
     file:     Sheets.bookName(),        /* 管理画面に出す。どのファイルを開いているか */
     /* **退避ずみの年度。** これを渡さないと、退避した年度を開いた人に
        基本時間割だけの紙が出て、「週案が全部消えた」と言われる。 */
     archived: Store.archivedAll(),
-    config:   Store.readConfig(),
+    config:   pub,
     slots:    Store.readSlots(),
     subjects: Store.readSubjects()
   };
@@ -1905,21 +2048,21 @@ function apiBoot(year){
 /* 年度の検査。**4月に開けたとき、何が足りないかを1画面で言う。**
    直しはここでやらない。黙って直すと、直した中身が誰にも見えない。 */
 function apiCheckYear(year){
-  Gate.check();
+  Gate.checkAdmin();
   return Store.checkYear(year || new Date().getFullYear());
 }
 /* 年度の退避。**3つに分けてある。数える／照合する／消す。**
    1つのボタンにまとめない。まとめると、確かめずに消せてしまう。 */
 function apiArchiveCount(year){
-  Gate.check();
+  Gate.checkAdmin();
   return Store.archiveCount(year);
 }
 function apiArchiveVerify(year, url){
-  Gate.check();
+  Gate.checkAdmin();
   return Store.archiveVerify(year, url);
 }
 function apiArchivePurge(year, url, typed){
-  Gate.check();
+  Gate.checkAdmin();
   return Store.archivePurge(year, url, typed);
 }
 function apiReadYear(year){
@@ -1943,7 +2086,7 @@ function apiWriteCells(year, patches){
 /* 週案シートを、いまの学級編成のぶんだけ先に作っておく。
    書くまで無いと、担任が「自分のシートが無い」と探すことになる。 */
 function setupPlanSheets(year){
-  Gate.check();
+  Gate.checkAdmin();
   const y = year || new Date().getFullYear();
   const r = Store.readRoster(y);
   const made = [];
@@ -1959,7 +2102,7 @@ function setupPlanSheets(year){
 
 /* 旧・週案（1枚に全クラス）から移す。エディタから1回だけ実行する。 */
 function migratePlanSheets(){
-  Gate.check();
+  Gate.checkAdmin();
   const r = Store.migratePlan();
   const msg = "移したコマ: " + r.moved + "／シート: " + r.sheets
             + (r.note ? "\n" + r.note : "")
@@ -1969,15 +2112,15 @@ function migratePlanSheets(){
 }
 
 function apiWriteRoster(year, classes, specials, week1, tanpopo){
-  Gate.check();
+  Gate.checkAdmin();
   return Store.writeRoster(year, classes, specials, week1, tanpopo);
 }
 function apiWriteBase(year, cls, variant, bank){
-  Gate.check();
+  Gate.checkAdmin();
   return Store.writeBase(year, cls, variant, bank);
 }
 function apiWriteBaseAll(year, table){
-  Gate.check();
+  Gate.checkAdmin();
   return Store.writeBaseAll(year, table);
 }
 function apiReadPaste(){
@@ -2004,43 +2147,61 @@ function apiTpTargets(){
   return Store.tpTargets();
 }
 function apiWriteTpTargets(list){
-  Gate.check();
+  Gate.checkAdmin();
   return Store.writeTargets(list);
 }
 function apiTestTpTarget(url){
-  Gate.check();
+  Gate.checkAdmin();
   return Store.testTarget(url);
 }
 /* 新年度の設定。**手順と、いまどこまで済んでいるか。**
    判定できるものは checkYear がシートを見て決め、人しか判定できない手順だけ
    「新年度設定」シートに記録する。 */
 function apiYearSetup(year){
-  Gate.check();
+  Gate.checkAdmin();
   return Store.yearSetup(year || new Date().getFullYear());
 }
 function apiTickYearSetup(year, key, on){
-  Gate.check();
+  Gate.checkAdmin();
   return Store.tickYearSetup(year, key, on);
 }
 /* 週案シートを作る。**これまではエディタからしか走らせられなかった。**
    新年度の手順の最後がエディタ頼みだと、そこで止まる。 */
 function apiSetupPlanSheets(year){
-  Gate.check();
+  Gate.checkAdmin();
   return setupPlanSheets(year);
 }
 /* A週の起点の月曜。**「設定」シートの1行だけを画面から直す。**
    ほかのキーは受け付けない（画面から設定を全部いじれるようにすると、
    関門の例外リストまで画面から書けることになる）。 */
 function apiWriteVariantOrigin(monday){
-  Gate.check();
+  Gate.checkAdmin();
   return Store.writeVariantOrigin(monday);
 }
 /* 年間行事計画表を貼り替える。**貼るのはシートではなく画面から。**
    シートのURLを教員に渡さないまま、年度初めの貼り替えが閉じる。 */
+/* 教科の表し方（表示名・時数表の1文字・たんぽぽ表記）を直す */
+function apiWriteSubjects(rows){
+  Gate.checkAdmin();
+  return Store.writeSubjects(rows);
+}
+
 function apiWriteEvents(rows){
-  Gate.check();
+  Gate.checkAdmin();
   return Store.writeEvents(rows);
 }
+/* 時数集計シートへ書く。**数えたのは画面のほう。**
+   ここは置くだけなので、教職員なら誰でも押せる（いまの Excel への貼り付けと同じ役）。
+   中身は derived なので、間違って押しても、もう一度押せば直る。 */
+function apiWriteTally(year, head, rows){
+  Gate.check();
+  return Store.writeTally(year, head, rows);
+}
+function apiReadTally(year){
+  Gate.check();
+  return Store.readTally(year);
+}
+
 function apiExportPlanSheet(name, sheets){
   Gate.check();
   return Store.exportPlanSheet(name, sheets);

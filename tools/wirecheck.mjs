@@ -155,6 +155,7 @@ await p.addInitScript(() => {
       withSuccessHandler(f){ okFn = f; return api; },
       withFailureHandler(f){ ngFn = f; return api; },
       apiBoot(y){
+        DATA.boot.isAdmin = (window.__isAdmin === undefined) ? true : !!window.__isAdmin;
         /* 本番と同じく、年度を渡されたら学級編成と基本時間割も一緒に返す */
         const r = Object.assign({}, DATA.boot,
                     y ? {year:y, roster:DATA.year.roster, base:DATA.year.base,
@@ -290,6 +291,23 @@ await p.addInitScript(() => {
       apiWriteVariantOrigin(m){
         call("apiWriteVariantOrigin", [m]);
         setTimeout(() => okFn({saved:m}), 0);
+      },
+      /* 教科の表し方。**本番は直した3列だけを書き戻し、読み直したものを返す** */
+      apiWriteSubjects(rows){
+        const cur = DATA.boot.subjects || [];
+        const out = cur.map(x => {
+          const r = (rows || []).find(y => y.code === x.code);
+          return r ? Object.assign({}, x, {name:r.name, short:r.short, tp:r.tp}) : x;
+        });
+        DATA.boot.subjects = out;
+        call("apiWriteSubjects", [rows]);
+        setTimeout(() => okFn({n:(rows || []).length, subjects:out}), 0);
+      },
+      apiWriteTally(year, head, rows){
+        /* シートのかわりに、この端末へ置く（形だけ本番と同じにする） */
+        window.__tally = {year:year, head:head, rows:rows};
+        call("apiWriteTally", [year, head, rows]);
+        setTimeout(() => okFn({name:"時数集計", rows:(rows || []).length, kept:0}), 0);
       },
       apiWriteEvents(rows){
         call("apiWriteEvents", [rows]);
@@ -1661,6 +1679,745 @@ await p.evaluate(() => {
   Wait.tune(200, 20000); window.__hang = false; window.__slowWrite = 0;
 });
 await p.waitForTimeout(200); await closeCf();
+
+/* ── 専科の基本時間割・中央のかたち・空き枠さがし ─────────────
+   **基本時間割は教師を持っていない。** 専科が自分の面を開いたとき、
+   基本の持ちコマが出るかどうかをここで見る。 */
+console.log("\n■ 専科の基本時間割（持ち主は「専科」シートの担当学年から引く）");
+await p.evaluate(() => {
+  const Yr = Y();
+  Yr.specials = [{code:"ongaku", label:"音楽", grades:["5"]},
+                 {code:"zuko",   label:"図工", grades:[]}];
+  /* 5-1 の月曜1限＝音楽、5-2 の月曜2限＝音楽、1-1 の月曜1限＝音楽（担当外の学年） */
+  Yr.base["5-1"] = {A:{"0|p1":{title:"音楽", subject:"ongaku"}}};
+  Yr.base["5-2"] = {A:{"0|p2":{title:"音楽", subject:"ongaku"}}};
+  Yr.base["1-1"] = {A:{"0|p1":{title:"音楽", subject:"ongaku"}}};
+  save();
+});
+await p.evaluate(() => openView({kind:"special", sp:"ongaku"}));
+await p.waitForTimeout(300);
+const spCell = (d, s) => p.evaluate(([d, s]) =>
+  (document.querySelector(`#sheet .cell[data-d="${d}"][data-s="${s}"] .t`) || {}).textContent,
+  [d, s]);
+ok("基本時間割の持ちコマが、専科の週に出る", await spCell(0, "p1") === "5-1", await spCell(0, "p1"));
+ok("別の校時の持ちコマも出る",             await spCell(0, "p2") === "5-2", await spCell(0, "p2"));
+ok("担当学年の外は出さない（1-1 は混ざらない）",
+   await p.evaluate(() => {
+     const t = [...document.querySelectorAll('#sheet .cell .t')].map(e => e.textContent);
+     return t.indexOf("1-1") < 0;
+   }) === true);
+ok("基本から来たコマは淡く出る（層が base）",
+   await p.evaluate(() =>
+     document.querySelector('#sheet .cell[data-d="0"][data-s="p1"]').dataset.layer) === "base");
+/* **担任が別の予定を入れたら、その時間に専科は行かない。** */
+await p.evaluate(() => {
+  const w = week();
+  w.home["5-1"] = w.home["5-1"] || {};
+  w.home["5-1"]["0|p1"] = {title:"国語", note:"", subject:"kokugo",
+                           at:Date.now(), by:"x@edu.nishi.or.jp"};
+  save(); buildSheet();
+});
+ok("担任が上書きしたコマは、専科の週から消える",
+   await spCell(0, "p1") === "", await spCell(0, "p1"));
+ok("担当学年を書いていなければ全学年（図工）",
+   await p.evaluate(() => {
+     view = {kind:"special", sp:"zuko"};
+     const me = specials().find(x => x.code === "zuko");
+     return (me.grades || []).length === 0;
+   }) === true);
+
+console.log("\n■ 中央のかたち（週案・4週・学年）");
+/* 上で担任の上書きを作ったので、開くと「上書きされた」の窓が出る。**先に閉じる** */
+const closeDlgs = async () => {
+  await p.evaluate(() => {
+    for(const d of document.querySelectorAll("dialog[open]")) d.close();
+  });
+  await p.waitForTimeout(150);
+};
+await p.evaluate(() => openView({kind:"grade", grade:"5"}));
+await p.waitForTimeout(300); await closeDlgs();
+ok("帯が出る", await p.evaluate(() => $("centerBar").hidden) === false);
+await p.locator('#centerTabs [data-center="grade"]').click();
+await p.waitForTimeout(400);
+ok("学年の面に入れ替わる", await p.evaluate(() =>
+   $("gradeView").hidden === false && $("stage").hidden === true) === true);
+ok("紙は1枚。**曜日をクラス数で割る**",
+   await p.evaluate(() => document.querySelectorAll("#gvPaper .gsheet").length) === 1);
+ok("1日が4クラスぶんに割れている",
+   await p.evaluate(() =>
+     document.querySelectorAll('#gvPaper .gcell[data-d="0"][data-s="p1"]').length) === 4);
+ok("どの列がどのクラスかを出す",
+   await p.evaluate(() => [...document.querySelectorAll('#gvPaper .gcell[data-d="0"][data-s="p1"]')]
+     .map(e => e.dataset.cls).join(",")) === "5-1,5-2,5-3,5-4");
+ok("組の見出しは数字だけ（1/4 の幅に「5-1」は入らない）",
+   await p.evaluate(() => {
+     const g = document.querySelector("#gvPaper .gcls");
+     return g.textContent === "1" && g.title === "5-1";
+   }) === true);
+ok("備考の欄を置かない", await p.evaluate(() =>
+   document.querySelectorAll("#gvPaper .gcell .n").length) === 0);
+ok("放課後と週メモも置かない", await p.evaluate(() =>
+   document.querySelectorAll('#gvPaper [data-s="after"], #gvPaper .foot').length) === 0);
+ok("見るだけ（書ける欄を作らない）",
+   await p.evaluate(() =>
+     document.querySelectorAll("#gvPaper [contenteditable]").length) === 0);
+ok("入力パネルは引っこむ",
+   await p.evaluate(() => document.querySelector(".panel").hidden) === true);
+/* **週を繰ったら、見ている面もついてくる。** */
+const gvTitle0 = await p.locator("#gvTitle").innerText();
+await p.locator("#nextWk").click(); await p.waitForTimeout(500); await closeDlgs();
+ok("週を繰ると、学年の面も動く",
+   (await p.locator("#gvTitle").innerText()) !== gvTitle0,
+   [gvTitle0, await p.locator("#gvTitle").innerText()]);
+ok("学年の面のまま、週の紙へ戻っていない",
+   await p.evaluate(() => $("gradeView").hidden) === false);
+await closeDlgs();
+await p.locator('#centerTabs [data-center="month"]').click();
+await p.waitForTimeout(600);
+ok("4週の面へも入れ替わる", await p.evaluate(() =>
+   $("monthView").hidden === false && $("gradeView").hidden === true) === true);
+ok("4週の紙も見るだけ",
+   await p.evaluate(() =>
+     document.querySelectorAll("#mPaper [contenteditable]").length) === 0);
+await closeDlgs();
+await p.locator('#centerTabs [data-center="week"]').click();
+await p.waitForTimeout(400);
+ok("週の紙へ戻る", await p.evaluate(() =>
+   $("stage").hidden === false && $("monthView").hidden === true) === true);
+ok("週の紙は書ける",
+   await p.evaluate(() =>
+     document.querySelectorAll("#sheet .cell .t[contenteditable]").length > 0) === true);
+
+console.log("\n■ 空き枠さがし（3段。2値にしない）");
+ok("学級の面には出さない", await p.evaluate(() => {
+     openView({kind:"class", cls:"5-1"});
+     return freeScope();
+   }) === null);
+await p.evaluate(() => openView({kind:"grade", grade:"5"}));
+await p.waitForTimeout(300); await closeDlgs();
+ok("学年の面では出す", await p.evaluate(() => $("freeBox").hidden) === false);
+ok("はじめは出さない（段が0）", await p.evaluate(() => freeOpt().level) === 0);
+ok("段が0のあいだは、印を付けない", await p.evaluate(() =>
+   document.querySelectorAll("#sheet .cell[data-free]").length) === 0);
+/* 5年の全クラスに、全校の予定と学年の予定と場所を取る教科を置く */
+await p.evaluate(() => {
+  const w = week(), now = Date.now();
+  w.school["1|p1"] = {title:"全校朝会", note:"", subject:null, at:now, by:"a@edu.nishi.or.jp"};
+  w.grade["5"] = w.grade["5"] || {};
+  w.grade["5"]["1|p2"] = {title:"学年集会", note:"", subject:"gakunen_shukai",
+                          at:now, by:"a@edu.nishi.or.jp"};
+  for(const c of classesOfGrade("5")){
+    Y().base[c] = Y().base[c] || {};
+    /* **A週・B週の両方に置く。** 週を繰ったあとなので、いまがどちらかは決まっている */
+    for(const v of ["A", "B"])
+      Y().base[c][v] = Object.assign({}, Y().base[c][v],
+        {"1|p3":{title:"体育", subject:"taiiku"}});
+  }
+  save();
+});
+await closeDlgs();
+await p.locator('#freeSeg [data-free="1"]').click();
+await p.waitForTimeout(400);
+const fst = (d, s) => p.evaluate(([d, s]) =>
+  (document.querySelector(`#sheet .cell[data-d="${d}"][data-s="${s}"]`) || {dataset:{}})
+    .dataset.free, [d, s]);
+ok("レベル1：全校の予定は使えない",  await fst(1, "p1") === "busy",  await fst(1, "p1"));
+ok("レベル1：学年の予定も使えない",  await fst(1, "p2") === "busy",  await fst(1, "p2"));
+ok("レベル1：場所を取る教科は、まだ自由", await fst(1, "p3") === "free", await fst(1, "p3"));
+await closeDlgs();
+await p.locator('#freeSeg [data-free="2"]').click();
+await p.waitForTimeout(400);
+ok("レベル2：場所を取る教科は避けたい", await fst(1, "p3") === "avoid", await fst(1, "p3"));
+ok("使えないコマには × が付く", await p.evaluate(() =>
+   getComputedStyle(document.querySelector('#sheet .cell[data-d="1"][data-s="p1"]'),
+                    "::after").content.indexOf("×") >= 0) === true);
+ok("避けたいコマには △ が付く", await p.evaluate(() =>
+   getComputedStyle(document.querySelector('#sheet .cell[data-d="1"][data-s="p3"]'),
+                    "::after").content.indexOf("△") >= 0) === true);
+/* **自由なコマには何も足さない。** 自由がいちばん多いことがあるので、
+   そちらに印を付けると紙が印の海になる（塞がっているほうを暗くする） */
+const bg = sel => p.evaluate(s2 => {
+  const e = document.querySelector(s2);
+  return e ? getComputedStyle(e).backgroundImage : "（そのコマが無い）";
+}, sel);
+ok("自由なコマは、そのまま（斜線を敷かない）",
+   await bg('#sheet .cell[data-free=free]') === "none",
+   await bg('#sheet .cell[data-free=free]'));
+ok("使えないコマに斜線を敷く",
+   (await bg('#sheet .cell[data-d="1"][data-s="p1"]')).indexOf("gradient") >= 0,
+   await bg('#sheet .cell[data-d="1"][data-s="p1"]'));
+ok("避けたいコマにも斜線（濃さが違う）", await p.evaluate(() => {
+     const g = s2 => getComputedStyle(document.querySelector(s2)).backgroundImage;
+     const a = g('#sheet .cell[data-d="1"][data-s="p3"]');
+     const b = g('#sheet .cell[data-d="1"][data-s="p1"]');
+     return a.indexOf("gradient") >= 0 && a !== b;
+   }) === true);
+ok("斜線は休みの斜め線と反対向き（休みは図形で `\\`・こちらは 135deg の `/`）",
+   (await bg('#sheet .cell[data-d="1"][data-s="p1"]')).indexOf("135deg") >= 0,
+   await bg('#sheet .cell[data-d="1"][data-s="p1"]'));
+const busyWhy = await p.evaluate(() =>
+  document.querySelector('#sheet .cell[data-d="1"][data-s="p1"]').title);
+ok("使えない理由を字で言う", busyWhy.indexOf("全校の予定") >= 0, busyWhy);
+ok("数えたものを出す（目で数え直させない）",
+   (await p.locator("#freeTally").innerText()).indexOf("○") >= 0,
+   await p.locator("#freeTally").innerText());
+/* 指定した教科は、**どの段でも**避ける */
+await p.evaluate(() => { freeOpt().avoid = ["kokugo"]; freeOpt().level = 1;
+                         save(); paintFree(); redrawCenter(); });
+await p.waitForTimeout(300);
+await p.evaluate(() => {
+  const w = week();
+  w.grade["5"]["2|p1"] = {title:"国語", note:"", subject:"kokugo",
+                          at:Date.now(), by:"a@edu.nishi.or.jp"};
+  save(); buildSheet();
+});
+ok("指定した教科は、レベル1でも避ける（学年の予定より前に見ない）",
+   await fst(2, "p1") === "busy", await fst(2, "p1"));
+await p.evaluate(() => {
+  const w = week();
+  delete w.grade["5"]["2|p1"];
+  for(const c of classesOfGrade("5")) for(const v of ["A", "B"])
+    Y().base[c][v] = Object.assign({}, Y().base[c][v], {"2|p1":{title:"国語", subject:"kokugo"}});
+  save(); buildSheet();
+});
+ok("基本時間割の国語も、指定すれば避けたいに落ちる",
+   await fst(2, "p1") === "avoid", await fst(2, "p1"));
+/* **場所は学校ぜんたいで1つ。** 面の範囲だけを見ると、代用の眼目が効かない */
+await p.evaluate(() => {
+  /* 5年は全部あける。1年（面の外）にだけ体育を置く */
+  const bank = c => (Y().base[c] || (Y().base[c] = {}));
+  for(const c of classesOfGrade("5")) for(const v of ["A", "B"])
+    delete (bank(c)[v] || {})["3|p1"];
+  for(const c of classesOfGrade("1")) for(const v of ["A", "B"])
+    bank(c)[v] = Object.assign({}, bank(c)[v], {"3|p1":{title:"体育", subject:"taiiku"}});
+  freeOpt().avoid = []; freeOpt().level = 2; save(); redrawCenter();
+});
+await p.waitForTimeout(300);
+ok("ほかの学年が場所を取っていたら、面の外でも避けたいに落ちる",
+   await fst(3, "p1") === "avoid", await fst(3, "p1"));
+ok("どのクラスが取っているかを言う",
+   (await p.evaluate(() =>
+      document.querySelector('#sheet .cell[data-d="3"][data-s="p1"]').title)).indexOf("1-1") >= 0,
+   await p.evaluate(() =>
+      document.querySelector('#sheet .cell[data-d="3"][data-s="p1"]').title));
+await p.evaluate(() => {
+  for(const c of classesOfGrade("1")) for(const v of ["A", "B"])
+    delete ((Y().base[c] || {})[v] || {})["3|p1"];
+  save(); redrawCenter();
+});
+await p.waitForTimeout(300);
+ok("場所が空けば自由に戻る", await fst(3, "p1") === "free", await fst(3, "p1"));
+
+/* **コマの読み方は週の紙と学年の面で1つ。** 分けて書いていたころ、
+   学年の面には「授業なし」の斜線が出ていなかった */
+console.log("\n■ コマの意味づけは、版面が2つでも1つ");
+await p.evaluate(() => {
+  const w = week();
+  w.home["5-2"] = Object.assign(w.home["5-2"] || {},
+    {"0|p2":{title:"授業なし", note:"", subject:null, at:Date.now(), by:"a@edu.nishi.or.jp"}});
+  save(); setCenter("grade");
+});
+await p.waitForTimeout(500); await closeDlgs();
+ok("学年の面でも「授業なし」は斜線で出る（字のままにしない）",
+   await p.evaluate(() =>
+     document.querySelectorAll("#gvPaper .gcell.nolesson .noneslash, #gvPaper .gcell.nolesson + .noneslash").length
+     + document.querySelectorAll("#gvPaper .gcell.nolesson").length >= 2) === true,
+   await p.evaluate(() => document.querySelectorAll("#gvPaper .gcell.nolesson").length));
+ok("週の紙と同じ字を出す（層も写す）",
+   await p.evaluate(() => {
+     const e = document.querySelector('#gvPaper .gcell[data-cls="5-2"][data-d="0"][data-s="p2"]');
+     return !!e && e.dataset.layer === "home" && e.classList.contains("nolesson");
+   }) === true);
+await p.evaluate(() => { const w = week(); delete w.home["5-2"]["0|p2"]; save(); setCenter("week"); });
+await p.waitForTimeout(400); await closeDlgs();
+
+/* 空き枠の印は、紙には出さない */
+ok("空き枠の印は画面だけ（刷る面には出さない）", await p.evaluate(() => {
+     const css = [...document.styleSheets].flatMap(s => {
+       try{ return [...s.cssRules]; }catch(_){ return []; }
+     });
+     return css.some(r => r.media && String(r.media).indexOf("print") >= 0
+       && String(r.cssText).indexOf("data-free") >= 0);
+   }) === true);
+await p.evaluate(() => { freeOpt().level = 0; freeOpt().avoid = []; save(); });
+
+/* ── 教科の色・1文字・対応表・カレンダー ───────────────── */
+console.log("\n■ 教科の色は、題名の欄の地だけ（チップをやめた）");
+await p.evaluate(() => { openView({kind:"class", cls:"5-1"}); });
+await p.waitForTimeout(400); await closeDlgs();
+ok("右メニューに口がある（窓を開かせない）",
+   await p.evaluate(() => $("chipWrap").hidden) === false);
+ok("はじめは「なし」", await p.evaluate(() =>
+   $("chipSeg").querySelector('[data-chip=off]').getAttribute("aria-pressed")) === "true");
+await p.locator('#chipSeg [data-chip="screen"]').click();
+await p.waitForTimeout(400);
+ok("紙に地が付く", await p.evaluate(() =>
+   $("sheet").classList.contains("chips-screen")) === true);
+ok("「画面だけ」は紙の印を立てない", await p.evaluate(() =>
+   $("sheet").classList.contains("chips-output")) === false);
+ok("丸いチップの形は作らない（地だけ）", await p.evaluate(() => {
+     const css = [...document.styleSheets].flatMap(s2 => {
+       try{ return [...s2.cssRules]; }catch(_){ return []; }
+     }).map(r => r.cssText).join("");
+     return css.indexOf("chips-screen .cell.has-sub .t") < 0;
+   }) === true);
+await p.locator('#chipSeg [data-chip="output"]').click();
+await p.waitForTimeout(300);
+ok("「紙にも」を選ぶと紙の印が立つ", await p.evaluate(() =>
+   $("sheet").classList.contains("chips-output")) === true);
+ok("クラスごとに持つ", await p.evaluate(() =>
+   (Y().chipModes || {})["5-1"]) === "output");
+
+console.log("\n■ 学年の面は1文字（時数表と同じ字）");
+await p.evaluate(() => {
+  const Yr = Y();
+  for(const c of classesOfGrade("5")) for(const v of ["A", "B"])
+    (Yr.base[c] || (Yr.base[c] = {}))[v] =
+      Object.assign({}, (Yr.base[c] || {})[v], {"0|p1":{title:"国語", subject:"kokugo"}});
+  save(); openView({kind:"grade", grade:"5"});
+});
+await p.waitForTimeout(400); await closeDlgs();
+await p.evaluate(() => setCenter("grade"));
+await p.waitForTimeout(600); await closeDlgs();
+ok("題名は1文字で出る", await p.evaluate(() =>
+   (document.querySelector('#gvPaper .gcell[data-cls="5-1"][data-d="0"][data-s="p1"] .t') || {})
+     .textContent) === "国",
+   await p.evaluate(() =>
+     (document.querySelector('#gvPaper .gcell[data-cls="5-1"][data-d="0"][data-s="p1"] .t') || {}).textContent));
+ok("1文字の無い教科は、紙の字の1文字目に落ちる",
+   await p.evaluate(() => shortOf("tosho", "図書")) === "図",
+   await p.evaluate(() => shortOf("tosho", "図書")));
+ok("紙そのものが細い（画面いっぱいに伸ばさない）", await p.evaluate(() => {
+     const sh = document.querySelector("#gvPaper .gsheet");
+     return sh.getBoundingClientRect().width < $("gvPaper").clientWidth;
+   }) === true);
+
+console.log("\n■ 教科の表し方（設定の対応表）");
+await p.evaluate(() => openSubDlg());
+await p.waitForTimeout(300);
+ok("3つの字を並べて出す", await p.evaluate(() =>
+   $("subRows").querySelectorAll(".subrow").length > 0
+   && !!$("subRows").querySelector("[data-f=name]")
+   && !!$("subRows").querySelector("[data-f=short]")
+   && !!$("subRows").querySelector("[data-f=tp]")) === true);
+ok("コードは出さない（行の身元なので触らせない）", await p.evaluate(() =>
+   !$("subRows").querySelector("[data-f=code]")) === true);
+await p.evaluate(() => {
+  const r = $("subRows").querySelector('.subrow[data-code=kokugo]');
+  r.querySelector("[data-f=short]").value = "語";
+  saveSubTable();
+});
+await p.waitForTimeout(400);
+ok("直すとシートへ送る",
+   (await calls()).indexOf("apiWriteSubjects") >= 0, await calls());
+ok("送る中身は、直した3つの字",
+   await p.evaluate(() => {
+     const a = (window.__calls.filter(c => c.name === "apiWriteSubjects").pop() || {}).args;
+     const r = a && a[0].find(x => x.code === "kokugo");
+     return !!r && r.short === "語" && r.name === "国語";
+   }) === true);
+ok("直した字が、そのまま学年の面に出る", await p.evaluate(() => {
+     $("subDlg").close();
+     setCenter("grade");
+     return (document.querySelector('#gvPaper .gcell[data-cls="5-1"][data-d="0"][data-s="p1"] .t') || {})
+       .textContent;
+   }) === "語");
+await p.evaluate(() => {
+  const r = $("subRows").querySelector('.subrow[data-code=kokugo]');
+  if(r) r.querySelector("[data-f=short]").value = "国";
+  const S = SUBJECTS.map(x => x.code === "kokugo" ? Object.assign({}, x, {short:"国"}) : x);
+  setSubjects(S); save();
+});
+
+console.log("\n■ カレンダーの面（4ヶ月・A4よこ1枚）");
+await p.evaluate(() => { openView({kind:"class", cls:"5-1"}); });
+await p.waitForTimeout(400); await closeDlgs();
+await p.locator('#centerTabs [data-center="cal"]').click();
+await p.waitForTimeout(900); await closeDlgs();
+ok("カレンダーの面に入れ替わる", await p.evaluate(() =>
+   $("calView").hidden === false && $("stage").hidden === true) === true);
+ok("4ヶ月ぶん出る", await p.evaluate(() =>
+   document.querySelectorAll("#cvPaper .cmonth").length) === 4);
+ok("月〜土の6列（日曜は置かない）", await p.evaluate(() =>
+   document.querySelectorAll("#cvPaper .cmonth:first-child .cdow").length) === 6);
+ok("1日は「日付・教科の1文字・備考」の3段", await p.evaluate(() => {
+     const d = document.querySelector("#cvPaper .cday:not(.none)");
+     return !!d.querySelector(".cnum") && !!d.querySelector(".csubs") && !!d.querySelector(".cnote");
+   }) === true);
+ok("教科は1文字ずつ並ぶ", await p.evaluate(() =>
+   [...document.querySelectorAll("#cvPaper .csubs")].some(e => e.textContent.trim().length > 1)) === true);
+ok("見るだけ（書ける欄を作らない）", await p.evaluate(() =>
+   document.querySelectorAll("#cvPaper [contenteditable]").length) === 0);
+/* 時間割の欄と備考の欄は、どちらも**横幅を等分した枠**。数は時程の「授業」の数。
+   6と決め打ちにすると、5校時までの学校で枠が1つ余る */
+ok("時間割の欄は、授業の数だけ枠に分かれる", await p.evaluate(() => {
+     const n = SLOTS.filter(s => s.kind === "lesson").length;
+     const d = document.querySelector("#cvPaper .cday:not(.none)");
+     return d.querySelectorAll(".csubs > i").length === n && n > 1;
+   }) === true, await p.evaluate(() =>
+     document.querySelector("#cvPaper .cday:not(.none)").querySelectorAll(".csubs > i").length));
+ok("備考の欄も同じ数の枠（上下がそろう）", await p.evaluate(() => {
+     const d = document.querySelector("#cvPaper .cday:not(.none)");
+     return d.querySelectorAll(".cnote > i").length
+         === d.querySelectorAll(".csubs > i").length;
+   }) === true);
+ok("備考は空のまま刷る（手で書き込む欄）", await p.evaluate(() =>
+   [...document.querySelectorAll("#cvPaper .cnote")].every(e => e.textContent === "")) === true,
+   await p.evaluate(() => [...document.querySelectorAll("#cvPaper .cnote")]
+     .map(e => e.textContent).filter(Boolean).slice(0, 3)));
+ok("出ない校時のぶんも枠は置く（詰めると校時がずれる）", await p.evaluate(() => {
+     const n = SLOTS.filter(s => s.kind === "lesson").length;
+     return [...document.querySelectorAll("#cvPaper .csubs")]
+       .every(e => e.querySelectorAll("i").length === n);
+   }) === true);
+ok("1枠は1文字まで", await p.evaluate(() =>
+   [...document.querySelectorAll("#cvPaper .csubs > i")]
+     .every(e => e.textContent.length <= 1)) === true);
+
+/* 月の下の時数集計。**その月のコマ数（年度はじめからの累計）** */
+ok("月の下に時数集計が出る", await p.evaluate(() =>
+   document.querySelectorAll("#cvPaper .cmonth .ctally").length) === 4);
+/* **教科ごと。** 合計ひとつなら、日数×コマ数でほぼ決まる数にしかならない。
+   月ごとに何教科出るかは、その学校の教科シート次第なので数では縛らない ──
+   **出ている札が教科の1文字かどうか**で見る */
+ok("教科ごとに出す（合計ひとつではない）", await p.evaluate(() => {
+     const shorts = SUBJECTS.filter(s => s.count && s.short).map(s => s.short);
+     const bs = [...document.querySelectorAll("#cvPaper .ct > b")];
+     return bs.length > 0 && bs.every(e => shorts.indexOf(e.textContent) >= 0);
+   }) === true, await p.evaluate(() =>
+     [...document.querySelectorAll("#cvPaper .ct > b")].map(e => e.textContent)));
+ok("「1文字 その月(累計)」の形", await p.evaluate(() => {
+     const e = document.querySelector("#cvPaper .cmonth:first-child .ct");
+     return /^.\d+\(\d+\)$/.test(e.textContent.replace(/\s/g, ""));
+   }) === true, await p.evaluate(() =>
+     document.querySelector("#cvPaper .cmonth:first-child .ct").textContent));
+ok("累計は、その月のぶんを下回らない", await p.evaluate(() =>
+   [...document.querySelectorAll("#cvPaper .ct")].every(e => {
+     const m = e.textContent.replace(/\s/g, "").match(/^.(\d+)\((\d+)\)$/);
+     return m && +m[2] >= +m[1];
+   })) === true);
+/* 数え方は時数集計表へのコピーと1つ（compose.js countSub）。
+   **時数に数えない教科は数に入らない** */
+/* 教科はシートが正本なので、名前を決め打ちにせず**いまの教科シートから取る** */
+ok("数え方は時数集計表と同じ（countSub 1つ）", await p.evaluate(() => {
+     const yes = SUBJECTS.filter(s => s.count && s.short)[0];
+     const no  = SUBJECTS.filter(s => !s.count || !s.short)[0];
+     return typeof countSub === "function"
+       && countSub({title:yes.name, subject:yes.code}).short === yes.short
+       /* 教科コードが無くても、題名の字で引く（手で書いたぶんも数える） */
+       && countSub({title:yes.name, subject:null}).short === yes.short
+       && (!no || countSub({title:no.name, subject:no.code}) === null)
+       && countSub({title:"授業なし", subject:null}) === null
+       && countSub({title:"", subject:null}) === null
+       && countSub(null) === null;
+   }) === true, await p.evaluate(() =>
+     SUBJECTS.map(s => [s.code, s.short, !!s.count])));
+ok("累計は年度で切る（4月はその月＝累計）", await p.evaluate(() => {
+     const apr = calCount(new Date(2026, 3, 1)), sum = calSum(new Date(2026, 3, 1));
+     return JSON.stringify(apr) === JSON.stringify(sum);
+   }) === true);
+ok("休みの日は数えない", await p.evaluate(() => {
+     /* 4月の、授業が数えられる最初の日を休みにして数え直す。
+        シートへは送らず、この端末の控えだけを直す（送ると後の検査に混ざる） */
+     let dt = null;
+     for(const d of calDates(new Date(2026, 3, 1))){
+       const c = calDayC(d);
+       if(c && Object.keys(c.count).length){ dt = d; break; }
+     }
+     if(!dt) return "4月に数えられる日が無い";
+     const before = calDayC(dt);
+     const n = Object.keys(before.count).reduce((a, k) => a + before.count[k], 0);
+     const keep = monday;
+     monday = mondayOf(dt);
+     const d0 = Math.round((dt - monday) / 86400000);
+     const w = week(), key = d0 + "|" + DAY_SLOT, was = w.school[key];
+     w.school[key] = {title:"休み", note:"", subject:null, at:Date.now(), by:"a@edu.nishi.or.jp"};
+     calCache = {};
+     const m = Object.keys(calDayC(dt).count).reduce((a, k) => a + calDayC(dt).count[k], 0);
+     if(was) w.school[key] = was; else delete w.school[key];
+     monday = keep;
+     calCache = {};
+     return n > 0 && m === 0;
+   }) === true, await p.evaluate(() => "上を見よ"));
+const calT0 = await p.locator("#cvTitle").innerText();
+await p.locator("#cvNext").click(); await p.waitForTimeout(700); await closeDlgs();
+ok("4ヶ月ずつ繰れる", (await p.locator("#cvTitle").innerText()) !== calT0,
+   [calT0, await p.locator("#cvTitle").innerText()]);
+ok("刷るのは A4 よこ", await p.evaluate(() =>
+   CAL_PAGE.w === 297 && CAL_PAGE.h === 210) === true);
+ok("刷る手順は月の面と1つ（printSpread）", await p.evaluate(() =>
+   typeof printSpread === "function" && typeof printCal === "function") === true);
+
+/* **月ごとに数えたものを取り置き、累計は足し算だけにする。**
+   4ヶ月ぶんの累計は、4月を4回・5月を3回…と同じ月を何度も通るので、
+   月の合計を1度だけ出せば数え直しが消える */
+ok("月ごとの数を取り置く", await p.evaluate(() =>
+   Object.keys(calMonthCache).length > 0) === true,
+   await p.evaluate(() => Object.keys(calMonthCache).length));
+ok("累計は取り置いた月を足すだけ（日を数え直さない）", await p.evaluate(() => {
+     for(const m of calMonths()) calSum(m);        /* 取り置きを温める */
+     const days = Object.keys(calCache).length;
+     const months = Object.keys(calMonthCache).length;
+     for(const m of calMonths()) calSum(m);        /* 2回目 */
+     /* 日も月も増えない＝組み直していない */
+     return days > 0 && Object.keys(calCache).length === days
+                     && Object.keys(calMonthCache).length === months;
+   }) === true);
+ok("中身が変わると取り置きを捨てる", await p.evaluate(() => {
+     for(const m of calMonths()) calSum(m);
+     const had = Object.keys(calMonthCache).length;
+     dataTick++;                     /* 書き込み・読み込みで上がる印 */
+     calFreshen();
+     return had > 0 && Object.keys(calMonthCache).length === 0;
+   }) === true);
+/* **面ごとに数が違う。** openView は捨てたあとすぐ数え直す（右メニューの時数を
+   描くため）ので、捨てる決まりそのものを見る */
+ok("面が変わると取り置きを捨てる（クラスごとに数が違う）", await p.evaluate(() => {
+     const keep = view;
+     view = {kind:"class", cls:"5-1"};
+     calFreshen();
+     calCount(new Date(2026, 3, 1));
+     const had = Object.keys(calMonthCache).length;
+     view = {kind:"class", cls:"5-2"};
+     calFreshen();
+     const after = Object.keys(calMonthCache).length;
+     view = keep; calFreshen();
+     return had > 0 && after === 0;
+   }) === true, await p.evaluate(() => Object.keys(calMonthCache).length));
+/* **週の年度は、その週の月曜で決まる。** 4月1日を含む週の月曜は3月にあることが
+   あり、その週は前の年度のシートに入っている。月の年度でまとめるとそこがずれ、
+   その年度ぶんを丸ごと違う年の箱へ読みに行っていた */
+ok("4/1 を含む週は、前の年度の箱に入れて読む", await p.evaluate(() => {
+     const g = fyWeeks([new Date(2026, 3, 1)]);      /* 2026年4月 */
+     return Object.keys(g).sort().join(",") === "2025,2026"
+         && Object.keys(g["2025"]).join(",") === "2026-03-30";
+   }) === true, await p.evaluate(() => {
+     const g = fyWeeks([new Date(2026, 3, 1)]);
+     return Object.keys(g).map(y => y + ":" + Object.keys(g[y]).join("/"));
+   }));
+ok("年度ごとの先頭の月曜が、その年度に入っている", await p.evaluate(() => {
+     const g = fyWeeks([new Date(2026, 3, 1), new Date(2026, 4, 1)]);
+     return Object.keys(g).every(y =>
+       String(fyOf(parseISO(Object.keys(g[y]).sort()[0]))) === y);
+   }) === true);
+await p.locator('#centerTabs [data-center="week"]').click();
+await p.waitForTimeout(400); await closeDlgs();
+
+console.log("\n■ 右メニューの時数");
+await p.evaluate(() => { openView({kind:"class", cls:"5-1"}); });
+await p.waitForTimeout(500); await closeDlgs();
+ok("学級を開くと出る", await p.evaluate(() =>
+   $("tallyWrap").hidden === false) === true);
+ok("教科ごとに「今月」と「累計」の3列", await p.evaluate(() => {
+     const r = document.querySelector("#tlyBox .tlyrow");
+     return !!r && r.children.length === 3
+         && /^\d+$/.test(r.children[1].textContent)
+         && /^\d+$/.test(r.children[2].textContent);
+   }) === true, await p.evaluate(() => {
+     const r = document.querySelector("#tlyBox .tlyrow");
+     return r ? [...r.children].map(e => e.textContent) : null;
+   }));
+/* **カレンダーの面と同じ数。** 数え方は countSub 1つなので、見る場所で違わない */
+ok("カレンダーの月の下と同じ数", await p.evaluate(() => {
+     const m = new Date(monday.getFullYear(), monday.getMonth(), 1);
+     const now = calCount(m), sum = calSum(m);
+     return [...document.querySelectorAll("#tlyBox .tlyrow")].every(r => {
+       const k = r.children[0].textContent;
+       return String(now[k] || 0) === r.children[1].textContent
+           && String(sum[k] || 0) === r.children[2].textContent;
+     });
+   }) === true);
+ok("見込みで数えているぶんを字で言う", await p.evaluate(() =>
+   /基本時間割/.test($("tlyNote").textContent)) === true,
+   await p.evaluate(() => $("tlyNote").textContent));
+ok("入口（まだ何も開いていない）では出さない", await p.evaluate(() => {
+     const keep = view;
+     view = {kind:"gate"};
+     drawTallyPanel();
+     const hid = $("tallyWrap").hidden;
+     view = keep; drawTallyPanel();
+     return hid;
+   }) === true);
+
+console.log("\n■ 時数集計シート（押したときだけ）");
+await p.evaluate(() => { openView({kind:"class", cls:"5-1"}); });
+await p.waitForTimeout(500); await closeDlgs();
+ok("ボタンと、時間がかかる断りが出る", await p.evaluate(() =>
+   !!$("tlySheet") && /1〜3分/.test($("tlySheetNote").textContent)) === true,
+   await p.evaluate(() => $("tlySheetNote").textContent));
+ok("？の説明にも、時間がかかると書いてある", await p.evaluate(() =>
+   /1〜3分/.test(HELP.tally2.b.join("")) ) === true);
+/* **？はボタンのすぐ右。** 見出しの横だと、押そうとしている人の目に入らない */
+ok("？は「時数を集計する」のすぐ右にある", await p.evaluate(() => {
+     const q = document.querySelector('[data-help="tally2"] .helpq');
+     const btn = $("tlySheet");
+     if(!q || !btn) return "？かボタンが無い";
+     const a = btn.getBoundingClientRect(), b = q.getBoundingClientRect();
+     /* 同じ高さで、ボタンより右。見出しの横に付いていたら上にずれる */
+     return b.left >= a.right - 1 && Math.abs(b.top - a.top) < a.height;
+   }) === true, await p.evaluate(() => {
+     const q = document.querySelector('[data-help="tally2"] .helpq');
+     const btn = $("tlySheet");
+     return q && btn ? [btn.getBoundingClientRect().toJSON(),
+                        q.getBoundingClientRect().toJSON()] : null;
+   }));
+/* **押し間違いで1〜3分待たせない。** 既定は「やめる」 */
+await p.locator("#tlySheet").click();
+await p.waitForTimeout(300);
+ok("押すと、先に確かめる窓が出る", await p.evaluate(() =>
+   $("okDlg").open === true) === true);
+ok("既定は「やめる」", await p.evaluate(() =>
+   document.activeElement === $("okNo")) === true);
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator("#okNo").click();
+await p.waitForTimeout(400); await closeDlgs();
+ok("やめれば、1本も呼ばない", (await calls()).indexOf("apiWriteTally") < 0, await calls());
+/* 数えて置く */
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator("#tlySheet").click();
+await p.waitForTimeout(300);
+await p.locator("#okYes").click();
+await p.waitForTimeout(2500); await closeDlgs();
+ok("数えると、時数集計シートへ置く",
+   (await calls()).indexOf("apiWriteTally") >= 0, await calls());
+const tly = await p.evaluate(() => window.__tally || null);
+ok("見出しは 年度・クラス・月 → 教科 → 合計",
+   !!tly && tly.head[0] === "年度" && tly.head[1] === "クラス" && tly.head[2] === "月"
+   && tly.head.indexOf("合計") > 3, tly && tly.head);
+ok("教科の列は、教科シートの順（1文字）", await p.evaluate(() => {
+     const want = SUBJECTS.filter(s => s.count && s.short).map(s => s.short)
+       .filter((x, i, a) => a.indexOf(x) === i);
+     const got = (window.__tally.head || []).slice(3, 3 + want.length);
+     return want.join(",") === got.join(",");
+   }) === true, tly && tly.head);
+ok("行は クラス × 月 のぶん", await p.evaluate(() => {
+     const m0 = new Date(monday.getFullYear(), monday.getMonth(), 1);
+     return window.__tally.rows.length
+         === allClasses().length * tallyMonths(m0).length;
+   }) === true, tly && tly.rows.length);
+/* **数えるのは画面。** シートの数と、右メニューに出ている数が一致すること */
+ok("シートに置いた数は、画面の数と同じ", await p.evaluate(() => {
+     const t = window.__tally, m = new Date(monday.getFullYear(), monday.getMonth(), 1);
+     const row = t.rows.find(r => r[1] === view.cls && r[2] === (m.getMonth() + 1) + "月");
+     if(!row) return "その月の行が無い";
+     const now = calCount(m);
+     return t.head.slice(3, t.head.indexOf("合計")).every((k, i) =>
+       String(now[k] || 0) === row[3 + i]);
+   }) === true, await p.evaluate(() => {
+     const t = window.__tally, m = new Date(monday.getFullYear(), monday.getMonth(), 1);
+     const row = t.rows.find(r => r[1] === view.cls && r[2] === (m.getMonth() + 1) + "月");
+     return [t.head, row];
+   }));
+ok("合計の列は、教科の数の合計", await p.evaluate(() => {
+     const t = window.__tally, at = t.head.indexOf("合計");
+     return t.rows.every(r => {
+       let n = 0;
+       for(let i = 3; i < at; i++) n += +r[i] || 0;
+       return String(n) === r[at];
+     });
+   }) === true);
+/* **休みの日は数えない**（時数集計表へのコピーと同じ決まり） */
+ok("数え方は時数集計表と同じ（休みの日は数えない）", await p.evaluate(() => {
+     const m = new Date(monday.getFullYear(), monday.getMonth(), 1);
+     /* **数えられるクラスを選ぶ。** 見本の基本時間割は全クラスぶんは無いので、
+        1つ目のクラスを決め打ちにすると、はじめから 0 のまま通ってしまう */
+     let cls = null, n = 0;
+     for(const c of allClasses()){
+       const x = tallyClassMonth(c, m);
+       const t = Object.keys(x).reduce((a, k) => a + x[k], 0);
+       if(t > 0){ cls = c; n = t; break; }
+     }
+     if(!cls) return "数えられるクラスが無い";
+     /* この月の平日を全部「休み」にして数え直す（この端末の控えだけ直す） */
+     const keep = monday, touched = [];
+     for(const dt of calDates(m)){
+       monday = mondayOf(dt);
+       const d = Math.round((dt - monday) / 86400000);
+       if(d < 0 || d >= DAYS) continue;
+       const w = week(), key = d + "|" + DAY_SLOT;
+       touched.push([w, key, w.school[key]]);
+       w.school[key] = {title:"休み", note:"", subject:null,
+                        at:Date.now(), by:"a@edu.nishi.or.jp"};
+     }
+     const after = tallyClassMonth(cls, m);
+     for(const [w, key, was] of touched){ if(was) w.school[key] = was; else delete w.school[key]; }
+     monday = keep; calCache = {}; calMonthCache = {}; calMark = "";
+     return n > 0 && Object.keys(after).length === 0;
+   }) === true);
+
+console.log("\n■ 出どころの四角（週案の紙だけ）");
+await p.evaluate(() => {
+  const w = week(), now = Date.now();
+  w.school["0|p1"] = {title:"全校朝会", note:"", subject:null, at:now, by:"a@edu.nishi.or.jp"};
+  (w.grade["5"] || (w.grade["5"] = {}))["1|p1"] =
+    {title:"学年集会", note:"", subject:"gakunen_shukai", at:now, by:"a@edu.nishi.or.jp"};
+  save(); openView({kind:"class", cls:"5-1"});
+});
+await p.waitForTimeout(500); await closeDlgs();
+const srcAt = (d, s2) => p.evaluate(([d, s2]) => {
+  const e = document.querySelector(`#sheet .cell[data-d="${d}"][data-s="${s2}"] .src`);
+  return e && !e.hidden ? e.textContent : "";
+}, [d, s2]);
+ok("全校から降りたコマは「全校」", await srcAt(0, "p1") === "全校", await srcAt(0, "p1"));
+/* **縦長。** 題名の欄は高さが余り、横幅が題名と取り合いになる。
+   横長だと「全校」で 5mm 取られるところ、縦なら 2.6mm で済む。
+   **見た目の形で見る**（縦書きの指定ではなく）── 指定が効いていても
+   箱が潰れていたら読めない */
+ok("四角は縦長（1行1文字で積む）", await p.evaluate(() => {
+     const e = document.querySelector('#sheet .cell[data-d="0"][data-s="p1"] .src');
+     const r = e.getBoundingClientRect(), fs = parseFloat(getComputedStyle(e).fontSize);
+     /* 2文字ぶんの高さがあり、幅は1文字ぶん。字が入りきっていること */
+     return r.height > r.width * 1.5
+         && r.height >= fs * 1.8
+         && e.scrollHeight <= e.clientHeight + 1;
+   }) === true, await p.evaluate(() => {
+     const e = document.querySelector('#sheet .cell[data-d="0"][data-s="p1"] .src');
+     const r = e.getBoundingClientRect();
+     return {w:+r.width.toFixed(1), h:+r.height.toFixed(1),
+             fs:getComputedStyle(e).fontSize,
+             scroll:e.scrollHeight, client:e.clientHeight};
+   }));
+ok("学年から降りたコマは「◯年」（層の名前ではなく学年の数字）",
+   await srcAt(1, "p1") === "5年", await srcAt(1, "p1"));
+ok("自分で書いたコマには出さない", await p.evaluate(() => {
+     writeCell(2, "p1", {title:"国語", subject:"kokugo"});
+     paintSheet();
+     const e = document.querySelector('#sheet .cell[data-d="2"][data-s="p1"] .src');
+     return !e || e.hidden;
+   }) === true);
+ok("右上の札と二重に言わない（層は四角が言う）", await p.evaluate(() => {
+     const e = document.querySelector('#sheet .cell[data-d="0"][data-s="p1"] .tag');
+     return e.hidden || e.textContent === "";
+   }) === true);
+ok("重なりは右上に残す（四角が言えないもの）", await p.evaluate(() => {
+     const w = week(), now = Date.now() + 1000;
+     (w.home["5-1"] || (w.home["5-1"] = {}))["0|p1"] =
+       {title:"国語", note:"", subject:"kokugo", at:now, by:"b@edu.nishi.or.jp"};
+     save(); paintSheet();
+     return document.querySelector('#sheet .cell[data-d="0"][data-s="p1"] .tag').textContent;
+   }) === "！重なり");
+/* **全学年の面では出さない。** 全部が「全校」になり、何も区別しない印になる */
+ok("全学年の面では出さない", await p.evaluate(() => {
+     openView({kind:"school"});
+     return [...document.querySelectorAll("#sheet .src")].every(e => e.hidden);
+   }) === true);
+await p.waitForTimeout(400); await closeDlgs();
+ok("4週の面には出さない", await p.evaluate(() => {
+     openView({kind:"class", cls:"5-1"});
+     setCenter("month");
+     return document.querySelectorAll("#mPaper .src:not([hidden])").length;
+   }) === 0);
+await p.waitForTimeout(600); await closeDlgs();
+await p.evaluate(() => setCenter("week"));
+await p.waitForTimeout(400); await closeDlgs();
+
+console.log("\n■ 管理操作は、押す前にサーバが止める");
+ok("管理者なら、設定と管理を出す", await p.evaluate(() =>
+   !document.querySelector('[data-act="settings"]').hidden) === true);
+ok("画面は関門ではない（本体はサーバの checkAdmin）", await p.evaluate(() => {
+     /* 隠れていても google.script.run は呼べる。だからサーバ側で止める */
+     return typeof Backend.info().isAdmin === "boolean";
+   }) === true);
 
 console.log(errs.length ? "\n【エラー】\n" + errs.join("\n") : "\nJSエラーなし");
 if(errs.length) ng += errs.length;

@@ -97,7 +97,11 @@ button,select,input,textarea{font:inherit;color:inherit}
 /* ── 中央 ────────────────────────────────────── */
 /* **紙の上下には何も置かない。** 週の移動も凡例も左へ寄せてある。
    置くたびに紙が縮み、いちばん見たいものが小さくなる。 */
-.center{grid-area:1/2/2/3;display:grid;grid-template-rows:auto minmax(0,1fr);
+.center{grid-area:1/2/2/3;display:grid;
+  /* 退避の知らせ／かたちの帯／中身、の3行。**中身は必ず3行目に置く。**
+     行を決めずに並べさせると、足した帯のぶんだけ中身が下の行へ押し出され、
+     帯が紙の下に回り込む（実際にそうなった） */
+  grid-template-rows:auto auto minmax(0,1fr);
   min-width:0;min-height:0}
 
 /* 退避ずみの年度の知らせ。**紙の外**（刷られない）。隠れているあいだは高さ0 */
@@ -133,9 +137,34 @@ button,select,input,textarea{font:inherit;color:inherit}
 .legend i.cl{background:var(--fill-b)}
 .legend i.bs{background:var(--sheet)}
 
-.stage{overflow:auto;padding:10px;display:flex;justify-content:center;
+/* 中央のかたちを入れ替える帯。**紙の外**（刷られない）。
+   紙の上下には置かない決まりなので、紙より上・中央の余白に置く */
+.cbar{grid-row:2;gap:14px;margin:8px 16px 0}
+.flab{font-size:12px;color:var(--tx-sub)}
+/* 避ける教科。**押したところに開く**（窓にすると、開くたびに紙が隠れる） */
+.favoid{position:relative}
+.favoid>summary{list-style:none;cursor:pointer;font-size:12.5px;
+  padding:6px 11px;border:1px solid var(--line);border-radius:var(--r-sm);
+  background:var(--card);color:var(--tx-sub);white-space:nowrap}
+.favoid>summary::-webkit-details-marker{display:none}
+.favoid[open]>summary{border-color:var(--tx-sub);color:var(--tx)}
+.fapop{position:absolute;z-index:40;top:calc(100% + 5px);left:0;width:16em;
+  display:flex;flex-wrap:wrap;gap:4px 10px;padding:11px 13px;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:0 6px 20px var(--shade-2)}
+.fapop label{display:flex;align-items:center;gap:5px;font-size:12.5px;
+  cursor:pointer;white-space:nowrap}
+.fapop .btn{width:100%;margin-top:4px}
+.ftally{font-size:12.5px;color:var(--tx-sub);font-variant-numeric:tabular-nums;
+  white-space:nowrap}
+.ftally b{color:var(--tx);font-weight:700}
+.ftally .fw{color:var(--tx-sub);font-weight:400}
+
+.stage{grid-area:3/1/4/2;overflow:auto;padding:10px;display:flex;justify-content:center;
   align-items:flex-start;min-height:0;min-width:0;gap:6px}
-.stage[hidden]{display:none!important}
+/* 出し入れするものは1本にまとめる。**書き漏らすと、面が2つ重なって出る** */
+.stage[hidden],.mview[hidden],.gvview[hidden],.cvview[hidden],.tpview[hidden],
+.cbar[hidden],.freebox[hidden]{display:none!important}
 
 /* 紙の左右で週を繰る。**左メニューの ◀ ▶ と同じことをする。**
    読んでいる目の高さに置くので、左端まで視線を戻さずに週を繰れる。
@@ -223,14 +252,15 @@ body.is-unsaved[data-scope="school"] .stage{
 
 /* 月の面。**4週ぶんを 2×2 に並べる。** 紙と入れ替えて出す。
    転がさずに1画面へ収める（収まらなければ紙にもならない）。 */
-.mview{grid-area:1/1/2/2;display:grid;grid-template-rows:auto auto minmax(0,1fr);
+.mview,.gvview,.cvview{grid-area:3/1/4/2;display:grid;
+  grid-template-rows:auto auto minmax(0,1fr);
   gap:8px;padding:12px 16px 16px;min-height:0;min-width:0}
-.mview[hidden]{display:none!important}
-.mbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+/* 帯。**同じ並べ方を3つの名前で書かない**（月の面・中央のかたち・空き枠） */
+.mbar,.cbar,.freebox{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .mbar b{font-size:15px}
 .mbar .grow{flex:1}
-.mview .hint{margin:0;font-size:12px;color:var(--tx-sub);line-height:1.7}
-.mview .hint b{color:var(--tx)}
+.mview .hint,.gvview .hint,.cvview .hint{margin:0;font-size:12px;color:var(--tx-sub);line-height:1.7}
+.mview .hint b,.gvview .hint b,.cvview .hint b{color:var(--tx)}
 .mpaper{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
   gap:6px;min-height:0;min-width:0;justify-items:center;align-items:start}
 /* 月の面の紙。**詰めるのは高さだけ。** 授業名は残す */
@@ -242,11 +272,17 @@ body.is-unsaved[data-scope="school"] .stage{
   --fs-t:13pt; --fs-n:6.5pt; --fs-a:6pt; --fs-b:7pt; --fs-s:5pt;
   box-shadow:0 1px 3px var(--shade);
 }
-/* **見るだけ。** 直すのは週の紙のほうで（触れると、月の面で直したつもりになる） */
-.sheet.mini .cell .t,.sheet.mini .cell .n,.sheet.mini .foot .t{pointer-events:none}
+/* **見るだけ。** 直すのは週の紙のほうで（触れると、月の面で直したつもりになる）。
+   欄そのものも contenteditable を付けずに組んである（sheet.js の sheetRO）。
+   ここは、そこをすり抜けた場合の二重の止め */
+.sheet.ro .cell .t,.sheet.ro .cell .n,.sheet.ro .foot .t{pointer-events:none}
+
+/* 学年の面。**1日をクラス数で縦に割る。** 紙と入れ替えて出す
+   （版面の決まりは .mview と共有。中央の面はどれも同じ枠で出す） */
+.gvpaper{min-height:0;min-width:0;overflow:auto}
 
 /* たんぽぽの面。週案の紙ではないので、紙と入れ替えて出す */
-.tpview{grid-area:1/1/2/2;overflow:auto;padding:22px 26px;display:flex;
+.tpview{grid-area:3/1/4/2;overflow:auto;padding:22px 26px;display:flex;
   flex-direction:column;gap:18px;min-height:0}
 /* **説明は畳んでおく。** 5行の説明を開いたまま置くと、毎回それを越えないと
    組にも交流級にも手が届かない。読むのは最初の1回だけ。 */
@@ -529,8 +565,11 @@ span.tpin{cursor:default}
 .settingcard b{font-size:14px}.settingcard span{font-size:11.5px;color:var(--tx-sub)}
 .subttl{font-size:12px;color:var(--tx-sub)}
 .radios{display:flex;flex-direction:column;gap:9px}.radios label{font-size:13px}
-.chipset{margin-top:8px;border:0;background:none;color:var(--ink-link);font:inherit;font-size:11.5px;
-  padding:0;text-decoration:underline;cursor:pointer}
+/* 教科に色をつける。**窓を開かせず、押す口をパレットの下に置く。**
+   毎週変えるものではないが、変えたくなるのは紙を見ているときなので、
+   紙のとなりで切り替えられるようにする */
+.chipset{margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.chipset[hidden]{display:none!important}
 /* リセット。**入れるものではないと、押す前に分かる形にする。**
    教科の並びの中にあるので、色だけでなく枠の形でも分ける */
 .pal.clear{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff;
@@ -921,3 +960,133 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 退避の手順。**番号のまま読ませる。** 箇条書きにすると順番が消える */
 .steps{margin:6px 0 10px;padding-left:1.5em;font-size:12.5px;line-height:1.9}
 .steps li{margin:2px 0}
+
+/* 教科の表し方の表。**3つの字を横に並べる。**
+   どれを直せばどこが変わるかは、見出しと下の説明が言う */
+.subtable{display:flex;flex-direction:column;gap:3px;max-height:56vh;overflow:auto}
+.subhead,.subrow{display:grid;grid-template-columns:7em 1fr 4.5em 6em;
+  gap:8px;align-items:center}
+.subhead{position:sticky;top:0;background:var(--card);z-index:1;
+  padding:4px 0;font-size:11.5px;color:var(--tx-sub);font-weight:700;
+  border-bottom:1px solid var(--line)}
+.subname{font-size:13px;color:var(--tx-sub);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.subrow input{padding:5px 8px;font:inherit;font-size:13px;
+  border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);
+  min-width:0}
+.subrow input[data-f=short],.subrow input[data-f=tp]{text-align:center}
+
+/* ── カレンダーの面 ──────────────────────────────
+   **4ヶ月を 2×2。** 月の面と同じ並べ方（A4 よこ1枚）。
+   1日は「日付／教科の1文字の並び／放課後の備考」の3段。 */
+.cvpaper{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
+  gap:6px;min-height:0;min-width:0;justify-items:center;align-items:start}
+.cmonth{--k:1;--cw:100%;--ch:auto;
+  /* **枠いっぱいに伸ばす。** 伸ばさないと中身の高さで止まり、
+     1日の欄が潰れたまま下に余白が残る（備考が2行も入らない） */
+  width:var(--cw);height:var(--ch);
+  background:var(--sheet);color:var(--ink);font-feature-settings:"palt" 1;
+  border:1.2px solid var(--rule-week);border-radius:2px;
+  box-shadow:0 1px 3px var(--shade);
+  display:flex;flex-direction:column;overflow:hidden}
+.cmhd{font-size:calc(11pt*var(--k));font-weight:700;text-align:center;
+  padding:calc(1mm*var(--k)) 0;border-bottom:1.2px solid var(--rule-week);
+  background:var(--band)}
+/* 月〜土の6列。**日曜は置かない**（週の紙と同じ。1列ぶん広く取れる） */
+/* 週の行は**均等に伸ばす**。月によって5行だったり6行だったりするので、
+   行の高さを決め打ちにすると、5行の月に1行ぶんの余白が残る */
+.cgrid{display:grid;grid-template-columns:repeat(6,1fr);
+  /* 曜日の行は字のぶんだけ。**週の行だけを均等に伸ばす**
+     （grid-auto-rows だけだと、曜日の行も1週ぶんの高さになる） */
+  grid-template-rows:auto;grid-auto-rows:1fr;flex:1;min-height:0}
+.cdow{font-size:calc(5.5pt*var(--k));text-align:center;color:var(--ink-sub);
+  padding:calc(.5mm*var(--k)) 0;background:var(--band);
+  border-right:.6px solid var(--rule);border-bottom:.6px solid var(--rule)}
+.cdow.sat{color:var(--ink-link)}
+/* 1日は**①日付／②時間割／③備考**の3段。②と③は横幅を等分した枠で、
+   上下の枠がそろう（3校時の字の真下が、3校時の書き込み欄になる）。 */
+.cday{position:relative;min-width:0;overflow:hidden;
+  display:flex;flex-direction:column;
+  padding:calc(.3mm*var(--k)) 0 0;
+  border-right:.6px solid var(--rule);border-bottom:.6px solid var(--rule)}
+.cday.none{background:var(--band)}
+/* ①日付。**中央ぞろえ。** 左に寄せると、下の等分した枠の線と目の動きがぶつかる */
+.cnum{font-size:calc(5.5pt*var(--k));color:var(--ink-sub);line-height:1;
+  text-align:center;padding-bottom:calc(.3mm*var(--k))}
+/* ②時間割・③備考。**同じ等分**。--np は時程の「授業」の数（既定6） */
+.csubs,.cnote{display:grid;grid-template-columns:repeat(var(--np,6),1fr);
+  border-top:.6px solid var(--rule)}
+.csubs>i,.cnote>i{font-style:normal;min-width:0;overflow:hidden;
+  text-align:center;border-right:.6px solid var(--rule-soft)}
+.csubs>i:last-child,.cnote>i:last-child{border-right:0}
+/* ②教科の1文字。**枠の幅は 2.6mm**（15.7mm を6等分）。
+   1文字ちょうどなので字間は要らない */
+.csubs{font-size:calc(7.5pt*var(--k));font-weight:600;line-height:1.25}
+/* ③備考は**空のまま**。手で書き込む欄なので、高さだけ取る。
+   残りの高さを全部渡す（1枠 2.6mm × 約5mm ── 丸や1文字ぶん） */
+.cnote{flex:1;min-height:calc(3.5mm*var(--k))}
+/* 休みの日は1文字の並びを出さない（授業が無いので）。
+   **書き込む欄は残す** ── 休みの日にも行事の覚えを書く */
+.cday.form-off .csubs>i{visibility:hidden}
+.cday.form-off{background:var(--band)}
+.cday.form-special .cnum::after{content:"特";font-size:.85em;margin-left:.2em}
+/* 年間行事のある日。**画面だけ**（週の紙と同じ扱い） */
+.cday.hasev .cnum::before{content:"●";color:var(--ink-link);font-size:.7em;
+  margin-right:.15em}
+@media print{ .cday.hasev .cnum::before{display:none} }
+
+/* ── 月の下の時数集計 ────────────────────────
+   教科ごとに **その月のコマ数（年度はじめからの累計）**。
+   **教科ごとに出す。** 合計1つでは日数×コマ数でほぼ決まる数にしかならず、
+   標準授業時数と突き合わせられない。
+
+   **4列に折り返す。** 13教科を1行に並べると字が読めない大きさになる。
+   その4ヶ月にも累計にも出てこない教科は行ごと出さない（0 で埋めない）。 */
+.ctally{display:grid;grid-template-columns:repeat(4,1fr);
+  gap:0 calc(1mm*var(--k));padding:calc(.6mm*var(--k)) calc(1mm*var(--k));
+  border-top:1.2px solid var(--rule-week);background:var(--band);
+  font-size:calc(5.5pt*var(--k));line-height:1.35;color:var(--ink)}
+/* **1文字と数をくっつける。** 列の幅（140mm ÷ 4 ＝ 35mm）に対して
+   「国22(128)」は 15mm しかないので、左右へ振り分けると 20mm の空きが入り、
+   どの数がどの教科のものか読めなくなる（実測）。
+   列の中で**かたまりごと中央**に置き、1文字は右ぞろえ・数は左ぞろえにして、
+   行をまたいでも縦がそろうようにする。 */
+.ct{display:grid;grid-template-columns:1.4em max-content;
+  justify-content:center;align-items:baseline;column-gap:.2em;
+  min-width:0;white-space:nowrap;font-variant-numeric:tabular-nums}
+.ct>b{text-align:right;font-weight:700;color:var(--ink-sub)}
+/* 累計は**小さく薄く**。手前に出るのはその月の数のほう */
+.ct i{font-style:normal;font-size:.85em;color:var(--ink-sub)}
+.ctnone{grid-column:1/-1;color:var(--ink-sub)}
+
+/* ── 右メニューの時数 ───────────────────────────
+   **3列の表。** 教科の1文字／今月／累計。
+   カレンダーの月の下と同じ数で、同じ並び（教科シートの順）。
+   ここは縦に読む（右メニューは細長い）ので、月の下のように4列へは折り返さない。 */
+.tly{border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;
+  background:var(--card)}
+.tlyhd,.tlyrow{display:grid;grid-template-columns:2.6em 1fr 1fr;
+  align-items:baseline;gap:6px;padding:3px 8px;
+  font-variant-numeric:tabular-nums}
+.tlyhd{background:var(--band);color:var(--tx-sub);font-size:11px;
+  border-bottom:1px solid var(--line)}
+.tlyrow{font-size:12.5px;border-top:1px solid var(--line)}
+.tlyrow:first-of-type{border-top:0}
+.tlyhd>span:first-child,.tlyrow>span:first-child{font-weight:700}
+/* 数は**右ぞろえ**。桁がそろわないと、多い少ないが縦に読めない */
+.tlyhd>span:not(:first-child),.tlyrow>span:not(:first-child){text-align:right}
+/* 累計は小さく薄く。手前に出るのは今月の数のほう（紙の集計と同じ扱い） */
+.tlyrow>span:last-child{color:var(--tx-sub)}
+#tlyNote{margin:6px 0 0}
+#tlyRead,#tlySheet{margin-top:6px;background:var(--card);border:1px solid var(--line);
+  border-radius:var(--r-sm);padding:4px 10px;font-size:12px;cursor:pointer}
+#tlyRead:hover,#tlySheet:hover{background:var(--band)}
+#tlyRead[hidden]{display:none!important}
+/* 時間がかかることを、押す前に読めるところへ置く（？の説明にも書いてある） */
+#tlySheetNote{margin-top:4px}
+/* ？は「時数を集計する」のすぐ右。**押す口のとなりに置く** ──
+   見出しの横だと、押そうとしている人の目に入らない。
+   .helpq は既定で margin-left:auto（並びの右端へ寄せる作り）なので、
+   ここでは 0 に戻して、ボタンとの間は gap で取る */
+.tlybtn{display:flex;align-items:center;gap:6px}
+.tlybtn>.helpq{margin-left:0}

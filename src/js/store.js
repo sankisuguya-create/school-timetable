@@ -143,7 +143,14 @@ function saveNow(){
    **戻り値は「保存が止まっていないか」**で、「いま書けたか」ではない
    （まだ書いていないので言えない）。呼ぶ側はどこも戻り値で分岐していない。
    分岐させたくなったら saveNow を使う。 */
+/* **中身が変わった印。** 数えたものを取り置く側（時数の集計）が、
+   「前に数えたときから変わったか」をこれ1つで見る。
+   日付や時刻ではなく数にする ── 同じミリ秒に2回変わることがある。
+   書き込み（save）と、シートから読んだぶんの取り込み（Backend.mergeWeek）で上がる。 */
+let dataTick = 0;
+
 function save(){
+  dataTick++;
   if(!saveT) saveT = setTimeout(saveNow, SAVE_WAIT);
   return !storeBroken;
 }
@@ -224,8 +231,24 @@ function normClasses_(v){
   }
   return Object.keys(out).length ? out : clone(DEFAULT_CLASSES);
 }
+/* 担当学年。**空の配列＝全学年を受け持つ。** 書いていない学校を、
+   どの学年も受け持たない専科にしてしまわない（→ gas/Store.gs gradeList_）。 */
+function spGrades_(v){
+  if(Array.isArray(v)) return v.map(String).filter(g => /^[1-9]$/.test(g)).sort();
+  const s = String(v == null ? "" : v).trim();
+  if(!s) return [];
+  const out = {};
+  const rest = s.replace(/([1-9])\s*年?\s*[〜～~\-ー－]\s*([1-9])/g, function(_, a, b){
+    const lo = Math.min(+a, +b), hi = Math.max(+a, +b);
+    for(let g = lo; g <= hi; g++) out[String(g)] = true;
+    return " ";
+  });
+  (rest.match(/[1-9]/g) || []).forEach(x => out[x] = true);
+  return Object.keys(out).sort();
+}
 function normSpecials_(v){
-  if(Array.isArray(v) && v.every(s => s && typeof s.code === 'string' && typeof s.label === 'string'))
+  if(Array.isArray(v) && v.every(s => s && typeof s.code === 'string'
+     && typeof s.label === 'string' && Array.isArray(s.grades)))
     return v;
   if(!Array.isArray(v)) return clone(DEFAULT_SPECIALS);
   const out = [], seen = {};
@@ -237,7 +260,7 @@ function normSpecials_(v){
     const known = SUB_BY_NAME[label];
     const code = String(raw && typeof raw === "object" && raw.code
       ? raw.code : known ? known.code : "sp_" + i);
-    out.push({code, label});
+    out.push({code, label, grades: spGrades_(raw && raw.grades)});
   }
   return out.length ? out : clone(DEFAULT_SPECIALS);
 }

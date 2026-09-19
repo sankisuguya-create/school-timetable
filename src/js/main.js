@@ -192,6 +192,7 @@ function refreshWeek(){
   $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
   drawDayPanel();                 /* この週の日の形。週をまたぐと中身が変わる */
+  drawTallyPanel();               /* 時数。週をまたぐと「今月」が変わる */
   paintArchive();                 /* 週をまたぐと年度が変わる。**そのつど見る** */
   paintTpSub();                   /* 提出の印は週ごと。週をまたぐと未に戻る */
   if(view.kind === "tanpopo"){
@@ -201,8 +202,10 @@ function refreshWeek(){
     if(tpTargets === null) loadTargets();
     return;
   }
-  buildSheet();
-  autoFit();
+  /* 中央に出ているものを組み直す。**かたちの分岐は redrawCenter が持つ**
+     （ここにも分岐を置くと、かたちを1つ足したとき2か所に足すことになる）。
+     週を繰ったのに、見ている面だけ前の週のまま、にしない */
+  redrawCenter(true);
 }
 function goWeek(n){
   saveNow();                      /* 週を出る前に、この端末の控えを書き切る */
@@ -509,10 +512,54 @@ function wire(){
   on("tpDelDlg","close", () => tpDelAnswer(false));
   on("tpSubBtn","click", toggleTpSub);
 
+  /* 中央のかたち（週案・4週・学年）。**行き先は1つ。**
+     左メニューの「4週まとめて（B4）」と同じ面へ行く */
+  for(const b of document.querySelectorAll("#centerTabs [data-center]"))
+    b.addEventListener("click", () => setCenter(b.dataset.center));
+  /* 空き枠さがし */
+  for(const b of document.querySelectorAll("#freeSeg [data-free]"))
+    b.addEventListener("click", () => {
+      freeOpt().level = +b.dataset.free;
+      save(); redrawCenter();
+    });
+  on("freeAvoid","toggle", () => { if($("freeAvoid").open) drawAvoidList(); });
+
+  /* 学年の面。**見るだけ。** */
+  on("gvGrade","change", e => { gGrade = e.target.value; redrawCenter(); });
+  on("gvClose","click",  () => setCenter("week"));
+  on("gvImage","click", async () => {
+    try{ await nodePng($("gvPaper"), outputName(gGrade + "年_" + "学年") + ".png");
+         toast("学年の画像を保存した"); }
+    catch(e){ toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
+  });
+  /* **測り直しは間引く。** 掴んで動かすあいだ、1秒に何十回も強制リフローになる
+     （週の紙の autoFit と同じ 120ms） */
+  let gvT = 0;
+  addEventListener("resize", () => {
+    clearTimeout(gvT);
+    gvT = setTimeout(() => { if(!$("gradeView").hidden) fitGrade(); }, 120);
+  });
+
+  /* カレンダーの面。**見るだけ。** 4ヶ月ずつ繰る */
+  on("cvPrev","click",  () => { calFrom = new Date(calFrom.getFullYear(), calFrom.getMonth() - CAL_MONTHS, 1); redrawCenter(); });
+  on("cvNext","click",  () => { calFrom = new Date(calFrom.getFullYear(), calFrom.getMonth() + CAL_MONTHS, 1); redrawCenter(); });
+  on("cvClose","click", () => setCenter("week"));
+  on("cvPrint","click", printCal);
+  on("cvImage","click", async () => {
+    try{ await nodePng($("cvPaper"), outputName("カレンダー") + ".png");
+         toast("カレンダーの画像を保存した"); }
+    catch(e){ toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
+  });
+  let cvT = 0;
+  addEventListener("resize", () => {
+    clearTimeout(cvT);
+    cvT = setTimeout(() => { if(!$("calView").hidden) fitCal(); }, 120);
+  });
+
   /* 月の面。**見るだけ。** 直すのは週の紙のほうで */
-  on("mPrev","click",  () => { mMonday = addDays(mMonday, -7 * MONTH_WEEKS); drawMonth(); });
-  on("mNext","click",  () => { mMonday = addDays(mMonday,  7 * MONTH_WEEKS); drawMonth(); });
-  on("mClose","click", () => showMonth(false));
+  on("mPrev","click",  () => { mMonday = addDays(mMonday, -7 * MONTH_WEEKS); redrawCenter(); });
+  on("mNext","click",  () => { mMonday = addDays(mMonday,  7 * MONTH_WEEKS); redrawCenter(); });
+  on("mClose","click", () => setCenter("week"));
   on("mPrint","click", printMonth);
   on("mImage","click", async () => {
     try{ await nodePng($("mPaper"), outputName("4週_B4")+".png"); toast("4週の画像を保存した"); }
@@ -527,6 +574,7 @@ function wire(){
   on("abSave","click", saveAb);
   on("evRead","click", evRead);
   on("evGo","click", evGo);
+  on("setSub","click",  () => { $("settingsDlg").close(); openSubDlg(); });
   on("setBase","click", () => { $("settingsDlg").close(); openBaseDlg(); });
   on("setRoster","click", () => { $("settingsDlg").close(); openRosterDlg(); });
   on("setTanpopo","click", () => { $("settingsDlg").close(); openTpGroupDlg(); });
@@ -538,20 +586,30 @@ function wire(){
     catch(e){ $("outStat").textContent="画像を作れませんでした（"+(e.message||e)+"）"; }
   });
   on("outSheet","click", exportWeekSheet);
-  on("chipOpen","click", () => {
-    if(view.kind!=="class") return;
-    $("chipClass").textContent=view.cls;
-    const mode=(Y().chipModes||{})[view.cls]||"off";
-    const radio=document.querySelector("input[name=chipMode][value='"+mode+"']"); if(radio) radio.checked=true;
-    $("chipDlg").showModal();
-  });
-  on("chipSave","click", () => {
-    if(view.kind!=="class") return;
-    const radio=document.querySelector("input[name=chipMode]:checked");
-    (Y().chipModes||(Y().chipModes={}))[view.cls]=radio?radio.value:"off";
-    save(); $("chipDlg").close(); buildSheet(); drawPalette();
-    toast(view.cls+" の教科チップを変更した");
-  });
+  /* 教科の色。**窓を開かせない。** 紙を見ているときに、そのとなりで切り替える */
+  for(const b of document.querySelectorAll("#chipSeg [data-chip]"))
+    b.addEventListener("click", () => {
+      if(view.kind !== "class") return;
+      (Y().chipModes || (Y().chipModes = {}))[view.cls] = b.dataset.chip;
+      save(); paintChipSeg(); redrawCenter(true);
+    });
+
+  /* 時数。**年度はじめからの週を読み直してから数え直す。**
+     見込みで出していた数を、確かな数に入れ替える口 */
+  on("tlyRead", "click", tallyReadAll);
+  /* 時数集計シート。**時間がかかるので、押す前に言う。**
+     押し間違いで1〜3分待たせない（やめる側に落ちる窓で受ける） */
+  on("tlySheet", "click", () => askOk({
+    title: "全クラスぶんの時数を数えますか",
+    lines: ["4月からこの月までを、<b>全クラスぶん</b>数えて、スプレッドシートの"
+            + "<b>「時数集計」シート</b>に置きます。",
+            "<b>1〜3分かかります。</b>年度の後半ほど長くかかります"
+            + "（読む週が増えるため）。",
+            "置いたものは、押すたびに作り直します。"
+            + "ほかの年度のぶんは残ります。"],
+    goLabel: "数える",
+    onYes: tallySheetAll
+  }));
 
   /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */
   on("dayDlg","close", () => { dayPick = 0; });
@@ -593,13 +651,19 @@ function wire(){
     save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
   });
   on("rsSp","change", e => {
+    /* **いま入っている担当学年を、教科コードで引き継ぐ。**
+       引き継がないと、専科の並びを1文字直すたびに担当学年が消え、
+       専科の基本時間割が全学年に広がる（誰も気づかない） */
+    const had = {};
+    for(const s of (Y().specials || [])) had[s.code] = s.grades || [];
     const seen = {}, out = [];
     for(const raw of String(e.target.value).split(/[,、\s]+/)){
       const label = raw.trim();
       if(!label || seen[label]) continue;
       seen[label] = 1;
       const known = SUB_BY_NAME[label];
-      out.push({code: known ? known.code : "sp_" + out.length, label});
+      const code = known ? known.code : "sp_" + out.length;
+      out.push({code, label, grades: had[code] || []});
     }
     Y().specials = out; save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
   });
@@ -743,6 +807,12 @@ function start(){
   /* 設定・時程・教科・その年度は、立ち上がりの1回でまとめてもらう。
      別々に取りに行くと、その回数だけ待つことになる。 */
   Backend.boot(() => {
+    /* **隠すのは目隠しであって関門ではない。** 本体はサーバの checkAdmin。
+       ここで伏せるのは、押しても断られるものを毎日目に入れないため */
+    if(Backend.isGas() && !Backend.info().isAdmin)
+      for(const e of document.querySelectorAll(
+            '[data-act="settings"],[data-act="admin"],[data-act="newyear"]'))
+        e.hidden = true;
     Backend.watch();              /* 開きっぱなしの画面も、たまに読み直す */
     applyPaper();
     /* **本番では、古い週の控えをここで間引く。** 溢れてから慌てない。
@@ -751,7 +821,7 @@ function start(){
     if(view.kind === "gate") drawGate();
     /* 新年度の設定が未了なら、左メニューに出す。**4/1 から、済むまで。**
        立ち上がりの1回だけ見に行く（週を繰るたびに見に行かない） */
-    pollNewYear();
+    if(!Backend.isGas() || Backend.info().isAdmin) pollNewYear();
   });
   // 案内の有無でデータ初期化の成否を変えない。
   setTimeout(() => openGuide(true), 250);
