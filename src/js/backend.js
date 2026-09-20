@@ -1,70 +1,70 @@
-/* �u���ꏊ�̌p���ځB**��ʂ͂ǂ���œ����Ă��邩��m��Ȃ��B**
+/* 置き場所の継ぎ目。**画面はどちらで動いているかを知らない。**
 
-     �茳�i�u���E�U�� dist/index.html ���J���j  �c localStorage
-     �{�ԁiApps Script �̃E�F�u�A�v���j        �c �V�[�g
+     手元（ブラウザで dist/index.html を開く）  … localStorage
+     本番（Apps Script のウェブアプリ）        … シート
 
-   ��ʂ͍��܂łǂ���A�������� db �����ē����ɕ`���B
-   �{�Ԃł�**�T��1��ǂ�Ń������Ɏ����A�������݂͍����𒙂߂Ă܂Ƃ߂đ���**�B
-   1�R�}�ł��тɃT�[�o��҂��ɂ���ƁA�Z���̉���ł͑Ō����~�܂�B
+   画面は今までどおり、メモリの db を見て同期に描く。
+   本番でも**週を1回読んでメモリに持ち、書き込みは差分を貯めてまとめて送る**。
+   1コマ打つたびにサーバを待つ作りにすると、校内の回線では打鍵が止まる。
 
-   �����i�������������߂�l�j��**�T�[�o���ł������̂���**�B
-   ���������Ƃɖ߂��Ă��������ŁA�茳�̍T���𒼂��B */
+   時刻（勝ち負けを決める値）は**サーバが打ったものが正**。
+   送ったあとに戻ってきた時刻で、手元の控えを直す。 */
 const Backend = (function(){
 
   const onGas = typeof google !== "undefined" && google.script && google.script.run;
 
-  /* **�܂������Ă��Ȃ��R�}�́u�ꏊ�v�������o����B���g�͊o���Ȃ��B**
-     �Ō��̂��тɒ��g��ςނƁA1�R�}���������ŉ��\�������邱�ƂɂȂ�B
-     ���钼�O�ɁA���̂Ƃ���ʂ������Ă��钆�g��ǂ��1���ɂ܂Ƃ߂�B */
-  let dirty = {};        /* "�w|�Ώ�|�j��|����" �� {layer,target,d,slot} */
+  /* **まだ送っていないコマの「場所」だけを覚える。中身は覚えない。**
+     打鍵のたびに中身を積むと、1コマ書くだけで何十件も送ることになる。
+     送る直前に、そのとき画面が持っている中身を読んで1件にまとめる。 */
+  let dirty = {};        /* "層|対象|曜日|時程" → {layer,target,d,slot} */
   let dirtyN = 0;
-  /* **���ܑ����Ă���r���̂Ԃ�B** �������Ԃ�܂ŁA�����ɒ��g���ƒu���Ă����B
-     �O�͑���n�߂����_�� dirty ����O���Ă����̂ŁA�Ԏ�������O�ɉ�ʂ�
-     ������ƁA���̂Ԃ񂪍T���ɂ��c��Ȃ��܂܏����Ă����B
-     �T���́u�܂��V�[�g�ɓ����Ă��Ȃ����́v��S�������Ă��Ȃ���ΈӖ����Ȃ��B */
-  let inflight = {};     /* �������񂲂Ƃ� id �� [patch, �c] */
+  /* **いま送っている途中のぶん。** 成功が返るまで、ここに中身ごと置いておく。
+     前は送り始めた時点で dirty から外していたので、返事が来る前に画面を
+     閉じられると、そのぶんが控えにも残らないまま消えていた。
+     控えは「まだシートに入っていないもの」を全部持っていなければ意味がない。 */
+  let inflight = {};     /* 送った回ごとの id → [patch, …] */
   let flightId = 0;
   let timer = 0;
   let sending = false;
   let editEpoch = 0;
   let acknowledged = false;
-  /* **���̉�ʂ�1�R�}�ł������āA�܂������Ă��Ȃ����B**
-     �J���������̐l���u���ۑ��v�ɂ��Ȃ����߂ɁAacknowledged �Ƃ͕ʂɎ���
-     �iacknowledged �͗����オ�肪 false �Ȃ̂ŁA�J�����u�Ԃ��疢�ۑ��Ɍ�����j�B
-     �茳�ł��{�Ԃł������ɓ��� ���� ���ۑ��̐��̓V�[�g�֑���Ԃ񂵂������Ȃ��̂ŁA
-     �茳�ł� always 0 �ɂȂ�A��ʂ̍��}�Ɏg���Ȃ��B */
+  /* **この画面で1コマでも書いて、まだ入っていないか。**
+     開いただけの人を「未保存」にしないために、acknowledged とは別に持つ
+     （acknowledged は立ち上がりが false なので、開いた瞬間から未保存に見える）。
+     手元でも本番でも同じに動く ── 未保存の数はシートへ送るぶんしか数えないので、
+     手元では always 0 になり、画面の合図に使えない。 */
   let touched = false;
   const flushWaiters = [];
   let notify = () => {};
-  let onDirty = () => {};   /* ���ۑ��̐����ς�������ʂɒm�点�� */
+  let onDirty = () => {};   /* 未保存の数が変わったら画面に知らせる */
   let lastErr = "";
 
-  /* **�������ď����Ȃ������Ԃ�B�̂ĂȂ��B**
-     dirty �֖߂��ƁA���� expectedAt �ł��܂ł�������������B
-     ���̕Ԏ����o��܂ŁA���낤�Ƃ������g���Ƃ����ɒu���B */
+  /* **競合して書けなかったぶん。捨てない。**
+     dirty へ戻すと、同じ expectedAt でいつまでも競合し続ける。
+     窓の返事が出るまで、送ろうとした中身ごとここに置く。 */
   let held = [];
   let onConflict = () => {};
 
-  /* ���� ���� ���������������������������������������������������������������������������� */
+  /* ── 共通 ────────────────────────────────────── */
 
   const isGas = () => !!onGas;
   const setNotifier = fn => { notify = fn; };
 
-  /* 1�R�}�ς�����B**�ꏊ���o���邾���ŁA�܂�����Ȃ��B**
-     �茳�ilocalStorage�j�͂��̂Ǌۂ��Ə����o���Ă���̂ŁA
-     �����Ŋo����͖̂{�Ԃ̃V�[�g�֑���Ԃ�B */
-  /* baseAt �� **�����O�ɁA���̃R�}���T�[�o�Ŏ����Ă��������B**
-     �Ăԑ��icompose.js �� writeCell�j���A�����ւ���O�ɓǂ�œn���B
-     �����œǂނ̂ł͒x���B��ɂ��鑀��ł́A�����R�}�������Ă���B
+  /* 1コマ変わった。**場所を覚えるだけで、まだ送らない。**
+     手元（localStorage）はそのつど丸ごと書き出しているので、
+     ここで覚えるのは本番のシートへ送るぶん。 */
+  /* baseAt ＝ **直す前に、そのコマがサーバで持っていた時刻。**
+     呼ぶ側（compose.js の writeCell）が、書き替える前に読んで渡す。
+     ここで読むのでは遅い。空にする操作では、もうコマが消えている。
 
-     �����Ǌo������A�����R�}�𑱂��Ē����Ă�**�㏑�����Ȃ�**�B
-     �Ō��̂��тɍX�V����ƁA�������������̑Ō��ɒǏ]���āA�������������B */
-  /* where �� ���̃R�}������N�x�ƏT�B**�n���Ȃ���΁A���܊J���Ă���T�B**
-     ���������Ԃ����꒼���Ƃ��́A�ʂ̏T�̃R�}��������Ȃ��B
-     ���܂̏T�Ƃ��Ċo����ƁA�ʂ̏T�̃R�}�������ւ��Ă��܂��B */
-  /* wasTitle �� �����O�ɁA���̒I�ɓ����Ă����薼�B**����ۂۂ̒�o�𕢂�����
-     ���߂�̂ɗv��**�i�� store.js markTpEdited �E tanpopo.js tpAffected�j�B
-     �n���Ȃ������Ăяo���́A���܂łǂ���w�����Ō��߂�i�������֓|���j�B */
+     いちど覚えたら、同じコマを続けて直しても**上書きしない**。
+     打鍵のたびに更新すると、物差しが自分の打鍵に追従して、競合を見逃す。 */
+  /* where ＝ そのコマがある年度と週。**渡さなければ、いま開いている週。**
+     競合したぶんを入れ直すときは、別の週のコマかもしれない。
+     いまの週として覚えると、別の週のコマを書き替えてしまう。 */
+  /* wasTitle ＝ 直す前に、その棚に入っていた題名。**たんぽぽの提出を覆すかを
+     決めるのに要る**（→ store.js markTpEdited ・ tanpopo.js tpAffected）。
+     渡さなかった呼び出しは、今までどおり層だけで決める（覆す側へ倒す）。 */
   function cellChanged(layer, target, d, slotId, baseAt, where, wasTitle){
     acknowledged = false;
     touched = true;
@@ -83,39 +83,37 @@ const Backend = (function(){
     schedule();
   }
 
-  /* **�Ō��ł͑���Ȃ��B** �肪�~�܂��Ă��΂炭�o���Ă���A�O�̂��ߑ���B
-     �ӂ���́u�ۑ��v���������Ƃ��E�T���ʂ�ς����Ƃ��E����Ƃ��ɑ���B */
-  function schedule(){ retry(180000); }        /* 3���B��肱�ڂ��̎󂯎M */
+  /* **打鍵では送らない。** 手が止まってしばらく経ってから、念のため送る。
+     ふだんは「保存」を押したとき・週や画面を変えたとき・閉じるときに送る。 */
+  function schedule(){ retry(180000); }        /* 3分。取りこぼしの受け皿 */
   function retry(ms){
     clearTimeout(timer);
     timer = setTimeout(() => flush(), ms);
   }
 
-  /* ���� ���������Ԃ� ������������������������������������������������������
-     �T�[�o�́A�Â���Ԃ���̕ۑ����R�}�P�ʂŎ~�߂� conflicts �ŕԂ�
-     �i�� gas/Store.gs writeCells�j�B**�~�܂������Ƃ���ʂɓ`���Ȃ��ƁA
-     ���t�͏���������ŏ����Ă��Ȃ��܂܏T��i�߂�B** */
+  /* ── 競合したぶん ───────────────────────────
+     サーバは、古い状態からの保存をコマ単位で止めて conflicts で返す
+     （→ gas/Store.gs writeCells）。**止まったことを画面に伝えないと、
+     教師は書けたつもりで書けていないまま週を進める。** */
   const cfKey = q => [q.date, q.slot, q.layer, q.target || ""].join("|");
 
-  /* ���̓��t���A�ǂ̔N�x�E�ǂ̏T�E�T�̉����ڂ����o���B
-     �����́A���܊J���Ă���T�̂��̂Ƃ͂�����Ȃ��i�T���ڂ�Ƃ��ɑ��邽�߁j�B */
+  /* その日付が、どの年度・どの週・週の何日目かを出す。
+     競合は、いま開いている週のものとはかぎらない（週を移るときに送るため）。 */
   function locOf(dateISO){
     const dt = parseISO(dateISO);
     if(!dt) return null;
-    const off = (dt.getDay() + 6) % 7;            /* ���j�� 0 �ɂ��� */
+    const off = (dt.getDay() + 6) % 7;            /* 月曜を 0 にする */
     const monday = iso(addDays(dt, -off));
-    /* �T�Ă̔N�x�̓R�}�̓��t�ł͂Ȃ��A���̏T�̌��j�Ō��܂�B
-       3/30 �̏T�ɂ��� 4/1 ����t�Ŕ��肷��ƁA�ۑ����ʂ��������N�x�̔���
-       ����A���̕ҏW�ŌÂ� expectedAt �𑗂��Ă��܂��B */
+    /* 週をまたいでも、月曜の年度へまとめる。3月30日の週は4月1日も前年度の週案。 */
     const monYear = +monday.slice(0, 4), monMonth = +monday.slice(5, 7);
-    return {year: (monMonth <= 3 ? monYear - 1 : monYear), monday, d: off};
+    return {year: monYear - (monMonth <= 3 ? 1 : 0), monday, d: off};
   }
 
   function takeConflicts(list, sent){
     if(!list || !list.length) return;
     for(const c of list){
       const loc = locOf(c.date);
-      if(!loc) continue;                          /* ���t���ǂ߂Ȃ��B�̂Ă��ɔ�΂� */
+      if(!loc) continue;                          /* 日付が読めない。捨てずに飛ばす */
       held.push({c, q: (sent || {})[cfKey(c)] || null, loc});
     }
     persistPending();
@@ -127,8 +125,8 @@ const Backend = (function(){
     persistPending(); onDirty(unsaved(), lastErr);
   };
 
-  /* **�����������Ƃ́A���̏T��K���ǂݒ����B**
-     �ǂݒ������ɑ��蒼���ƁA���Ă��Ȃ��ύX��������x�ׂ��ɂ������ƂɂȂ�B */
+  /* **競合したあとは、その週を必ず読み直す。**
+     読み直さずに送り直すと、見ていない変更をもう一度潰しにいくことになる。 */
   function reloadWeek(list, after){
     if(!onGas) return after();
     for(const h of (list || []))
@@ -138,7 +136,7 @@ const Backend = (function(){
     ready(after);
   }
 
-  /* ���钼�O�ɁA���܉�ʂ������Ă��钆�g��ǂ��1�R�}1���ɂ���B */
+  /* 送る直前に、いま画面が持っている中身を読んで1コマ1件にする。 */
   function patchOf(m){
     const w = (db.years[String(m.year)] || {weeks:{}}).weeks[m.monday];
     const bank = !w ? null
@@ -155,18 +153,18 @@ const Backend = (function(){
             subject: e ? (e.subject || "") : "",
             sp:      e ? (e.sp || "")      : "",
             remove:  !e,
-            /* **���̕ҏW���n�߂��Ƃ��A�������m���Ă����T�[�o�̍X�V�����B**
-               �T�[�o�́A���܃V�[�g�ɓ����Ă��鎞���Ƃ��������ׂ�B
-               �Ⴆ�΁A���̂������ɒN���������Ă���i�����j�B
+            /* **この編集を始めたとき、自分が知っていたサーバの更新時刻。**
+               サーバは、いまシートに入っている時刻とこれを見比べる。
+               違えば、そのあいだに誰かが書いている（競合）。
 
-               �茳�őł��������iat�j�ł͂Ȃ��B**�ł��т� at �͐i�ނ̂ŁA
-               ����𑗂�ƕK���H���Ⴂ�A�S���������ɂȂ�B**
-               �����O�ɍT�����l�ibaseAt�j���g���B�R�}����ɂ����Ƃ���
-               �������g�������̂ŁA�T���Ă����Ȃ��ƕ�������������B */
+               手元で打った時刻（at）ではない。**打つたびに at は進むので、
+               それを送ると必ず食い違い、全部が競合になる。**
+               直す前に控えた値（baseAt）を使う。コマを空にしたときは
+               もう中身が無いので、控えておかないと物差しが消える。 */
             expectedAt: +m.baseAt || 0};
   }
 
-  /* ���߂��Ԃ�𑗂�Bafter �͑���I����Ă���Ăԁi�������育������Ԃ����߁j�B */
+  /* 貯めたぶんを送る。after は送り終わってから呼ぶ（押した手ごたえを返すため）。 */
   function flush(after){
     if(after) flushWaiters.push(after);
     if(sending) return;
@@ -181,9 +179,9 @@ const Backend = (function(){
     }
     const batch = dirty;
     dirty = {}; dirtyN = 0; sending = true;
-    /* **�ǂ̃R�}���A�ǂ̒��g�ő����������o���Ă����B**
-       �������Ԃ��Ă����Ƃ��A�Ԃ��Ă���̂́u���܃V�[�g�ɓ����Ă�����́v�����B
-       ����������悤�Ƃ������g�́A������Ŏ����Ă��Ȃ��Əo���Ȃ��B */
+    /* **どのコマを、どの中身で送ったかを覚えておく。**
+       競合が返ってきたとき、返ってくるのは「いまシートに入っているもの」だけ。
+       自分が入れようとした中身は、こちらで持っていないと出せない。 */
     const byYear = {}, sent = {};
     for(const k in batch){
       const m = batch[k];
@@ -191,20 +189,20 @@ const Backend = (function(){
       sent[cfKey(q)] = q;
       (byYear[m.year] || (byYear[m.year] = [])).push(q);
     }
-    /* �ӂ���1�N�x�Ԃ�B�N�x���܂����Œ������Ƃ�����2��ɕ������ */
+    /* ふつうは1年度ぶん。年度をまたいで直したときだけ2回に分かれる */
     const years = Object.keys(byYear);
     let left = years.length, bad = false;
     const t0 = Date.now();
     for(const y of years){
-      /* **����Ԃ���A�������Ԃ�܂ōT���̑��ɂ��u���Ă����B**
-         �Ԏ�������O�ɉ�ʂ�����Ă��A���ɊJ�����Ƃ��ɑ��蒼���� */
+      /* **送るぶんを、成功が返るまで控えの側にも置いておく。**
+         返事が来る前に画面を閉じられても、次に開いたときに送り直せる */
       const id = ++flightId;
       inflight[id] = byYear[y];
       persistPending();
       google.script.run
         .withSuccessHandler(res => {
           editEpoch++;
-          delete inflight[id];            /* �V�[�g�ɓ������B�T������O���Ă悢 */
+          delete inflight[id];            /* シートに入った。控えから外してよい */
           noteTime(res, Date.now() - t0);
           applyServerTimes(res && res.at);
           takeConflicts(res && res.conflicts, sent);
@@ -219,12 +217,12 @@ const Backend = (function(){
         .withFailureHandler(err => {
           bad = true;
           delete inflight[id];
-          /* ����Ȃ������Ԃ�͎̂ĂȂ��B���̕ۑ��ł�����x���� */
+          /* 送れなかったぶんは捨てない。次の保存でもう一度送る */
           for(const k in batch) if(String(batch[k].year) === String(y)){
             if(!dirty[k]){ dirty[k] = batch[k]; dirtyN++; }
           }
-          lastErr = err && err.message ? err.message : "�ʐM�ł��Ȃ�";
-          notify("<b>�ۑ��ł��Ă��Ȃ�</b>�i" + escText(lastErr) + "�j�B������x�u�ۑ��v������");
+          lastErr = err && err.message ? err.message : "通信できない";
+          notify("<b>保存できていない</b>（" + escText(lastErr) + "）。もう一度「保存」を押す");
           if(!--left) sending = false;
           onDirty(unsaved(), lastErr);
           persistPending();
@@ -232,20 +230,17 @@ const Backend = (function(){
         })
         .apiWriteCells(+y, byYear[y]);
     }
-    /* **����n�߂Ă��A�����Ă��Ȃ����͌��炳�Ȃ��B** ���炷�ƁA�����������
-       �u�ۑ����݁v�Əo�āA�����ŕ����l�͓������Ǝv���Ă��܂� */
+    /* **送り始めても、入っていない数は減らさない。** 減らすと、押した直後に
+       「保存ずみ」と出て、そこで閉じた人は入ったと思ってしまう */
     onDirty(unsaved(), lastErr);
   }
-  /* ���� ����Ȃ��܂ܕ���ꂽ�Ԃ�������z�� ����������������
-     �����Ă���r���ŉ�ʂ������ƁA�V�[�g�ɓ���Ȃ��܂܏�����B
-     �茳�ilocalStorage�j�ɂ͒��g���c�邪�A���ɊJ�����Ƃ��V�[�g�̑���
-     �ǂݒ����̂ŁA**�V�[�g�ɖ������̂͏㏑������ď�����B**
+  /* ── 送れないまま閉じられたぶんを持ち越す ────────
+     送っている途中で画面を閉じられると、シートに入らないまま消える。
+     手元（localStorage）には中身が残るが、次に開いたときシートの側を
+     読み直すので、**シートに無いものは上書きされて消える。**
 
-     ������A�܂������Ă��Ȃ��R�}��**���g����**���̒[���ɍT���Ă����A
-     ���ɊJ�����Ƃ��ɑ��蒼���B���ꂽ��T�����̂Ă�B */
-  /* localStorage �͓����u���E�U�̑S�^�u�ŋ��ʁB�ۑ����̃^�u���ʃ^�u��
-     �T���������Ȃ��悤�A�^�u���Ƃɕۑ���𕪂���BsessionStorage ��ID��
-     �����^�u�̍ēǍ��ł͎c��̂ŁA�ʐM�f��̕�������ς��Ȃ��B */
+     だから、まだ送っていないコマは**中身ごと**この端末に控えておき、
+     次に開いたときに送り直す。送れたら控えを捨てる。 */
   function tabId(){
     const k = KEY + "/pending-tab";
     try{
@@ -263,21 +258,22 @@ const Backend = (function(){
   const LEGACY_PEND = KEY + "/pending";
   const LEGACY_HELD = KEY + "/conflicts";
   let pendT = 0;
-
-  /* 1.33.1 �܂ł̋��ʃL�[�Ɏc�����T���́A�ŏ��ɊJ�����^�u�ֈ�x�����ڂ��B
-     �V�����^�u���m�ł́A�e���̃L�[�ȊO��ǂ܂Ȃ��B */
   function savedList(key, legacy){
-    let list = null;
-    try{ list = JSON.parse(localStorage.getItem(key) || "null"); }catch(e){}
-    if(Array.isArray(list) && list.length) return list;
-    try{ list = JSON.parse(localStorage.getItem(legacy) || "null"); }catch(e){}
-    if(!Array.isArray(list) || !list.length) return [];
-    try{ localStorage.setItem(key, JSON.stringify(list)); localStorage.removeItem(legacy); }catch(e){}
-    return list;
+    try{
+      const v = JSON.parse(localStorage.getItem(key) || "null");
+      if(Array.isArray(v)) return v;
+      const old = JSON.parse(localStorage.getItem(legacy) || "[]");
+      if(Array.isArray(old) && old.length){
+        localStorage.setItem(key, JSON.stringify(old));
+        localStorage.removeItem(legacy);
+        return old;
+      }
+    }catch(e){}
+    return [];
   }
 
-  /* �T���ɏ������g�B**�܂������Ă��Ȃ��Ԃ�ƁA�����Ă���r���̂Ԃ�̗����B**
-     �����R�}�������ɂ���΁A���܉�ʂ������Ă���ق��idirty�j���������B */
+  /* 控えに書く中身。**まだ送っていないぶんと、送っている途中のぶんの両方。**
+     同じコマが両方にあれば、いま画面が持っているほう（dirty）が正しい。 */
   function pendingNow(){
     const seen = {}, out = [];
     for(const k in dirty){
@@ -298,28 +294,28 @@ const Backend = (function(){
       else localStorage.removeItem(HELD);
       if(list.length) localStorage.setItem(PEND, JSON.stringify(list));
       else localStorage.removeItem(PEND);
-    }catch(e){}                 /* �T�����Ȃ��Ă��A���܂̕ۑ��͎~�߂Ȃ� */
+    }catch(e){}                 /* 控えられなくても、いまの保存は止めない */
   }
   const persistSoon = () => { clearTimeout(pendT); pendT = setTimeout(persistPending, 900); };
 
-  /* �O�ɕ����Ƃ��̎����z���𑗂�B**�T��ǂݒ����O�ɑ���B**
-     ���Ƃ��瑗��ƁA�ǂݒ����ŏ��������g�𑗂邱�ƂɂȂ�B */
+  /* 前に閉じたときの持ち越しを送る。**週を読み直す前に送る。**
+     あとから送ると、読み直しで消えた中身を送ることになる。 */
   function sendPending(after){
     if(!onGas) return after();
     const list = savedList(PEND, LEGACY_PEND);
-    if(!list || !list.length) return after();
+    if(!list.length) return after();
     const byYear = {};
     for(const q of list){
       const loc = locOf(q.date);
       if(!loc) continue;
       (byYear[loc.year] || (byYear[loc.year] = [])).push(q);
     }
+    if(!Object.keys(byYear).length) return after();
     let left = Object.keys(byYear).length;
-    if(!left) return after();
-    /* **����Ȃ������Ԃ�͎̂ĂȂ��B** �O�͂����ōT���������Ă����B
-       ���������ƂɏT��ǂݒ����̂ŁA���钼�O�ɏ������R�}���A
-       �����̒ʐM1��̂܂�����**�i�v�ɏ����Ă���**�B�T�����v��̂�
-       �܂��ɂ��̎��̂̂��߂Ȃ̂ŁA���ꂽ���̂������T������O���B */
+    /* **送れなかったぶんは捨てない。** 前はここで控えを消していた。
+       消したあとに週を読み直すので、閉じる直前に書いたコマが、
+       翌朝の通信1回のつまずきで**永久に消えていた**。控えが要るのは
+       まさにこの事故のためなので、送れたものだけを控えから外す。 */
     const leftOver = [];
     const done = () => {
       if(--left) return;
@@ -333,8 +329,8 @@ const Backend = (function(){
     for(const y in byYear)
       (function(y, list){
         google.script.run
-          /* �����z��������������i���Ă��邠�����ɒN�����������j�B
-             **�����Ŗق��Ď̂Ă�ƁA����O�ɏ������Ԃ񂪏�����B** */
+          /* 持ち越しも競合しうる（閉じているあいだに誰かが直した）。
+             **ここで黙って捨てると、閉じる前に書いたぶんが消える。** */
           .withSuccessHandler(res => {
             const sent = {};
             for(const q of list) sent[cfKey(q)] = q;
@@ -342,8 +338,8 @@ const Backend = (function(){
             done();
           })
           .withFailureHandler(() => {
-            /* �T���Ɏc�������łȂ��A���܂̑���҂��ɂ��ςށB
-               ���Ɂu�ۑ��v���������Ƃ��ɁA������ꏏ�ɏo�Ă��� */
+            /* 控えに残すだけでなく、いまの送り待ちにも積む。
+               次に「保存」を押したときに、これも一緒に出ていく */
             for(const q of list){
               leftOver.push(q);
               const d = String(q.date).split("-");
@@ -358,17 +354,17 @@ const Backend = (function(){
               }
             }
             onDirty(unsaved(), lastErr);
-            notify("<b>�O�ɕ����Ƃ��̂Ԃ�𑗂�Ȃ�����</b>�i" + list.length
-                 + " �R�}�j�B������x�u�ۑ��v������");
+            notify("<b>前に閉じたときのぶんを送れなかった</b>（" + list.length
+                 + " コマ）。もう一度「保存」を押す");
             done();
           })
           .apiWriteCells(+y, list);
       })(y, byYear[y]);
   }
 
-  /* **�܂��V�[�g�ɓ����Ă��Ȃ��R�}�̐��B** �����Ă���r���̂Ԃ��������B
-     �����Ȃ��ƁA����������Ɂu�ۑ����݁v�Əo�Ă��܂��A
-     �����ŕ����l�͓������Ǝv���Ă��܂��B */
+  /* **まだシートに入っていないコマの数。** 送っている途中のぶんも数える。
+     数えないと、押した直後に「保存ずみ」と出てしまい、
+     そこで閉じた人は入ったと思ってしまう。 */
   const unsaved = () => {
     let n = dirtyN + held.length;
     for(const id in inflight) n += inflight[id].length;
@@ -377,12 +373,12 @@ const Backend = (function(){
   const setDirtyWatcher = fn => { onDirty = fn; fn(unsaved(), lastErr); };
   const setConflictWatcher = fn => { onConflict = fn; };
 
-  /* �T�[�o���ł��������Ŏ茳�̍T���𒼂��B
-     ���t���ꂼ��� PC �̎��v�ŏ������������߂�ƁA���v���i��ł���l�� always ���B */
+  /* サーバが打った時刻で手元の控えを直す。
+     教師それぞれの PC の時計で勝ち負けを決めると、時計が進んでいる人が always 勝つ。 */
   function applyServerTimes(at){
     if(!at) return;
     for(const k in at){
-      const p = k.split("|");            /* ���t|����|�w|�Ώ� */
+      const p = k.split("|");            /* 日付|時程|層|対象 */
       for(const m of Object.values(dirty)){
         const q = patchOf(m);
         if(cfKey(q) === k) m.baseAt = at[k];
@@ -395,28 +391,28 @@ const Backend = (function(){
                  : p[2] === "grade"  ? w.grade[p[3]]
                  : p[2] === "special"? w.special[p[3]]
                  : w.home[p[3]];
-      /* **�T�[�o���ł��������B** ���ɂ��̃R�}�𒼂��Ƃ��̕������ɂȂ� */
+      /* **サーバが打った時刻。** 次にこのコマを直すときの物差しになる */
       if(bank && bank[key]){ bank[key].at = at[k]; bank[key].sat = at[k]; }
     }
   }
 
-  /* ���� �ǂݍ��� ����������������������������������������������������������������
-     �茳�ł͉������Ȃ��idb �����̂܂ܐ��{�j�B
-     �{�Ԃł́A���̔N�x�ƏT���V�[�g��������ă������ɍڂ���B */
+  /* ── 読み込み ────────────────────────────────
+     手元では何もしない（db がそのまま正本）。
+     本番では、その年度と週をシートから引いてメモリに載せる。 */
 
-  /* �����オ��B**�ݒ�ƁA���܂̔N�x�̂Ԃ��1��ł��炤�B**
-     �ʁX�Ɏ��ɍs���ƁA�������o��܂łɂ��̉񐔂����҂��ƂɂȂ�B */
+  /* 立ち上がり。**設定と、いまの年度のぶんを1回でもらう。**
+     別々に取りに行くと、入口が出るまでにその回数だけ待つことになる。 */
   let booted = false;
   const waiters = [];
-  /* �����オ��ł�������A**�����ƒu���ꏊ�̂���**�B�Ǘ���ʂɏo���B
-     �茳�ŊJ���Ă���Ƃ��͋�̂܂܁i�T�[�o�ɕ����Ă��Ȃ��̂ŕ�����Ȃ��j�B */
-  /* isAdmin ��**��ʂ��B�����߂���**�B�֖�̓T�[�o�� checkAdmin �����B
-     �茳�iGAS�łȂ��j�ł͉B���Ȃ� ���� �G�����̂������ƁA�����Ă��邩�m���߂��Ȃ� */
+  /* 立ち上がりでもらった、**自分と置き場所のこと**。管理画面に出す。
+     手元で開いているときは空のまま（サーバに聞いていないので分からない）。 */
+  /* isAdmin は**画面を隠すためだけ**。関門はサーバの checkAdmin が持つ。
+     手元（GASでない）では隠さない ── 触れるものが無いと、直せているか確かめられない */
   let bootInfo = {me:"", file:"", archived:{}, isAdmin:!onGas};
 
-  /* **�ۑ��ɂ����������Ԃ��A�ŋ߂̂Ԃ񂾂��o����B**
-     �����Ȃ��Ă������ƂɁA�N��������O�ɋC�Â����߁B
-     ���ߍ��܂Ȃ��i�傫�Ȋč����O�͍��Ȃ��B���΍�����ŒN�����Ȃ��j�B */
+  /* **保存にかかった時間を、最近のぶんだけ覚える。**
+     長くなってきたことに、誰かが困る前に気づくため。
+     溜め込まない（大きな監査ログは作らない。作れば作ったで誰も見ない）。 */
   const TIMES = 20;
   const times = [];
   function noteTime(res, roundMs){
@@ -425,8 +421,8 @@ const Backend = (function(){
                 cells: +res.count || 0, sheets: +res.sheets || 0});
     while(times.length > TIMES) times.shift();
   }
-  /* �x���ق����猩��B**���ς́A���܂ɏo��x�����B���B**
-     ����̂́u���܂�10�b�҂������v�ق��ŁA���ς��������Ƃł͂Ȃ��B */
+  /* 遅いほうから見る。**平均は、たまに出る遅さを隠す。**
+     困るのは「たまに10秒待たされる」ほうで、平均が速いことではない。 */
   function saveTimes(){
     if(!times.length) return null;
     const pick = f => times.map(f).sort((a, b) => a - b);
@@ -439,9 +435,9 @@ const Backend = (function(){
   const info = () => ({me: bootInfo.me, file: bootInfo.file, gas: !!onGas,
                       isAdmin: !!bootInfo.isAdmin,
                       archived: bootInfo.archived || {}, times: saveTimes()});
-  /* ���̔N�x�͑ޔ����݂��B**�ޔ����݂̔N�x�ɁA�������킸�Ɏ����o���Ȃ��B**
-     �T�Ă̍s�͂����{�̂ɖ����̂ŁA��{���Ԋ������̎����o��B
-     �����ق��ďo���Ɓu�T�Ă��S���������v�ƌ�����B */
+  /* その年度は退避ずみか。**退避ずみの年度に、何も言わずに紙を出さない。**
+     週案の行はもう本体に無いので、基本時間割だけの紙が出る。
+     それを黙って出すと「週案が全部消えた」と言われる。 */
   const archivedYear = y => (bootInfo.archived || {})[String(y)] || null;
   function boot(after){
     if(!onGas){ booted = true; return after(); }
@@ -456,10 +452,10 @@ const Backend = (function(){
       after();
       while(waiters.length) waiters.shift()();
     };
-    /* google.script.run �͉���f�Ő����E���s�̂ǂ�����Ԃ�Ȃ����Ƃ�����B
-       �����ƏT�ړ����i�v�ɑ҂������A�[���̍T���ŊJ�����Ԃ֖߂��B */
+    /* google.script.run は回線断で成功・失敗のどちらも返らないことがある。
+       入口と週移動を永久に待たせず、端末の控えで開ける状態へ戻す。 */
     const timer = setTimeout(() => {
-      notify("�ŏ��̓ǂݍ��݂Ɏ��Ԃ��������Ă���B<b>�[���̍T���ŊJ����</b>�B������m���߂čēǂݍ��݂��Ă�������");
+      notify("最初の読み込みに時間がかかっている。<b>端末の控えで開いた</b>。回線を確かめて再読み込みしてください");
       finish();
     }, 15000);
     google.script.run
@@ -470,59 +466,59 @@ const Backend = (function(){
         if(b.subjects && b.subjects.length) setSubjects(b.subjects);
         if(b.config)  applyConfig(b.config);
         if(b.year) applyYear(String(b.year), b);
-        /* **�T��ǂݒ����O�ɁA�����z���𑗂�B** */
+        /* **週を読み直す前に、持ち越しを送る。** */
         sendPending(() => {
           finish();
         });
       })
       .withFailureHandler(e => {
-        notify("�J���Ȃ������i" + escText(String(e && e.message)) + "�j");
-        finish();                   /* �J���Ȃ��Ă��~�߂Ȃ��B�茳�̍T���ő����� */
+        notify("開けなかった（" + escText(String(e && e.message)) + "）");
+        finish();                   /* 開けなくても止めない。手元の控えで続ける */
       })
       .apiBoot(fy());
   }
   const whenBooted = fn => booted ? fn() : waiters.push(fn);
 
   const loadedYear = {}, loadedWeek = {};
-  /* **��x�ǂ񂾂��x�Ɠǂݒ����Ȃ��A����߂�B**
-     30�l�������T��G��^�p�Ȃ̂ɁA�^�u���J�����܂܂̒S�C�ɂ�
-     ���̓��ق��̒N���������Ă��f��Ȃ������B�u���ɊJ�����Ƃ��ɒm�点��v
-     �idocs/spec.md 3�߁j��"�J�����Ƃ�"���A���ۂɂ͍ēǂݍ��݂������������B
+  /* **一度読んだら二度と読み直さない、をやめる。**
+     30人が同じ週を触る運用なのに、タブを開いたままの担任には
+     その日ほかの誰が何を入れても映らなかった。「次に開いたときに知らせる」
+     （docs/spec.md 3節）の"開いたとき"が、実際には再読み込みしか無かった。
 
-     �ǂ񂾎������o���Ă����A�Â��Ȃ��Ă������ʂ��J���Ƃ��ɓǂݒ����B
-     �����ɓǂݒ����̂ł͂Ȃ��Ԃ�u���̂́A�N���X�𑱂��Č���Ƃ���
-     1�����������Ȃ����߁B */
-  const FRESH_MS = 60000;          /* ������Â��T���́A�J���Ƃ��ɓǂݒ��� */
-  const WATCH_MS = 180000;         /* �J�����ςȂ��̉�ʂ��A���ꂲ�ƂɌ��ɍs�� */
+     読んだ時刻を覚えておき、古くなっていたら画面を開くときに読み直す。
+     すぐに読み直すのではなく間を置くのは、クラスを続けて見るときに
+     1つずつ往復させないため。 */
+  const FRESH_MS = 60000;          /* これより古い控えは、開くときに読み直す */
+  const WATCH_MS = 180000;         /* 開きっぱなしの画面を、これごとに見に行く */
   const fresh_ = tag => (loadedWeek[tag] || 0) > Date.now() - FRESH_MS;
 
   function applyYear(y, r){
-    if(String(y) !== String(fy())) return;  /* ���܊J���Ă���N�x�̂Ԃ񂾂� */
+    if(String(y) !== String(fy())) return;  /* いま開いている年度のぶんだけ */
     const Yr = Y();
     if(r.roster){
       if(r.roster.classes && Object.keys(r.roster.classes).length) Yr.classes = r.roster.classes;
       if(r.roster.specials && r.roster.specials.length)            Yr.specials = r.roster.specials;
       if(r.roster.week1) Yr.week1 = r.roster.week1;
-      /* ��������̂����i�S���O�����N�x������j�B�L���ł͂Ȃ��A�Ԃ��Ă������Ō��� */
+      /* 空も答えのうち（全部外した年度がある）。有無ではなく、返ってきたかで見る */
       if(r.roster.tanpopo !== undefined && r.roster.tanpopo !== null)
         Yr.tanpopo = tpNorm_(r.roster.tanpopo);
     }
     Yr.base = r.base || {};
-    /* �N�ԍs���B**��������̂���**�i�܂��\���Ă��Ȃ��N�x������j */
+    /* 年間行事。**空も答えのうち**（まだ貼っていない年度がある） */
     if(r.events !== undefined && r.events !== null) Yr.events = r.events;
-    /* **�ǂ߂Ȃ������s�͖ق��Ď̂ĂȂ��B** �����Ă��Ȃ��̂��ǂ߂Ă��Ȃ��̂���
-       ������Ȃ��ƁA�V�[�g�����Ȃ��牽�x�������������ƂɂȂ� */
+    /* **読めなかった行は黙って捨てない。** 入っていないのか読めていないのかが
+       分からないと、シートを見ながら何度も書き直すことになる */
     if(r.warn && r.warn.length)
-      notify("<b>��{���Ԋ��V�[�g�ɓǂ߂Ȃ��s������</b>�i" + r.warn.length + "�s�j�F<br>"
+      notify("<b>基本時間割シートに読めない行がある</b>（" + r.warn.length + "行）：<br>"
            + r.warn.slice(0, 3).map(escText).join("<br>")
-           + (r.warn.length > 3 ? "<br>�ق� " + (r.warn.length - 3) + "�s" : ""));
+           + (r.warn.length > 3 ? "<br>ほか " + (r.warn.length - 3) + "行" : ""));
     loadedYear[y] = true;
   }
 
   function ensureYear(after){
     if(!onGas) return after();
     const y = String(fy());
-    Y();                                   /* ���̔N�x�̓��ꕨ��p�ӂ��Ă��� */
+    Y();                                   /* その年度の入れ物を用意しておく */
     if(loadedYear[y]) return after();
     let finished = false;
     const finish = () => {
@@ -532,37 +528,37 @@ const Backend = (function(){
       after();
     };
     const timer = setTimeout(() => {
-      notify("�N�x�̐ݒ�̓ǂݍ��݂Ɏ��Ԃ��������Ă���B�[���̍T���ő�����");
+      notify("年度の設定の読み込みに時間がかかっている。端末の控えで続ける");
       finish();
     }, 15000);
     google.script.run
       .withSuccessHandler(r => {
-        /* ����ۂی𗬋��͋�������̂����i�S���O�����N�x������j�B
-           �L���ł͂Ȃ��A�z�񂪕Ԃ��Ă������ǂ����Ō���iapplyYear �̒��j */
+        /* たんぽぽ交流級は空も答えのうち（全部外した年度がある）。
+           有無ではなく、配列が返ってきたかどうかで見る（applyYear の中） */
         applyYear(y, r);
         finish();
       })
-      /* **�ǂ߂Ȃ��Ă���֐i�ށB** �i�܂Ȃ��ƁA�J��������̉�ʂ��o�Ȃ��܂�
-         �O�̉�ʂ��c��A�ǂ������Ă���̂�������Ȃ��Ȃ�B
-         ���g�͎茳�̍T���̂܂܁B�ǂ߂Ȃ��������Ƃ͑тŌ����B */
+      /* **読めなくても先へ進む。** 進まないと、開いたつもりの画面が出ないまま
+         前の画面が残り、どこを見ているのか分からなくなる。
+         中身は手元の控えのまま。読めなかったことは帯で言う。 */
       .withFailureHandler(e => {
-        notify("�N�x�̐ݒ��ǂ߂Ȃ������i" + escText(String(e && e.message)) + "�j");
+        notify("年度の設定を読めなかった（" + escText(String(e && e.message)) + "）");
         finish();
       })
       .apiReadYear(+y);
   }
 
-  /* **���̉�ʂɗv��V�[�g������ǂށB**
-     �T�Ă̓N���X���Ƃ�1������̂ŁA�S���ǂނ�27���Ԃ�҂��ƂɂȂ�B
-     3-3 ���J���Ȃ�u�T�� 3-3�v�u�T�� 3�N�v�u�T�� �S�Z�v��3���ő����B */
+  /* **その画面に要るシートだけを読む。**
+     週案はクラスごとに1枚あるので、全部読むと27枚ぶん待つことになる。
+     3-3 を開くなら「週案 3-3」「週案 3年」「週案 全校」の3枚で足りる。 */
   function ensureWeek(after){
     if(!onGas) return after();
     const want = targetsForView().filter(t => !fresh_(weekTag(t)));
     if(!want.length) return after();
-    /* **�ǂ̔N�x�E�ǂ̏T�ɗ��񂾂̂����o���Ă����B**
-       �Ԏ������邱��ɂ́A�����ʂ̏T�����Ă��邩������Ȃ��B
-       ���܌��Ă���T�֓���Ă��܂��ƁA���̏T�̒��g��������B
-       �Z���̉���ł͕Ԏ��̏���������ւ��i�Â��T�̕Ԏ������Ƃ���͂��j�B */
+    /* **どの年度・どの週に頼んだのかを覚えておく。**
+       返事が来るころには、もう別の週を見ているかもしれない。
+       いま見ている週へ入れてしまうと、その週の中身が消える。
+       校内の回線では返事の順序が入れ替わる（古い週の返事があとから届く）。 */
     const year = fy(), mon = wkKey(), epoch = editEpoch;
     let finished = false;
     const finish = () => {
@@ -572,7 +568,7 @@ const Backend = (function(){
       after();
     };
     const timer = setTimeout(() => {
-      notify("���̏T�̓ǂݍ��݂Ɏ��Ԃ��������Ă���B<b>�[���̍T���ŊJ����</b>");
+      notify("この週の読み込みに時間がかかっている。<b>端末の控えで開いた</b>");
       finish();
     }, 15000);
     google.script.run
@@ -581,24 +577,24 @@ const Backend = (function(){
         finish();
       })
       .withFailureHandler(e => {
-        notify("���̏T��ǂ߂Ȃ������i" + escText(String(e && e.message))
-             + "�j�B<b>���̏T�͂܂������Ȃ�</b>");
+        notify("この週を読めなかった（" + escText(String(e && e.message))
+             + "）。<b>この週はまだ書かない</b>");
         finish();
       })
       .apiReadWeek(year, mon, want);
   }
-  /* **�������̏T���A�܂Ƃ߂ēǂށB** ���̖ʂ�4�T�Ԃ����x�ɏo���B
-     1�T���J���ēǂ܂���ƁA4��҂��ƂɂȂ�B
-     ���܌��Ă����ʂɗv��Ώۂ����ǂށi27���͓ǂ܂Ȃ��j�B */
+  /* **いくつかの週を、まとめて読む。** 月の面は4週ぶんを一度に出す。
+     1週ずつ開いて読ませると、4回待つことになる。
+     いま見ている画面に要る対象だけ読む（27枚は読まない）。 */
   function readWeeks(mons, after){
     if(!onGas) return after();
     const want = targetsForView();
     const year = fy(), epoch = editEpoch;
     const todo = (mons || []).filter(m => want.some(t => !fresh_(weekTag(t, year, m))));
     if(!todo.length || !want.length) return after();
-    /* **��x�ɓ����鐔��}����B** �J�����_�[�̖ʂ͔N�x�͂��߂���̗݌v���o���̂ŁA
-       3���ɂ� 45 �T�Ԃ�ɂȂ�B45 �{�𓯎��ɓ������ GAS ���ŋl�܂�A
-       �ǂ���Ԃ�Ȃ��܂ܑ҂��̕\�����c��B */
+    /* **一度に投げる数を抑える。** カレンダーの面は年度はじめからの累計を出すので、
+       3月には 45 週ぶんになる。45 本を同時に投げると GAS 側で詰まり、
+       どれも返らないまま待ちの表示が残る。 */
     let left = todo.length, next = 0;
     const done = () => { if(--left <= 0) after(); else fire(); };
     function fire(){
@@ -606,16 +602,16 @@ const Backend = (function(){
       const m = todo[next++];
       google.script.run
         .withSuccessHandler(w => { mergeWeek(want, w, year, m, epoch); done(); })
-        /* **�ǂ߂Ȃ��Ă���֐i�ށB** �i�܂Ȃ��ƁA�J��������̖ʂ��o�Ȃ� */
+        /* **読めなくても先へ進む。** 進まないと、開いたつもりの面が出ない */
         .withFailureHandler(() => done())
         .apiReadWeek(year, m, want);
     }
     for(let i = 0; i < AT_ONCE && i < todo.length; i++) fire();
   }
   const AT_ONCE = 8;
-  /* **�S�N���X�Ԃ�̏T��ǂށB** �����W�v��27�N���X�S���𐔂���̂ŁA
-     ���܊J���Ă���ʁi3���j�����ł͑���Ȃ��B
-     �����W�v�̃{�^�����炵���Ă΂Ȃ� ���� �ӂ���̉�ʂł͓ǂ݂����ɂȂ�B */
+  /* **全クラスぶんの週を読む。** 時数集計は27クラス全部を数えるので、
+     いま開いている面（3枚）だけでは足りない。
+     時数集計のボタンからしか呼ばない ── ふだんの画面では読みすぎになる。 */
   function readWeeksAll(mons, after){
     if(!onGas) return after();
     const want = allTargets();
@@ -635,9 +631,9 @@ const Backend = (function(){
     for(let i = 0; i < AT_ONCE && i < todo.length; i++) fire();
   }
 
-  /* �n�������j�̂����A**�܂��ǂ�ł��Ȃ��T�̐�**�B
-     �����̏W�v�́A�ǂ߂Ă��Ȃ��T���u��{���Ԋ��ǂ���v�Ƃ��Đ�����̂ŁA
-     �o���Ă��鐔���ǂꂾ�������݂Ȃ̂����A��ʂŌ�����悤�ɂ���B */
+  /* 渡した月曜のうち、**まだ読んでいない週の数**。
+     時数の集計は、読めていない週を「基本時間割どおり」として数えるので、
+     出している数がどれだけ見込みなのかを、画面で言えるようにする。 */
   function unread(mons, year){
     if(!onGas) return 0;
     const want = targetsForView(), y = year === undefined ? fy() : year;
@@ -648,8 +644,8 @@ const Backend = (function(){
     (year === undefined ? fy() : year) + "/" + (mon === undefined ? wkKey() : mon)
     + "/" + t.layer + "/" + (t.target || "");
 
-  /* �܂������Ă��Ȃ��R�}������Ώۂ́A�ǂݒ����ŏ㏑�����Ȃ��B
-     **�㏑������ƁA�������̂ɏ������悤�Ɍ�����B** */
+  /* まだ送っていないコマがある対象は、読み直しで上書きしない。
+     **上書きすると、書いたのに消えたように見える。** */
   function hasPending(layer, target, year, mon){
     const matches = m => m.layer === layer && m.target === (target || "")
       || layer === "home" && m.layer === "special" && m.target === target;
@@ -664,22 +660,22 @@ const Backend = (function(){
     return false;
   }
 
-  /* **���̃N���X��҂����Ȃ��B** 1�J�������ƁA�肪�󂢂Ă��邤����
-     ���̏T�̎c���ǂ�ł����B�J�����т�1�����҂̂́A
-     3�N���X���邾����3��҂Ƃ������ƁB */
+  /* **次のクラスを待たせない。** 1つ開いたあと、手が空いているうちに
+     この週の残りを読んでおく。開くたびに1往復待つのは、
+     3クラス見るだけで3回待つということ。 */
   let preT = 0;
   function prefetchWeek(){
     if(!onGas) return;
     clearTimeout(preT);
     preT = setTimeout(() => {
-      /* ��ǂ݂�**��x���ǂ�ł��Ȃ�����**�����B�Â��Ȃ��������̂��̂܂�
-         ��ǂ݂���ƁA�J���Ă����Ȃ��N���X�̂��߂ɖ����ǂ݂ɍs�����ƂɂȂ� */
+      /* 先読みは**一度も読んでいないもの**だけ。古くなっただけのものまで
+         先読みすると、開いてもいないクラスのために毎分読みに行くことになる */
       const want = allTargets().filter(t => !loadedWeek[weekTag(t)]);
       if(!want.length || sending) return;
       const year = fy(), mon = wkKey(), epoch = editEpoch;
       google.script.run
         .withSuccessHandler(w => mergeWeek(want, w, year, mon, epoch))
-        .withFailureHandler(() => {})     /* ��ǂ݂����s���Ă��A�J���Ƃ��ɓǂݒ��� */
+        .withFailureHandler(() => {})     /* 先読みが失敗しても、開くときに読み直す */
         .apiReadWeek(year, mon, want);
     }, 1200);
   }
@@ -690,29 +686,29 @@ const Backend = (function(){
     return out;
   }
 
-  /* year/mon �́u���񂾂Ƃ��̔N�x�ƏT�v�B�n����Ȃ���΁A���܂̔N�x�ƏT�B
-     **���񂾐�̏T�֓����B** ���܌��Ă���T�֓����ƁA
-     �Ԏ����x�ꂽ�Ԃ񂾂��ʂ̏T�̒��g��������B */
+  /* year/mon は「頼んだときの年度と週」。渡されなければ、いまの年度と週。
+     **頼んだ先の週へ入れる。** いま見ている週へ入れると、
+     返事が遅れたぶんだけ別の週の中身が消える。 */
   function mergeWeek(want, w, year, mon, epoch){
     if(epoch !== undefined && epoch !== editEpoch) return;
-    dataTick++;                      /* ���������̂̎��u�����Â����� */
+    dataTick++;                      /* 数えたものの取り置きを古くする */
     const y = (year === undefined) ? fy() : year;
     const m = (mon  === undefined) ? wkKey() : mon;
     const Yr = db.years[String(y)];
-    if(!Yr || !Yr.weeks) return;      /* ���̔N�x���������� */
+    if(!Yr || !Yr.weeks) return;      /* その年度がもう無い */
     const cur = Yr.weeks[m] || (Yr.weeks[m] =
       {school:{}, grade:{}, special:{}, home:{}, acked:[], variant:"A"});
-    /* �T�[�o���痈���R�}�ɂ́A**���̎������u�m���Ă��������v�Ƃ��čT����**�B
-       ���ɂ��̃R�}�𒼂��Ƃ��A����� expectedAt �Ƃ��đ���B
-       �T�[�o�� sat�i�X�V�����������s�� -1�j��t���ĕԂ��B�t���Ă��Ȃ��̂�
-       �Â��ł̃T�[�o�Ȃ̂ŁA���̂Ƃ����� at �őウ��B */
+    /* サーバから来たコマには、**その時刻を「知っていた時刻」として控える**。
+       次にこのコマを直すとき、これを expectedAt として送る。
+       サーバは sat（更新時刻が無い行は -1）を付けて返す。付いていないのは
+       古い版のサーバなので、そのときだけ at で代える。 */
     const stamp = bank => {
       for(const k in (bank || {}))
         if(bank[k].sat === undefined) bank[k].sat = bank[k].at || 0;
       return bank || {};
     };
     for(const t of want){
-      /* �܂������Ă��Ȃ��R�}������Ώۂ͐G��Ȃ� */
+      /* まだ送っていないコマがある対象は触らない */
       if(hasPending(t.layer, t.target, y, m)) continue;
       if(t.layer === "school")     cur.school = stamp(w.school);
       else if(t.layer === "grade") cur.grade[t.target]  = stamp((w.grade || {})[t.target]);
@@ -722,8 +718,8 @@ const Backend = (function(){
       }
       loadedWeek[weekTag(t, y, m)] = Date.now();
     }
-    /* **��o�̈�́A�Ώۂɂ�����炸�ڂ��ւ���B**
-       �T���Ƃ̎������̂ŁA�ǂ̃N���X��ǂ񂾂��Ƃ͊֌W���Ȃ� */
+    /* **提出の印は、対象にかかわらず載せ替える。**
+       週ごとの持ちもので、どのクラスを読んだかとは関係しない */
     if(w && w.submits){
       for(const c of Object.keys(w.submits)){
         if(hasPending('home', c, y, m) || hasPending('grade', gradeOf(c), y, m)
@@ -734,12 +730,12 @@ const Backend = (function(){
       if(typeof paintTpSub === 'function') paintTpSub();
     }
   }
-  /* **�J�����ςȂ��̉�ʂ��A���܂ɓǂݒ����B**
-     �ؗj�̗[����30�l�������T��G��^�p�ŁA�J�����܂ܒu���Ă���S�C��
-     �ق��̐l�̏������݂�1���f��Ȃ��̂������΂񍢂�B
+  /* **開きっぱなしの画面を、たまに読み直す。**
+     木曜の夕方に30人が同じ週を触る運用で、開いたまま置いている担任に
+     ほかの人の書き込みが1つも映らないのがいちばん困る。
 
-     ���Ă��Ȃ��^�u�ł͓ǂ܂Ȃ��i�d�r�Ɖ�����g��Ȃ��j�B
-     �܂������Ă��Ȃ��R�}������Ώۂ́A�ǂݒ����Ă��G��Ȃ��ihasPending�j�B */
+     見ていないタブでは読まない（電池と回線を使わない）。
+     まだ送っていないコマがある対象は、読み直しても触らない（hasPending）。 */
   let watchT = 0;
   function watch(){
     clearInterval(watchT);
@@ -753,8 +749,8 @@ const Backend = (function(){
       });
     }, WATCH_MS);
   }
-  /* ���܊J���Ă����ʂ̍T�����u�Â��v���Ƃɂ���B���ɓǂނƂ��ɓǂݒ����B
-     **�^�u�֖߂��Ă����l�������΂�Â����̂����Ă���**�̂ŁA�����ŕK��1��ǂށB */
+  /* いま開いている画面の控えを「古い」ことにする。次に読むときに読み直す。
+     **タブへ戻ってきた人がいちばん古いものを見ている**ので、そこで必ず1回読む。 */
   function stale(){
     for(const t of targetsForView()) delete loadedWeek[weekTag(t)];
   }
@@ -765,23 +761,23 @@ const Backend = (function(){
     ensureWeek(() => { if(typeof paintSheet === "function") paintSheet(); });
   });
 
-  /* �T��N�x���J���Ƃ��̓����B�茳�ł͑����̏�ő����B
-     �����オ���1�񂪂܂��Ԃ��Ă��Ȃ���΁A�����҂��Ă���ǂ�
-     �i�҂��Ȃ��ƁA�V�[�g�̎�����m��Ȃ��܂܎���g��ł��܂��j�B */
+  /* 週や年度を開くときの入口。手元では即その場で続く。
+     立ち上がりの1回がまだ返っていなければ、それを待ってから読む
+     （待たないと、シートの時程を知らないまま紙を組んでしまう）。 */
   const ready = after => whenBooted(() => ensureYear(() => ensureWeek(after)));
   const readyYear = after => whenBooted(() => ensureYear(after));
 
-  /* ���� �ݒ�̏������� ������������������������������������������������������ */
+  /* ── 設定の書き込み ─────────────────────────── */
 
   function saveRoster(){
     if(!onGas) return save();
     const Yr = Y();
     google.script.run
-      .withFailureHandler(e => notify("�w���Ґ���ۑ��ł��Ȃ������i" + escText(String(e && e.message)) + "�j"))
+      .withFailureHandler(e => notify("学級編成を保存できなかった（" + escText(String(e && e.message)) + "）"))
       .apiWriteRoster(fy(), Yr.classes, Yr.specials, Yr.week1, Yr.tanpopo || {});
   }
-  /* ���Ȃ̕\�����B**�N���X��N�x�ɕR�Â��Ȃ�**�i�w�Z��1�j�̂ŔN�x�𑗂�Ȃ��B
-     �茳�ł͑���悪�����̂ŁA�T�����������čςɂ��� */
+  /* 教科の表し方。**クラスや年度に紐づかない**（学校で1つ）ので年度を送らない。
+     手元では送る先が無いので、控えだけ書いて済にする */
   function saveSubjects(rows, then){
     if(!onGas){ save(); if(then) then(true); return; }
     google.script.run
@@ -790,7 +786,7 @@ const Backend = (function(){
         if(then) then(true);
       })
       .withFailureHandler(e => {
-        notify("���Ȃ̕\������ۑ��ł��Ȃ������i" + escText(String(e && e.message)) + "�j");
+        notify("教科の表し方を保存できなかった（" + escText(String(e && e.message)) + "）");
         if(then) then(false);
       })
       .apiWriteSubjects(rows);
@@ -798,105 +794,105 @@ const Backend = (function(){
   function saveBase(cls, variant){
     if(!onGas) return save();
     google.script.run
-      .withFailureHandler(e => notify("��{���Ԋ���ۑ��ł��Ȃ������i" + escText(String(e && e.message)) + "�j"))
+      .withFailureHandler(e => notify("基本時間割を保存できなかった（" + escText(String(e && e.message)) + "）"))
       .apiWriteBase(fy(), cls, variant, ((Y().base[cls] || {})[variant]) || {});
   }
 
-  /* �Œ莞�Ԋ��̎�荞�݁B**20�N���X�~A�TB�T��1��ő���B**
-     1�N���X������ƁA�r���Ő؂ꂽ�Ƃ��ɔ��������������\���c��B */
+  /* 固定時間割の取り込み。**20クラス×A週B週を1回で送る。**
+     1クラスずつ送ると、途中で切れたときに半分だけ入った表が残る。 */
   function saveBaseAll(list, after){
     if(!onGas){ save(); return after && after(); }
     const table = {}, B = Y().base;
     for(const c of list) if(B[c]) table[c] = {A:B[c].A || {}, B:B[c].B || {}};
     google.script.run
       .withSuccessHandler(r => after && after(r))
-      .withFailureHandler(e => notify("��{���Ԋ���ۑ��ł��Ȃ������i" + (e && e.message) + "�j"))
+      .withFailureHandler(e => notify("基本時間割を保存できなかった（" + (e && e.message) + "）"))
       .apiWriteBaseAll(fy(), table);
   }
 
-  /* �N�x�̑ޔ��B**������^�ƍ�����^���� ��3�ɕ����Ă���B**
-     1�ɂ܂Ƃ߂�ƁA�m���߂��ɏ����Ă��܂��B */
+  /* 年度の退避。**数える／照合する／消す の3つに分けてある。**
+     1つにまとめると、確かめずに消せてしまう。 */
   function archiveCount(year, ok, ng){
-    if(!onGas) return ng("�茳�ł̓V�[�g�ɂȂ����Ă��Ȃ��̂ŁA�ޔ��ł��Ȃ�");
+    if(!onGas) return ng("手元ではシートにつながっていないので、退避できない");
     google.script.run
       .withSuccessHandler(r => ok(r))
-      .withFailureHandler(e => ng("�������Ȃ������i" + (e && e.message) + "�j"))
+      .withFailureHandler(e => ng("数えられなかった（" + (e && e.message) + "）"))
       .apiArchiveCount(+year);
   }
   function archiveVerify(year, url, ok, ng){
-    if(!onGas) return ng("�茳�ł̓V�[�g�ɂȂ����Ă��Ȃ��̂ŁA�ƍ��ł��Ȃ�");
+    if(!onGas) return ng("手元ではシートにつながっていないので、照合できない");
     google.script.run
       .withSuccessHandler(r => ok(r))
-      .withFailureHandler(e => ng("�ƍ��ł��Ȃ������i" + (e && e.message) + "�j"))
+      .withFailureHandler(e => ng("照合できなかった（" + (e && e.message) + "）"))
       .apiArchiveVerify(+year, url);
   }
   function archivePurge(year, url, typed, ok, ng){
-    if(!onGas) return ng("�茳�ł̓V�[�g�ɂȂ����Ă��Ȃ��̂ŁA�����Ȃ�");
+    if(!onGas) return ng("手元ではシートにつながっていないので、消せない");
     google.script.run
       .withSuccessHandler(r => {
-        /* ��������A���̔N�x�͑ޔ����݂ɂȂ�B**��ʂɂ������f��** */
+        /* 消したら、その年度は退避ずみになる。**画面にもすぐ映す** */
         (bootInfo.archived || (bootInfo.archived = {}))[String(year)] =
           {url:r.url, at:r.at, by:r.by};
         ok(r);
       })
-      .withFailureHandler(e => ng(String((e && e.message) || "�����Ȃ�����")))
+      .withFailureHandler(e => ng(String((e && e.message) || "消せなかった")))
       .apiArchivePurge(+year, url, typed);
   }
 
-  /* �N�x�̌����B**4���ɊJ�����Ƃ��A��������Ȃ�����1��ʂŌ����B**
-     �茳�ł͌����Ȃ��i�V�[�g��ǂ܂Ȃ���΁A����Ȃ����̂�������Ȃ��j�B */
+  /* 年度の検査。**4月に開けたとき、何が足りないかを1画面で言う。**
+     手元では見られない（シートを読まなければ、足りないものが分からない）。 */
   function checkYear(ok, ng){
-    if(!onGas) return ng("�茳�ł̓V�[�g�ɂȂ����Ă��Ȃ��̂ŁA�����ł��Ȃ�");
+    if(!onGas) return ng("手元ではシートにつながっていないので、検査できない");
     google.script.run
       .withSuccessHandler(r => ok(r))
-      .withFailureHandler(e => ng("�����ł��Ȃ������i" + (e && e.message) + "�j"))
+      .withFailureHandler(e => ng("検査できなかった（" + (e && e.message) + "）"))
       .apiCheckYear(fy());
   }
 
-  /* �\��t���p�V�[�g���A���̂܂܂̌`�œǂށB�茳�ł͎g���Ȃ� */
+  /* 貼り付け用シートを、そのままの形で読む。手元では使えない */
   function readPaste(ok, ng){
-    if(!onGas) return ng("�茳�ł́A�V�[�g�̑���ɓ\��t�������g��");
+    if(!onGas) return ng("手元では、シートの代わりに貼り付け欄を使う");
     google.script.run
       .withSuccessHandler(g => ok(g || []))
-      .withFailureHandler(e => ng("�V�[�g��ǂ߂Ȃ������i" + (e && e.message) + "�j"))
+      .withFailureHandler(e => ng("シートを読めなかった（" + (e && e.message) + "）"))
       .apiReadPaste();
   }
 
-  /* ����ۂێ��Ԋ��ցA**1�T�Ԃ��1���̃V�[�g�Ƃ��ďo��**�B
-     �ǂ̃N���X�̂ǂ̍Z�������������߂�͉̂�ʁi�w�̏d�˕���m���Ă���j�B
-     �ǂ�Ȍ`�̃V�[�g����邩�����߂�̂̓V�[�g���i�����̌`��m���Ă���j�B
-     cols = [{cls, group}] �̕��сB**���тƑg��������Ō��߂ēn���B** */
-  /* �����W�v�V�[�g�֒u���B**�������͉̂�ʂ̂ق�**�i������1�����̂܂܁j�B
-     �茳�����Ŏg���Ă���Ƃ��͒u���悪�����̂ŁA���̂܂܍ςɂ���B */
+  /* たんぽぽ時間割へ、**1週ぶんを1枚のシートとして出す**。
+     どのクラスのどの校時が何かを決めるのは画面（層の重ね方を知っている）。
+     どんな形のシートを作るかを決めるのはシート側（実物の形を知っている）。
+     cols = [{cls, group}] の並び。**並びと組をこちらで決めて渡す。** */
+  /* 時数集計シートへ置く。**数えたのは画面のほう**（合成は1か所のまま）。
+     手元だけで使っているときは置く先が無いので、そのまま済にする。 */
   function saveTally(year, head, rows, then){
-    if(!onGas) return then && then({name:"�i�茳�j", rows:rows.length, kept:0});
+    if(!onGas) return then && then({name:"（手元）", rows:rows.length, kept:0});
     google.script.run
       .withSuccessHandler(r => then && then(r))
       .withFailureHandler(e => {
-        notify("�����W�v�������Ȃ������i" + escText(String(e && e.message)) + "�j");
+        notify("時数集計を書けなかった（" + escText(String(e && e.message)) + "）");
         then && then(null);
       })
       .apiWriteTally(year, head, rows);
   }
 
   function exportWeek(titles, cols, slots, name, url, ok, ng){
-    if(!onGas) return ng("�茳�ł͂���ۂێ��Ԋ��ɂȂ����Ă��Ȃ�");
+    if(!onGas) return ng("手元ではたんぽぽ時間割につながっていない");
     const w = week(), year = fy(), mon = wkKey();
     google.script.run
       .withSuccessHandler(r => { if(r.submits) w.tpSub = r.submits; save(); ok(r); })
-      .withFailureHandler(e => ng(String((e && e.message) || "�������߂Ȃ�����")))
+      .withFailureHandler(e => ng(String((e && e.message) || "書き込めなかった")))
       .apiExportWeek(year, mon, titles, cols, slots, name, url || "", w.tpSub || {});
   }
 
-  /* ���� ����ۂۂւ̒�o ������������������������������������������������
-     **�S�C���u���T�Ԃ�͏����I�����v�ƌ�������B** �T���Ƃɗ��Ē����B
-     �茳�ł́A���̒[���̒������Ɏ��i�V�[�g�ɂȂ��ł��Ȃ��j�B */
+  /* ── たんぽぽへの提出 ────────────────────────
+     **担任が「今週ぶんは書き終えた」と言った印。** 週ごとに立て直す。
+     手元では、この端末の中だけに持つ（シートにつないでいない）。 */
   function tpSubmit(cls, on, ok, ng){
     const w = week();
     const seq = (w.tpEditSeq || {})[cls] || 0;
     if(!onGas){
       if(!w.tpSub) w.tpSub = {};
-      if(on) w.tpSub[cls] = {at:String(Date.now()), by:"�i�茳�j", dirty:false, exports:(w.tpSub[cls] || {}).exports || {}};
+      if(on) w.tpSub[cls] = {at:String(Date.now()), by:"（手元）", dirty:false, exports:(w.tpSub[cls] || {}).exports || {}};
       else delete w.tpSub[cls];
       if(w.tpEdited) delete w.tpEdited[cls];
       save();
@@ -911,87 +907,87 @@ const Backend = (function(){
         save();
         ok(w.tpSub);
       })
-      .withFailureHandler(e => ng(String((e && e.message) || "���Ă��Ȃ�����")))
+      .withFailureHandler(e => ng(String((e && e.message) || "立てられなかった")))
       .apiTpSubmit(fy(), wkKey(), cls, !!on);
   }
 
-  /* ���� ����ۂۂ̏o���� ������������������������������������������������
-     **1�{�Ƃ͂�����Ȃ��B** �茳�ł͐ݒ�������Ȃ��̂ŁA��ŕԂ�
-     �i��ʂ́u�茳�ł͏o��������ĂȂ��v�Əo���j�B */
+  /* ── たんぽぽの出す先 ────────────────────────
+     **1本とはかぎらない。** 手元では設定を持たないので、空で返す
+     （画面は「手元では出す先を持てない」と出す）。 */
   function tpTargets(ok, ng){
     if(!onGas) return ok([]);
     google.script.run
       .withSuccessHandler(r => ok(r || []))
-      .withFailureHandler(e => ng("�o�����ǂ߂Ȃ������i" + (e && e.message) + "�j"))
+      .withFailureHandler(e => ng("出す先を読めなかった（" + (e && e.message) + "）"))
       .apiTpTargets();
   }
   function saveTpTargets(list, ok, ng){
-    if(!onGas) return ng("�茳�ł͏o��������ĂȂ��i�V�[�g�ɂȂ��ł��Ȃ��j");
+    if(!onGas) return ng("手元では出す先を持てない（シートにつないでいない）");
     google.script.run
       .withSuccessHandler(r => ok(r))
-      .withFailureHandler(e => ng(String((e && e.message) || "�����Ȃ�����")))
+      .withFailureHandler(e => ng(String((e && e.message) || "書けなかった")))
       .apiWriteTpTargets(list);
   }
   function testTpTarget(url, ok, ng){
-    if(!onGas) return ng("�茳�ł͎����Ȃ�");
+    if(!onGas) return ng("手元では試せない");
     google.script.run
       .withSuccessHandler(r => ok(r))
-      .withFailureHandler(e => ng(String((e && e.message) || "�����Ȃ�����")))
+      .withFailureHandler(e => ng(String((e && e.message) || "試せなかった")))
       .apiTestTpTarget(url);
   }
 
-  /* ���� �V�N�x�̐ݒ� ��������������������������������������������������������
-     �菇�ƁA���܂ǂ��܂ōς�ł��邩�B**�V�[�g�����Ȃ��ƕ�����Ȃ��B** */
+  /* ── 新年度の設定 ────────────────────────────
+     手順と、いまどこまで済んでいるか。**シートを見ないと分からない。** */
   function yearSetup(ok, ng){
-    if(!onGas) return ng("�茳�ł͕�����Ȃ��i�V�[�g�����Ȃ��Ɣ���ł��Ȃ��j");
+    if(!onGas) return ng("手元では分からない（シートを見ないと判定できない）");
     google.script.run
       .withSuccessHandler(r => ok(r))
-      .withFailureHandler(e => ng("�ǂ߂Ȃ������i" + (e && e.message) + "�j"))
+      .withFailureHandler(e => ng("読めなかった（" + (e && e.message) + "）"))
       .apiYearSetup(fy());
   }
   function tickYearSetup(key, on, ok, ng){
-    if(!onGas) return ng("�茳�ł͋L�^�ł��Ȃ�");
+    if(!onGas) return ng("手元では記録できない");
     google.script.run
       .withSuccessHandler(r => ok(r))
-      .withFailureHandler(e => ng(String((e && e.message) || "�L�^�ł��Ȃ�����")))
+      .withFailureHandler(e => ng(String((e && e.message) || "記録できなかった")))
       .apiTickYearSetup(fy(), key, !!on);
   }
   function setupPlanSheets(ok, ng){
-    if(!onGas) return ng("�茳�ł̓V�[�g�����Ȃ�");
+    if(!onGas) return ng("手元ではシートを作れない");
     google.script.run
       .withSuccessHandler(r => ok(r))
-      .withFailureHandler(e => ng(String((e && e.message) || "���Ȃ�����")))
+      .withFailureHandler(e => ng(String((e && e.message) || "作れなかった")))
       .apiSetupPlanSheets(fy());
   }
-  /* A�T�̋N�_�̌��j�B**�ݒ�V�[�g�̂���1�s��������ʂ��璼���B** */
+  /* A週の起点の月曜。**設定シートのこの1行だけを画面から直す。** */
   function saveVariantOrigin(monday, ok, ng){
     if(!onGas){ db.settings.abAnchor = monday; save(); return ok({saved: monday}); }
     google.script.run
       .withSuccessHandler(r => { db.settings.abAnchor = monday; save(); ok(r); })
-      .withFailureHandler(e => ng(String((e && e.message) || "�����Ȃ�����")))
+      .withFailureHandler(e => ng(String((e && e.message) || "書けなかった")))
       .apiWriteVariantOrigin(monday);
   }
-  /* �N�ԍs���v��\��\��ւ���Brows �͌��o�����܂ޓ񎟌��z�� */
+  /* 年間行事計画表を貼り替える。rows は見出しを含む二次元配列 */
   function saveEvents(rows, ok, ng){
-    if(!onGas) return ng("�茳�ł͓\��ւ����Ȃ��i�V�[�g�ɂȂ��ł��Ȃ��j");
+    if(!onGas) return ng("手元では貼り替えられない（シートにつないでいない）");
     google.script.run
       .withSuccessHandler(r => ok(r))
-      .withFailureHandler(e => ng(String((e && e.message) || "�\��ւ����Ȃ�����")))
+      .withFailureHandler(e => ng(String((e && e.message) || "貼り替えられなかった")))
       .apiWriteEvents(rows);
   }
-  /* �T�Ă����L�p�̐V���� Google Sheet �ɂ���B���J�͈͂͏���ɕς��Ȃ��B */
+  /* 週案を共有用の新しい Google Sheet にする。公開範囲は勝手に変えない。 */
   function exportPlanSheet(name, sheets, ok, ng){
-    if(!onGas) return ng("�茳�ł�Google Sheet�����Ȃ�");
+    if(!onGas) return ng("手元ではGoogle Sheetを作れない");
     google.script.run.withSuccessHandler(ok)
-      .withFailureHandler(e => ng(String((e && e.message) || "Sheet�����Ȃ�����")))
+      .withFailureHandler(e => ng(String((e && e.message) || "Sheetを作れなかった")))
       .apiExportPlanSheet(name, sheets);
   }
 
-  /* ��ʂ����O�ɁA���߂��Ԃ���o���؂�B
-     �o���؂�Ȃ������ɕ���ꂻ���ȂƂ��́A�����~�߂�B */
+  /* 画面を閉じる前に、貯めたぶんを出し切る。
+     出し切れないうちに閉じられそうなときは、引き止める。 */
   addEventListener("beforeunload", ev => {
     if(onGas && (unsaved() || sending || held.length)){
-      persistPending();          /* ��ɍT����B����؂�Ȃ��Ă����ɊJ�����Ƃ��ɑ��� */
+      persistPending();          /* 先に控える。送り切れなくても次に開いたときに送る */
       flush();
       ev.preventDefault();
       ev.returnValue = "";
@@ -999,7 +995,7 @@ const Backend = (function(){
   });
 
   return {isGas, info, saved: () => acknowledged && !unsaved() && !sending,
-          /* �������̂ɁA�܂��V�[�g�ɓ����Ă��Ȃ��B��ʂ̒n�̐F�͂���Ō��߂� */
+          /* 書いたのに、まだシートに入っていない。画面の地の色はこれで決める */
           touched: () => touched || !!lastErr, setNotifier, setDirtyWatcher, setConflictWatcher,
           unsaved, prefetchWeek, readWeeks, readWeeksAll, unread, saveTally,
           watch, stale, heldCells, dropHeld, reloadWeek,
@@ -1010,4 +1006,3 @@ const Backend = (function(){
           yearSetup, tickYearSetup, setupPlanSheets, saveVariantOrigin, saveEvents,
           exportPlanSheet};
 })();
-
