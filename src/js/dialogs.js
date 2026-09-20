@@ -92,13 +92,12 @@ async function nodePng(node, name){
   }).join("\n");
   const xml = new XMLSerializer().serializeToString(node.cloneNode(true));
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${r.width}" height="${r.height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml"><style>${css}</style>${xml}</div></foreignObject></svg>`;
-  const url = URL.createObjectURL(new Blob([svg], {type:"image/svg+xml"}));
-  try{
-    const img = new Image(); await new Promise((ok, ng) => { img.onload=ok; img.onerror=ng; img.src=url; });
-    const scale=2, cv=document.createElement("canvas"); cv.width=Math.ceil(r.width*scale); cv.height=Math.ceil(r.height*scale);
-    const cx=cv.getContext("2d"); cx.scale(scale,scale); cx.fillStyle="#fff"; cx.fillRect(0,0,r.width,r.height); cx.drawImage(img,0,0);
-    const blob=await new Promise(ok => cv.toBlob(ok,"image/png")); downloadBlob(blob,name);
-  } finally { URL.revokeObjectURL(url); }
+  /* Blob URL の SVG は Chrome で canvas を汚染し、PNG にできない。data URL なら同一生成元として描画できる。 */
+  const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  const img = new Image(); await new Promise((ok, ng) => { img.onload=ok; img.onerror=ng; img.src=url; });
+  const scale=2, cv=document.createElement("canvas"); cv.width=Math.ceil(r.width*scale); cv.height=Math.ceil(r.height*scale);
+  const cx=cv.getContext("2d"); cx.scale(scale,scale); cx.fillStyle="#fff"; cx.fillRect(0,0,r.width,r.height); cx.drawImage(img,0,0);
+  const blob=await new Promise(ok => cv.toBlob(ok,"image/png")); downloadBlob(blob,name);
 }
 const outputName = suffix => viewName().replace(/[^\w\-ぁ-んァ-ヶ一-龠]/g,"_") + "_" + iso(monday) + "_" + suffix;
 function exportWeekSheet(){

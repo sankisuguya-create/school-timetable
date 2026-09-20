@@ -103,10 +103,10 @@ const Backend = (function(){
     const dt = parseISO(dateISO);
     if(!dt) return null;
     const off = (dt.getDay() + 6) % 7;            /* 月曜を 0 にする */
-    const mo = +String(dateISO).slice(5, 7);
-    return {year: (mo <= 3 ? +String(dateISO).slice(0, 4) - 1
-                           : +String(dateISO).slice(0, 4)),
-            monday: iso(addDays(dt, -off)), d: off};
+    const monday = iso(addDays(dt, -off));
+    /* 週をまたいでも、月曜の年度へまとめる。3月30日の週は4月1日も前年度の週案。 */
+    const monYear = +monday.slice(0, 4), monMonth = +monday.slice(5, 7);
+    return {year: monYear - (monMonth <= 3 ? 1 : 0), monday, d: off};
   }
 
   function takeConflicts(list, sent){
@@ -241,9 +241,36 @@ const Backend = (function(){
 
      だから、まだ送っていないコマは**中身ごと**この端末に控えておき、
      次に開いたときに送り直す。送れたら控えを捨てる。 */
-  const PEND = KEY + "/pending";
-  const HELD = KEY + "/conflicts";
+  function tabId(){
+    const k = KEY + "/pending-tab";
+    try{
+      let id = sessionStorage.getItem(k);
+      if(!id){
+        id = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+        sessionStorage.setItem(k, id);
+      }
+      return id;
+    }catch(e){ return "fallback"; }
+  }
+  const TAB = tabId();
+  const PEND = KEY + "/pending/" + TAB;
+  const HELD = KEY + "/conflicts/" + TAB;
+  const LEGACY_PEND = KEY + "/pending";
+  const LEGACY_HELD = KEY + "/conflicts";
   let pendT = 0;
+  function savedList(key, legacy){
+    try{
+      const v = JSON.parse(localStorage.getItem(key) || "null");
+      if(Array.isArray(v)) return v;
+      const old = JSON.parse(localStorage.getItem(legacy) || "[]");
+      if(Array.isArray(old) && old.length){
+        localStorage.setItem(key, JSON.stringify(old));
+        localStorage.removeItem(legacy);
+        return old;
+      }
+    }catch(e){}
+    return [];
+  }
 
   /* 控えに書く中身。**まだ送っていないぶんと、送っている途中のぶんの両方。**
      同じコマが両方にあれば、いま画面が持っているほう（dirty）が正しい。 */
@@ -275,17 +302,15 @@ const Backend = (function(){
      あとから送ると、読み直しで消えた中身を送ることになる。 */
   function sendPending(after){
     if(!onGas) return after();
-    let list = null;
-    try{ list = JSON.parse(localStorage.getItem(PEND) || "null"); }catch(e){}
-    if(!list || !list.length) return after();
+    const list = savedList(PEND, LEGACY_PEND);
+    if(!list.length) return after();
     const byYear = {};
     for(const q of list){
-      const y = String(q.date).slice(0, 4);
-      /* 4月始まりなので、1〜3月は前の年度 */
-      const m = +String(q.date).slice(5, 7);
-      const fyOf = m <= 3 ? (+y - 1) : +y;
-      (byYear[fyOf] || (byYear[fyOf] = [])).push(q);
+      const loc = locOf(q.date);
+      if(!loc) continue;
+      (byYear[loc.year] || (byYear[loc.year] = [])).push(q);
     }
+    if(!Object.keys(byYear).length) return after();
     let left = Object.keys(byYear).length;
     /* **送れなかったぶんは捨てない。** 前はここで控えを消していた。
        消したあとに週を読み直すので、閉じる直前に書いたコマが、
@@ -416,7 +441,7 @@ const Backend = (function(){
   const archivedYear = y => (bootInfo.archived || {})[String(y)] || null;
   function boot(after){
     if(!onGas){ booted = true; return after(); }
-    try{ held = JSON.parse(localStorage.getItem(HELD) || '[]'); if(!Array.isArray(held)) held = []; }catch(_){ held = []; }
+    held = savedList(HELD, LEGACY_HELD);
     if(held.length){ onConflict(held.slice()); onDirty(unsaved(), lastErr); }
     let finished = false;
     const finish = () => {

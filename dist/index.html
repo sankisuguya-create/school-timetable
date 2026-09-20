@@ -2604,8 +2604,8 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.33.1";
-let BUILD_DATE  = "2026-09-19";
+let APP_VERSION = "1.33.2";
+let BUILD_DATE  = "2026-09-21";
 
 /* 時程。行を固定しない（学校ごとに違う）。
    tally = 時数集計表のどの列に当たるか。chips = 教科を選べるか。
@@ -3557,10 +3557,10 @@ const Backend = (function(){
     const dt = parseISO(dateISO);
     if(!dt) return null;
     const off = (dt.getDay() + 6) % 7;            /* 月曜を 0 にする */
-    const mo = +String(dateISO).slice(5, 7);
-    return {year: (mo <= 3 ? +String(dateISO).slice(0, 4) - 1
-                           : +String(dateISO).slice(0, 4)),
-            monday: iso(addDays(dt, -off)), d: off};
+    const monday = iso(addDays(dt, -off));
+    /* 週をまたいでも、月曜の年度へまとめる。3月30日の週は4月1日も前年度の週案。 */
+    const monYear = +monday.slice(0, 4), monMonth = +monday.slice(5, 7);
+    return {year: monYear - (monMonth <= 3 ? 1 : 0), monday, d: off};
   }
 
   function takeConflicts(list, sent){
@@ -3695,9 +3695,36 @@ const Backend = (function(){
 
      だから、まだ送っていないコマは**中身ごと**この端末に控えておき、
      次に開いたときに送り直す。送れたら控えを捨てる。 */
-  const PEND = KEY + "/pending";
-  const HELD = KEY + "/conflicts";
+  function tabId(){
+    const k = KEY + "/pending-tab";
+    try{
+      let id = sessionStorage.getItem(k);
+      if(!id){
+        id = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+        sessionStorage.setItem(k, id);
+      }
+      return id;
+    }catch(e){ return "fallback"; }
+  }
+  const TAB = tabId();
+  const PEND = KEY + "/pending/" + TAB;
+  const HELD = KEY + "/conflicts/" + TAB;
+  const LEGACY_PEND = KEY + "/pending";
+  const LEGACY_HELD = KEY + "/conflicts";
   let pendT = 0;
+  function savedList(key, legacy){
+    try{
+      const v = JSON.parse(localStorage.getItem(key) || "null");
+      if(Array.isArray(v)) return v;
+      const old = JSON.parse(localStorage.getItem(legacy) || "[]");
+      if(Array.isArray(old) && old.length){
+        localStorage.setItem(key, JSON.stringify(old));
+        localStorage.removeItem(legacy);
+        return old;
+      }
+    }catch(e){}
+    return [];
+  }
 
   /* 控えに書く中身。**まだ送っていないぶんと、送っている途中のぶんの両方。**
      同じコマが両方にあれば、いま画面が持っているほう（dirty）が正しい。 */
@@ -3729,17 +3756,15 @@ const Backend = (function(){
      あとから送ると、読み直しで消えた中身を送ることになる。 */
   function sendPending(after){
     if(!onGas) return after();
-    let list = null;
-    try{ list = JSON.parse(localStorage.getItem(PEND) || "null"); }catch(e){}
-    if(!list || !list.length) return after();
+    const list = savedList(PEND, LEGACY_PEND);
+    if(!list.length) return after();
     const byYear = {};
     for(const q of list){
-      const y = String(q.date).slice(0, 4);
-      /* 4月始まりなので、1〜3月は前の年度 */
-      const m = +String(q.date).slice(5, 7);
-      const fyOf = m <= 3 ? (+y - 1) : +y;
-      (byYear[fyOf] || (byYear[fyOf] = [])).push(q);
+      const loc = locOf(q.date);
+      if(!loc) continue;
+      (byYear[loc.year] || (byYear[loc.year] = [])).push(q);
     }
+    if(!Object.keys(byYear).length) return after();
     let left = Object.keys(byYear).length;
     /* **送れなかったぶんは捨てない。** 前はここで控えを消していた。
        消したあとに週を読み直すので、閉じる直前に書いたコマが、
@@ -3870,7 +3895,7 @@ const Backend = (function(){
   const archivedYear = y => (bootInfo.archived || {})[String(y)] || null;
   function boot(after){
     if(!onGas){ booted = true; return after(); }
-    try{ held = JSON.parse(localStorage.getItem(HELD) || '[]'); if(!Array.isArray(held)) held = []; }catch(_){ held = []; }
+    held = savedList(HELD, LEGACY_HELD);
     if(held.length){ onConflict(held.slice()); onDirty(unsaved(), lastErr); }
     let finished = false;
     const finish = () => {
@@ -9014,13 +9039,12 @@ async function nodePng(node, name){
   }).join("\n");
   const xml = new XMLSerializer().serializeToString(node.cloneNode(true));
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${r.width}" height="${r.height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml"><style>${css}</style>${xml}</div></foreignObject></svg>`;
-  const url = URL.createObjectURL(new Blob([svg], {type:"image/svg+xml"}));
-  try{
-    const img = new Image(); await new Promise((ok, ng) => { img.onload=ok; img.onerror=ng; img.src=url; });
-    const scale=2, cv=document.createElement("canvas"); cv.width=Math.ceil(r.width*scale); cv.height=Math.ceil(r.height*scale);
-    const cx=cv.getContext("2d"); cx.scale(scale,scale); cx.fillStyle="#fff"; cx.fillRect(0,0,r.width,r.height); cx.drawImage(img,0,0);
-    const blob=await new Promise(ok => cv.toBlob(ok,"image/png")); downloadBlob(blob,name);
-  } finally { URL.revokeObjectURL(url); }
+  /* Blob URL の SVG は Chrome で canvas を汚染し、PNG にできない。data URL なら同一生成元として描画できる。 */
+  const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  const img = new Image(); await new Promise((ok, ng) => { img.onload=ok; img.onerror=ng; img.src=url; });
+  const scale=2, cv=document.createElement("canvas"); cv.width=Math.ceil(r.width*scale); cv.height=Math.ceil(r.height*scale);
+  const cx=cv.getContext("2d"); cx.scale(scale,scale); cx.fillStyle="#fff"; cx.fillRect(0,0,r.width,r.height); cx.drawImage(img,0,0);
+  const blob=await new Promise(ok => cv.toBlob(ok,"image/png")); downloadBlob(blob,name);
 }
 const outputName = suffix => viewName().replace(/[^\w\-ぁ-んァ-ヶ一-龠]/g,"_") + "_" + iso(monday) + "_" + suffix;
 function exportWeekSheet(){

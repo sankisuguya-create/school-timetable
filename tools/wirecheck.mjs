@@ -378,6 +378,20 @@ await p.addInitScript(() => {
   window.google = {script: {get run(){ return runner(); }}};
 });
 
+await p.addInitScript(() => {
+  window.__pendingJson = () => {
+    const root = "school-timetable/v3/pending/", out = [];
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(!k || !k.startsWith(root)) continue;
+      try{
+        const v = JSON.parse(localStorage.getItem(k) || "[]");
+        if(Array.isArray(v)) out.push(...v);
+      }catch(_){}
+    }
+    return out.length ? JSON.stringify(out) : null;
+  };
+});
 await p.goto(PAGE);
 await p.waitForTimeout(700);
 const calls = () => p.evaluate(() => window.__calls.map(c => c.name));
@@ -805,7 +819,7 @@ await p.waitForTimeout(120);
 await p.locator(".pal[data-v='rika']").click();
 await p.waitForTimeout(1300);                 /* 控えを書くのを待つ */
 const pend = await p.evaluate(() =>
-  JSON.parse(localStorage.getItem("school-timetable/v3/pending") || "null"));
+  JSON.parse(window.__pendingJson() || "null"));
 ok("送っていないコマは、この端末に控える",
    !!pend && pend.length === 1 && pend[0].title === "理科", pend);
 ok("控えるのは中身ごと（次に開いたとき、読み直しで消えないように）",
@@ -826,8 +840,8 @@ ok("週を読み直すより先に送る", await p.evaluate(() => {
      return w >= 0 && (r < 0 || w < r);
    }) === true, await calls());
 ok("送れたら控えは消す",
-   await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")) === null,
-   await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")));
+   await p.evaluate(() => window.__pendingJson()) === null,
+   await p.evaluate(() => window.__pendingJson()));
 
 console.log("\n■ 送り直しに失敗しても、控えは捨てない");
 /* **ここが前は捨てていた。** 送れなかったのに控えを消していたので、
@@ -842,8 +856,8 @@ await p.waitForTimeout(120);
 await p.locator(".pal[data-v='sansu']").click();
 await p.waitForTimeout(1300);
 ok("送れないまま控えができている", await p.evaluate(() =>
-     (JSON.parse(localStorage.getItem("school-timetable/v3/pending") || "[]") || []).length) === 1,
-   await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")));
+     (JSON.parse(window.__pendingJson() || "[]") || []).length) === 1,
+   await p.evaluate(() => window.__pendingJson()));
 
 /* **開き直したときの送り直しが失敗する形。** ここが前は控えを消していた。
    立ち上がりの1回で送り直し、失敗しても消していたので、そのあと週を
@@ -860,7 +874,7 @@ await p.evaluate(() => localStorage.setItem("wirecheck/failBoot", "1"));
 await p.reload();
 await p.waitForTimeout(1500);
 const kept = await p.evaluate(() =>
-  JSON.parse(localStorage.getItem("school-timetable/v3/pending") || "null"));
+  JSON.parse(window.__pendingJson() || "null"));
 ok("送り直しに失敗しても、控えを捨てない",
    Array.isArray(kept) && kept.length === 1 && kept[0].title === "算数", kept);
 ok("控えていたぶんは、送り待ちにも積み直す",
@@ -876,9 +890,9 @@ await p.evaluate(() => { window.__failWrite = false; });
 await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(400);
 await p.locator("#saveBtn").click(); await p.waitForTimeout(900);
 ok("回線が戻れば、控えていたぶんも送れる",
-   await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")) === null
+   await p.evaluate(() => window.__pendingJson()) === null
    && await p.evaluate(() => Backend.unsaved()) === 0,
-   [await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")),
+   [await p.evaluate(() => window.__pendingJson()),
     await p.evaluate(() => Backend.unsaved())]);
 await p.evaluate(() => { window.__failWrite = true; });
 /* いま手元にあるぶんを、失敗する回線へ送ってみる */
@@ -896,16 +910,16 @@ ok("送れなかったぶんは、送り待ちに戻る",
    await p.evaluate(() => Backend.unsaved()));
 ok("送れなかったぶんは、控えにも残る",
    await p.evaluate(() =>
-     (JSON.parse(localStorage.getItem("school-timetable/v3/pending") || "[]") || []).length) > 0,
-   await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")));
+     (JSON.parse(window.__pendingJson() || "[]") || []).length) > 0,
+   await p.evaluate(() => window.__pendingJson()));
 await p.evaluate(() => { window.__failWrite = false; });
 await p.locator("#saveBtn").click();
 await p.waitForTimeout(900);
 ok("押し直せば、そのまま送れる",
    await p.evaluate(() => Backend.unsaved()) === 0
-   && await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")) === null,
+   && await p.evaluate(() => window.__pendingJson()) === null,
    [await p.evaluate(() => Backend.unsaved()),
-    await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending"))]);
+    await p.evaluate(() => window.__pendingJson())]);
 
 console.log("\n■ 送っている途中で閉じても、控えに残っている");
 /* **ここが前は消えていた。** 送り始めた時点で控えから外していたので、
@@ -921,10 +935,10 @@ await p.evaluate(() => { window.__hang = true; });   /* 送っても返事が来
 await p.locator("#saveBtn").click();
 await p.waitForTimeout(700);
 ok("送っている途中も、控えに中身が残っている", await p.evaluate(() => {
-     const l = JSON.parse(localStorage.getItem("school-timetable/v3/pending") || "[]") || [];
+     const l = JSON.parse(window.__pendingJson() || "[]") || [];
      return l.some(q => q.slot === "p3" && q.target === "5-4" && q.title === "理科");
    }) === true,
-   await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")));
+   await p.evaluate(() => window.__pendingJson()));
 ok("送っている途中は「保存ずみ」と言わない",
    await p.evaluate(() => Backend.unsaved()) > 0,
    await p.evaluate(() => Backend.unsaved()));
@@ -939,7 +953,7 @@ ok("開き直すと、送っている途中だったぶんを送り直す", awai
        .some(q => q.slot === "p3" && q.target === "5-4" && q.title === "理科")) === true,
    await p.evaluate(() => window.__calls.filter(c => c.name === "apiWriteCells").map(c => c.args[1])));
 ok("送れたら控えは消える",
-   await p.evaluate(() => localStorage.getItem("school-timetable/v3/pending")) === null);
+   await p.evaluate(() => window.__pendingJson()) === null);
 ok("シートにも入っている", await p.evaluate(() => {
      const st = window.__sheet();
      const bank = st[["2026","home","5-4"].join("\u0001")] || {};
