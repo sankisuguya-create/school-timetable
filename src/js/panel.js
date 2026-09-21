@@ -362,11 +362,12 @@ function fillPanel(){
     if(nm !== document.activeElement) nm.value = tripName(selCell.d, selCell.s);
     if(tp !== document.activeElement) tp.value = tripTp(selCell.d, selCell.s);
     nm.disabled = tp.disabled = !!who;
+    /* **残すのは「いまの状態」だけ。** 決まりごと（1本ぶんに同じ字が入る・
+       たんぽぽは2文字まで）は ？ の中（HELP.trip）へ移した */
     $("pTripHint").innerHTML = who
       ? "この行事は<b>" + escText(who) + "</b>が入れたもの。名前もその面から直す。"
-      : "続けて置いた<b>1本ぶんに同じ字</b>が入る。"
-        + "紙の字は、長ければ小さくして収める。"
-        + "<b>たんぽぽに出す字は2文字まで</b>にする（児童の列は 50px しかない）。";
+      : "";
+    $("pTripHint").hidden = !who;
   }
 
   /* **この日の行事。** 年間行事計画表から読んだもの。
@@ -399,9 +400,8 @@ function fillPanel(){
     "<div class='lrow'><b>" + escText(x.text) + "</b>"
     + "<span>" + escText(x.href) + "</span>"
     + "<button data-i='" + i + "' title='リンクを外す'>外す</button></div>").join("");
-  $("pLinkHint").innerHTML = ls.length
-    ? "紙の上でも<b>その文字を押すと開く</b>。刷ると下線だけが残る。"
-    : "欄の中で<b>文字を選んでから</b>下のボタンを押す。1つのコマにいくつでも付く。";
+  /* 使い方は ？ の中（HELP.links）。押す口のとなりに置くと、
+     リンクが1つも無いコマでも毎回2行の説明を越えて押すことになる */
   for(const b of $("pLinks").querySelectorAll("button")){
     b.onclick = () => {
       const x = ls[+b.dataset.i];

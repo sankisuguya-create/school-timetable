@@ -2216,7 +2216,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
              行事ごとに違う名前が要る（自然学校・社会見学・修学旅行）ので、
              学校ひとつの設定にはしない -->
         <div id="pTripWrap" hidden>
-          <h3>この校外行事の名前</h3>
+          <h3 data-help="trip">この校外行事の名前</h3>
           <label for="pTripName">紙に出す字</label>
           <input class="pinp" id="pTripName" maxlength="12" placeholder="校外学習">
           <label for="pTripTp" style="margin-top:8px">たんぽぽに出す字</label>
@@ -2226,16 +2226,12 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
         <!-- 年間行事計画表。**日付にしか結びついていない**ので、
              どの校時に入れるかは押した人が決める（docs/spec.md 6節） -->
         <div id="pEvWrap" hidden>
-          <h3>この日の行事</h3>
+          <h3 data-help="events">この日の行事</h3>
           <div class="evs" id="pEvs"></div>
-          <p class="hint" style="margin:6px 0 0">年間行事計画表から読んだもの。
-            <b>押すと、選んでいるコマに入る。</b>何校時かは表に書いていないので、
-            決めるのは人。</p>
         </div>
         <div>
-          <h3>リンク</h3>
+          <h3 data-help="links">リンク</h3>
           <div class="links" id="pLinks"></div>
-          <p class="hint" id="pLinkHint" style="margin:6px 0"></p>
           <button class="btn wide" id="pAddLink">選んだ文字にリンクを付ける</button>
         </div>
         <div class="row-btn">
@@ -8181,11 +8177,12 @@ function fillPanel(){
     if(nm !== document.activeElement) nm.value = tripName(selCell.d, selCell.s);
     if(tp !== document.activeElement) tp.value = tripTp(selCell.d, selCell.s);
     nm.disabled = tp.disabled = !!who;
+    /* **残すのは「いまの状態」だけ。** 決まりごと（1本ぶんに同じ字が入る・
+       たんぽぽは2文字まで）は ？ の中（HELP.trip）へ移した */
     $("pTripHint").innerHTML = who
       ? "この行事は<b>" + escText(who) + "</b>が入れたもの。名前もその面から直す。"
-      : "続けて置いた<b>1本ぶんに同じ字</b>が入る。"
-        + "紙の字は、長ければ小さくして収める。"
-        + "<b>たんぽぽに出す字は2文字まで</b>にする（児童の列は 50px しかない）。";
+      : "";
+    $("pTripHint").hidden = !who;
   }
 
   /* **この日の行事。** 年間行事計画表から読んだもの。
@@ -8218,9 +8215,8 @@ function fillPanel(){
     "<div class='lrow'><b>" + escText(x.text) + "</b>"
     + "<span>" + escText(x.href) + "</span>"
     + "<button data-i='" + i + "' title='リンクを外す'>外す</button></div>").join("");
-  $("pLinkHint").innerHTML = ls.length
-    ? "紙の上でも<b>その文字を押すと開く</b>。刷ると下線だけが残る。"
-    : "欄の中で<b>文字を選んでから</b>下のボタンを押す。1つのコマにいくつでも付く。";
+  /* 使い方は ？ の中（HELP.links）。押す口のとなりに置くと、
+     リンクが1つも無いコマでも毎回2行の説明を越えて押すことになる */
   for(const b of $("pLinks").querySelectorAll("button")){
     b.onclick = () => {
       const x = ls[+b.dataset.i];
@@ -10177,6 +10173,40 @@ const HELP = {
        + "コマの中身が教科ではなく、行き先のクラスだからです。",
        "<b>教科に色をつける</b>は、この下で切り替えます。"
        + "「紙にも」を選ぶと、モノクロ印刷では13色が灰色の濃淡になります。"]},
+  /* **欄から追い出した説明の置き場。** 画面には「いまの状態」だけを残し、
+     決まりごと（何文字まで・どこで直すか）はここに移した */
+  trip: {t:"この校外行事の名前",
+    b:["<b>紙に出す字を、この行事だけに決めます。</b>"
+       + "自然学校・社会見学・修学旅行で違う字が要るので、"
+       + "学校ひとつの設定にはしていません。",
+       "<b>続けて置いた1本ぶんに、同じ字が入ります。</b>"
+       + "3・4校時を続けて校外行事にすれば、その2コマは1つの枠につながり、"
+       + "字は1回だけ出ます。どちらのコマから直しても同じです。",
+       "紙の字は12文字まで。長ければ、<b>その枠の中だけ</b>小さくして収めます。",
+       "<b>たんぽぽに出す字は2文字までにします。</b>"
+       + "児童の列は 50px しかないので、それより長いと読めません。",
+       "<i>はじめの人がつまずくところ：</i>"
+       + "全校・学年から降りてきた校外行事は、ここでは直せません"
+       + "（欄が灰色になり、入れた面の名前が出ます）。"
+       + "入れた面（全校・◯年）を開いて直します。"]},
+  events: {t:"この日の行事",
+    b:["<b>年間行事計画表から読んだ、その日の行事です。</b>",
+       "<b>押すと、選んでいるコマに入ります。</b>"
+       + "コマを選んでから押してください。",
+       "<b>何校時に入れるかは、押す人が決めます。</b>"
+       + "年間行事計画表は日付にしか結びついておらず、校時の列がありません。",
+       "<i>はじめの人がつまずくところ：</i>"
+       + "ここに何も出ない日は、行事表にその日が無いということです。"
+       + "行事表は設定の「年間行事計画表」から貼り替えます。"]},
+  links: {t:"リンク",
+    b:["<b>コマの文字に、開く先を付けられます。</b>"
+       + "指導案・ワークシート・動画などの置き場へ、紙から直に飛べます。",
+       "欄の中で<b>文字を選んでから</b>下のボタンを押します。"
+       + "1つのコマにいくつでも付きます。",
+       "<b>画面では、その文字を押すと開きます。</b>"
+       + "刷ると、下線だけが紙に残ります。",
+       "付けたものは一覧に出ます。<b>「外す」で消せます</b>"
+       + "（文字はそのまま残ります）。"]},
   fontsize: {t:"フォントサイズ",
     b:["<b>紙に出る字の大きさです。</b>題名（教科名）と備考を別々に変えられます。",
        "<b>設定の「印刷と文字」と同じものです。</b>"

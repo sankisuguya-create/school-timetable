@@ -377,7 +377,7 @@
              行事ごとに違う名前が要る（自然学校・社会見学・修学旅行）ので、
              学校ひとつの設定にはしない -->
         <div id="pTripWrap" hidden>
-          <h3>この校外行事の名前</h3>
+          <h3 data-help="trip">この校外行事の名前</h3>
           <label for="pTripName">紙に出す字</label>
           <input class="pinp" id="pTripName" maxlength="12" placeholder="校外学習">
           <label for="pTripTp" style="margin-top:8px">たんぽぽに出す字</label>
@@ -387,16 +387,12 @@
         <!-- 年間行事計画表。**日付にしか結びついていない**ので、
              どの校時に入れるかは押した人が決める（docs/spec.md 6節） -->
         <div id="pEvWrap" hidden>
-          <h3>この日の行事</h3>
+          <h3 data-help="events">この日の行事</h3>
           <div class="evs" id="pEvs"></div>
-          <p class="hint" style="margin:6px 0 0">年間行事計画表から読んだもの。
-            <b>押すと、選んでいるコマに入る。</b>何校時かは表に書いていないので、
-            決めるのは人。</p>
         </div>
         <div>
-          <h3>リンク</h3>
+          <h3 data-help="links">リンク</h3>
           <div class="links" id="pLinks"></div>
-          <p class="hint" id="pLinkHint" style="margin:6px 0"></p>
           <button class="btn wide" id="pAddLink">選んだ文字にリンクを付ける</button>
         </div>
         <div class="row-btn">
