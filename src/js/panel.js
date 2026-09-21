@@ -131,6 +131,18 @@ function drawDayPanel(){
     b.onclick = () => openDayDlg(d);
     row.appendChild(b);
   }
+  /* 畳んだままでも「ふつうでない日があるか」だけは見える。
+     **開き閉じは覚えておく**（既定は畳む。週に0〜1回しか直さない） */
+  const fold = $("dayFold");
+  if(fold){
+    if(fold.open !== !!db.settings.dayOpen) fold.open = !!db.settings.dayOpen;
+    const odd = [];
+    for(let d = 0; d < DAYS; d++){
+      const f = dayForm(d);
+      if(f) odd.push(DOW[d] + DAY_FORM[f].label);
+    }
+    $("dayPeek").textContent = odd.length ? odd.join("・") : "ぜんぶふつう";
+  }
 }
 
 /* 書く前に一度だけ聞く。**別の人の予定を潰すときだけ。**
@@ -367,19 +379,13 @@ function fillPanel(){
   }
 
   /* 入れる先。クラスを開いているときだけ選べる */
+  /* 「入れる先」の欄は外した。**開いたものが、そのまま入る先。**
+     もう1か所で選べると、開いているものと食い違い、学級を開いたまま
+     全校へ広がることが起きていた（→ src/index.html の右メニュー）。
+     scope は自分の学級に固定する ── 変数そのものは残してある
+     （学年・全校の面を開いたときの行き先を、同じ言葉で書くため）。 */
   const isClass = view.kind === "class";
-  $("pScopeWrap").hidden = !isClass;
-  if(isClass){
-    const g = gradeOf(view.cls);
-    $("pScope").innerHTML = [
-      ["self",  "この学級のみ（" + view.cls + "）"],
-      ["grade", "この学年に反映（" + g + "年の全クラス）"],
-      ["school","全校に反映（全クラス）"]
-    ].map(([v, label]) =>
-      "<label><input type='radio' name='sc' value='" + v + "'"
-      + (scope === v ? " checked" : "") + "> " + escText(label) + "</label>").join("");
-    for(const r of $("pScope").querySelectorAll("input")) r.onchange = () => { scope = r.value; paintHeader(); };
-  }
+  if(isClass) scope = "self";
 
   $("pAll").hidden    = slot.kind !== "brk";
   $("pRevert").hidden = !(isClass && (week().home[view.cls] || {})[ck(selCell.d, selCell.s)]);

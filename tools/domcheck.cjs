@@ -60,7 +60,8 @@ async function check(gas, failure=false, guide='new'){
     assert.ok(d.getElementById('sheet').classList.contains('chips-screen'),'棚の値が紙に出る');
     w.eval("Y().chipModes[view.cls]='off'; buildSheet();");
     assert.equal(d.getElementById('sheet').classList.contains('chips-screen'),false);
-    d.getElementById('gridBtn').click();
+    /* 見出しの右のグリッドは外した。入口へ行く口は「ほかの週案を開く」1つ */
+    d.querySelector('.nav[data-act="gate"]').click();
     assert.equal(d.getElementById('gate').hidden,false);
     d.getElementById('nextWk').click();
     await wait(80);

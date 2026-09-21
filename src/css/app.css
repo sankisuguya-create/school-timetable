@@ -55,11 +55,30 @@ button,select,input,textarea{font:inherit;color:inherit}
   color:var(--ink-link);font-size:11.5px;padding:3px 8px;cursor:pointer;
   font-family:inherit;align-self:flex-start}
 .abauto:hover{border-color:var(--ink-link)}
+/* 日付と行き先。**いちばん大きい字を、この2つに渡す。**
+   左上で見るのは「いま何週の、どれか」の2つだけ。ここが読めないまま書くと、
+   書いた先を間違える ── そのとき戻すのは、書くより何倍も手間がかかる。
+   **中央ぞろえ。** 左に寄せると、前後の ◀ ▶ と行き先の欄で
+   字の始まりが3つに散らばり、視線が左右に振れる。 */
 .side .pill{justify-content:space-between}
-.side .pill .date{font-size:14px;padding:4px 6px}
+.side .pill .date{font-size:18px;font-weight:700;padding:5px 4px;
+  flex:1;text-align:center;letter-spacing:.01em}
 .side .wkrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .side .seg button{padding:5px 10px;font-size:12.5px}
-.side .target{width:100%}
+.side .target{width:100%;font-size:16px;font-weight:700;text-align:center;
+  text-align-last:center;padding-top:7px;padding-bottom:7px}
+/* 中央に出すかたち（週案・4週・学年・カレンダー）。**左上に上げた。**
+   いちばんよく押すのに、紙のとなりの帯にあった。
+
+   **2段にする。** 1行に4つ並べると、左メニューの幅（228mm）では
+   1つ 52px にしかならず、「カレンダー」の5文字が枠から出て切れた（実測）。
+   段を分ければ 1つ 104px 取れて、4つとも字が最後まで読める。 */
+.side .viewseg{display:grid;grid-template-columns:1fr 1fr;width:100%}
+.side .viewseg button{padding:7px 4px;font-size:12.5px;white-space:nowrap}
+/* 段のあいだと、左右のあいだに線を入れる。**押す口の切れ目を見せる**
+   （地の色だけだと、押されていない3つがひとつながりに見える） */
+.side .viewseg button:nth-child(2n){border-left:1px solid var(--line)}
+.side .viewseg button:nth-child(n+3){border-top:1px solid var(--line)}
 .side .legend{flex-direction:column;align-items:flex-start;gap:7px;padding:0 8px}
 .side .foot-note{margin-top:auto;padding:10px 8px 2px;font-size:11px;color:var(--tx-sub);
   line-height:1.7}
@@ -164,7 +183,7 @@ button,select,input,textarea{font:inherit;color:inherit}
   align-items:flex-start;min-height:0;min-width:0;gap:6px}
 /* 出し入れするものは1本にまとめる。**書き漏らすと、面が2つ重なって出る** */
 .stage[hidden],.mview[hidden],.gvview[hidden],.cvview[hidden],.tpview[hidden],
-.cbar[hidden],.freebox[hidden]{display:none!important}
+.cbar[hidden],.freebox[hidden],.viewseg[hidden]{display:none!important}
 
 /* 紙の左右で週を繰る。**左メニューの ◀ ▶ と同じことをする。**
    読んでいる目の高さに置くので、左端まで視線を戻さずに週を繰れる。
@@ -472,9 +491,28 @@ span.tpin{cursor:default}
 .save.apply.dirty{background:var(--apply);border-color:var(--apply);color:#fff}
 .save.apply.bad{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff}
 /* 押す前に、どこへ出るかを字で言う1行 */
-.applymsg{margin:0;padding:7px 10px;border-left:3px solid var(--apply);
-  background:#FDF2E6;color:#6B3A05;font-size:12px;line-height:1.7}
-.applymsg b{color:#6B3A05}
+/* 空き枠さがし。**紙のとなりの帯から右メニューへ移した。**
+   帯には空き枠しか残っておらず、面を開くたび紙の上に1行が出たり消えたりして、
+   紙の位置が上下に動いていた。ここでは縦に積む（右メニューは細長い）。 */
+.panel .freebox{flex-direction:column;align-items:stretch;gap:7px;
+  padding:9px 10px;border:1px solid var(--line);border-radius:var(--r-sm);
+  background:var(--card);margin:0}
+.panel .freebox .flab{font-size:12px;color:var(--tx-sub);font-weight:600}
+.panel .freebox .seg{width:100%}
+.panel .freebox .seg button{flex:1;padding:6px 4px;font-size:12px}
+/* 畳める見出し（時数・日の形で同じ形） */
+#dayFold>summary,#tallyFold>summary{list-style:none;cursor:pointer;
+  display:flex;align-items:center;gap:8px;padding:7px 9px;
+  border:1px solid var(--line);border-radius:var(--r-sm);
+  background:var(--card);font-size:13px;font-weight:700;color:var(--tx)}
+#dayFold>summary::-webkit-details-marker{display:none}
+#dayFold>summary::before{content:"▸";font-size:11px;color:var(--tx-sub);
+  transition:transform .12s}
+#dayFold[open]>summary::before{transform:rotate(90deg)}
+#dayFold>summary:hover{border-color:var(--ink-link)}
+#dayFold>summary i{font-style:normal;font-weight:400;font-size:12px;
+  color:var(--tx-sub);margin-left:auto}
+.dayin{padding-top:9px}
 /* たんぽぽへの提出。**保存の右隣。** たんぽぽの児童がいるクラスだけに出る。
    色は既にある専科の茶（--cat-special）。保存の青とも、ロックの赤とも
    混ざらない。**押す前は塗って、押したあとは淡くする**——
@@ -1153,5 +1191,16 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
    見出しの横だと、押そうとしている人の目に入らない。
    .helpq は既定で margin-left:auto（並びの右端へ寄せる作り）なので、
    ここでは 0 に戻して、ボタンとの間は gap で取る */
-.tlybtn{display:flex;align-items:center;gap:6px}
+/* 時数のまわりの小さいボタン。**.btn と同じ形で、ひとまわり小さく。**
+   ここまで .mini には1行も当たっておらず、ブラウザ既定のボタンのまま出ていた
+   ── 右メニューのほかの押す口と形も字も違い、そこだけ浮いて見えていた。 */
+.mini{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
+  padding:6px 11px;font-size:12.5px;font-family:inherit;color:var(--tx);
+  cursor:pointer;white-space:nowrap;line-height:1.35;
+  transition:background .12s,border-color .12s}
+.mini:hover{background:var(--hover);border-color:var(--tx-sub)}
+.mini:focus-visible{outline:2px solid var(--ink-link);outline-offset:1px}
+.mini:disabled{opacity:.45;cursor:default}
+.tlybtn{display:flex;align-items:center;gap:6px;margin-top:7px}
 .tlybtn>.helpq{margin-left:0}
+.tlyin>.mini{margin-top:7px}

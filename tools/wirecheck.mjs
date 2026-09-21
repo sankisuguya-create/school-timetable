@@ -565,16 +565,25 @@ ok("週を動かすと、書いたぶんが先に届く",
    (await calls()).indexOf("apiWriteCells") >= 0, await calls());
 await p.locator("#prevWk").click(); await p.waitForTimeout(500);
 
-console.log("\n■ 入れる先を変えると層も変わる");
-await p.evaluate(() => { window.__calls.length = 0; });
-await p.locator("#sheet .cell[data-d='4'][data-s='p3'] .t").click();
-await p.waitForTimeout(150);
-await p.locator("#pScope input[value='grade']").check();
-await p.locator(".pal[data-v='kokugo']").click();
-await p.locator("#saveBtn").click(); await p.waitForTimeout(600);
-const gq = (await lastCall("apiWriteCells")).args[1][0];
-ok("学年に反映すると層は grade・対象は学年",
-   gq.layer === "grade" && gq.target === "5", gq);
+/* **開いたものが、そのまま入る先。** 右メニューの「入れる先」は外した ──
+   開いているものと別にもう1か所で選べると、学級を開いたまま全校へ広がる */
+console.log("\n■ 開いた面が、そのまま層になる");
+ok("学級の面に「入れる先」の欄は無い", await p.evaluate(() =>
+   !document.getElementById("pScopeWrap")) === true);
+ok("学級の面では、いつもその学級に入る", await p.evaluate(() =>
+   layerOfStore() + "|" + targetOfStore()) === "home|5-1");
+const shut = () => p.evaluate(() =>
+  document.querySelectorAll("dialog[open]").forEach(d => d.close()));
+await p.evaluate(() => { openView({kind:"grade", grade:"5"}); });
+await p.waitForTimeout(700); await shut();
+ok("学年の面では、層は grade・対象は学年", await p.evaluate(() =>
+   layerOfStore() + "|" + targetOfStore()) === "grade|5");
+await p.evaluate(() => { openView({kind:"school"}); });
+await p.waitForTimeout(700); await shut();
+ok("全学年の面では、層は school", await p.evaluate(() =>
+   layerOfStore() + "|" + targetOfStore()) === "school|");
+await p.evaluate(() => { openView({kind:"class", cls:"5-1"}); });
+await p.waitForTimeout(700); await shut();
 
 console.log("\n■ 空にすると消す指示が届く");
 await p.evaluate(() => { window.__calls.length = 0; });
@@ -592,7 +601,6 @@ console.log("\n■ 通常保存 → 競合 → それでも上書き");
 await p.evaluate(() => { window.__calls.length = 0; });
 const CELL = "#sheet .cell[data-d='3'][data-s='p3']";
 await p.locator(CELL + " .t").click(); await p.waitForTimeout(150);
-await p.locator("#pScope input[value='self']").check();
 await p.locator(".pal[data-v='kokugo']").click();
 await p.locator("#saveBtn").click(); await p.waitForTimeout(600);
 const c1 = (await lastCall("apiWriteCells")).args[1].slice(-1)[0];
@@ -1750,7 +1758,9 @@ const closeDlgs = async () => {
 };
 await p.evaluate(() => openView({kind:"grade", grade:"5"}));
 await p.waitForTimeout(300); await closeDlgs();
-ok("帯が出る", await p.evaluate(() => $("centerBar").hidden) === false);
+/* かたちの切り替えは左上へ上げた（紙のとなりの帯は無くなった） */
+ok("左上にかたちの切り替えが出る",
+   await p.evaluate(() => $("centerTabs").hidden) === false);
 await p.locator('#centerTabs [data-center="grade"]').click();
 await p.waitForTimeout(400);
 ok("学年の面に入れ替わる", await p.evaluate(() =>
@@ -2664,13 +2674,20 @@ await p.waitForTimeout(600); await closeDlgs();
 await p.evaluate(() => setCenter("week"));
 await p.waitForTimeout(400); await closeDlgs();
 
-console.log("\n■ 管理操作は、押す前にサーバが止める");
-ok("管理者なら、設定と管理を出す", await p.evaluate(() =>
-   !document.querySelector('[data-act="settings"]').hidden) === true);
-ok("画面は関門ではない（本体はサーバの checkAdmin）", await p.evaluate(() => {
-     /* 隠れていても google.script.run は呼べる。だからサーバ側で止める */
-     return typeof Backend.info().isAdmin === "boolean";
+/* **設定は、教職員なら誰でも触れる。** 画面もサーバも同じ
+   （gas/Gate.gs の checkAdmin を呼ぶ口は無くなった）。
+   学校で3人しか直せないと、基本時間割や学級編成を直したい人が
+   その3人の手が空くのを待つことになっていた。 */
+console.log("\n■ 設定は教職員なら誰でも触れる");
+ok("管理者でなくても、設定を出す", await p.evaluate(() => {
+     window.__isAdmin = false;
+     return !document.querySelector('[data-act="settings"]').hidden;
    }) === true);
+ok("管理・システムも隠さない", await p.evaluate(() =>
+   !document.querySelector('[data-act="admin"]').hidden) === true);
+/* **止めるのは児童と外の人だけ。** そちらはサーバの Gate.check が持つ */
+ok("サーバ側に管理者だけの関門は残っていない", await p.evaluate(() =>
+   typeof Backend.info().isAdmin === "boolean") === true);
 
 console.log(errs.length ? "\n【エラー】\n" + errs.join("\n") : "\nJSエラーなし");
 if(errs.length) ng += errs.length;

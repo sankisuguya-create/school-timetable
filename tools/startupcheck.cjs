@@ -47,7 +47,8 @@ vm.runInContext('start()', context);
 assert.equal(bootCount,1,'初期描画後にGAS初期化へ到達する');
 assert.ok(draws>0 && headers>0,'週移動前に入口と行き先を描画する');
 if(!process.env.BASELINE_REF){
-  assert.equal(outputs.length,3,'出力ボタン3個のHTML契約');
+  /* 教務必携用・時数をコピー・4週まとめて・学年でならべる・カレンダー */
+  assert.equal(outputs.length,5,'出力ボタン5個のHTML契約');
   vm.runInContext('showPlanOutputs(false)',context);
   assert.ok(outputs.every(x=>x.hidden));
   vm.runInContext('showGate()',context);

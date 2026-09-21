@@ -42,21 +42,12 @@ function paintSave(){
   b.title = err ? "もう一度押す。閉じると消える"
           : n   ? n + " コマぶんがまだシートに入っていない"
                 : "シートに入っている";
-  paintApplyMsg();
 }
 
-/* **押す前に、どこへ出るかを字で出す。** 色と背景だけに持たせない。
-   ボタンの中に入れると 400px の右パネルで折り返すので、下に1行で置く。 */
-function paintApplyMsg(){
-  const m = $("applyMsg");
-  if(!m) return;
-  const wide = typeof broadScope === "function" && broadScope();
-  m.hidden = !wide;
-  if(!wide) return;
-  const cs = writeClasses();
-  m.innerHTML = "ここで直したものは、<b>" + escText(viewName()) + " の "
-              + cs.length + " クラス</b>の週案に出る。";
-}
+/* 「ここで直したものは◯◯の3クラスに出る」の1行は外した。
+   **開いたものが、そのまま入る先**（入れる先の欄も外してある）で、
+   左上の行き先の欄が同じことを言っている。保存ボタンも、効く先が広い面では
+   「保存・反映」と字と色が変わる ── 同じことを3か所で言っていた。 */
 /* ── たんぽぽへの提出 ────────────────────────
    **担任が「今週ぶんは書き終えた」と言う印。** 週ごとに立て直す。
 
@@ -438,6 +429,11 @@ function wire(){
       if(a === "admin")   return openAdminDlg();
       if(a === "newyear") return openNewYearDlg();
       if(a === "month")   return openMonth();
+      /* 学年・カレンダーも「週案を出す」から開ける。**中央の帯と同じもの。**
+         刷るものを探している人は、左の「出す」の並びを見にいく */
+      if(a === "grade")   return centerOk() ? setCenter("grade")
+                                            : toast("クラスや学年を開いてから押す");
+      if(a === "cal")     return openCal();
       if(a === "print")   return window.print();
       if(a === "settings")return openSettings();
       if(a === "outweek") return openWeekOutput();
@@ -634,11 +630,9 @@ function wire(){
     save(); redrawCenter();
   });
 
-  /* 時数の畳み。**開き閉じを覚えておく**（毎回たたみ直させない） */
-  on("tallyFold", "toggle", () => {
-    db.settings.tallyOpen = $("tallyFold").open;
-    save();
-  });
+  /* 畳みの開き閉じは覚えておく（毎回たたみ直させない） */
+  on("tallyFold", "toggle", () => { db.settings.tallyOpen = $("tallyFold").open; save(); });
+  on("dayFold",   "toggle", () => { db.settings.dayOpen   = $("dayFold").open;   save(); });
 
   /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */
   on("dayDlg","close", () => { dayPick = 0; });
@@ -845,12 +839,10 @@ function start(){
   /* 設定・時程・教科・その年度は、立ち上がりの1回でまとめてもらう。
      別々に取りに行くと、その回数だけ待つことになる。 */
   Backend.boot(() => {
-    /* **隠すのは目隠しであって関門ではない。** 本体はサーバの checkAdmin。
-       ここで伏せるのは、押しても断られるものを毎日目に入れないため */
-    if(Backend.isGas() && !Backend.info().isAdmin)
-      for(const e of document.querySelectorAll(
-            '[data-act="settings"],[data-act="admin"],[data-act="newyear"]'))
-        e.hidden = true;
+    /* **設定は、教職員なら誰でも触れる。**（サーバ側も同じ ── gas/Gate.gs）
+       前は管理者以外から設定・管理・新年度を伏せていた。学校で3人しか
+       直せないと、基本時間割や学級編成を直したい人が、その3人の手が空くのを
+       待つことになる。止めるのは児童と外の人だけにした。 */
     Backend.watch();              /* 開きっぱなしの画面も、たまに読み直す */
     applyPaper();
     /* **本番では、古い週の控えをここで間引く。** 溢れてから慌てない。
