@@ -2515,52 +2515,87 @@ console.log("\n■ 表から取り込む（時数表・年間行事計画表）"
 await p.evaluate(() => { openView({kind:"class", cls:"5-1"}); });
 await p.waitForTimeout(500); await closeDlgs();
 /* ── 時数表。**いま開いているクラスの、この週だけ** ── */
+/* 並びは「時数をコピー」と同じ矩形。手元の時数集計表からその週の塊を
+   そのまま貼れるようにするため（形が違うと、貼る前に並べ替える手間が入る） */
+await p.evaluate(() => {
+  const t = db.settings.tally;
+  t.classes = allClasses().slice(0, 4).join(", ");
+  t.block = 6;
+  t.cols = {};
+  SLOTS.filter(s => s.kind === "lesson").forEach((s, i) => { t.cols[s.id] = i + 1; });
+  save();
+  openView({kind:"class", cls:t.classes.split(",")[0].trim()});
+});
+await p.waitForTimeout(700); await closeDlgs();
 await p.evaluate(() => openImpPlan("tally"));
-await p.waitForTimeout(250);
-await p.locator("#ipTpl").click(); await p.waitForTimeout(300);
-ok("雛形は 見出し＋月〜金 の5行", await p.evaluate(() => {
-     const r = $("ipText").value.split("\n");
-     return r.length === 6 && r[0].split("\t")[0] === "曜日" && r[1].split("\t")[0] === "月";
-   }) === true, await p.evaluate(() => $("ipText").value.split("\n")[0]));
-ok("雛形にいまの中身が入っている", await p.evaluate(() => {
-     const r = $("ipText").value.split("\n").map(x => x.split("\t"));
+await p.waitForTimeout(350);
+ok("時数表は、窓の中のマス目の表で受ける", await p.evaluate(() =>
+   !$("ipTableWrap").hidden && $("ipTextWrap").hidden) === true);
+ok("行は 5日 × 1日の行数", await p.evaluate(() =>
+   document.querySelectorAll("#ipTable tr").length
+   === 1 + WEEKDAYS * impTallyCols().block) === true,
+   await p.evaluate(() => document.querySelectorAll("#ipTable tr").length));
+ok("列は「列のずれ」の設定どおり", await p.evaluate(() =>
+   document.querySelectorAll("#ipTable tr:nth-child(2) input").length
+   === impTallyCols().width) === true);
+/* **自分の行に印。** 貼るのは塊ごとだが、入るのは自分の行だけ */
+ok("いま開いているクラスの行に印が付く", await p.evaluate(() =>
+   document.querySelectorAll("#ipTable tr.mine").length === WEEKDAYS) === true,
+   await p.evaluate(() => document.querySelectorAll("#ipTable tr.mine").length));
+ok("表にはいまの週案が入っている", await p.evaluate(() => {
+     const at = impTallyRow();
+     const box = document.querySelector("#ipTable input[data-n='" + at + "'][data-c='1']");
      const les = SLOTS.filter(s => s.kind === "lesson");
-     const c = cellFor(0, les[0].id), t = plain(c.title).trim();
-     return r[1][1] === (!t ? "" : t === NO_LESSON ? "／" : shortOf(c.subject, c.title));
+     const c = cellFor(0, les[0].id), sub = countSub(c);
+     return box.value === (sub ? sub.short : "");
    }) === true);
 /* **変えていない欄は入れない。** 貼り戻しただけで全欄を書くと、
    学年・全校から降りてきたコマが担任の層に化ける（紙の見た目は同じ） */
 await p.locator("#ipRead").click(); await p.waitForTimeout(300);
-ok("そのまま貼り戻しても、1件も入れない", await p.evaluate(() =>
+ok("そのままなら、1件も入れない", await p.evaluate(() =>
    /同じでした/.test($("ipWarn").textContent) && $("ipGo").disabled) === true,
    await p.evaluate(() => $("ipStat").textContent + " / " + $("ipWarn").textContent));
+/* 塊ごと貼れる（時数集計表からコピーしてくるのが、この口の目的） */
+ok("塊ごと貼れる", await p.evaluate(() => {
+     const at = impTallyRow();
+     impTallyPaste(at, 1, [["国", "算"]]);
+     const a = document.querySelector("#ipTable input[data-n='" + at + "'][data-c='1']").value;
+     const b = document.querySelector("#ipTable input[data-n='" + at + "'][data-c='2']").value;
+     return a === "国" && b === "算";
+   }) === true);
 await p.evaluate(() => {
-  const r = $("ipText").value.split("\n").map(x => x.split("\t"));
-  r[1][1] = "国"; r[1][2] = "算"; r[1][3] = "むにゃ";
-  $("ipText").value = r.map(x => x.join("\t")).join("\n");
+  const at = impTallyRow();
+  document.querySelector("#ipTable input[data-n='" + at + "'][data-c='3']").value = "むにゃ";
 });
 await p.locator("#ipRead").click(); await p.waitForTimeout(300);
 ok("読めない字は、入れずに名指しする", await p.evaluate(() =>
    /むにゃ/.test($("ipWarn").textContent)) === true);
 ok("入れる前に「どの曜日の何校時に何が入るか」を出す", await p.evaluate(() =>
-   /国語/.test($("ipGrid").innerText) && /月/.test($("ipGrid").innerText)) === true,
+   /月/.test($("ipGrid").innerText)) === true,
    await p.evaluate(() => $("ipGrid").innerText.slice(0, 60)));
-const impBefore = await p.evaluate(() => {
-  const les = SLOTS.filter(s => s.kind === "lesson");
-  return JSON.stringify([0,1].map(i => plain(cellFor(0, les[i].id).title).trim()));
-});
 await p.locator("#ipGo").click(); await p.waitForTimeout(700); await closeDlgs();
 ok("開いているクラスの、担任の層に入る", await p.evaluate(() => {
      const les = SLOTS.filter(s => s.kind === "lesson");
-     const a = cellFor(0, les[0].id), b = cellFor(0, les[1].id);
-     return plain(a.title).trim() === "国語" && a.layer === "home"
-         && plain(b.title).trim() === "算数" && b.layer === "home";
-   }) === true, impBefore);
+     const a = cellFor(0, les[0].id);
+     return plain(a.title).trim() === "国語" && a.layer === "home";
+   }) === true, await p.evaluate(() => {
+     const les = SLOTS.filter(s => s.kind === "lesson");
+     return cellFor(0, les[0].id);
+   }));
 ok("ほかの週には入らない", await p.evaluate(() => {
      const other = Y().weeks[iso(addDays(monday, 7))];
-     return !other || !other.home || !other.home["5-1"]
-         || Object.keys(other.home["5-1"]).length === 0;
+     return !other || !other.home || !other.home[view.cls]
+         || Object.keys(other.home[view.cls]).length === 0;
    }) === true);
+/* **クラスの並びに入っていなければ、行が決められないので取り込まない** */
+ok("並びに無いクラスでは、理由を言って止める", await p.evaluate(() => {
+     const keep = db.settings.tally.classes;
+     db.settings.tally.classes = "9-9";
+     const r = impTallyRead([]);
+     db.settings.tally.classes = keep;
+     return /クラスの並び/.test(r.warn || "");
+   }) === true);
+
 /* ── 年間行事。**全校・学年へ。日付は週をまたぐ** ── */
 await p.evaluate(() => {
   const y = Y();

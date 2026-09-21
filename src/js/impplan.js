@@ -46,87 +46,82 @@ function impSubject(v){
 
 /* ══ ① 時数表 → いま開いているクラスの週案 ══════════════
 
-   **形は「曜日 × 校時」の素直な矩形**にした。時数集計表そのものの並び
-   （日×クラスの塊・列のずれ）で受けると、貼る人が自分の行がどこかを
-   数えることになる。1クラスぶんなら 5行で足りる。
+   **並びは「時数をコピー」と同じ矩形**にしてある（dialogs.js tallyGrid）。
+   手元の時数集計表からその週の塊をそのままコピーして、窓の表へ1回で
+   貼れるようにするため ── 形が違うと、貼る前に並べ替える手間が入る。
 
-   1行目は見出し（校時の名前）。**見出しごと貼ってもらう** ──
-   見出しが無いと、5行 × N列 のどこが1校時かを位置で決めることになり、
-   1列ずれたまま取り込んでも気づけない。 */
+     行 … 月〜金 × 1日あたりの行数（設定の「1日の行数」）。
+          先頭から順にクラス（設定の「クラスの並び」）。
+     列 … 設定の「列のずれ」に従う。校時ごとに何列目かが決まっている。
+
+   **取り込むのは、いま開いているクラスの行だけ。** ほかのクラスの行は
+   貼ったまま置いておける（消させない ── 消させると、次に貼るとき
+   また塊ごと持ってくることになる）。 */
 
 const impTallySlots = () => SLOTS.filter(s => s.kind === "lesson");
 
-/* 雛形。**いま紙に出ている教科の1文字**を入れて出す */
-function impTallyTemplate(){
-  const slots = impTallySlots();
-  const rows = [["曜日"].concat(slots.map(s => s.name + "校時"))];
-  for(let d = 0; d < WEEKDAYS; d++){
-    const line = [DOW[d]];
-    for(const s of slots){
-      if(!slotShown(d, s)){ line.push("－"); continue; }
-      const c = cellFor(d, s.id);
-      const t = plain(c.title).trim();
-      line.push(!t ? "" : t === NO_LESSON ? "／" : shortOf(c.subject, c.title));
-    }
-    rows.push(line);
+/* 設定の「列のずれ」から、列 → 校時 の対応を作る */
+function impTallyCols(){
+  const t = (db.settings.tally || {cols:{}});
+  const cols = t.cols || {};
+  const used = Object.keys(cols).map(k => +cols[k] || 0);
+  const width = (used.length ? Math.max.apply(null, used) : 0) + 1;
+  const bySlot = new Array(width).fill(null);
+  for(const id in cols){
+    const sl = SLOT_BY_ID[id];
+    if(sl) bySlot[+cols[id] || 0] = sl;
   }
-  return rows;
+  return {width, bySlot, block: Math.max(1, +t.block || 10), list: tallyClasses()};
 }
 
+/* 雛形。**「時数をコピー」と同じ矩形**をそのまま使う */
+const impTallyTemplate = () => tallyGrid();
+
+/* いま開いているクラスが、1日の塊の何行目か。無ければ -1 */
+const impTallyRow = () => impTallyCols().list.indexOf(view.kind === "class" ? view.cls : "");
+
 /* 読む。戻すのは {rows, warn}。rows は [{d, slot, sub, mark}] */
-function impTallyRead(text){
-  const grid = impSplit(text), slots = impTallySlots();
-  if(grid.length < 2)
-    return {warn:"<b>見出しと、少なくとも1行が要ります。</b>"
-          + "雛形を見出しの行ごとコピーして貼ってください。"};
-  /* 見出しの行を捨てる。**「曜日」で始まっていなければ見出しが無い** */
-  const head = grid[0].map(impNorm);
-  if(head[0].indexOf("曜日") < 0)
-    return {warn:"<b>1行目が見出しではありません。</b>"
-          + "「曜日」から始まる見出しの行ごと貼ってください"
-          + "（雛形を出し直せば、その形になります）。"};
-  const body = grid.slice(1);
-  if(body.length !== WEEKDAYS)
-    return {warn:"<b>" + WEEKDAYS + "行（月〜金）が要ります。</b>"
-          + "いま " + body.length + " 行です。"
-          + "土曜の行や、空の行が混ざっていないか見てください。"};
+function impTallyRead(grid){
+  const g = impTallyCols();
+  const at = impTallyRow();
+  if(view.kind !== "class")
+    return {warn:"<b>クラスを開いてから取り込みます。</b>"};
+  if(at < 0)
+    return {warn:"<b>" + escText(view.cls) + " が、時数の「クラスの並び」に入っていません。</b>"
+          + "どの行がこのクラスかを決められないので、取り込めません。<br>"
+          + "左メニューの「時数をコピー」の窓で、並びを実物に合わせてください"
+          + (g.list.length ? "（いまは " + escText(g.list.join("・")) + "）" : "") + "。"};
+  if(grid.length < WEEKDAYS * g.block)
+    return {warn:"<b>行が足りません。</b>"
+          + (WEEKDAYS * g.block) + " 行（" + WEEKDAYS + "日 × 1日 " + g.block + "行）が要ります。"
+          + "いま " + grid.length + " 行です。"};
 
   const out = [], unknown = {};
   for(let d = 0; d < WEEKDAYS; d++){
-    const line = body[d];
-    /* 1列目は曜日。**合っているか見る** ── 並べ替えて貼られたら、
-       そのまま入れると月曜の予定が金曜に入る */
-    const dow = impNorm(line[0]);
-    if(dow && dow.indexOf(DOW[d]) < 0)
-      return {warn:"<b>" + (d + 1) + "行目が「" + escText(DOW[d]) + "」ではありません（"
-            + escText(dow) + "）。</b>行の並べ替えはできません。"};
-    for(let i = 0; i < slots.length; i++){
-      const raw = line[i + 1];
-      const v = impNorm(raw);
+    const line = grid[d * g.block + at] || [];
+    for(let col = 0; col < g.width; col++){
+      const sl = g.bySlot[col];
+      if(!sl || sl.kind !== "lesson") continue;      /* 授業の列だけ入れる */
+      if(!slotShown(d, sl)) continue;                /* 紙に出ていない校時 */
+      const v = impNorm(line[col]);
       if(v === "" || v === "－" || v === "-") continue;   /* 空欄は触らない */
       /* **変わっていない欄は入れない。**
          雛形はいまの中身を入れて出すので、貼り戻すと全欄が「書いた」ことになる。
          そのまま入れると、学年や全校から降りてきたコマにも担任の層で
          同じ字を書き込み、**降りてきたはずのコマが担任のものに化ける**
-         （紙の見た目は同じなので、書いた本人には気づけない）。
-         いま紙に出ている字と同じなら、触らない。 */
-      const now = cellFor(d, slots[i].id);
+         （紙の見た目は同じなので、書いた本人には気づけない）。 */
+      const now = cellFor(d, sl.id);
       const nowT = plain(now.title).trim();
       const nowMark = !nowT ? "" : nowT === NO_LESSON ? "／"
                                  : shortOf(now.subject, now.title);
-      /* **同じかどうかを先に見る。** あとに回すと、読めない字として名指しする
-         ものの中に「触っていない欄」が混ざる。時数に数えない教科（図書・行事・
-         給食・クラブ・委員会）は1文字を持たないので、雛形には表示名の1文字目
-         （図・行・給…）が出る ── それを教科として引き直すことはできない。
-         触っていないなら、引き直す必要もない。 */
       if(impNorm(nowMark) === v) continue;               /* すでに同じ */
       if(v === "／" || v === "/"){
-        out.push({d, slot:slots[i].id, sub:null, mark:NO_LESSON});
+        out.push({d, slot:sl.id, sub:null, mark:NO_LESSON});
         continue;
       }
       const sub = impSubject(v);
       if(!sub){ unknown[v] = (unknown[v] || 0) + 1; continue; }
-      out.push({d, slot:slots[i].id, sub, mark:sub.name});
+      out.push({d, slot:sl.id, sub, mark:sub.name});
     }
   }
   const un = Object.keys(unknown);
@@ -158,7 +153,6 @@ function impTallyApply(rows){
     }
   } finally{ scope = keep; }
   buildSheet();
-  if(typeof drawScope === "function") drawScope();
   return {n, skip};
 }
 
@@ -348,23 +342,101 @@ function openImpPlan(kind){
   $("ipTtl").textContent = tally ? "時数表から取り込む" : "年間行事計画表からコマを作る";
   $("ipLead").innerHTML = tally
     ? "<b>いま開いている「" + escText(viewName()) + "」の、この週に入ります。</b>"
-      + "雛形を出して表に貼り、教科の1文字を入れ替えてから、丸ごと貼り戻してください。"
+      + "下の表は<b>「時数をコピー」と同じ並び</b>です。"
+      + "手元の時数集計表からその週の塊をコピーして、"
+      + "<b>左上のマスを選んでそのまま貼る</b>と、1回で入ります。"
+      + "マスを直に打ち直しても構いません。"
     : "<b>全校・学年の層に入ります。</b>雛形には、年間行事計画表に入っている行事が"
       + "並びます。<b>コマにしたい行だけ「校時」と「対象」を埋めて</b>、"
       + "丸ごと貼り戻してください。埋めなかった行は入りません。";
+  /* 時数表はマス目の表、年間行事は字の欄。**運び方は同じでも、形が違う。**
+     時数表は矩形なので、表のほうが貼りやすい（列のずれを目で合わせられる）。
+     年間行事は1行1件で、行を足し引きするので、字の欄のほうが直しやすい */
+  $("ipTableWrap").hidden = !tally;
+  $("ipTextWrap").hidden  = tally;
+  $("ipTpl").textContent  = tally ? "いまの週案を表に入れる" : "雛形を出す（コピー）";
   $("ipText").value = "";
   $("ipStat").textContent = "";
   $("ipWarn").innerHTML = "";
   $("ipGrid").innerHTML = "";
   $("ipGo").disabled = true;
   $("ipGo").textContent = tally ? "この週に入れる" : "全校・学年に入れる";
+  if(tally) impTallyTable(impTallyTemplate());
   $("impPlanDlg").showModal();
 }
 
+/* ── 窓の中のマス目の表（時数表のほう）────────────────
+   **貼る先をそのまま見せる。** スプレッドシートを開かずに済む。
+
+   左の2列は目じるし（曜日・クラス）。触れない。
+   右のマスが中身で、1マスが1校時ぶん。**いま開いているクラスの行に印**を付け、
+   ほかのクラスの行は薄くする ── 貼るのは塊ごとなので消させないが、
+   入るのは自分の行だけだと、見て分かるようにしておく。 */
+function impTallyTable(grid){
+  const g = impTallyCols(), at = impTallyRow();
+  const head = ["<tr><th></th><th></th>"
+    + g.bySlot.map((sl, i) => "<th>" + escText(sl ? sl.name : String(i)) + "</th>").join("")
+    + "</tr>"];
+  const body = [];
+  for(let d = 0; d < WEEKDAYS; d++) for(let r = 0; r < g.block; r++){
+    const n = d * g.block + r;
+    const line = grid[n] || [];
+    const mine = r === at;
+    body.push("<tr" + (mine ? " class='mine'" : "") + (r === 0 ? " data-top='1'" : "") + ">"
+      + "<th class='dow'>" + (r === 0 ? escText(DOW[d]) : "") + "</th>"
+      + "<th class='cls'>" + escText(g.list[r] || "") + "</th>"
+      + g.bySlot.map((sl, i) =>
+          "<td" + (sl && sl.kind === "lesson" ? "" : " class='off'") + ">"
+          + "<input data-n='" + n + "' data-c='" + i + "' value='"
+          + escText(line[i] == null ? "" : line[i]) + "'"
+          + (sl && sl.kind === "lesson" ? "" : " tabindex='-1'") + "></td>").join("")
+      + "</tr>");
+  }
+  $("ipTable").innerHTML = "<table class='iptbl'>" + head.join("") + body.join("") + "</table>";
+  /* **塊ごと貼れるようにする。** 1マスずつ打ち直させない ──
+     時数集計表からコピーしてくるのが、この口のそもそもの目的 */
+  for(const e of $("ipTable").querySelectorAll("input"))
+    e.addEventListener("paste", ev => {
+      const txt = (ev.clipboardData || window.clipboardData).getData("text");
+      if(!txt || txt.indexOf("\t") < 0 && txt.indexOf("\n") < 0) return;  /* 1マスぶんはそのまま */
+      ev.preventDefault();
+      impTallyPaste(+e.dataset.n, +e.dataset.c, impSplit(txt));
+    });
+}
+
+/* 貼られた塊を、選んだマスを左上にして流し込む */
+function impTallyPaste(n0, c0, rows){
+  const g = impTallyCols();
+  for(let r = 0; r < rows.length; r++) for(let c = 0; c < rows[r].length; c++){
+    const box = $("ipTable").querySelector(
+      "input[data-n='" + (n0 + r) + "'][data-c='" + (c0 + c) + "']");
+    if(box) box.value = rows[r][c];
+  }
+  $("ipStat").textContent = rows.length + " 行を貼った。「読む」で確かめる";
+}
+
+/* 表を読み出して矩形に戻す */
+function impTallyGrid(){
+  const g = impTallyCols(), out = [];
+  for(let n = 0; n < WEEKDAYS * g.block; n++){
+    const line = new Array(g.width).fill("");
+    for(let c = 0; c < g.width; c++){
+      const box = $("ipTable").querySelector("input[data-n='" + n + "'][data-c='" + c + "']");
+      if(box) line[c] = box.value;
+    }
+    out.push(line);
+  }
+  return out;
+}
+
 function impPlanTemplate(){
-  const rows = impPlanKind === "tally" ? impTallyTemplate() : impEvTemplate();
-  if(rows.length < 2 && impPlanKind !== "tally")
-    return toast("年間行事計画表に行事がありません");
+  if(impPlanKind === "tally"){
+    impTallyTable(impTallyTemplate());
+    $("ipStat").textContent = "いまの週案を表に入れた";
+    return;
+  }
+  const rows = impEvTemplate();
+  if(rows.length < 2) return toast("年間行事計画表に行事がありません");
   copyText(impTsv(rows),
     "雛形をコピーした。スプレッドシートへ <b>貼り付け</b> してください");
   /* **貼る先の窓にも出しておく。** クリップボードが使えない環境がある
@@ -374,7 +446,7 @@ function impPlanTemplate(){
 }
 
 function impPlanRead(){
-  const r = impPlanKind === "tally" ? impTallyRead($("ipText").value)
+  const r = impPlanKind === "tally" ? impTallyRead(impTallyGrid())
                                     : impEvRead($("ipText").value);
   impPlanRows = null;
   $("ipGrid").innerHTML = "";

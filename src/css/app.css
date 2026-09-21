@@ -635,6 +635,31 @@ span.tpin{cursor:default}
    紙のとなりで切り替えられるようにする */
 .chipset{margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .chipset[hidden]{display:none!important}
+/* 時数表を貼るマス目の表。**貼る先をそのまま見せる。**
+   1マスが1校時ぶん。塊ごと貼れるので、スプレッドシートを開かずに済む。 */
+.iptblwrap{max-height:46vh;max-width:100%;overflow:auto;
+  width:max-content;border:1px solid var(--line);
+  border-radius:var(--r-sm);background:var(--card)}
+.iptbl{border-collapse:collapse;font-size:12px}
+.iptbl th{position:sticky;top:0;z-index:1;background:var(--bg);color:var(--tx-sub);
+  font-weight:600;font-size:11px;padding:4px 6px;white-space:nowrap;
+  border:1px solid var(--line-soft)}
+.iptbl th.dow,.iptbl th.cls{position:static;text-align:right;
+  background:var(--card);color:var(--tx-sub)}
+.iptbl th.dow{font-weight:700;color:var(--tx)}
+.iptbl td{padding:0;border:1px solid var(--line-soft)}
+.iptbl input{width:2.6em;border:0;background:transparent;padding:4px 2px;
+  font:inherit;color:var(--ink);text-align:center;outline:none}
+.iptbl input:focus{background:#FFFBEA;box-shadow:inset 0 0 0 1.6px var(--ink-link)}
+/* **自分の行に印。** 貼るのは塊ごとだが、入るのは自分の行だけ */
+.iptbl tr.mine th.cls{color:var(--ink-link);font-weight:700}
+.iptbl tr.mine td{background:var(--fill-a)}
+/* 授業ではない列（列のずれを当てていない列）。触らせない */
+.iptbl td.off{background:var(--bg)}
+.iptbl td.off input{color:var(--tx-sub)}
+/* 1日の切れ目。**どこからが次の曜日か**を線で見せる */
+.iptbl tr[data-top] th,.iptbl tr[data-top] td{border-top:1.5px solid var(--line)}
+
 /* 紙の字の大きさ（＋−）。**数は真ん中に出す。**
    押したものと変わったものが並んでいないと、効いたかどうか分からない。
    端まで来たら押せなくする（無反応にすると、壊れたのか端なのか読めない） */
