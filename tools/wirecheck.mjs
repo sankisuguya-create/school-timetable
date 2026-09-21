@@ -2672,13 +2672,20 @@ await p.waitForTimeout(600); await closeDlgs();
 await p.evaluate(() => setCenter("week"));
 await p.waitForTimeout(400); await closeDlgs();
 
-console.log("\n■ 管理操作は、押す前にサーバが止める");
-ok("管理者なら、設定と管理を出す", await p.evaluate(() =>
-   !document.querySelector('[data-act="settings"]').hidden) === true);
-ok("画面は関門ではない（本体はサーバの checkAdmin）", await p.evaluate(() => {
-     /* 隠れていても google.script.run は呼べる。だからサーバ側で止める */
-     return typeof Backend.info().isAdmin === "boolean";
+/* **設定は、教職員なら誰でも触れる。** 画面もサーバも同じ
+   （gas/Gate.gs の checkAdmin を呼ぶ口は無くなった）。
+   学校で3人しか直せないと、基本時間割や学級編成を直したい人が
+   その3人の手が空くのを待つことになっていた。 */
+console.log("\n■ 設定は教職員なら誰でも触れる");
+ok("管理者でなくても、設定を出す", await p.evaluate(() => {
+     window.__isAdmin = false;
+     return !document.querySelector('[data-act="settings"]').hidden;
    }) === true);
+ok("管理・システムも隠さない", await p.evaluate(() =>
+   !document.querySelector('[data-act="admin"]').hidden) === true);
+/* **止めるのは児童と外の人だけ。** そちらはサーバの Gate.check が持つ */
+ok("サーバ側に管理者だけの関門は残っていない", await p.evaluate(() =>
+   typeof Backend.info().isAdmin === "boolean") === true);
 
 console.log(errs.length ? "\n【エラー】\n" + errs.join("\n") : "\nJSエラーなし");
 if(errs.length) ng += errs.length;

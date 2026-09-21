@@ -2048,21 +2048,21 @@ function apiBoot(year){
 /* 年度の検査。**4月に開けたとき、何が足りないかを1画面で言う。**
    直しはここでやらない。黙って直すと、直した中身が誰にも見えない。 */
 function apiCheckYear(year){
-  Gate.checkAdmin();
+  Gate.check();
   return Store.checkYear(year || new Date().getFullYear());
 }
 /* 年度の退避。**3つに分けてある。数える／照合する／消す。**
    1つのボタンにまとめない。まとめると、確かめずに消せてしまう。 */
 function apiArchiveCount(year){
-  Gate.checkAdmin();
+  Gate.check();
   return Store.archiveCount(year);
 }
 function apiArchiveVerify(year, url){
-  Gate.checkAdmin();
+  Gate.check();
   return Store.archiveVerify(year, url);
 }
 function apiArchivePurge(year, url, typed){
-  Gate.checkAdmin();
+  Gate.check();
   return Store.archivePurge(year, url, typed);
 }
 function apiReadYear(year){
@@ -2086,7 +2086,7 @@ function apiWriteCells(year, patches){
 /* 週案シートを、いまの学級編成のぶんだけ先に作っておく。
    書くまで無いと、担任が「自分のシートが無い」と探すことになる。 */
 function setupPlanSheets(year){
-  Gate.checkAdmin();
+  Gate.check();
   const y = year || new Date().getFullYear();
   const r = Store.readRoster(y);
   const made = [];
@@ -2102,7 +2102,7 @@ function setupPlanSheets(year){
 
 /* 旧・週案（1枚に全クラス）から移す。エディタから1回だけ実行する。 */
 function migratePlanSheets(){
-  Gate.checkAdmin();
+  Gate.check();
   const r = Store.migratePlan();
   const msg = "移したコマ: " + r.moved + "／シート: " + r.sheets
             + (r.note ? "\n" + r.note : "")
@@ -2112,15 +2112,15 @@ function migratePlanSheets(){
 }
 
 function apiWriteRoster(year, classes, specials, week1, tanpopo){
-  Gate.checkAdmin();
+  Gate.check();
   return Store.writeRoster(year, classes, specials, week1, tanpopo);
 }
 function apiWriteBase(year, cls, variant, bank){
-  Gate.checkAdmin();
+  Gate.check();
   return Store.writeBase(year, cls, variant, bank);
 }
 function apiWriteBaseAll(year, table){
-  Gate.checkAdmin();
+  Gate.check();
   return Store.writeBaseAll(year, table);
 }
 function apiReadPaste(){
@@ -2147,47 +2147,47 @@ function apiTpTargets(){
   return Store.tpTargets();
 }
 function apiWriteTpTargets(list){
-  Gate.checkAdmin();
+  Gate.check();
   return Store.writeTargets(list);
 }
 function apiTestTpTarget(url){
-  Gate.checkAdmin();
+  Gate.check();
   return Store.testTarget(url);
 }
 /* 新年度の設定。**手順と、いまどこまで済んでいるか。**
    判定できるものは checkYear がシートを見て決め、人しか判定できない手順だけ
    「新年度設定」シートに記録する。 */
 function apiYearSetup(year){
-  Gate.checkAdmin();
+  Gate.check();
   return Store.yearSetup(year || new Date().getFullYear());
 }
 function apiTickYearSetup(year, key, on){
-  Gate.checkAdmin();
+  Gate.check();
   return Store.tickYearSetup(year, key, on);
 }
 /* 週案シートを作る。**これまではエディタからしか走らせられなかった。**
    新年度の手順の最後がエディタ頼みだと、そこで止まる。 */
 function apiSetupPlanSheets(year){
-  Gate.checkAdmin();
+  Gate.check();
   return setupPlanSheets(year);
 }
 /* A週の起点の月曜。**「設定」シートの1行だけを画面から直す。**
    ほかのキーは受け付けない（画面から設定を全部いじれるようにすると、
    関門の例外リストまで画面から書けることになる）。 */
 function apiWriteVariantOrigin(monday){
-  Gate.checkAdmin();
+  Gate.check();
   return Store.writeVariantOrigin(monday);
 }
 /* 年間行事計画表を貼り替える。**貼るのはシートではなく画面から。**
    シートのURLを教員に渡さないまま、年度初めの貼り替えが閉じる。 */
 /* 教科の表し方（表示名・時数表の1文字・たんぽぽ表記）を直す */
 function apiWriteSubjects(rows){
-  Gate.checkAdmin();
+  Gate.check();
   return Store.writeSubjects(rows);
 }
 
 function apiWriteEvents(rows){
-  Gate.checkAdmin();
+  Gate.check();
   return Store.writeEvents(rows);
 }
 /* 時数集計シートへ書く。**数えたのは画面のほう。**
