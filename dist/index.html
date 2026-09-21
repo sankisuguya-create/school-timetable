@@ -605,9 +605,28 @@ span.tpin{cursor:default}
 .save.apply.dirty{background:var(--apply);border-color:var(--apply);color:#fff}
 .save.apply.bad{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff}
 /* 押す前に、どこへ出るかを字で言う1行 */
-.applymsg{margin:0;padding:7px 10px;border-left:3px solid var(--apply);
-  background:#FDF2E6;color:#6B3A05;font-size:12px;line-height:1.7}
-.applymsg b{color:#6B3A05}
+/* 空き枠さがし。**紙のとなりの帯から右メニューへ移した。**
+   帯には空き枠しか残っておらず、面を開くたび紙の上に1行が出たり消えたりして、
+   紙の位置が上下に動いていた。ここでは縦に積む（右メニューは細長い）。 */
+.panel .freebox{flex-direction:column;align-items:stretch;gap:7px;
+  padding:9px 10px;border:1px solid var(--line);border-radius:var(--r-sm);
+  background:var(--card);margin:0}
+.panel .freebox .flab{font-size:12px;color:var(--tx-sub);font-weight:600}
+.panel .freebox .seg{width:100%}
+.panel .freebox .seg button{flex:1;padding:6px 4px;font-size:12px}
+/* 畳める見出し（時数・日の形で同じ形） */
+#dayFold>summary,#tallyFold>summary{list-style:none;cursor:pointer;
+  display:flex;align-items:center;gap:8px;padding:7px 9px;
+  border:1px solid var(--line);border-radius:var(--r-sm);
+  background:var(--card);font-size:13px;font-weight:700;color:var(--tx)}
+#dayFold>summary::-webkit-details-marker{display:none}
+#dayFold>summary::before{content:"▸";font-size:11px;color:var(--tx-sub);
+  transition:transform .12s}
+#dayFold[open]>summary::before{transform:rotate(90deg)}
+#dayFold>summary:hover{border-color:var(--ink-link)}
+#dayFold>summary i{font-style:normal;font-weight:400;font-size:12px;
+  color:var(--tx-sub);margin-left:auto}
+.dayin{padding-top:9px}
 /* たんぽぽへの提出。**保存の右隣。** たんぽぽの児童がいるクラスだけに出る。
    色は既にある専科の茶（--cat-special）。保存の青とも、ロックの赤とも
    混ざらない。**押す前は塗って、押したあとは淡くする**——
@@ -1894,23 +1913,6 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
       <!-- 中央に出すかたちを入れ替える帯。**紙の外**（刷られない）。
            書けるのは週の紙1枚だけ。4週と学年は見るだけの面。
            空き枠さがしも、見るための道具なのでここに置く（面をまたいで効く） -->
-      <div class="cbar" id="centerBar" hidden>
-        <!-- 空き枠さがし。**学年・全校・専科の面だけ。**
-             学級の面に「空き枠」は無い（探しているのは自分の空き時間で、別のもの） -->
-        <div class="freebox" id="freeBox" hidden>
-          <span class="flab">空き枠</span>
-          <div class="seg" id="freeSeg" role="group" aria-label="空き枠さがし">
-            <button data-free="0" aria-pressed="true">出さない</button
-            ><button data-free="1" aria-pressed="false">レベル1</button
-            ><button data-free="2" aria-pressed="false">レベル2</button>
-          </div>
-          <details class="favoid" id="freeAvoid">
-            <summary id="freeAvoidSum">避ける教科</summary>
-            <div class="fapop" id="freeAvoidBody"></div>
-          </details>
-          <span class="ftally" id="freeTally" aria-live="polite"></span>
-        </div>
-      </div>
 
       <!-- ④ 紙の左右で週を繰る。**左メニューの ◀ ▶ と同じことをする。**
            紙を読んでいる目の高さに置く ── 読みながら週を繰るとき、
@@ -2024,9 +2026,29 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
             <span id="tpSubTxt">たんぽぽに提出</span></button>
         </div>
       </div>
-      <!-- 学年・全学年の面（と、学級で入れる先を広げたとき）にだけ出る。
-           **押す前に、どこへ出るかを字で言う。** 色と背景だけに持たせない -->
-      <p class="applymsg" id="applyMsg" hidden></p>
+      <!-- 空き枠さがし。**学年・全校・専科の面だけ。**
+           学級の面に「空き枠」は無い（探しているのは自分の空き時間で、別のもの）。
+
+           **紙のとなりの帯から、ここへ移した。** あの帯には空き枠しか
+           残っておらず、面を開くたびに紙の上に1行の帯が出たり消えたりして、
+           紙の位置が上下に動いていた。押す口は押す口の並ぶところに置く。
+
+           ここにあった「ここで直したものは◯◯の3クラスに出る」は外した。
+           開いたものが、そのまま入る先（入れる先の欄も外してある）で、
+           左上の行き先の欄が同じことを言っている。 -->
+      <div class="freebox" id="freeBox" hidden>
+        <span class="flab">空き枠</span>
+        <div class="seg" id="freeSeg" role="group" aria-label="空き枠さがし">
+          <button data-free="0" aria-pressed="true">出さない</button
+          ><button data-free="1" aria-pressed="false">レベル1</button
+          ><button data-free="2" aria-pressed="false">レベル2</button>
+        </div>
+        <details class="favoid" id="freeAvoid">
+          <summary id="freeAvoidSum">避ける教科</summary>
+          <div class="fapop" id="freeAvoidBody"></div>
+        </details>
+        <span class="ftally" id="freeTally" aria-live="polite"></span>
+      </div>
       <p class="tpchanged" id="tpChanged" role="status" hidden>未提出の変更あり！　保存後に、たんぽぽへ再提出してください。</p>
       <p class="lockmsg" id="lockMsg" hidden>
         <b>この画面はロック中。</b>直すには右上の「ロック中」を押す。</p>
@@ -2175,13 +2197,15 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
            担任の画面からは押せない。紙の日付の見出しに置いていたころは、
            押せることに気づかれず「休みの日を入れる口が無い」と言われた。
            紙の上には印（特・休）だけを残す ── あれは刷って残る情報 -->
+      <!-- **畳んでおく。** 日の形を直すのは週に0〜1回で、毎日見るものではない。
+           開いたままだと、6日ぶんの押す口が右メニューの下に居座る。
+           説明は ？ の中（HELP.dayform） -->
       <div id="dayWrap" hidden>
-        <h3>この週の日の形</h3>
-        <div class="dayrow" id="dayRow"></div>
-        <p class="hint" style="margin:7px 0 0">押すと、その日を
-          <b>特別校時</b>（朝学習が消えて上へ詰まる）や
-          <b>休み</b>（1〜6校時に斜め線）にできる。<b>全クラスの紙に入る。</b>
-          戻せば、書いてある予定がそのまま出る（休みにしても中身は消していない）。</p>
+        <details id="dayFold">
+          <summary data-help="dayform"><span>この週の日の形</span>
+            <i id="dayPeek"></i></summary>
+          <div class="dayin"><div class="dayrow" id="dayRow"></div></div>
+        </details>
       </div>
 
     </aside>
@@ -6869,12 +6893,10 @@ function setCenter(kind){
 function paintCenterTabs(){
   for(const b of document.querySelectorAll("#centerTabs [data-center]"))
     b.setAttribute("aria-pressed", String(b.dataset.center === centerMode));
-  /* かたちの帯は左上へ上げた。**紙のとなりの帯は空き枠さがしだけ**なので、
-     そちらが要らない面では帯ごと消す */
+  /* かたちの帯は左上へ、空き枠は右メニューへ移した。
+     紙のとなりの帯そのものが無くなっている */
   const seg = $("centerTabs");
   if(seg) seg.hidden = !centerOk();
-  const bar = $("centerBar");
-  if(bar) bar.hidden = !freeScope();
   paintFree();
 }
 
@@ -7655,6 +7677,18 @@ function drawDayPanel(){
     b.title = DAY_FORM[f].why + "　押すと変えられる（全クラスに入る）";
     b.onclick = () => openDayDlg(d);
     row.appendChild(b);
+  }
+  /* 畳んだままでも「ふつうでない日があるか」だけは見える。
+     **開き閉じは覚えておく**（既定は畳む。週に0〜1回しか直さない） */
+  const fold = $("dayFold");
+  if(fold){
+    if(fold.open !== !!db.settings.dayOpen) fold.open = !!db.settings.dayOpen;
+    const odd = [];
+    for(let d = 0; d < DAYS; d++){
+      const f = dayForm(d);
+      if(f) odd.push(DOW[d] + DAY_FORM[f].label);
+    }
+    $("dayPeek").textContent = odd.length ? odd.join("・") : "ぜんぶふつう";
   }
 }
 
@@ -8910,7 +8944,7 @@ function openView(v){
       $("gradeView").hidden = true;
       document.querySelector(".panel").hidden = true;
       document.querySelector(".work").classList.add("no-panel");
-      $("centerBar").hidden = true;
+      $("centerTabs").hidden = true;
     }
     /* たんぽぽの面には紙が無い。紙から出す操作（印刷・時数）は伏せる */
     showPlanOutputs(!tp);
@@ -9713,6 +9747,19 @@ const HELP = {
        + "「たんぽぽ時間割に書き入れる」は、ロックしたままでも押せます。",
        "<i>はじめの人がつまずくところ：</i>入れた組は「学級編成」の"
        + "たんぽぽ交流級の欄に残ります。年度の初めに直すのはそちらです。"]},
+  dayform: {t:"この週の日の形",
+    b:["<b>その日を「特別校時」や「休み」にします。全学年の面からだけ直せます。</b>"
+       + "効く範囲が全クラスなので、担任の画面からは押せません。",
+       "<b>特別校時</b>＝朝学習の行が消えて、下が上へ詰まります"
+       + "（授業参観や式のある日）。",
+       "<b>休み</b>＝1〜6校時に斜め線を引きます。"
+       + "<b>中身は消していません。</b>戻せば、書いてある予定がそのまま出ます。",
+       "<b>畳んでおけます。</b>見出しを押すと開き閉じします。"
+       + "週に0〜1回しか直さないので、閉じておくと下が近くなります。"
+       + "畳んだままでも、ふつうでない日があれば見出しに出ます。",
+       "<i>はじめの人がつまずくところ：</i>"
+       + "校外行事を置いた日は、休みにしても斜め線を引きません"
+       + "（自然学校のように休日をまたぐ行事があるため）。"]},
   gradeview: {t:"学年でならべる",
     b:["<b>同じ学年のクラスを、横に並べて見る画面です。</b>"
        + "合同体育・学年集会・専科の巡りが、そろっているかどうかが分かります。",
@@ -10490,21 +10537,12 @@ function paintSave(){
   b.title = err ? "もう一度押す。閉じると消える"
           : n   ? n + " コマぶんがまだシートに入っていない"
                 : "シートに入っている";
-  paintApplyMsg();
 }
 
-/* **押す前に、どこへ出るかを字で出す。** 色と背景だけに持たせない。
-   ボタンの中に入れると 400px の右パネルで折り返すので、下に1行で置く。 */
-function paintApplyMsg(){
-  const m = $("applyMsg");
-  if(!m) return;
-  const wide = typeof broadScope === "function" && broadScope();
-  m.hidden = !wide;
-  if(!wide) return;
-  const cs = writeClasses();
-  m.innerHTML = "ここで直したものは、<b>" + escText(viewName()) + " の "
-              + cs.length + " クラス</b>の週案に出る。";
-}
+/* 「ここで直したものは◯◯の3クラスに出る」の1行は外した。
+   **開いたものが、そのまま入る先**（入れる先の欄も外してある）で、
+   左上の行き先の欄が同じことを言っている。保存ボタンも、効く先が広い面では
+   「保存・反映」と字と色が変わる ── 同じことを3か所で言っていた。 */
 /* ── たんぽぽへの提出 ────────────────────────
    **担任が「今週ぶんは書き終えた」と言う印。** 週ごとに立て直す。
 
@@ -11087,11 +11125,9 @@ function wire(){
     save(); redrawCenter();
   });
 
-  /* 時数の畳み。**開き閉じを覚えておく**（毎回たたみ直させない） */
-  on("tallyFold", "toggle", () => {
-    db.settings.tallyOpen = $("tallyFold").open;
-    save();
-  });
+  /* 畳みの開き閉じは覚えておく（毎回たたみ直させない） */
+  on("tallyFold", "toggle", () => { db.settings.tallyOpen = $("tallyFold").open; save(); });
+  on("dayFold",   "toggle", () => { db.settings.dayOpen   = $("dayFold").open;   save(); });
 
   /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */
   on("dayDlg","close", () => { dayPick = 0; });

@@ -491,9 +491,28 @@ span.tpin{cursor:default}
 .save.apply.dirty{background:var(--apply);border-color:var(--apply);color:#fff}
 .save.apply.bad{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff}
 /* 押す前に、どこへ出るかを字で言う1行 */
-.applymsg{margin:0;padding:7px 10px;border-left:3px solid var(--apply);
-  background:#FDF2E6;color:#6B3A05;font-size:12px;line-height:1.7}
-.applymsg b{color:#6B3A05}
+/* 空き枠さがし。**紙のとなりの帯から右メニューへ移した。**
+   帯には空き枠しか残っておらず、面を開くたび紙の上に1行が出たり消えたりして、
+   紙の位置が上下に動いていた。ここでは縦に積む（右メニューは細長い）。 */
+.panel .freebox{flex-direction:column;align-items:stretch;gap:7px;
+  padding:9px 10px;border:1px solid var(--line);border-radius:var(--r-sm);
+  background:var(--card);margin:0}
+.panel .freebox .flab{font-size:12px;color:var(--tx-sub);font-weight:600}
+.panel .freebox .seg{width:100%}
+.panel .freebox .seg button{flex:1;padding:6px 4px;font-size:12px}
+/* 畳める見出し（時数・日の形で同じ形） */
+#dayFold>summary,#tallyFold>summary{list-style:none;cursor:pointer;
+  display:flex;align-items:center;gap:8px;padding:7px 9px;
+  border:1px solid var(--line);border-radius:var(--r-sm);
+  background:var(--card);font-size:13px;font-weight:700;color:var(--tx)}
+#dayFold>summary::-webkit-details-marker{display:none}
+#dayFold>summary::before{content:"▸";font-size:11px;color:var(--tx-sub);
+  transition:transform .12s}
+#dayFold[open]>summary::before{transform:rotate(90deg)}
+#dayFold>summary:hover{border-color:var(--ink-link)}
+#dayFold>summary i{font-style:normal;font-weight:400;font-size:12px;
+  color:var(--tx-sub);margin-left:auto}
+.dayin{padding-top:9px}
 /* たんぽぽへの提出。**保存の右隣。** たんぽぽの児童がいるクラスだけに出る。
    色は既にある専科の茶（--cat-special）。保存の青とも、ロックの赤とも
    混ざらない。**押す前は塗って、押したあとは淡くする**——

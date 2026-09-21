@@ -131,6 +131,18 @@ function drawDayPanel(){
     b.onclick = () => openDayDlg(d);
     row.appendChild(b);
   }
+  /* 畳んだままでも「ふつうでない日があるか」だけは見える。
+     **開き閉じは覚えておく**（既定は畳む。週に0〜1回しか直さない） */
+  const fold = $("dayFold");
+  if(fold){
+    if(fold.open !== !!db.settings.dayOpen) fold.open = !!db.settings.dayOpen;
+    const odd = [];
+    for(let d = 0; d < DAYS; d++){
+      const f = dayForm(d);
+      if(f) odd.push(DOW[d] + DAY_FORM[f].label);
+    }
+    $("dayPeek").textContent = odd.length ? odd.join("・") : "ぜんぶふつう";
+  }
 }
 
 /* 書く前に一度だけ聞く。**別の人の予定を潰すときだけ。**

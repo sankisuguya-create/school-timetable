@@ -72,7 +72,9 @@ try{
   await p.evaluate(`${shut}openView({kind:'grade',grade:'5'});writeCell(3,'p1',{title:'学年集会'});refreshWeek();`);
   await p.evaluate(shut);
   assert.match(await p.locator('#saveTxt').innerText(),/保存・反映/);
-  assert.match(await p.locator('#applyMsg').innerText(),/4 クラス/);
+  /* 「ここで直したものは◯クラスに出る」の1行は外した。
+     効く先が広いことは、保存ボタンの字（保存・反映）と左上の行き先が言う */
+  assert.equal(await p.evaluate(()=>writeClasses().length),4);
   await p.locator('#saveBtn').click();
   assert.ok(await p.locator('#apDlg').evaluate(d=>d.open));
   assert.equal(await p.evaluate(()=>document.activeElement.id),'apNo');
@@ -84,7 +86,8 @@ try{
   /* 学級の面では聞かない（入れる先がその学級だけなので） */
   await p.evaluate(`${shut}openView({kind:'class',cls:'5-1'});writeCell(3,'p4',{title:'算数'});refreshWeek();`);
   await p.evaluate(shut);
-  assert.equal(await p.locator('#applyMsg').isVisible(),false);
+  assert.match(await p.locator('#saveTxt').innerText(),/^保存/);
+  assert.equal(await p.evaluate(()=>broadScope()),false);
   await p.locator('#saveBtn').click();
   assert.equal(await p.locator('#apDlg').evaluate(d=>d.open),false);
   assert.equal(await unsaved(),false);

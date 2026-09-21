@@ -1184,6 +1184,12 @@ ok("担任の画面には、日の形の欄を出さない",
    await p.locator("#dayWrap").evaluate(e => e.hidden) === true);
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".master.all").click(); await p.waitForTimeout(400);
+/* **畳んである**（週に0〜1回しか直さない）。押す前に開く */
+ok("畳んだままでも、ふつうでない日があるかは見える",
+   await p.evaluate(() => $("dayPeek").textContent.length > 0) === true,
+   await p.evaluate(() => $("dayPeek").textContent));
+await p.evaluate(() => { $("dayFold").open = true; });
+await p.waitForTimeout(200);
 ok("全学年の面では、右メニューに6日ぶん並ぶ",
    await p.locator("#dayRow .dayb").count() === 6,
    await p.locator("#dayRow .dayb").count());
@@ -1228,13 +1234,16 @@ ok("ほかの曜日の行の高さは変わらない（朝学習の行は 6mm �
    }) === true,
    await p.evaluate(() => Math.round(document.querySelector("#sheet .cell[data-d='0'][data-s='am2']")
      .getBoundingClientRect().height / (96/25.4) * 10) / 10));
+/* **画面の倍率を外して測る。** 紙は .paper の zoom で画面に合わせて
+   拡大してあり、getBoundingClientRect はその拡大後の大きさを返す。
+   割らずに mm と見なすと、画面が広いだけで「B5 に入らない」と出る。 */
+const sheetMM = () => p.evaluate(() => {
+  const z = parseFloat(getComputedStyle(document.querySelector(".paper")).zoom) || 1;
+  return document.querySelector("#sheet").getBoundingClientRect().height / z / (96/25.4);
+});
 ok("紙の高さは変わらない（B5 に収まる）",
-   await p.evaluate(() => {
-     const mm = px => px / (96/25.4);
-     return mm(document.querySelector("#sheet").getBoundingClientRect().height) <= 257 - 16;
-   }) === true,
-   await p.evaluate(() => Math.round(document.querySelector("#sheet")
-     .getBoundingClientRect().height / (96/25.4) * 10) / 10));
+   (await sheetMM()) <= 257 - 16 + 0.5,
+   Math.round((await sheetMM()) * 10) / 10);
 ok("詰めたぶんは放課後が受け取る（その日の放課後が広い）",
    await p.evaluate(() => {
      const h = s => document.querySelector(s).getBoundingClientRect().height;

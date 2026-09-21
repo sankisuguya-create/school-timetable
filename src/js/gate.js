@@ -111,7 +111,7 @@ function openView(v){
       $("gradeView").hidden = true;
       document.querySelector(".panel").hidden = true;
       document.querySelector(".work").classList.add("no-panel");
-      $("centerBar").hidden = true;
+      $("centerTabs").hidden = true;
     }
     /* たんぽぽの面には紙が無い。紙から出す操作（印刷・時数）は伏せる */
     showPlanOutputs(!tp);

@@ -1758,7 +1758,9 @@ const closeDlgs = async () => {
 };
 await p.evaluate(() => openView({kind:"grade", grade:"5"}));
 await p.waitForTimeout(300); await closeDlgs();
-ok("帯が出る", await p.evaluate(() => $("centerBar").hidden) === false);
+/* かたちの切り替えは左上へ上げた（紙のとなりの帯は無くなった） */
+ok("左上にかたちの切り替えが出る",
+   await p.evaluate(() => $("centerTabs").hidden) === false);
 await p.locator('#centerTabs [data-center="grade"]').click();
 await p.waitForTimeout(400);
 ok("学年の面に入れ替わる", await p.evaluate(() =>

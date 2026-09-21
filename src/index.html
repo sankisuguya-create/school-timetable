@@ -150,23 +150,6 @@
       <!-- 中央に出すかたちを入れ替える帯。**紙の外**（刷られない）。
            書けるのは週の紙1枚だけ。4週と学年は見るだけの面。
            空き枠さがしも、見るための道具なのでここに置く（面をまたいで効く） -->
-      <div class="cbar" id="centerBar" hidden>
-        <!-- 空き枠さがし。**学年・全校・専科の面だけ。**
-             学級の面に「空き枠」は無い（探しているのは自分の空き時間で、別のもの） -->
-        <div class="freebox" id="freeBox" hidden>
-          <span class="flab">空き枠</span>
-          <div class="seg" id="freeSeg" role="group" aria-label="空き枠さがし">
-            <button data-free="0" aria-pressed="true">出さない</button
-            ><button data-free="1" aria-pressed="false">レベル1</button
-            ><button data-free="2" aria-pressed="false">レベル2</button>
-          </div>
-          <details class="favoid" id="freeAvoid">
-            <summary id="freeAvoidSum">避ける教科</summary>
-            <div class="fapop" id="freeAvoidBody"></div>
-          </details>
-          <span class="ftally" id="freeTally" aria-live="polite"></span>
-        </div>
-      </div>
 
       <!-- ④ 紙の左右で週を繰る。**左メニューの ◀ ▶ と同じことをする。**
            紙を読んでいる目の高さに置く ── 読みながら週を繰るとき、
@@ -280,9 +263,29 @@
             <span id="tpSubTxt">たんぽぽに提出</span></button>
         </div>
       </div>
-      <!-- 学年・全学年の面（と、学級で入れる先を広げたとき）にだけ出る。
-           **押す前に、どこへ出るかを字で言う。** 色と背景だけに持たせない -->
-      <p class="applymsg" id="applyMsg" hidden></p>
+      <!-- 空き枠さがし。**学年・全校・専科の面だけ。**
+           学級の面に「空き枠」は無い（探しているのは自分の空き時間で、別のもの）。
+
+           **紙のとなりの帯から、ここへ移した。** あの帯には空き枠しか
+           残っておらず、面を開くたびに紙の上に1行の帯が出たり消えたりして、
+           紙の位置が上下に動いていた。押す口は押す口の並ぶところに置く。
+
+           ここにあった「ここで直したものは◯◯の3クラスに出る」は外した。
+           開いたものが、そのまま入る先（入れる先の欄も外してある）で、
+           左上の行き先の欄が同じことを言っている。 -->
+      <div class="freebox" id="freeBox" hidden>
+        <span class="flab">空き枠</span>
+        <div class="seg" id="freeSeg" role="group" aria-label="空き枠さがし">
+          <button data-free="0" aria-pressed="true">出さない</button
+          ><button data-free="1" aria-pressed="false">レベル1</button
+          ><button data-free="2" aria-pressed="false">レベル2</button>
+        </div>
+        <details class="favoid" id="freeAvoid">
+          <summary id="freeAvoidSum">避ける教科</summary>
+          <div class="fapop" id="freeAvoidBody"></div>
+        </details>
+        <span class="ftally" id="freeTally" aria-live="polite"></span>
+      </div>
       <p class="tpchanged" id="tpChanged" role="status" hidden>未提出の変更あり！　保存後に、たんぽぽへ再提出してください。</p>
       <p class="lockmsg" id="lockMsg" hidden>
         <b>この画面はロック中。</b>直すには右上の「ロック中」を押す。</p>
@@ -431,13 +434,15 @@
            担任の画面からは押せない。紙の日付の見出しに置いていたころは、
            押せることに気づかれず「休みの日を入れる口が無い」と言われた。
            紙の上には印（特・休）だけを残す ── あれは刷って残る情報 -->
+      <!-- **畳んでおく。** 日の形を直すのは週に0〜1回で、毎日見るものではない。
+           開いたままだと、6日ぶんの押す口が右メニューの下に居座る。
+           説明は ？ の中（HELP.dayform） -->
       <div id="dayWrap" hidden>
-        <h3>この週の日の形</h3>
-        <div class="dayrow" id="dayRow"></div>
-        <p class="hint" style="margin:7px 0 0">押すと、その日を
-          <b>特別校時</b>（朝学習が消えて上へ詰まる）や
-          <b>休み</b>（1〜6校時に斜め線）にできる。<b>全クラスの紙に入る。</b>
-          戻せば、書いてある予定がそのまま出る（休みにしても中身は消していない）。</p>
+        <details id="dayFold">
+          <summary data-help="dayform"><span>この週の日の形</span>
+            <i id="dayPeek"></i></summary>
+          <div class="dayin"><div class="dayrow" id="dayRow"></div></div>
+        </details>
       </div>
 
     </aside>

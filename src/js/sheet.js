@@ -580,12 +580,10 @@ function setCenter(kind){
 function paintCenterTabs(){
   for(const b of document.querySelectorAll("#centerTabs [data-center]"))
     b.setAttribute("aria-pressed", String(b.dataset.center === centerMode));
-  /* かたちの帯は左上へ上げた。**紙のとなりの帯は空き枠さがしだけ**なので、
-     そちらが要らない面では帯ごと消す */
+  /* かたちの帯は左上へ、空き枠は右メニューへ移した。
+     紙のとなりの帯そのものが無くなっている */
   const seg = $("centerTabs");
   if(seg) seg.hidden = !centerOk();
-  const bar = $("centerBar");
-  if(bar) bar.hidden = !freeScope();
   paintFree();
 }
 
