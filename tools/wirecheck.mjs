@@ -2689,6 +2689,46 @@ await p.waitForTimeout(400); await closeDlgs();
    （gas/Gate.gs の checkAdmin を呼ぶ口は無くなった）。
    学校で3人しか直せないと、基本時間割や学級編成を直したい人が
    その3人の手が空くのを待つことになっていた。 */
+console.log("\n■ 専科の枠（同じ教科を学年で分けて持てる）");
+/* **身元（code）と教科（subject）は別もの。** 同じ教科に2人いる形が
+   実際にある（図工1・2年／図工3〜6年、理科3・4年／理科5・6年）ので、
+   教科コードそのものを身元にはできない */
+await p.evaluate(() => {
+  Y().specials = [
+    {code:"rika",   subject:"rika", grades:["3","4"]},
+    {code:"rika_2", subject:"rika", grades:["5","6"]}
+  ];
+  save(); drawGate();
+});
+await p.waitForTimeout(400); await closeDlgs();
+ok("同じ教科の枠が2つ持てる", await p.evaluate(() =>
+   specials().filter(s => spSubjectOf(s.code) === "rika").length) === 2);
+ok("名前に担当学年が付く（入口で見分けられる）", await p.evaluate(() =>
+   specials().map(s => spLabel(s)).join("/")) === "理科3・4年/理科5・6年",
+   await p.evaluate(() => specials().map(s => spLabel(s))));
+ok("身元が違えば、受け持つクラスも違う", await p.evaluate(() => {
+     const a = classesOfSpecial("rika"), b = classesOfSpecial("rika_2");
+     return a.join(",") !== b.join(",") && !a.some(c => b.indexOf(c) >= 0);
+   }) === true,
+   await p.evaluate(() => [classesOfSpecial("rika"), classesOfSpecial("rika_2")]));
+ok("担当学年のクラスだけを受け持つ", await p.evaluate(() =>
+   classesOfSpecial("rika").every(c => ["3","4"].indexOf(gradeOf(c)) >= 0)
+   && classesOfSpecial("rika_2").every(c => ["5","6"].indexOf(gradeOf(c)) >= 0)) === true,
+   await p.evaluate(() => [classesOfSpecial("rika"), classesOfSpecial("rika_2")]));
+/* **紙に出す字と時数は教科のほう。** 身元は枠を指すだけ */
+ok("どちらの枠でも、教科は理科", await p.evaluate(() =>
+   spSubjectOf("rika") === "rika" && spSubjectOf("rika_2") === "rika") === true);
+/* 古い控え（subject が無い）は、身元をそのまま教科として読む */
+ok("古い控えは、身元を教科として読む", await p.evaluate(() => {
+     const keep = Y().specials;
+     Y().specials = [{code:"ongaku", label:"音楽", grades:[]}];
+     const got = spSubjectOf("ongaku");
+     Y().specials = keep;
+     return got;
+   }) === "ongaku");
+await p.evaluate(() => { Y().specials = clone(DEFAULT_SPECIALS); save(); drawGate(); });
+await p.waitForTimeout(400); await closeDlgs();
+
 console.log("\n■ 専科の面のクラスチップ（学年ごとに束ねる）");
 await p.evaluate(() => openView({kind:"special", sp:"ongaku"}));
 await p.waitForTimeout(800); await closeDlgs();

@@ -40,9 +40,11 @@ ok("6年に 6-4 がある", await p.locator(".tile[data-c='6-4']").count() === 1
 ok("4年に 4-4 は無い", await p.locator(".tile[data-c='4-4']").count() === 0);
 ok("学年マスターが6つ＋全学年", await p.locator(".master:not(.tp)").count() === 7,
    await p.locator(".master:not(.tp)").count());
-ok("専科が4つ（音楽・図工・理科・外国語）",
-   await p.locator(".tile.sp").count() === 4,
-   await p.locator(".tile.sp").count());
+/* **枠は6つ。** 同じ教科を学年で分けて持つ形がある
+   （図工1・2年／図工3〜6年、理科3・4年／理科5・6年） */
+ok("専科の枠が6つ（同じ教科が2枠あってよい）",
+   await p.locator(".tile.sp").count() === 6,
+   await p.evaluate(() => specials().map(s => spLabel(s))));
 ok("古い形の端末キャッシュでも、初回から入口を描ける", await p.evaluate(() => {
   const yr = Y(), keep = {classes:clone(yr.classes), specials:clone(yr.specials),
                           tanpopo:clone(yr.tanpopo)};

@@ -246,21 +246,41 @@ function spGrades_(v){
   (rest.match(/[1-9]/g) || []).forEach(x => out[x] = true);
   return Object.keys(out).sort();
 }
+/* 専科の枠をそろえる。**古い控えを捨てない。**
+
+   前は「身元（code）＝教科コード」だったので、同じ教科に2人いる形
+   （理科3・4年／理科5・6年）が持てなかった。いまは subject を別に持つ。
+   subject が無い控えは、身元をそのまま教科コードとして読む
+   ── それが前の決まりだったので、読み替えだけで足りる。
+
+   **身元は重ならないようにする。** 重なると、週案の棚（e.sp）で
+   どちらの枠のコマか決まらなくなる。 */
 function normSpecials_(v){
-  if(Array.isArray(v) && v.every(s => s && typeof s.code === 'string'
-     && typeof s.label === 'string' && Array.isArray(s.grades)))
-    return v;
   if(!Array.isArray(v)) return clone(DEFAULT_SPECIALS);
+  /* **すでに形がそろっていれば、そのまま返す。** 作り直すと、
+     直していないのに参照が変わり、上の階が「変わった」と見て描き直す */
+  if(v.every(x => x && typeof x.code === "string" && x.code
+       && typeof x.subject === "string" && x.subject && Array.isArray(x.grades)))
+    return v;
   const out = [], seen = {};
   for(let i = 0; i < v.length; i++){
     const raw = v[i];
-    const label = String(raw && typeof raw === "object" ? raw.label : raw || "").trim();
-    if(!label || seen[label]) continue;
-    seen[label] = 1;
+    const obj = (raw && typeof raw === "object") ? raw : {label:String(raw || "")};
+    const label = String(obj.label || "").trim();
+    /* 教科コード。書いてあればそれ、無ければ身元か、名前から引く */
     const known = SUB_BY_NAME[label];
-    const code = String(raw && typeof raw === "object" && raw.code
-      ? raw.code : known ? known.code : "sp_" + i);
-    out.push({code, label, grades: spGrades_(raw && raw.grades)});
+    let subject = String(obj.subject || "").trim();
+    if(!subject) subject = String(obj.code || "").trim() || (known ? known.code : "");
+    if(!subject && !label) continue;
+    /* 身元。**1人目は教科コードのまま**（前の年度の控えがそのまま読める） */
+    let code = String(obj.code || "").trim() || subject || ("sp_" + i);
+    if(seen[code]){
+      let n = 2;
+      while(seen[(subject || code) + "_" + n]) n++;
+      code = (subject || code) + "_" + n;
+    }
+    seen[code] = 1;
+    out.push({code, subject: subject || code, grades: spGrades_(obj.grades)});
   }
   return out.length ? out : clone(DEFAULT_SPECIALS);
 }

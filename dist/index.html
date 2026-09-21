@@ -2398,14 +2398,16 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
     <input type="text" id="rsNewG" placeholder="7 や 特支" style="width:9em">
     <button class="btn" id="rsAddG">足す</button></div>
   <hr>
-  <div class="row"><span>専科</span>
-    <input type="text" id="rsSp" style="flex:1;min-width:18em" placeholder="音楽, 図工, 理科"></div>
-  <!-- 担当学年。**基本時間割から専科の持ちコマを引くために要る。**
-       同じ教科に専科が2人いると、どちらのコマかが教科コードだけでは決まらない。
-       空欄は全学年（書いていない学校を、どの学年も持たない専科にしない） -->
+  <!-- 専科。**1行が1人ぶんの枠。** 同じ教科に2人いる形が実際にある
+       （図工1・2年／図工3〜6年、理科3・4年／理科5・6年）ので、
+       教科ごとに1行ではなく、枠ごとに1行にしてある。
+
+       担当学年は、**基本時間割のどのコマがその人のものか**を決める
+       （compose.js spBaseClasses）。空欄は全学年 ── 書いていない学校を、
+       どの学年も持たない専科にしない。 -->
+  <div class="row" data-help="specials"><span>専科の枠</span>
+    <button class="btn" id="rsSpAdd">枠を足す</button></div>
   <div id="rsSpRows"></div>
-  <p class="hint">専科の<b>担当学年</b>は、基本時間割のどのコマがその人のものかを決めます。
-     <b>空欄なら全学年</b>。<code>3,4</code> でも <code>3〜6</code> でも書けます。</p>
   <div class="row"><span>第1週の月曜</span>
     <input type="text" id="rsW1" size="12">
     <span style="color:var(--tx-sub);font-size:12px">時数集計表のシート名（週番号）の起点</span></div>
@@ -2846,11 +2848,26 @@ const DEFAULT_CLASSES = {
 };
 /* grades＝受け持つ学年。**空なら全学年。** 同じ教科に専科が2人いる学校で、
    基本時間割のどのコマが誰のものかを決める唯一の材料（「専科」シートの担当学年）。 */
+/* 専科の枠。**1人ぶんが1つ。** 同じ教科に2人いる形が実際にある
+   （図工1・2年／図工3〜6年、理科3・4年／理科5・6年）ので、
+   教科コードそのものを身元にはできない。
+
+     code    その枠の身元。**週案の棚にこの字で入る**ので、あとから変えない。
+             1人目は教科コードのまま（前の年度の控えがそのまま読める）。
+             2人目からは「rika_2」のように連番を足す。
+     subject 教科コード。紙に出す字・時数の数え方はここで決まる。
+     grades  担当学年。**空なら全学年**（書いていない学校を、
+             どの学年も持たない専科にしない）。
+     label   画面に出す名前。grades から組み立てる（「理科3・4年」）。
+
+   **年度ごとに変わる。** 学級編成の窓で足す・消す・学年を直す。 */
 const DEFAULT_SPECIALS = [
-  {code:"ongaku",  label:"音楽",  grades:[]},
-  {code:"zuko",    label:"図工",  grades:[]},
-  {code:"rika",    label:"理科",  grades:[]},
-  {code:"gaikoku", label:"外国語",grades:[]}
+  {code:"ongaku",  subject:"ongaku",  grades:["1","2","3","4"]},
+  {code:"zuko",    subject:"zuko",    grades:["1","2"]},
+  {code:"zuko_2",  subject:"zuko",    grades:["3","4","5","6"]},
+  {code:"gaikoku", subject:"gaikoku", grades:["3","4","5","6"]},
+  {code:"rika",    subject:"rika",    grades:["3","4"]},
+  {code:"rika_2",  subject:"rika",    grades:["5","6"]}
 ];
 
 /* ── 場所を取る教科 ────────────────────────────
@@ -3385,21 +3402,41 @@ function spGrades_(v){
   (rest.match(/[1-9]/g) || []).forEach(x => out[x] = true);
   return Object.keys(out).sort();
 }
+/* 専科の枠をそろえる。**古い控えを捨てない。**
+
+   前は「身元（code）＝教科コード」だったので、同じ教科に2人いる形
+   （理科3・4年／理科5・6年）が持てなかった。いまは subject を別に持つ。
+   subject が無い控えは、身元をそのまま教科コードとして読む
+   ── それが前の決まりだったので、読み替えだけで足りる。
+
+   **身元は重ならないようにする。** 重なると、週案の棚（e.sp）で
+   どちらの枠のコマか決まらなくなる。 */
 function normSpecials_(v){
-  if(Array.isArray(v) && v.every(s => s && typeof s.code === 'string'
-     && typeof s.label === 'string' && Array.isArray(s.grades)))
-    return v;
   if(!Array.isArray(v)) return clone(DEFAULT_SPECIALS);
+  /* **すでに形がそろっていれば、そのまま返す。** 作り直すと、
+     直していないのに参照が変わり、上の階が「変わった」と見て描き直す */
+  if(v.every(x => x && typeof x.code === "string" && x.code
+       && typeof x.subject === "string" && x.subject && Array.isArray(x.grades)))
+    return v;
   const out = [], seen = {};
   for(let i = 0; i < v.length; i++){
     const raw = v[i];
-    const label = String(raw && typeof raw === "object" ? raw.label : raw || "").trim();
-    if(!label || seen[label]) continue;
-    seen[label] = 1;
+    const obj = (raw && typeof raw === "object") ? raw : {label:String(raw || "")};
+    const label = String(obj.label || "").trim();
+    /* 教科コード。書いてあればそれ、無ければ身元か、名前から引く */
     const known = SUB_BY_NAME[label];
-    const code = String(raw && typeof raw === "object" && raw.code
-      ? raw.code : known ? known.code : "sp_" + i);
-    out.push({code, label, grades: spGrades_(raw && raw.grades)});
+    let subject = String(obj.subject || "").trim();
+    if(!subject) subject = String(obj.code || "").trim() || (known ? known.code : "");
+    if(!subject && !label) continue;
+    /* 身元。**1人目は教科コードのまま**（前の年度の控えがそのまま読める） */
+    let code = String(obj.code || "").trim() || subject || ("sp_" + i);
+    if(seen[code]){
+      let n = 2;
+      while(seen[(subject || code) + "_" + n]) n++;
+      code = (subject || code) + "_" + n;
+    }
+    seen[code] = 1;
+    out.push({code, subject: subject || code, grades: spGrades_(obj.grades)});
   }
   return out.length ? out : clone(DEFAULT_SPECIALS);
 }
@@ -5292,8 +5329,8 @@ function viewName(){
   if(view.kind === "grade")   return view.grade + "年";
   if(view.kind === "school")  return "全学年";
   if(view.kind === "special"){
-    const x = specials().find(s => s.code === view.sp);
-    return x ? x.label : "専科";
+    const x = spOf(view.sp);
+    return x ? spLabel(x) : "専科";
   }
   if(view.kind === "tanpopo") return "たんぽぽ";
   return "";
@@ -5466,10 +5503,38 @@ function countSub(c){
   return (sub && sub.count && sub.short) ? sub : null;
 }
 
+/* 専科の枠1つ。無ければ null */
+const spOf = code => specials().find(x => x.code === code) || null;
+
+/* その枠の**教科コード**。身元（code）とは別もの ──
+   同じ教科に専科が2人いる形（理科3・4年／理科5・6年）があるので、
+   身元は「rika」「rika_2」と分かれ、教科はどちらも「rika」。
+   古い控えには subject が無い（身元＝教科コードだった）ので、code に落とす。 */
+function spSubjectOf(code){
+  const me = spOf(code);
+  return (me && me.subject) || code;
+}
+
+/* 画面に出す名前。**担当学年まで入れる。** 同じ教科が2人並ぶと、
+   「理科」「理科」では入口でどちらか分からない。 */
+function spLabel(sp){
+  if(!sp) return "";
+  const sub = SUB_BY_CODE[sp.subject || sp.code];
+  const name = sp.label || (sub ? sub.name : (sp.subject || sp.code));
+  const gs = sp.grades || [];
+  if(!gs.length) return name;                 /* 空欄＝全学年 */
+  /* **学年の数ではなく、中身で比べる。** 数で見ると、いまある学年が
+     2つの学校で「3・4年」を持つ枠が「全学年」に化ける（実測）。
+     いまある学年をぜんぶ持っているときだけ、学年を並べない */
+  const all = gradesAll();
+  if(all.length && all.every(g => gs.indexOf(g) >= 0)) return name;
+  return name + gs.join("・") + "年";
+}
+
 /* その専科が受け持つ学年。**空なら null＝全学年。**
    書いていない学校を、どの学年も受け持たない専科にしない。 */
 function spGradesOf(code){
-  const me = specials().find(x => x.code === code);
+  const me = spOf(code);
   return (me && me.grades && me.grades.length) ? me.grades : null;
 }
 /* その専科が受け持つクラス */
@@ -5491,12 +5556,15 @@ function classesOfSpecial(code){
    別の予定を入れていれば、その時間に専科は行かない。基本の字だけを見ると、
    もう無くなった授業が専科の週に残る。 */
 function spBaseClasses(d, s, sp){
-  const out = [];
+  /* **身元ではなく教科で比べる。** 基本時間割には「rika」としか
+     書いていない。どの理科の先生が行くかは、担当学年（classesOfSpecial）
+     のほうが決める ── 理科3・4年の先生には3年と4年のコマだけが出る。 */
+  const sub = spSubjectOf(sp), out = [];
   for(const c of classesOfSpecial(sp)){
     const b = baseCell(c, d, s);
-    if(!b || b.subject !== sp) continue;
+    if(!b || b.subject !== sub) continue;
     const cur = compose(c, d, s);
-    if(rootSubject(cur.subject) !== sp) continue;
+    if(rootSubject(cur.subject) !== sub) continue;
     out.push(c);
   }
   return out;
@@ -5657,7 +5725,11 @@ function freeOne(d, sid, c, opt){
   if(opt.level < FREE_L2) return {st:"free", why:""};
   if(PLACE_SUBJECTS.indexOf(root) >= 0) return {st:"avoid", why:name + "（場所）"};
   if((SUB_BY_CODE[code] || {}).only)    return {st:"avoid", why:name};
-  if(specials().some(x => x.code === root) && root !== opt.sp)
+  /* ほかの専科が入っているコマ。**教科で見る**（身元ではない）。
+     自分の教科なら「ほかの専科」ではない ── 理科3・4年の先生にとって
+     3年の理科は自分のコマで、避けるものではない */
+  if(specials().some(x => spSubjectOf(x.code) === root)
+     && root !== spSubjectOf(opt.sp))
     return {st:"avoid", why:name + "（専科）"};
   return {st:"free", why:""};
 }
@@ -6306,10 +6378,12 @@ function writeCell(d, s, patch){
       }
     }
     if(target && allClasses().indexOf(target) >= 0){
-      const sub = SUB_BY_CODE[view.sp];
+      /* **紙に出す字と教科は教科コードのほう。** 身元（sp）は枠を指すだけで、
+         紙には「理科」と出し、時数も理科として数える */
+      const sub = SUB_BY_CODE[spSubjectOf(view.sp)];
       (w.special[target] || (w.special[target] = {}))[key] = {
         title: escText(sub ? sub.name : viewName()),
-        subject: view.sp, sp: view.sp,
+        subject: spSubjectOf(view.sp), sp: view.sp,
         note: ("note" in patch) ? clean(patch.note) : (cur.note || ""),
         /* **物差しも控えに持たせる。** 持たせないと、サーバの返事が
            戻るまでのあいだに続けて直したぶんが、また 0 を送ることになる */
@@ -8983,7 +9057,7 @@ function drawGate(){
   for(let i = 0; i < cols; i++)
     out.push(sp[i]
       ? "<button class='tile sp' data-go='special' data-s='" + escText(sp[i].code) + "'>"
-        + "<i></i>" + escText(sp[i].label) + "</button>"
+        + "<i></i>" + escText(spLabel(sp[i])) + "</button>"
       : "<span class='tile none'></span>");
   /* いちばん下にたんぽぽ。ここで交流級を選び、ここからだけ出す */
   out.push("<button class='master tp' data-go='tanpopo'><i></i>たんぽぽ</button>");
@@ -9090,7 +9164,7 @@ function drawTargetSelect(){
   const groups = [
     ["学級",  allClasses().map(c => ["class:" + c, c])],
     ["学年",  grades().map(g => ["grade:" + g, g + "年"])],
-    ["専科",  specials().map(s => ["special:" + s.code, s.label])],
+    ["専科",  specials().map(s => ["special:" + s.code, spLabel(s)])],
     ["学校",  [["school:", "全学年"], ["tanpopo:", "たんぽぽ"]]]
   ];
   const cur = view.kind === "class"   ? "class:" + view.cls
@@ -9485,20 +9559,59 @@ function drawRoster(){
   $("rsFy").textContent = fy() + "年度";
   $("rsW1").value = Yr.week1 || firstMonday(fy());
   $("rsAbNow").textContent = "いまは " + (db.settings.abAnchor || AB_ANCHOR);
-  $("rsSp").value = (Yr.specials || []).map(s => s.label).join(", ");
-  /* 専科ごとの担当学年。**空欄は全学年。** ここを書くと、基本時間割の
-     その教科のコマが、その学年ぶんだけ専科の週に出る（compose.js spBaseClasses） */
-  $("rsSpRows").innerHTML = (Yr.specials || []).map(s =>
-    "<div class='row'><span>" + escText(s.label) + " の担当学年</span>"
-    + "<input type='text' data-sp='" + escText(s.code) + "' style='flex:1;min-width:10em'"
-    + " placeholder='空欄＝全学年' value='" + escText((s.grades || []).join(",")) + "'>"
-    + "</div>").join("");
+  /* 専科の枠。**1行が1人ぶん。** 教科 ＋ 担当学年 ＋ 消す。
+     同じ教科の行が2つあってよい（図工1・2年／図工3〜6年）。
+     身元（code）は行には出さない ── 週案の棚に入っている字なので、
+     見せても直させない（直すと、入れたコマの持ち主が変わる）。 */
+  /* 専科が持つのは、時数に数える教科だけ（図書・給食・クラブは専科にしない） */
+  const spSubs = SUBJECTS.filter(x => x.count && !x.only);
+  $("rsSpRows").innerHTML = (Yr.specials || []).map(sp =>
+    "<div class='row sprow'>"
+    + "<select data-spsub='" + escText(sp.code) + "'>"
+    + spSubs.map(x => "<option value='" + escText(x.code) + "'"
+        + (x.code === (sp.subject || sp.code) ? " selected" : "") + ">"
+        + escText(x.name) + "</option>").join("")
+    + "</select>"
+    + "<input type='text' data-sp='" + escText(sp.code) + "' style='flex:1;min-width:8em'"
+    + " placeholder='担当学年（空欄＝全学年）' value='"
+    + escText((sp.grades || []).join(",")) + "'>"
+    + "<span class='splab'>" + escText(spLabel(sp)) + "</span>"
+    + "<button class='btn danger' data-spdel='" + escText(sp.code) + "'>消す</button>"
+    + "</div>").join("")
+    || "<p class='hint'>専科の枠がありません。「枠を足す」から作ります。</p>";
+
+  const spSave = () => { save(); Backend.saveRoster(); drawRoster(); afterRosterChange(); };
   for(const e of $("rsSpRows").querySelectorAll("input[data-sp]"))
     e.onchange = () => {
       const t = (Y().specials || []).find(x => x.code === e.dataset.sp);
       if(!t) return;
       t.grades = spGrades_(e.value);
-      save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+      spSave();
+    };
+  for(const e of $("rsSpRows").querySelectorAll("select[data-spsub]"))
+    e.onchange = () => {
+      const t = (Y().specials || []).find(x => x.code === e.dataset.spsub);
+      if(!t) return;
+      /* **身元は変えない。** 変えると、その枠で入れたコマの持ち主が
+         行方不明になる（週案の棚には身元の字が入っている） */
+      t.subject = e.value;
+      spSave();
+    };
+  for(const b of $("rsSpRows").querySelectorAll("button[data-spdel]"))
+    b.onclick = () => {
+      const code = b.dataset.spdel;
+      const t = (Y().specials || []).find(x => x.code === code);
+      askOk({
+        title: (t ? spLabel(t) : "この枠") + " を消しますか",
+        lines:["<b>その枠で入れたコマは消えません。</b>枠が無くなるので、"
+              + "入口からその面を開けなくなります。",
+               "学年を直したいだけなら、消さずに<b>担当学年の欄</b>を直してください。"],
+        goLabel:"消す",
+        onYes: () => {
+          Y().specials = (Y().specials || []).filter(x => x.code !== code);
+          spSave();
+        }
+      });
     };
 
   $("rsRows").innerHTML = grades().map(g =>
@@ -9839,6 +9952,21 @@ const HELP = {
        + "「たんぽぽ時間割に書き入れる」は、ロックしたままでも押せます。",
        "<i>はじめの人がつまずくところ：</i>入れた組は「学級編成」の"
        + "たんぽぽ交流級の欄に残ります。年度の初めに直すのはそちらです。"]},
+  specials: {t:"専科の枠",
+    b:["<b>1行が1人ぶんの枠です。</b>教科と、担当する学年を決めます。",
+       "<b>同じ教科の行が2つあって構いません。</b>"
+       + "図工1・2年と図工3〜6年、理科3・4年と理科5・6年のように、"
+       + "同じ教科を学年で分けて持つ形が実際にあります。"
+       + "入口には「理科3・4年」「理科5・6年」と、学年まで付けて並びます。",
+       "<b>担当学年が、基本時間割のどのコマがその人のものかを決めます。</b>"
+       + "理科3・4年の先生の週には、3年と4年の理科のコマだけが出ます。"
+       + "<b>空欄なら全学年。</b><code>3,4</code> でも <code>3〜6</code> でも書けます。",
+       "<b>年度ごとに変わるところです。</b>「枠を足す」で足し、"
+       + "要らなくなった枠は「消す」で消します。",
+       "<i>はじめの人がつまずくところ：</i>"
+       + "枠を消しても、その枠で入れたコマは消えません"
+       + "（入口からその面を開けなくなるだけです）。"
+       + "学年を直したいだけなら、消さずに担当学年の欄を直してください。"]},
   free: {t:"空き枠あり/なし表示",
     b:["<b>その週のどのコマが空いているかを、紙の上に印で出します。</b>"
        + "学年・全学年・専科の面だけに出ます"
@@ -11287,22 +11415,15 @@ function wire(){
     $("rsNewG").value = "";
     save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
   });
-  on("rsSp","change", e => {
-    /* **いま入っている担当学年を、教科コードで引き継ぐ。**
-       引き継がないと、専科の並びを1文字直すたびに担当学年が消え、
-       専科の基本時間割が全学年に広がる（誰も気づかない） */
-    const had = {};
-    for(const s of (Y().specials || [])) had[s.code] = s.grades || [];
-    const seen = {}, out = [];
-    for(const raw of String(e.target.value).split(/[,、\s]+/)){
-      const label = raw.trim();
-      if(!label || seen[label]) continue;
-      seen[label] = 1;
-      const known = SUB_BY_NAME[label];
-      const code = known ? known.code : "sp_" + out.length;
-      out.push({code, label, grades: had[code] || []});
-    }
-    Y().specials = out; save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+  /* 専科の枠を足す。**身元は重ならないように付ける**（週案の棚に入る字）。
+     1人目は教科コードのまま、2人目からは「rika_2」と連番を足す。 */
+  on("rsSpAdd","click", () => {
+    const list = Y().specials || (Y().specials = []);
+    const sub = (SUBJECTS.find(x => x.count && !x.only) || {code:"ongaku"}).code;
+    let code = sub, n = 2;
+    while(list.some(x => x.code === code)) code = sub + "_" + (n++);
+    list.push({code, subject:sub, grades:[]});
+    save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
   });
   on("rsW1","change", e => {
     const v = String(e.target.value).trim();

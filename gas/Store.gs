@@ -429,7 +429,11 @@ const Store = (function(){
 
     /* 3. 専科 */
     if(!r.specials.length) say("warn", "専科", "1つも無い", "「専科」シートに教科コードと表示名を入れる");
-    else say("ok", "専科", r.specials.map(s => s.label).join("・"), "");
+    /* label は画面が組み立てる（教科＋担当学年）。ここは教科と学年をそのまま並べる */
+    else say("ok", "専科", r.specials.map(function(s){
+      var g = (s.grades || []).join("・");
+      return String(s.label || s.subject || s.code) + (g ? g + "年" : "");
+    }).join("／"), "");
 
     /* 4. 時程 */
     const slots = readSlots();

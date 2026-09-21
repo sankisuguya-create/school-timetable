@@ -58,7 +58,7 @@ function drawGate(){
   for(let i = 0; i < cols; i++)
     out.push(sp[i]
       ? "<button class='tile sp' data-go='special' data-s='" + escText(sp[i].code) + "'>"
-        + "<i></i>" + escText(sp[i].label) + "</button>"
+        + "<i></i>" + escText(spLabel(sp[i])) + "</button>"
       : "<span class='tile none'></span>");
   /* いちばん下にたんぽぽ。ここで交流級を選び、ここからだけ出す */
   out.push("<button class='master tp' data-go='tanpopo'><i></i>たんぽぽ</button>");
@@ -165,7 +165,7 @@ function drawTargetSelect(){
   const groups = [
     ["学級",  allClasses().map(c => ["class:" + c, c])],
     ["学年",  grades().map(g => ["grade:" + g, g + "年"])],
-    ["専科",  specials().map(s => ["special:" + s.code, s.label])],
+    ["専科",  specials().map(s => ["special:" + s.code, spLabel(s)])],
     ["学校",  [["school:", "全学年"], ["tanpopo:", "たんぽぽ"]]]
   ];
   const cur = view.kind === "class"   ? "class:" + view.cls

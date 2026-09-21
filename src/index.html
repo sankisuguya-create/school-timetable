@@ -595,14 +595,16 @@
     <input type="text" id="rsNewG" placeholder="7 や 特支" style="width:9em">
     <button class="btn" id="rsAddG">足す</button></div>
   <hr>
-  <div class="row"><span>専科</span>
-    <input type="text" id="rsSp" style="flex:1;min-width:18em" placeholder="音楽, 図工, 理科"></div>
-  <!-- 担当学年。**基本時間割から専科の持ちコマを引くために要る。**
-       同じ教科に専科が2人いると、どちらのコマかが教科コードだけでは決まらない。
-       空欄は全学年（書いていない学校を、どの学年も持たない専科にしない） -->
+  <!-- 専科。**1行が1人ぶんの枠。** 同じ教科に2人いる形が実際にある
+       （図工1・2年／図工3〜6年、理科3・4年／理科5・6年）ので、
+       教科ごとに1行ではなく、枠ごとに1行にしてある。
+
+       担当学年は、**基本時間割のどのコマがその人のものか**を決める
+       （compose.js spBaseClasses）。空欄は全学年 ── 書いていない学校を、
+       どの学年も持たない専科にしない。 -->
+  <div class="row" data-help="specials"><span>専科の枠</span>
+    <button class="btn" id="rsSpAdd">枠を足す</button></div>
   <div id="rsSpRows"></div>
-  <p class="hint">専科の<b>担当学年</b>は、基本時間割のどのコマがその人のものかを決めます。
-     <b>空欄なら全学年</b>。<code>3,4</code> でも <code>3〜6</code> でも書けます。</p>
   <div class="row"><span>第1週の月曜</span>
     <input type="text" id="rsW1" size="12">
     <span style="color:var(--tx-sub);font-size:12px">時数集計表のシート名（週番号）の起点</span></div>

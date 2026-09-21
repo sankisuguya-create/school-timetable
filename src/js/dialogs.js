@@ -369,20 +369,59 @@ function drawRoster(){
   $("rsFy").textContent = fy() + "年度";
   $("rsW1").value = Yr.week1 || firstMonday(fy());
   $("rsAbNow").textContent = "いまは " + (db.settings.abAnchor || AB_ANCHOR);
-  $("rsSp").value = (Yr.specials || []).map(s => s.label).join(", ");
-  /* 専科ごとの担当学年。**空欄は全学年。** ここを書くと、基本時間割の
-     その教科のコマが、その学年ぶんだけ専科の週に出る（compose.js spBaseClasses） */
-  $("rsSpRows").innerHTML = (Yr.specials || []).map(s =>
-    "<div class='row'><span>" + escText(s.label) + " の担当学年</span>"
-    + "<input type='text' data-sp='" + escText(s.code) + "' style='flex:1;min-width:10em'"
-    + " placeholder='空欄＝全学年' value='" + escText((s.grades || []).join(",")) + "'>"
-    + "</div>").join("");
+  /* 専科の枠。**1行が1人ぶん。** 教科 ＋ 担当学年 ＋ 消す。
+     同じ教科の行が2つあってよい（図工1・2年／図工3〜6年）。
+     身元（code）は行には出さない ── 週案の棚に入っている字なので、
+     見せても直させない（直すと、入れたコマの持ち主が変わる）。 */
+  /* 専科が持つのは、時数に数える教科だけ（図書・給食・クラブは専科にしない） */
+  const spSubs = SUBJECTS.filter(x => x.count && !x.only);
+  $("rsSpRows").innerHTML = (Yr.specials || []).map(sp =>
+    "<div class='row sprow'>"
+    + "<select data-spsub='" + escText(sp.code) + "'>"
+    + spSubs.map(x => "<option value='" + escText(x.code) + "'"
+        + (x.code === (sp.subject || sp.code) ? " selected" : "") + ">"
+        + escText(x.name) + "</option>").join("")
+    + "</select>"
+    + "<input type='text' data-sp='" + escText(sp.code) + "' style='flex:1;min-width:8em'"
+    + " placeholder='担当学年（空欄＝全学年）' value='"
+    + escText((sp.grades || []).join(",")) + "'>"
+    + "<span class='splab'>" + escText(spLabel(sp)) + "</span>"
+    + "<button class='btn danger' data-spdel='" + escText(sp.code) + "'>消す</button>"
+    + "</div>").join("")
+    || "<p class='hint'>専科の枠がありません。「枠を足す」から作ります。</p>";
+
+  const spSave = () => { save(); Backend.saveRoster(); drawRoster(); afterRosterChange(); };
   for(const e of $("rsSpRows").querySelectorAll("input[data-sp]"))
     e.onchange = () => {
       const t = (Y().specials || []).find(x => x.code === e.dataset.sp);
       if(!t) return;
       t.grades = spGrades_(e.value);
-      save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+      spSave();
+    };
+  for(const e of $("rsSpRows").querySelectorAll("select[data-spsub]"))
+    e.onchange = () => {
+      const t = (Y().specials || []).find(x => x.code === e.dataset.spsub);
+      if(!t) return;
+      /* **身元は変えない。** 変えると、その枠で入れたコマの持ち主が
+         行方不明になる（週案の棚には身元の字が入っている） */
+      t.subject = e.value;
+      spSave();
+    };
+  for(const b of $("rsSpRows").querySelectorAll("button[data-spdel]"))
+    b.onclick = () => {
+      const code = b.dataset.spdel;
+      const t = (Y().specials || []).find(x => x.code === code);
+      askOk({
+        title: (t ? spLabel(t) : "この枠") + " を消しますか",
+        lines:["<b>その枠で入れたコマは消えません。</b>枠が無くなるので、"
+              + "入口からその面を開けなくなります。",
+               "学年を直したいだけなら、消さずに<b>担当学年の欄</b>を直してください。"],
+        goLabel:"消す",
+        onYes: () => {
+          Y().specials = (Y().specials || []).filter(x => x.code !== code);
+          spSave();
+        }
+      });
     };
 
   $("rsRows").innerHTML = grades().map(g =>
@@ -723,6 +762,21 @@ const HELP = {
        + "「たんぽぽ時間割に書き入れる」は、ロックしたままでも押せます。",
        "<i>はじめの人がつまずくところ：</i>入れた組は「学級編成」の"
        + "たんぽぽ交流級の欄に残ります。年度の初めに直すのはそちらです。"]},
+  specials: {t:"専科の枠",
+    b:["<b>1行が1人ぶんの枠です。</b>教科と、担当する学年を決めます。",
+       "<b>同じ教科の行が2つあって構いません。</b>"
+       + "図工1・2年と図工3〜6年、理科3・4年と理科5・6年のように、"
+       + "同じ教科を学年で分けて持つ形が実際にあります。"
+       + "入口には「理科3・4年」「理科5・6年」と、学年まで付けて並びます。",
+       "<b>担当学年が、基本時間割のどのコマがその人のものかを決めます。</b>"
+       + "理科3・4年の先生の週には、3年と4年の理科のコマだけが出ます。"
+       + "<b>空欄なら全学年。</b><code>3,4</code> でも <code>3〜6</code> でも書けます。",
+       "<b>年度ごとに変わるところです。</b>「枠を足す」で足し、"
+       + "要らなくなった枠は「消す」で消します。",
+       "<i>はじめの人がつまずくところ：</i>"
+       + "枠を消しても、その枠で入れたコマは消えません"
+       + "（入口からその面を開けなくなるだけです）。"
+       + "学年を直したいだけなら、消さずに担当学年の欄を直してください。"]},
   free: {t:"空き枠あり/なし表示",
     b:["<b>その週のどのコマが空いているかを、紙の上に印で出します。</b>"
        + "学年・全学年・専科の面だけに出ます"

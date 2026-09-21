@@ -127,11 +127,26 @@ const DEFAULT_CLASSES = {
 };
 /* grades＝受け持つ学年。**空なら全学年。** 同じ教科に専科が2人いる学校で、
    基本時間割のどのコマが誰のものかを決める唯一の材料（「専科」シートの担当学年）。 */
+/* 専科の枠。**1人ぶんが1つ。** 同じ教科に2人いる形が実際にある
+   （図工1・2年／図工3〜6年、理科3・4年／理科5・6年）ので、
+   教科コードそのものを身元にはできない。
+
+     code    その枠の身元。**週案の棚にこの字で入る**ので、あとから変えない。
+             1人目は教科コードのまま（前の年度の控えがそのまま読める）。
+             2人目からは「rika_2」のように連番を足す。
+     subject 教科コード。紙に出す字・時数の数え方はここで決まる。
+     grades  担当学年。**空なら全学年**（書いていない学校を、
+             どの学年も持たない専科にしない）。
+     label   画面に出す名前。grades から組み立てる（「理科3・4年」）。
+
+   **年度ごとに変わる。** 学級編成の窓で足す・消す・学年を直す。 */
 const DEFAULT_SPECIALS = [
-  {code:"ongaku",  label:"音楽",  grades:[]},
-  {code:"zuko",    label:"図工",  grades:[]},
-  {code:"rika",    label:"理科",  grades:[]},
-  {code:"gaikoku", label:"外国語",grades:[]}
+  {code:"ongaku",  subject:"ongaku",  grades:["1","2","3","4"]},
+  {code:"zuko",    subject:"zuko",    grades:["1","2"]},
+  {code:"zuko_2",  subject:"zuko",    grades:["3","4","5","6"]},
+  {code:"gaikoku", subject:"gaikoku", grades:["3","4","5","6"]},
+  {code:"rika",    subject:"rika",    grades:["3","4"]},
+  {code:"rika_2",  subject:"rika",    grades:["5","6"]}
 ];
 
 /* ── 場所を取る教科 ────────────────────────────

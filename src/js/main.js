@@ -683,22 +683,15 @@ function wire(){
     $("rsNewG").value = "";
     save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
   });
-  on("rsSp","change", e => {
-    /* **いま入っている担当学年を、教科コードで引き継ぐ。**
-       引き継がないと、専科の並びを1文字直すたびに担当学年が消え、
-       専科の基本時間割が全学年に広がる（誰も気づかない） */
-    const had = {};
-    for(const s of (Y().specials || [])) had[s.code] = s.grades || [];
-    const seen = {}, out = [];
-    for(const raw of String(e.target.value).split(/[,、\s]+/)){
-      const label = raw.trim();
-      if(!label || seen[label]) continue;
-      seen[label] = 1;
-      const known = SUB_BY_NAME[label];
-      const code = known ? known.code : "sp_" + out.length;
-      out.push({code, label, grades: had[code] || []});
-    }
-    Y().specials = out; save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+  /* 専科の枠を足す。**身元は重ならないように付ける**（週案の棚に入る字）。
+     1人目は教科コードのまま、2人目からは「rika_2」と連番を足す。 */
+  on("rsSpAdd","click", () => {
+    const list = Y().specials || (Y().specials = []);
+    const sub = (SUBJECTS.find(x => x.count && !x.only) || {code:"ongaku"}).code;
+    let code = sub, n = 2;
+    while(list.some(x => x.code === code)) code = sub + "_" + (n++);
+    list.push({code, subject:sub, grades:[]});
+    save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
   });
   on("rsW1","change", e => {
     const v = String(e.target.value).trim();
