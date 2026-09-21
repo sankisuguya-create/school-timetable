@@ -669,10 +669,7 @@ function drawGradeView(){
   const cs = gClasses();
   $("gvTitle").textContent = (gGrade || "") + "年　"
     + md(monday) + " → " + md(addDays(monday, 5));
-  $("gvHint").innerHTML = "1日を<b>" + cs.length + "クラスぶん</b>に割って、"
-    + "同じコマを<b>となりどうし</b>で並べています。"
-    + "<b>備考と放課後は置いていません</b>（ずれを読むための面なので）。"
-    + "直すのは週の紙のほうで。ここは見るだけです。";
+  /* 説明は ？ の中（HELP.gradeview） */
   const sel = $("gvGrade");
   sel.innerHTML = grades().map(g =>
     "<option value='" + escText(g) + "'" + (g === gGrade ? " selected" : "") + ">"
@@ -793,19 +790,46 @@ function fitK(nodes, probe, want, setVars){
   return k;
 }
 
-/* 1枚を画面に収める。幅は枠が持つので、合わせるのは高さだけ。 */
-/* 1コマの幅（px）。**1文字が読める最小**。これ×列数が紙の幅になる */
+/* 1コマの幅（px）。**倍率1のときの大きさ**。これ×列数が紙の幅になる */
 const G_CELL = 26;
+/* 学年の面の紙。**幅と高さの両方を見て、当たるまで広げる。**
+
+   前は 26px/コマ を上限にしていた（w = min(画面, 26×列数)）ので、
+   画面が広いほど右に余白が残り、字はいつまでも小さいままだった。
+   いまは**幅いっぱいまで広げてから、はみ出すぶんだけ高さで戻す**。
+
+   *上限を 3 倍にしてある理由*：クラスが2つの学年だと紙が細く、
+   大きな画面では 4〜5倍まで伸びて、1文字が親指ほどになる。
+   広く使うための面であって、拡大鏡ではない。 */
+const G_MAX_K = 3;
 function fitGrade(){
   const box = $("gvPaper"), sh = box && box.querySelector(".gsheet");
   if(!box || !sh) return;
-  const avail = box.clientWidth, h = box.clientHeight;
-  if(avail < 2 || h < 2) return;
+  const availW = box.clientWidth, availH = box.clientHeight;
+  if(availW < 2 || availH < 2) return;
   /* 月〜金は n 列ずつ、土は約半分 */
   const n = Math.max(1, gClasses().length);
-  const want = 50 + G_CELL * n * (DAYS - 1 + .6);
-  const w = Math.min(avail, want);
-  fitK([sh], sh, h, x => x.style.setProperty("--pw", w + "px"));
+  const baseW = 50 + G_CELL * n * (DAYS - 1 + .6);
+  let k = Math.min(G_MAX_K, availW / baseW);
+  for(let pass = 0; pass < 5; pass++){
+    sh.style.setProperty("--pw", (baseW * k) + "px");
+    sh.style.setProperty("--k", String(k));
+    const have = sh.scrollHeight;
+    if(have <= availH + 0.5) break;
+    k = Math.max(.2, k * (availH / have) * .99);
+  }
+  return k;
+}
+
+/* 学年の面を刷る。**A4 よこ1枚。** 月の面・カレンダーと同じ運び方
+   （紙の大きさで組み直してから刷り、刷り終わりで画面の大きさへ戻す）。
+   紙は横に長い ── 5日 × クラス数の列が並ぶので、よこ向きでないと入らない。 */
+const GV_PAGE = {w:297, h:210, mg:8};
+function fitGradePrint(){
+  const sh = $("gvPaper") && $("gvPaper").querySelector(".gsheet");
+  if(!sh) return;
+  sh.style.setProperty("--pw", (GV_PAGE.w - GV_PAGE.mg * 2) + "mm");
+  sh.style.setProperty("--k", "1");
 }
 
 /* 1枠に入るところまで --k を下げる。**測って決める。**

@@ -541,6 +541,7 @@ function wire(){
   on("cvNext","click",  () => { calFrom = new Date(calFrom.getFullYear(), calFrom.getMonth() + CAL_MONTHS, 1); redrawCenter(); });
   on("cvClose","click", () => setCenter("week"));
   on("cvPrint","click", printCal);
+  on("gvPrint","click", printGrade);
   on("cvImage","click", async () => {
     try{ await nodePng($("cvPaper"), outputName("カレンダー") + ".png");
          toast("カレンダーの画像を保存した"); }

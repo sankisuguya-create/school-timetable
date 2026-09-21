@@ -564,6 +564,10 @@ function printSpread(page, mark, fit, cellMM){
 }
 const printMonth = () => printSpread(M_PAGE,   "printing-month", fitMonth, mCellMM);
 const printCal   = () => printSpread(CAL_PAGE, "printing-cal",   fitCal,   calCellMM);
+/* 学年の面。**紙は1枚**なので、枠の大きさを渡す代わりに
+   刷るとき用の組み方（fitGradePrint）へ切り替えるだけ */
+const printGrade = () => printSpread(GV_PAGE, "printing-grade",
+                                     c => (c ? fitGradePrint() : fitGrade()), () => 1);
 
 function applyPaper(){
   const s = db.settings, sh = $("sheet");

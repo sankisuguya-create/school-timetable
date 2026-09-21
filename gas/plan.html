@@ -400,10 +400,14 @@ body.is-unsaved[data-scope="school"] .stage{
   --night-1:#464B52; --night-2:#2C3036;
 }
 
-/* 月の面。**4週ぶんを 2×2 に並べる。** 紙と入れ替えて出す。
-   転がさずに1画面へ収める（収まらなければ紙にもならない）。 */
+/* 見るための面（4週・学年・カレンダー）。紙と入れ替えて出す。
+   転がさずに1画面へ収める（収まらなければ紙にもならない）。
+
+   **帯 ＋ 紙 の2行。** 説明はどれも ？ の中へ移したので、あいだの1行は無い。
+   行を3つ書いたままにすると、紙が `1fr` の行に入らず中身の高さで止まる
+   ── 学年の面が画面の 28% で止まっていた（実測 280px / 1000px）。 */
 .mview,.gvview,.cvview{grid-area:3/1/4/2;display:grid;
-  grid-template-rows:auto auto minmax(0,1fr);
+  grid-template-rows:auto minmax(0,1fr);
   gap:8px;padding:12px 16px 16px;min-height:0;min-width:0}
 /* 帯。**同じ並べ方を3つの名前で書かない**（月の面・中央のかたち・空き枠） */
 .mbar,.cbar,.freebox{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -1718,6 +1722,13 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   /* 日付の帯も、地が飛んでも分かるように下の線を残す */
   body.printing-cal .cnum{background:transparent;border-bottom-color:var(--rule)}
   body:not(.printing-cal) .cvview{display:none!important}
+  /* 学年の面を刷るとき。**まわりの操作も、週の1枚も出さない** */
+  body.printing-grade .stage{display:none!important}
+  body.printing-grade .gvview .mbar{display:none!important}
+  body.printing-grade .gvview{padding:0;gap:0;grid-template-rows:auto;display:block}
+  body.printing-grade .gvpaper{overflow:visible}
+  body.printing-grade .gsheet{box-shadow:none;border-radius:0;border-color:#000}
+  body:not(.printing-grade) .gvview{display:none!important}
   /* 空き枠さがしの印も刷らない。**枠を探している最中の作業**であって、
      刷って残す情報ではない（年間行事の印と同じ扱い） */
   .cell[data-free]{background-image:none!important}
@@ -1987,14 +1998,16 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
            学年で揃えるものを決めるとき、見たいのは1クラスの中身ではなく
            クラスどうしのずれ。**見るだけ** -->
       <div class="gvview" id="gradeView" hidden>
-        <div class="mbar">
+        <!-- 説明は ？ の中（HELP.gradeview）。帯に置くと、毎回読み飛ばす字が
+             紙のとなりに居座る -->
+        <div class="mbar" data-help="gradeview">
           <select class="target" id="gvGrade" aria-label="見る学年"></select>
           <b id="gvTitle"></b>
           <span class="grow"></span>
+          <button class="btn go" id="gvPrint">印刷</button>
           <button class="btn" id="gvImage">画像</button>
           <button class="btn" id="gvClose">週の紙へ戻る</button>
         </div>
-        <p class="hint" id="gvHint"></p>
         <div class="gvpaper" id="gvPaper"></div>
       </div>
 
@@ -7106,10 +7119,7 @@ function drawGradeView(){
   const cs = gClasses();
   $("gvTitle").textContent = (gGrade || "") + "年　"
     + md(monday) + " → " + md(addDays(monday, 5));
-  $("gvHint").innerHTML = "1日を<b>" + cs.length + "クラスぶん</b>に割って、"
-    + "同じコマを<b>となりどうし</b>で並べています。"
-    + "<b>備考と放課後は置いていません</b>（ずれを読むための面なので）。"
-    + "直すのは週の紙のほうで。ここは見るだけです。";
+  /* 説明は ？ の中（HELP.gradeview） */
   const sel = $("gvGrade");
   sel.innerHTML = grades().map(g =>
     "<option value='" + escText(g) + "'" + (g === gGrade ? " selected" : "") + ">"
@@ -7230,19 +7240,46 @@ function fitK(nodes, probe, want, setVars){
   return k;
 }
 
-/* 1枚を画面に収める。幅は枠が持つので、合わせるのは高さだけ。 */
-/* 1コマの幅（px）。**1文字が読める最小**。これ×列数が紙の幅になる */
+/* 1コマの幅（px）。**倍率1のときの大きさ**。これ×列数が紙の幅になる */
 const G_CELL = 26;
+/* 学年の面の紙。**幅と高さの両方を見て、当たるまで広げる。**
+
+   前は 26px/コマ を上限にしていた（w = min(画面, 26×列数)）ので、
+   画面が広いほど右に余白が残り、字はいつまでも小さいままだった。
+   いまは**幅いっぱいまで広げてから、はみ出すぶんだけ高さで戻す**。
+
+   *上限を 3 倍にしてある理由*：クラスが2つの学年だと紙が細く、
+   大きな画面では 4〜5倍まで伸びて、1文字が親指ほどになる。
+   広く使うための面であって、拡大鏡ではない。 */
+const G_MAX_K = 3;
 function fitGrade(){
   const box = $("gvPaper"), sh = box && box.querySelector(".gsheet");
   if(!box || !sh) return;
-  const avail = box.clientWidth, h = box.clientHeight;
-  if(avail < 2 || h < 2) return;
+  const availW = box.clientWidth, availH = box.clientHeight;
+  if(availW < 2 || availH < 2) return;
   /* 月〜金は n 列ずつ、土は約半分 */
   const n = Math.max(1, gClasses().length);
-  const want = 50 + G_CELL * n * (DAYS - 1 + .6);
-  const w = Math.min(avail, want);
-  fitK([sh], sh, h, x => x.style.setProperty("--pw", w + "px"));
+  const baseW = 50 + G_CELL * n * (DAYS - 1 + .6);
+  let k = Math.min(G_MAX_K, availW / baseW);
+  for(let pass = 0; pass < 5; pass++){
+    sh.style.setProperty("--pw", (baseW * k) + "px");
+    sh.style.setProperty("--k", String(k));
+    const have = sh.scrollHeight;
+    if(have <= availH + 0.5) break;
+    k = Math.max(.2, k * (availH / have) * .99);
+  }
+  return k;
+}
+
+/* 学年の面を刷る。**A4 よこ1枚。** 月の面・カレンダーと同じ運び方
+   （紙の大きさで組み直してから刷り、刷り終わりで画面の大きさへ戻す）。
+   紙は横に長い ── 5日 × クラス数の列が並ぶので、よこ向きでないと入らない。 */
+const GV_PAGE = {w:297, h:210, mg:8};
+function fitGradePrint(){
+  const sh = $("gvPaper") && $("gvPaper").querySelector(".gsheet");
+  if(!sh) return;
+  sh.style.setProperty("--pw", (GV_PAGE.w - GV_PAGE.mg * 2) + "mm");
+  sh.style.setProperty("--k", "1");
 }
 
 /* 1枠に入るところまで --k を下げる。**測って決める。**
@@ -9754,6 +9791,10 @@ function printSpread(page, mark, fit, cellMM){
 }
 const printMonth = () => printSpread(M_PAGE,   "printing-month", fitMonth, mCellMM);
 const printCal   = () => printSpread(CAL_PAGE, "printing-cal",   fitCal,   calCellMM);
+/* 学年の面。**紙は1枚**なので、枠の大きさを渡す代わりに
+   刷るとき用の組み方（fitGradePrint）へ切り替えるだけ */
+const printGrade = () => printSpread(GV_PAGE, "printing-grade",
+                                     c => (c ? fitGradePrint() : fitGrade()), () => 1);
 
 function applyPaper(){
   const s = db.settings, sh = $("sheet");
@@ -11273,6 +11314,7 @@ function wire(){
   on("cvNext","click",  () => { calFrom = new Date(calFrom.getFullYear(), calFrom.getMonth() + CAL_MONTHS, 1); redrawCenter(); });
   on("cvClose","click", () => setCenter("week"));
   on("cvPrint","click", printCal);
+  on("gvPrint","click", printGrade);
   on("cvImage","click", async () => {
     try{ await nodePng($("cvPaper"), outputName("カレンダー") + ".png");
          toast("カレンダーの画像を保存した"); }

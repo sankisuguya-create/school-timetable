@@ -184,14 +184,16 @@
            学年で揃えるものを決めるとき、見たいのは1クラスの中身ではなく
            クラスどうしのずれ。**見るだけ** -->
       <div class="gvview" id="gradeView" hidden>
-        <div class="mbar">
+        <!-- 説明は ？ の中（HELP.gradeview）。帯に置くと、毎回読み飛ばす字が
+             紙のとなりに居座る -->
+        <div class="mbar" data-help="gradeview">
           <select class="target" id="gvGrade" aria-label="見る学年"></select>
           <b id="gvTitle"></b>
           <span class="grow"></span>
+          <button class="btn go" id="gvPrint">印刷</button>
           <button class="btn" id="gvImage">画像</button>
           <button class="btn" id="gvClose">週の紙へ戻る</button>
         </div>
-        <p class="hint" id="gvHint"></p>
         <div class="gvpaper" id="gvPaper"></div>
       </div>
 

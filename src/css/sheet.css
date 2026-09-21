@@ -356,6 +356,13 @@
   /* 日付の帯も、地が飛んでも分かるように下の線を残す */
   body.printing-cal .cnum{background:transparent;border-bottom-color:var(--rule)}
   body:not(.printing-cal) .cvview{display:none!important}
+  /* 学年の面を刷るとき。**まわりの操作も、週の1枚も出さない** */
+  body.printing-grade .stage{display:none!important}
+  body.printing-grade .gvview .mbar{display:none!important}
+  body.printing-grade .gvview{padding:0;gap:0;grid-template-rows:auto;display:block}
+  body.printing-grade .gvpaper{overflow:visible}
+  body.printing-grade .gsheet{box-shadow:none;border-radius:0;border-color:#000}
+  body:not(.printing-grade) .gvview{display:none!important}
   /* 空き枠さがしの印も刷らない。**枠を探している最中の作業**であって、
      刷って残す情報ではない（年間行事の印と同じ扱い） */
   .cell[data-free]{background-image:none!important}

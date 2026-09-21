@@ -2061,10 +2061,28 @@ ok("題名は1文字で出る", await p.evaluate(() =>
 ok("1文字の無い教科は、紙の字の1文字目に落ちる",
    await p.evaluate(() => shortOf("tosho", "図書")) === "図",
    await p.evaluate(() => shortOf("tosho", "図書")));
-ok("紙そのものが細い（画面いっぱいに伸ばさない）", await p.evaluate(() => {
+/* **幅と高さの両方を見て、当たるまで広げる。**
+   前は 26px/コマ を上限にしていたので、画面が広いほど右に余白が残り、
+   字はいつまでも小さいままだった。いまは、どちらかの向きが埋まる */
+ok("どちらかの向きが埋まるまで広げる", await p.evaluate(() => {
      const sh = document.querySelector("#gvPaper .gsheet");
-     return sh.getBoundingClientRect().width < $("gvPaper").clientWidth;
+     const box = $("gvPaper"), r = sh.getBoundingClientRect();
+     const fullW = r.width >= box.clientWidth - 2;
+     const fullH = r.height >= box.clientHeight - 2;
+     return fullW || fullH;
+   }) === true, await p.evaluate(() => {
+     const sh = document.querySelector("#gvPaper .gsheet");
+     const box = $("gvPaper"), r = sh.getBoundingClientRect();
+     return {w:[+r.width.toFixed(0), box.clientWidth],
+             h:[+r.height.toFixed(0), box.clientHeight]};
+   }));
+ok("どちらの向きにもはみ出さない", await p.evaluate(() => {
+     const sh = document.querySelector("#gvPaper .gsheet");
+     const box = $("gvPaper"), r = sh.getBoundingClientRect();
+     return r.width <= box.clientWidth + 2 && r.height <= box.clientHeight + 2;
    }) === true);
+/* 刷る口。**紙は横に長い**（5日 × クラス数）ので A4 よこ1枚 */
+ok("刷るボタンがある", await p.evaluate(() => !!$("gvPrint")) === true);
 
 console.log("\n■ 教科の表し方（設定の対応表）");
 await p.evaluate(() => openSubDlg());

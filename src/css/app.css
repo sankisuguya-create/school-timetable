@@ -269,10 +269,14 @@ body.is-unsaved[data-scope="school"] .stage{
   --night-1:#464B52; --night-2:#2C3036;
 }
 
-/* 月の面。**4週ぶんを 2×2 に並べる。** 紙と入れ替えて出す。
-   転がさずに1画面へ収める（収まらなければ紙にもならない）。 */
+/* 見るための面（4週・学年・カレンダー）。紙と入れ替えて出す。
+   転がさずに1画面へ収める（収まらなければ紙にもならない）。
+
+   **帯 ＋ 紙 の2行。** 説明はどれも ？ の中へ移したので、あいだの1行は無い。
+   行を3つ書いたままにすると、紙が `1fr` の行に入らず中身の高さで止まる
+   ── 学年の面が画面の 28% で止まっていた（実測 280px / 1000px）。 */
 .mview,.gvview,.cvview{grid-area:3/1/4/2;display:grid;
-  grid-template-rows:auto auto minmax(0,1fr);
+  grid-template-rows:auto minmax(0,1fr);
   gap:8px;padding:12px 16px 16px;min-height:0;min-width:0}
 /* 帯。**同じ並べ方を3つの名前で書かない**（月の面・中央のかたち・空き枠） */
 .mbar,.cbar,.freebox{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
