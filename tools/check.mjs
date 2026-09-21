@@ -90,8 +90,14 @@ ok("戻すと、日付から決まる週になる",
    await p.evaluate(() => [week().variant, autoVariant(wkKey()), !!week().vset]));
 
 console.log("\n■ 手の届くところ");
-ok("「週案」の右にグリッドメニューのボタンがある",
-   await p.locator(".side h2 #gridBtn").count() === 1);
+/* 見出しの「週案」と、その右のグリッド（入口へ飛ぶ口）は外した。
+   **字だけの見出しは何も決めない**し、入口へ行く口はすぐ下の
+   「ほかの週案を開く」と同じもので、同じ場所に2つあった。
+   空いたところへ、中央のかたち（週案・4週・学年・カレンダー）を上げてある */
+ok("左上に「中央に出すもの」の4つが出る",
+   await p.locator(".side #centerTabs [data-center]").count() === 4);
+ok("入口へ行く口は1つだけ",
+   await p.locator('[data-act="gate"]').count() === 1);
 ok("「時間割の入力」の右に保存がある",
    await p.locator(".phead .pbtns #saveBtn").count() === 1);
 ok("その隣にロックがある",
@@ -155,8 +161,8 @@ ok("時程に時刻が出る",
 const fit = await p.evaluate(() => db.settings.vz);
 ok("紙が画面に合わせて拡大される", fit > 40 && fit <= 160, fit);
 
-ok("グリッドのボタンで入口へ戻れる", await (async () => {
-  await p.locator("#gridBtn").click(); await p.waitForTimeout(250);
+ok("「ほかの週案を開く」で入口へ戻れる", await (async () => {
+  await p.locator('.nav[data-act="gate"]').click(); await p.waitForTimeout(250);
   const shown = await p.locator("#gate").isVisible();
   await p.locator(".tile[data-c='3-3']").click(); await p.waitForTimeout(300);
   return shown;
@@ -221,22 +227,36 @@ ok("文字を押すと開く",
 ok("javascript: の href は落とす",
    await p.evaluate(() => clean('<a href="javascript:alert(1)">x</a>').indexOf("javascript") < 0));
 
-console.log("\n■ 入れる先（選ぶたびに戻る）");
+/* **入れる先の欄は外した。** 開いたものが、そのまま入る先。
+   別にもう1か所で選べると、開いているものと食い違い、
+   学級を開いたまま全校へ広がることが起きていた */
+console.log("\n■ 入れる先は、開いた面が決める");
+ok("学級の面に「入れる先」の欄は無い",
+   await p.evaluate(() => !document.getElementById("pScopeWrap")));
 await p.locator("#sheet .cell[data-d='3'][data-s='p3'] .t").click();
 await p.waitForTimeout(150);
-await p.locator("#pScope input[value='grade']").check();
 await p.locator(".pal[data-v='sogo']").click();
 await p.waitForTimeout(250);
-ok("学年に反映すると学年マスターに入る",
-   await p.evaluate(() => !!(week().grade["3"] || {})["3|p3"]));
-await p.locator("#sheet .cell[data-d='4'][data-s='p3'] .t").click();
-await p.waitForTimeout(200);
-ok("別のコマを選ぶと「この学級のみ」へ戻る",
-   await p.locator("#pScope input[value='self']").isChecked());
+ok("学級の面で入れると、その学級に入る",
+   await p.evaluate(() => !!(week().home["3-3"] || {})["3|p3"]));
+ok("学年マスターには入らない",
+   await p.evaluate(() => !(week().grade["3"] || {})["3|p3"]));
 
 console.log("\n■ 層（マスターはその層のものだけ出す）");
+/* **学年の層に置いてから見る。** 担任の面から学年へ広げる口は無くなった
+   （入れる先の欄を外した）ので、この節は自分で学年の棚へ置く */
+await p.evaluate(() => {
+  const w = week();
+  (w.grade["3"] || (w.grade["3"] = {}))["3|p3"] =
+    /* **自分が入れたことにする。** ほかの人の名前にすると、3-3 を開いたとき
+       「あなたの予定が上書きされています」の窓が出て、そのあとの節で
+       紙の上を押せなくなる（窓が手前に乗る） */
+    {title:"総合", note:"", subject:"sogo", at:Date.now(), by:myEmail()};
+  save();
+});
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
 await p.locator(".master[data-g='3']").click(); await p.waitForTimeout(300);
+await p.evaluate(() => { for(const d of document.querySelectorAll("dialog[open]")) d.close(); });
 ok("学年マスターに学年の予定が出る",
    (await p.locator("#sheet .cell[data-d='3'][data-s='p3'] .t").innerText()).trim() === "総合");
 ok("担任が入れた分は出ない",
@@ -245,6 +265,10 @@ ok("担任が入れた分は出ない",
 console.log("\n■ 専科（同じデータをクラス名で見る）");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
 await p.locator(".tile.sp[data-s='ongaku']").click(); await p.waitForTimeout(300);
+/* **開いたときの知らせを閉じてから触る。** 面を開くと「上書きされています」の
+   窓が出ることがあり、出ていると紙の上を押せない（窓が手前に乗る） */
+await p.evaluate(() => { for(const d of document.querySelectorAll("dialog[open]")) d.close(); });
+await p.waitForTimeout(150);
 await p.locator("#sheet .cell[data-d='1'][data-s='p2'] .t").click(); await p.waitForTimeout(150);
 await p.locator(".pal[data-v='2-1']").click(); await p.waitForTimeout(250);
 ok("専科の週にはクラス名が出る",
@@ -293,12 +317,19 @@ await p.locator("#rosterDlg .dlgx").click(); await p.waitForTimeout(250);
 console.log("\n■ 上書きの警告（書く側）");
 /* 学年マスターで 3年 の木3校時に「学年体育」を入れる。
    3-3 には担任の「総合」が入っているので、聞かれるはず */
+/* 面を開いたときに出る知らせ（上書き・重なり）は、先に閉じてから触る。
+   出ていると紙の上を押せない（窓が手前に乗る） */
+const shutDlgs = async () => { await p.evaluate(() => {
+  for(const d of document.querySelectorAll("dialog[open]")) d.close(); });
+  await p.waitForTimeout(120); };
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-3']").click(); await p.waitForTimeout(300);
+await shutDlgs();
 await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").click(); await p.waitForTimeout(150);
 await p.locator(".pal[data-v='kokugo']").click(); await p.waitForTimeout(250);
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".master[data-g='3']").click(); await p.waitForTimeout(300);
+await shutDlgs();
 
 const swOpen = () => p.locator("#swDlg").evaluate(d => d.open);
 await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").click(); await p.waitForTimeout(150);
@@ -449,9 +480,12 @@ ok("誰の何を潰すのかを言う",
 ok("既定は「変更しない」",
    await p.evaluate(() => document.activeElement && document.activeElement.id) === "swNo");
 await p.locator("#swNo").click(); await p.waitForTimeout(250);
-ok("「変更しない」なら入らない",
-   await p.evaluate(() => plain(ownCell(1, "p2").title)) === "",
-   await p.evaluate(() => ownCell(1, "p2")));
+/* **落としたクラスが入っていないこと**を見る。空になるとは限らない ──
+   そのコマは基本時間割で別のクラス（6-4 など）に当たっていることがある */
+ok("「変更しない」なら入らない", await p.evaluate(() => {
+     const c = ownCell(1, "p2");
+     return c.layer === "base" || plain(c.title).indexOf("2-1") < 0;
+   }) === true, await p.evaluate(() => ownCell(1, "p2")));
 await p.locator("#sheet .cell[data-d='1'][data-s='p2'] .t").click();
 await p.waitForTimeout(200);
 await p.locator(".pal[data-v='2-1']").click(); await p.waitForTimeout(400);
@@ -1574,7 +1608,11 @@ ok("チップに枠の線がある（地が飛んでも残る）", tr.枠 === "s
 ok("チップの地は半透明", /^rgba\(.*0?\.\d+\)$/.test(tr.地), tr.地);
 ok("覆ったコマの字は、チップの手前で折り返す", tr.字をよける === true, tr);
 /* **校時の横線は消さない。** 消すと、どの校時のことか紙から読めなくなる */
-ok("校時の横線はそのまま残る", tr.線 === "1px,1px,1px,1px", tr.線);
+/* 太さの数値そのものは見ない。CSS は .6px 指定で、画面の拡大率によって
+   ブラウザが 1px にも 1.03px にも丸める。**4本とも残っていること**を見る */
+ok("校時の横線はそのまま残る",
+   String(tr.線).split(",").length === 4
+   && String(tr.線).split(",").every(x => parseFloat(x) > 0), tr.線);
 /* **縦書きに頼らない。** writing-mode の縦組みは、字を送るのにフォント側の
    情報が要る。無い環境では4文字が同じ場所に重なった（実測 24×11px） */
 ok("「校外学習」が1文字ずつ縦に並ぶ", tr.字数 === 4 && tr.縦 === true, tr);
@@ -2017,7 +2055,8 @@ ok("刷るときは、まわりの操作も週の1枚も出さない", await p.e
      && getComputedStyle(document.getElementById("stage")).display === "none") === true);
 await p.evaluate(() => { document.body.classList.remove("printing-month"); fitMonth(); });
 await p.emulateMedia({media:"screen"});
-await p.evaluate(() => showMonth(false));
+/* 面の出し入れは setCenter 1本になった（showMonth は PR23 で無くなった） */
+await p.evaluate(() => setCenter("week"));
 await p.waitForTimeout(400);
 ok("戻ると、いつもの週の紙に戻る",
    await p.locator("#monthView").evaluate(e => e.hidden) === true
@@ -2026,9 +2065,11 @@ ok("戻ると、いつもの週の紙に戻る",
 console.log("\n■ 教科チップの色は、字が運んでいるものを二重にするだけ");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
 await p.locator(".tile[data-c='1-1']").click(); await p.waitForTimeout(500);
+/* 押す口は窓から右メニューの帯へ移った（#chipSeg）。既定は「なし」 */
 ok("教科チップの色は既定で使わない",
    await p.evaluate(() => !$('sheet').classList.contains('chips-screen')
-     && $('chipNow').textContent === '使わない') === true);
+     && document.querySelector('#chipSeg [data-chip=off]')
+          .getAttribute('aria-pressed') === 'true') === true);
 ok("教科ごとに地の色がある",
    await p.evaluate(() => new Set([...document.querySelectorAll(".pal")]
      .map(x => getComputedStyle(x).backgroundColor)).size) >= 12,
@@ -2235,8 +2276,9 @@ ok("B5出力には印刷・画像・Google Sheetがある",
    await p.locator("#outPrint,#outImage,#outSheet").count()===3);
 ok("B4出力にも印刷・画像・Google Sheetがある",
    await p.locator("#mPrint,#mImage,#mSheet").count()===3);
+/* 押す口は窓から右メニューの帯へ移った（#chipSeg。なし／画面だけ／紙にも） */
 ok("教科チップは3段階から選べる",
-   await p.locator("input[name=chipMode]").count()===3);
+   await p.locator("#chipSeg [data-chip]").count()===3);
 
 
 console.log("\n■ 窓を閉じるところは、窓枠の右上");

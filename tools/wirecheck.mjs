@@ -565,16 +565,25 @@ ok("週を動かすと、書いたぶんが先に届く",
    (await calls()).indexOf("apiWriteCells") >= 0, await calls());
 await p.locator("#prevWk").click(); await p.waitForTimeout(500);
 
-console.log("\n■ 入れる先を変えると層も変わる");
-await p.evaluate(() => { window.__calls.length = 0; });
-await p.locator("#sheet .cell[data-d='4'][data-s='p3'] .t").click();
-await p.waitForTimeout(150);
-await p.locator("#pScope input[value='grade']").check();
-await p.locator(".pal[data-v='kokugo']").click();
-await p.locator("#saveBtn").click(); await p.waitForTimeout(600);
-const gq = (await lastCall("apiWriteCells")).args[1][0];
-ok("学年に反映すると層は grade・対象は学年",
-   gq.layer === "grade" && gq.target === "5", gq);
+/* **開いたものが、そのまま入る先。** 右メニューの「入れる先」は外した ──
+   開いているものと別にもう1か所で選べると、学級を開いたまま全校へ広がる */
+console.log("\n■ 開いた面が、そのまま層になる");
+ok("学級の面に「入れる先」の欄は無い", await p.evaluate(() =>
+   !document.getElementById("pScopeWrap")) === true);
+ok("学級の面では、いつもその学級に入る", await p.evaluate(() =>
+   layerOfStore() + "|" + targetOfStore()) === "home|5-1");
+const shut = () => p.evaluate(() =>
+  document.querySelectorAll("dialog[open]").forEach(d => d.close()));
+await p.evaluate(() => { openView({kind:"grade", grade:"5"}); });
+await p.waitForTimeout(700); await shut();
+ok("学年の面では、層は grade・対象は学年", await p.evaluate(() =>
+   layerOfStore() + "|" + targetOfStore()) === "grade|5");
+await p.evaluate(() => { openView({kind:"school"}); });
+await p.waitForTimeout(700); await shut();
+ok("全学年の面では、層は school", await p.evaluate(() =>
+   layerOfStore() + "|" + targetOfStore()) === "school|");
+await p.evaluate(() => { openView({kind:"class", cls:"5-1"}); });
+await p.waitForTimeout(700); await shut();
 
 console.log("\n■ 空にすると消す指示が届く");
 await p.evaluate(() => { window.__calls.length = 0; });
@@ -592,7 +601,6 @@ console.log("\n■ 通常保存 → 競合 → それでも上書き");
 await p.evaluate(() => { window.__calls.length = 0; });
 const CELL = "#sheet .cell[data-d='3'][data-s='p3']";
 await p.locator(CELL + " .t").click(); await p.waitForTimeout(150);
-await p.locator("#pScope input[value='self']").check();
 await p.locator(".pal[data-v='kokugo']").click();
 await p.locator("#saveBtn").click(); await p.waitForTimeout(600);
 const c1 = (await lastCall("apiWriteCells")).args[1].slice(-1)[0];

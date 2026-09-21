@@ -438,6 +438,11 @@ function wire(){
       if(a === "admin")   return openAdminDlg();
       if(a === "newyear") return openNewYearDlg();
       if(a === "month")   return openMonth();
+      /* 学年・カレンダーも「週案を出す」から開ける。**中央の帯と同じもの。**
+         刷るものを探している人は、左の「出す」の並びを見にいく */
+      if(a === "grade")   return centerOk() ? setCenter("grade")
+                                            : toast("クラスや学年を開いてから押す");
+      if(a === "cal")     return openCal();
       if(a === "print")   return window.print();
       if(a === "settings")return openSettings();
       if(a === "outweek") return openWeekOutput();
