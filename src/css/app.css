@@ -544,11 +544,10 @@ span.tpin{cursor:default}
 /* 専科の面。**クラスを学年ごとに束ね、2列×3段に固める。**
    20クラスを1列に流すと「4-2 はどこか」を毎回端から探すことになる。
    左上1年・右上2年・左下3年…と**学年の位置がいつも同じ**なら、一手で届く。
-   区切りの線は引かない（束が6つ見えていれば、線は何も足さない）。 */
+   区切りの線も、束の見出し（「3年」）も置かない ── チップの字の頭が
+   その学年で、束の位置も学年の順に固定してある。書き足しても何も増えない。 */
 .palg{display:grid;grid-template-columns:1fr 1fr;gap:9px 12px;width:100%}
 .palgg{display:flex;flex-wrap:wrap;align-items:center;gap:5px;min-width:0}
-.palgh{font-size:11px;color:var(--tx-sub);font-weight:700;
-  flex:0 0 2.6em;letter-spacing:.02em}
 /* 学年ごとの地。**色は学年を運ばない。** 運ぶのはチップの字（3-2）と、
    上の並び（学年の位置が固定）。色はその三重目。
    実測では、この6色は色だけでは見分けられない（2色覚で13組が閾値割れ。

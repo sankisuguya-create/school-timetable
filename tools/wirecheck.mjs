@@ -2693,12 +2693,16 @@ ok("受け持つ学年のぶんだけ束ができる", await p.evaluate(() =>
 ok("2列に並ぶ", await p.evaluate(() =>
    getComputedStyle(document.querySelector("#pals .palg"))
      .gridTemplateColumns.split(" ").length) === 2);
+/* **束に見出しは置かない。** チップの字の頭がその学年で、束の位置も
+   学年の順に固定してある。「3年」と書き足しても何も増えない */
+ok("束に見出しを置かない", await p.evaluate(() =>
+   document.querySelectorAll("#pals .palgh").length) === 0);
 ok("束の順は学年の順（左上から小さいほうへ）", await p.evaluate(() => {
-     const got = [...document.querySelectorAll("#pals .palgh")]
-       .map(e => parseInt(e.textContent, 10));
+     const got = [...document.querySelectorAll("#pals .palgg")]
+       .map(e => parseInt(e.dataset.g, 10));
      return got.every((n, i) => i === 0 || n > got[i - 1]);
    }) === true,
-   await p.evaluate(() => [...document.querySelectorAll("#pals .palgh")].map(e => e.textContent)));
+   await p.evaluate(() => [...document.querySelectorAll("#pals .palgg")].map(e => e.dataset.g)));
 ok("チップの字はクラス名のまま", await p.evaluate(() =>
    [...document.querySelectorAll("#pals .pal[data-g]")]
      .every(e => /^[1-9]-[1-9]$/.test(e.textContent))) === true);
@@ -2716,8 +2720,7 @@ ok("学年ごとに地の色が付く（束の中は同じ色）", await p.evalu
      .slice(0,3).map(e => getComputedStyle(e).backgroundColor)));
 ok("色を外しても、字と並びで学年が分かる", await p.evaluate(() => {
      const e = document.querySelector('#pals .pal[data-g]');
-     return e.textContent.charAt(0) === e.closest(".palgg").querySelector(".palgh")
-              .textContent.charAt(0);
+     return e.textContent.charAt(0) === e.closest(".palgg").dataset.g;
    }) === true);
 /* **リセットは専科にも出す。** 専科が入れたコマも全クラスの紙に降りるので、
    入れるのと同じ手数で取り消せないと、1コマずつ空にして回ることになる */

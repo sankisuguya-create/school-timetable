@@ -50,10 +50,11 @@ function drawPalette(){
     })).filter(x => x.list.length);
     /* **リセットは専科にも出す。** 専科が入れたコマも全クラスの紙に降りるので、
        入れるのと同じ手数で取り消せないと、1コマずつ空にして回ることになる */
+    /* **束に見出しは付けない。** チップの字（3-2）の頭がその学年で、
+       束の位置も学年の順に固定してある。「3年」と書き足しても何も増えない */
     $("pals").innerHTML =
       "<div class='palg'>"
-      + groups.map(x => "<div class='palgg'><span class='palgh'>"
-          + escText(x.g) + "年</span>"
+      + groups.map(x => "<div class='palgg' data-g='" + escText(x.g) + "'>"
           + x.list.map(c => palHtml({v:c, t:c, g:x.g})).join("")
           + "</div>").join("")
       + "</div>"
