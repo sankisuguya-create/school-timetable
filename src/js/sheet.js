@@ -599,6 +599,14 @@ function paintFree(){
   const sum = $("freeAvoidSum");
   if(sum) sum.textContent = o.avoid.length ? "避ける教科（" + o.avoid.length + "）"
                                            : "避ける教科";
+  /* 畳んだままでも、いま何を出しているかは見出しに出す。
+     **開き閉じは覚えておく**（既定は畳む。組み替えるときだけ使う道具） */
+  const fold = $("freeFold");
+  if(fold){
+    if(fold.open !== !!db.settings.freeOpen) fold.open = !!db.settings.freeOpen;
+    const now = document.querySelector("#freeSeg [data-free='" + o.level + "']");
+    $("freePeek").textContent = now ? now.textContent : "";
+  }
   paintFreeTally();
 }
 /* 数えたものを出す。**一覧を目で数え直させない**（それがこの道具の役目そのもの） */

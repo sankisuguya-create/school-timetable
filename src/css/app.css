@@ -494,25 +494,28 @@ span.tpin{cursor:default}
 /* 空き枠さがし。**紙のとなりの帯から右メニューへ移した。**
    帯には空き枠しか残っておらず、面を開くたび紙の上に1行が出たり消えたりして、
    紙の位置が上下に動いていた。ここでは縦に積む（右メニューは細長い）。 */
-.panel .freebox{flex-direction:column;align-items:stretch;gap:7px;
-  padding:9px 10px;border:1px solid var(--line);border-radius:var(--r-sm);
-  background:var(--card);margin:0}
-.panel .freebox .flab{font-size:12px;color:var(--tx-sub);font-weight:600}
-.panel .freebox .seg{width:100%}
-.panel .freebox .seg button{flex:1;padding:6px 4px;font-size:12px}
-/* 畳める見出し（時数・日の形で同じ形） */
-#dayFold>summary,#tallyFold>summary{list-style:none;cursor:pointer;
+.panel .freebox{display:block;margin:0}
+/* 畳める見出し（時数・日の形・空き枠で同じ形） */
+#dayFold>summary,#tallyFold>summary,#freeFold>summary{list-style:none;cursor:pointer;
   display:flex;align-items:center;gap:8px;padding:7px 9px;
   border:1px solid var(--line);border-radius:var(--r-sm);
   background:var(--card);font-size:13px;font-weight:700;color:var(--tx)}
-#dayFold>summary::-webkit-details-marker{display:none}
-#dayFold>summary::before{content:"▸";font-size:11px;color:var(--tx-sub);
-  transition:transform .12s}
-#dayFold[open]>summary::before{transform:rotate(90deg)}
-#dayFold>summary:hover{border-color:var(--ink-link)}
-#dayFold>summary i{font-style:normal;font-weight:400;font-size:12px;
-  color:var(--tx-sub);margin-left:auto}
+#dayFold>summary::-webkit-details-marker,
+#freeFold>summary::-webkit-details-marker{display:none}
+#dayFold>summary::before,#freeFold>summary::before{content:"▸";font-size:11px;
+  color:var(--tx-sub);transition:transform .12s}
+#dayFold[open]>summary::before,
+#freeFold[open]>summary::before{transform:rotate(90deg)}
+#dayFold>summary:hover,#freeFold>summary:hover{border-color:var(--ink-link)}
+#dayFold>summary i,#freeFold>summary i{font-style:normal;font-weight:400;
+  font-size:12px;color:var(--tx-sub);margin-left:auto}
 .dayin{padding-top:9px}
+/* 空き枠の中身。**段の名前が長い**ので、縦に積んで折り返させない */
+.freein{padding-top:9px;display:flex;flex-direction:column;gap:7px}
+.freein .seg{flex-direction:column;width:100%}
+.freein .seg button{padding:7px 10px;font-size:12px;text-align:left;
+  border-top:1px solid var(--line)}
+.freein .seg button:first-child{border-top:0}
 /* たんぽぽへの提出。**保存の右隣。** たんぽぽの児童がいるクラスだけに出る。
    色は既にある専科の茶（--cat-special）。保存の青とも、ロックの赤とも
    混ざらない。**押す前は塗って、押したあとは淡くする**——

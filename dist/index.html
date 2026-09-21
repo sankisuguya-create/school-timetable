@@ -625,25 +625,28 @@ span.tpin{cursor:default}
 /* 空き枠さがし。**紙のとなりの帯から右メニューへ移した。**
    帯には空き枠しか残っておらず、面を開くたび紙の上に1行が出たり消えたりして、
    紙の位置が上下に動いていた。ここでは縦に積む（右メニューは細長い）。 */
-.panel .freebox{flex-direction:column;align-items:stretch;gap:7px;
-  padding:9px 10px;border:1px solid var(--line);border-radius:var(--r-sm);
-  background:var(--card);margin:0}
-.panel .freebox .flab{font-size:12px;color:var(--tx-sub);font-weight:600}
-.panel .freebox .seg{width:100%}
-.panel .freebox .seg button{flex:1;padding:6px 4px;font-size:12px}
-/* 畳める見出し（時数・日の形で同じ形） */
-#dayFold>summary,#tallyFold>summary{list-style:none;cursor:pointer;
+.panel .freebox{display:block;margin:0}
+/* 畳める見出し（時数・日の形・空き枠で同じ形） */
+#dayFold>summary,#tallyFold>summary,#freeFold>summary{list-style:none;cursor:pointer;
   display:flex;align-items:center;gap:8px;padding:7px 9px;
   border:1px solid var(--line);border-radius:var(--r-sm);
   background:var(--card);font-size:13px;font-weight:700;color:var(--tx)}
-#dayFold>summary::-webkit-details-marker{display:none}
-#dayFold>summary::before{content:"▸";font-size:11px;color:var(--tx-sub);
-  transition:transform .12s}
-#dayFold[open]>summary::before{transform:rotate(90deg)}
-#dayFold>summary:hover{border-color:var(--ink-link)}
-#dayFold>summary i{font-style:normal;font-weight:400;font-size:12px;
-  color:var(--tx-sub);margin-left:auto}
+#dayFold>summary::-webkit-details-marker,
+#freeFold>summary::-webkit-details-marker{display:none}
+#dayFold>summary::before,#freeFold>summary::before{content:"▸";font-size:11px;
+  color:var(--tx-sub);transition:transform .12s}
+#dayFold[open]>summary::before,
+#freeFold[open]>summary::before{transform:rotate(90deg)}
+#dayFold>summary:hover,#freeFold>summary:hover{border-color:var(--ink-link)}
+#dayFold>summary i,#freeFold>summary i{font-style:normal;font-weight:400;
+  font-size:12px;color:var(--tx-sub);margin-left:auto}
 .dayin{padding-top:9px}
+/* 空き枠の中身。**段の名前が長い**ので、縦に積んで折り返させない */
+.freein{padding-top:9px;display:flex;flex-direction:column;gap:7px}
+.freein .seg{flex-direction:column;width:100%}
+.freein .seg button{padding:7px 10px;font-size:12px;text-align:left;
+  border-top:1px solid var(--line)}
+.freein .seg button:first-child{border-top:0}
 /* たんぽぽへの提出。**保存の右隣。** たんぽぽの児童がいるクラスだけに出る。
    色は既にある専科の茶（--cat-special）。保存の青とも、ロックの赤とも
    混ざらない。**押す前は塗って、押したあとは淡くする**——
@@ -2074,17 +2077,27 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
            開いたものが、そのまま入る先（入れる先の欄も外してある）で、
            左上の行き先の欄が同じことを言っている。 -->
       <div class="freebox" id="freeBox" hidden>
-        <span class="flab">空き枠</span>
-        <div class="seg" id="freeSeg" role="group" aria-label="空き枠さがし">
-          <button data-free="0" aria-pressed="true">出さない</button
-          ><button data-free="1" aria-pressed="false">レベル1</button
-          ><button data-free="2" aria-pressed="false">レベル2</button>
-        </div>
-        <details class="favoid" id="freeAvoid">
-          <summary id="freeAvoidSum">避ける教科</summary>
-          <div class="fapop" id="freeAvoidBody"></div>
+        <!-- **畳んでおく。** 空き枠を探すのは時間割を組み替えるときだけで、
+             毎日見るものではない。畳んだままでも、いま何を出しているかは
+             見出しに出る。説明は ？ の中（HELP.free） -->
+        <details id="freeFold">
+          <summary data-help="free"><span>空き枠あり/なし表示</span>
+            <i id="freePeek"></i></summary>
+          <div class="freein">
+            <!-- **段の名前は、何をふさがりと見るかで書く。**
+                 「レベル1／2」では、押すまで何が変わるか分からなかった -->
+            <div class="seg" id="freeSeg" role="group" aria-label="空き枠あり/なし表示">
+              <button data-free="0" aria-pressed="true">表示オフ</button
+              ><button data-free="1" aria-pressed="false">全校・学年枠表示</button
+              ><button data-free="2" aria-pressed="false">全校・学年・他専科枠表示</button>
+            </div>
+            <details class="favoid" id="freeAvoid">
+              <summary id="freeAvoidSum">避ける教科</summary>
+              <div class="fapop" id="freeAvoidBody"></div>
+            </details>
+            <span class="ftally" id="freeTally" aria-live="polite"></span>
+          </div>
         </details>
-        <span class="ftally" id="freeTally" aria-live="polite"></span>
       </div>
       <p class="tpchanged" id="tpChanged" role="status" hidden>未提出の変更あり！　保存後に、たんぽぽへ再提出してください。</p>
       <p class="lockmsg" id="lockMsg" hidden>
@@ -6949,6 +6962,14 @@ function paintFree(){
   const sum = $("freeAvoidSum");
   if(sum) sum.textContent = o.avoid.length ? "避ける教科（" + o.avoid.length + "）"
                                            : "避ける教科";
+  /* 畳んだままでも、いま何を出しているかは見出しに出す。
+     **開き閉じは覚えておく**（既定は畳む。組み替えるときだけ使う道具） */
+  const fold = $("freeFold");
+  if(fold){
+    if(fold.open !== !!db.settings.freeOpen) fold.open = !!db.settings.freeOpen;
+    const now = document.querySelector("#freeSeg [data-free='" + o.level + "']");
+    $("freePeek").textContent = now ? now.textContent : "";
+  }
   paintFreeTally();
 }
 /* 数えたものを出す。**一覧を目で数え直させない**（それがこの道具の役目そのもの） */
@@ -9818,6 +9839,23 @@ const HELP = {
        + "「たんぽぽ時間割に書き入れる」は、ロックしたままでも押せます。",
        "<i>はじめの人がつまずくところ：</i>入れた組は「学級編成」の"
        + "たんぽぽ交流級の欄に残ります。年度の初めに直すのはそちらです。"]},
+  free: {t:"空き枠あり/なし表示",
+    b:["<b>その週のどのコマが空いているかを、紙の上に印で出します。</b>"
+       + "学年・全学年・専科の面だけに出ます"
+       + "（学級の面に「空き枠」はありません。探しているのは自分の空き時間で、別のものです）。",
+       "<b>表示オフ</b>＝何も敷きません。",
+       "<b>全校・学年枠表示</b>＝全校の予定・学年の予定・校外行事・授業なしで"
+       + "ふさがっているコマに印を付けます。<b>動かせないもの</b>だけを見ます。",
+       "<b>全校・学年・他専科枠表示</b>＝それに、<b>ほかの専科</b>が入っているコマと、"
+       + "場所を取る教科（体育・音楽・図工など）を「避けたい」として足します。"
+       + "合同体育や学年集会のように、学年でまとめてやる教科も入ります。",
+       "<b>色は使っていません。</b>斜線の有無・密度と、記号（△ ×）で分けています"
+       + "（自由がいちばん多いので、自由には何も敷きません）。",
+       "<b>避ける教科</b>で、段の指定に自分で足せます。"
+       + "ここで選んだ教科は、どの段でも「避けたい」になります。",
+       "<b>畳んでおけます。</b>組み替えるときだけ使う道具なので、"
+       + "閉じておくと下が近くなります。畳んだままでも、いま何を出しているかは"
+       + "見出しに出ます。"]},
   dayform: {t:"この週の日の形",
     b:["<b>その日を「特別校時」や「休み」にします。全学年の面からだけ直せます。</b>"
        + "効く範囲が全クラスなので、担任の画面からは押せません。",
@@ -11199,6 +11237,7 @@ function wire(){
   /* 畳みの開き閉じは覚えておく（毎回たたみ直させない） */
   on("tallyFold", "toggle", () => { db.settings.tallyOpen = $("tallyFold").open; save(); });
   on("dayFold",   "toggle", () => { db.settings.dayOpen   = $("dayFold").open;   save(); });
+  on("freeFold",  "toggle", () => { db.settings.freeOpen  = $("freeFold").open;  save(); });
 
   /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */
   on("dayDlg","close", () => { dayPick = 0; });

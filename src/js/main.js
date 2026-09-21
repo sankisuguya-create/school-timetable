@@ -633,6 +633,7 @@ function wire(){
   /* 畳みの開き閉じは覚えておく（毎回たたみ直させない） */
   on("tallyFold", "toggle", () => { db.settings.tallyOpen = $("tallyFold").open; save(); });
   on("dayFold",   "toggle", () => { db.settings.dayOpen   = $("dayFold").open;   save(); });
+  on("freeFold",  "toggle", () => { db.settings.freeOpen  = $("freeFold").open;  save(); });
 
   /* この日の形。**全学年の面で、日付の見出しを押すと開く**（結線は sheet.js） */
   on("dayDlg","close", () => { dayPick = 0; });

@@ -274,17 +274,27 @@
            開いたものが、そのまま入る先（入れる先の欄も外してある）で、
            左上の行き先の欄が同じことを言っている。 -->
       <div class="freebox" id="freeBox" hidden>
-        <span class="flab">空き枠</span>
-        <div class="seg" id="freeSeg" role="group" aria-label="空き枠さがし">
-          <button data-free="0" aria-pressed="true">出さない</button
-          ><button data-free="1" aria-pressed="false">レベル1</button
-          ><button data-free="2" aria-pressed="false">レベル2</button>
-        </div>
-        <details class="favoid" id="freeAvoid">
-          <summary id="freeAvoidSum">避ける教科</summary>
-          <div class="fapop" id="freeAvoidBody"></div>
+        <!-- **畳んでおく。** 空き枠を探すのは時間割を組み替えるときだけで、
+             毎日見るものではない。畳んだままでも、いま何を出しているかは
+             見出しに出る。説明は ？ の中（HELP.free） -->
+        <details id="freeFold">
+          <summary data-help="free"><span>空き枠あり/なし表示</span>
+            <i id="freePeek"></i></summary>
+          <div class="freein">
+            <!-- **段の名前は、何をふさがりと見るかで書く。**
+                 「レベル1／2」では、押すまで何が変わるか分からなかった -->
+            <div class="seg" id="freeSeg" role="group" aria-label="空き枠あり/なし表示">
+              <button data-free="0" aria-pressed="true">表示オフ</button
+              ><button data-free="1" aria-pressed="false">全校・学年枠表示</button
+              ><button data-free="2" aria-pressed="false">全校・学年・他専科枠表示</button>
+            </div>
+            <details class="favoid" id="freeAvoid">
+              <summary id="freeAvoidSum">避ける教科</summary>
+              <div class="fapop" id="freeAvoidBody"></div>
+            </details>
+            <span class="ftally" id="freeTally" aria-live="polite"></span>
+          </div>
         </details>
-        <span class="ftally" id="freeTally" aria-live="polite"></span>
       </div>
       <p class="tpchanged" id="tpChanged" role="status" hidden>未提出の変更あり！　保存後に、たんぽぽへ再提出してください。</p>
       <p class="lockmsg" id="lockMsg" hidden>

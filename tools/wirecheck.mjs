@@ -1812,7 +1812,7 @@ ok("週の紙は書ける",
    await p.evaluate(() =>
      document.querySelectorAll("#sheet .cell .t[contenteditable]").length > 0) === true);
 
-console.log("\n■ 空き枠さがし（3段。2値にしない）");
+console.log("\n■ 空き枠あり/なし表示（3段。2値にしない）");
 ok("学級の面には出さない", await p.evaluate(() => {
      openView({kind:"class", cls:"5-1"});
      return freeScope();
@@ -1820,6 +1820,17 @@ ok("学級の面には出さない", await p.evaluate(() => {
 await p.evaluate(() => openView({kind:"grade", grade:"5"}));
 await p.waitForTimeout(300); await closeDlgs();
 ok("学年の面では出す", await p.evaluate(() => $("freeBox").hidden) === false);
+/* **畳んである**（組み替えるときだけ使う道具）。押す前に開く */
+ok("畳んだままでも、いま何を出しているかは見出しに出る", await p.evaluate(() =>
+   $("freePeek").textContent) === "表示オフ",
+   await p.evaluate(() => $("freePeek").textContent));
+ok("段の名前は、何をふさがりと見るかで書く", await p.evaluate(() =>
+   [...document.querySelectorAll("#freeSeg [data-free]")].map(e => e.textContent).join("/"))
+   === "表示オフ/全校・学年枠表示/全校・学年・他専科枠表示",
+   await p.evaluate(() =>
+     [...document.querySelectorAll("#freeSeg [data-free]")].map(e => e.textContent)));
+await p.evaluate(() => { $("freeFold").open = true; });
+await p.waitForTimeout(200);
 ok("はじめは出さない（段が0）", await p.evaluate(() => freeOpt().level) === 0);
 ok("段が0のあいだは、印を付けない", await p.evaluate(() =>
    document.querySelectorAll("#sheet .cell[data-free]").length) === 0);
@@ -1845,13 +1856,13 @@ await p.waitForTimeout(400);
 const fst = (d, s) => p.evaluate(([d, s]) =>
   (document.querySelector(`#sheet .cell[data-d="${d}"][data-s="${s}"]`) || {dataset:{}})
     .dataset.free, [d, s]);
-ok("レベル1：全校の予定は使えない",  await fst(1, "p1") === "busy",  await fst(1, "p1"));
-ok("レベル1：学年の予定も使えない",  await fst(1, "p2") === "busy",  await fst(1, "p2"));
-ok("レベル1：場所を取る教科は、まだ自由", await fst(1, "p3") === "free", await fst(1, "p3"));
+ok("全校・学年枠：全校の予定は使えない",  await fst(1, "p1") === "busy",  await fst(1, "p1"));
+ok("全校・学年枠：学年の予定も使えない",  await fst(1, "p2") === "busy",  await fst(1, "p2"));
+ok("全校・学年枠：場所を取る教科は、まだ自由", await fst(1, "p3") === "free", await fst(1, "p3"));
 await closeDlgs();
 await p.locator('#freeSeg [data-free="2"]').click();
 await p.waitForTimeout(400);
-ok("レベル2：場所を取る教科は避けたい", await fst(1, "p3") === "avoid", await fst(1, "p3"));
+ok("全校・学年・他専科枠：場所を取る教科は避けたい", await fst(1, "p3") === "avoid", await fst(1, "p3"));
 ok("使えないコマには × が付く", await p.evaluate(() =>
    getComputedStyle(document.querySelector('#sheet .cell[data-d="1"][data-s="p1"]'),
                     "::after").content.indexOf("×") >= 0) === true);
@@ -1895,7 +1906,7 @@ await p.evaluate(() => {
                           at:Date.now(), by:"a@edu.nishi.or.jp"};
   save(); buildSheet();
 });
-ok("指定した教科は、レベル1でも避ける（学年の予定より前に見ない）",
+ok("指定した教科は、どの段でも避ける（学年の予定より前に見ない）",
    await fst(2, "p1") === "busy", await fst(2, "p1"));
 await p.evaluate(() => {
   const w = week();
