@@ -2678,6 +2678,59 @@ await p.waitForTimeout(400); await closeDlgs();
    （gas/Gate.gs の checkAdmin を呼ぶ口は無くなった）。
    学校で3人しか直せないと、基本時間割や学級編成を直したい人が
    その3人の手が空くのを待つことになっていた。 */
+console.log("\n■ 専科の面のクラスチップ（学年ごとに束ねる）");
+await p.evaluate(() => openView({kind:"special", sp:"ongaku"}));
+await p.waitForTimeout(800); await closeDlgs();
+/* **20クラスを1列に流すと「4-2 はどこか」を毎回端から探す。**
+   2列×3段に固め、学年の位置をいつも同じにする */
+/* 束の数＝その専科が受け持つ学年の数（見本の音楽は5年だけ） */
+ok("受け持つ学年のぶんだけ束ができる", await p.evaluate(() =>
+   document.querySelectorAll("#pals .palgg").length
+   === gradesAll().filter(g =>
+        classesOfSpecial(view.sp).some(c => gradeOf(c) === g)).length) === true,
+   await p.evaluate(() => [document.querySelectorAll("#pals .palgg").length,
+     classesOfSpecial(view.sp)]));
+ok("2列に並ぶ", await p.evaluate(() =>
+   getComputedStyle(document.querySelector("#pals .palg"))
+     .gridTemplateColumns.split(" ").length) === 2);
+ok("束の順は学年の順（左上から小さいほうへ）", await p.evaluate(() => {
+     const got = [...document.querySelectorAll("#pals .palgh")]
+       .map(e => parseInt(e.textContent, 10));
+     return got.every((n, i) => i === 0 || n > got[i - 1]);
+   }) === true,
+   await p.evaluate(() => [...document.querySelectorAll("#pals .palgh")].map(e => e.textContent)));
+ok("チップの字はクラス名のまま", await p.evaluate(() =>
+   [...document.querySelectorAll("#pals .pal[data-g]")]
+     .every(e => /^[1-9]-[1-9]$/.test(e.textContent))) === true);
+/* **色は学年を運ばない。** 運ぶのは字と並び。色は三重目 ──
+   実測でこの6色は色だけでは見分けられない（2色覚で13組が閾値割れ）。
+   だから字（3-2）も並び（学年の位置）も外さない */
+ok("学年ごとに地の色が付く（束の中は同じ色）", await p.evaluate(() =>
+   [...document.querySelectorAll("#pals .palgg")].every(gg => {
+     const cs = [...gg.querySelectorAll(".pal")]
+       .map(e => getComputedStyle(e).backgroundColor);
+     return cs.length && new Set(cs).size === 1
+         && cs[0] !== "rgba(0, 0, 0, 0)" && cs[0] !== "rgb(255, 255, 255)";
+   })) === true,
+   await p.evaluate(() => [...document.querySelectorAll("#pals .pal[data-g]")]
+     .slice(0,3).map(e => getComputedStyle(e).backgroundColor)));
+ok("色を外しても、字と並びで学年が分かる", await p.evaluate(() => {
+     const e = document.querySelector('#pals .pal[data-g]');
+     return e.textContent.charAt(0) === e.closest(".palgg").querySelector(".palgh")
+              .textContent.charAt(0);
+   }) === true);
+/* **リセットは専科にも出す。** 専科が入れたコマも全クラスの紙に降りるので、
+   入れるのと同じ手数で取り消せないと、1コマずつ空にして回ることになる */
+ok("専科にもリセットのチップが出る", await p.evaluate(() =>
+   !!document.querySelector("#pals > .pal.clear")) === true);
+ok("リセットは束の外に置く（入れるものではない）", await p.evaluate(() =>
+   !document.querySelector("#pals .palgg .pal.clear")) === true);
+await p.evaluate(() => openView({kind:"class", cls:"5-1"}));
+await p.waitForTimeout(700); await closeDlgs();
+ok("学級の面は、いままでどおり教科の並び", await p.evaluate(() =>
+   !document.querySelector("#pals .palg")
+   && document.querySelectorAll("#pals .pal").length > 5) === true);
+
 console.log("\n■ 設定は教職員なら誰でも触れる");
 ok("管理者でなくても、設定を出す", await p.evaluate(() => {
      window.__isAdmin = false;

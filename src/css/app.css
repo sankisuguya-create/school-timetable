@@ -541,6 +541,27 @@ span.tpin{cursor:default}
 .panel .where{font-size:14px;font-weight:600;margin:0;line-height:1.45}
 
 .pals{display:flex;flex-wrap:wrap;gap:5px}
+/* 専科の面。**クラスを学年ごとに束ね、2列×3段に固める。**
+   20クラスを1列に流すと「4-2 はどこか」を毎回端から探すことになる。
+   左上1年・右上2年・左下3年…と**学年の位置がいつも同じ**なら、一手で届く。
+   区切りの線は引かない（束が6つ見えていれば、線は何も足さない）。 */
+.palg{display:grid;grid-template-columns:1fr 1fr;gap:9px 12px;width:100%}
+.palgg{display:flex;flex-wrap:wrap;align-items:center;gap:5px;min-width:0}
+.palgh{font-size:11px;color:var(--tx-sub);font-weight:700;
+  flex:0 0 2.6em;letter-spacing:.02em}
+/* 学年ごとの地。**色は学年を運ばない。** 運ぶのはチップの字（3-2）と、
+   上の並び（学年の位置が固定）。色はその三重目。
+   実測では、この6色は色だけでは見分けられない（2色覚で13組が閾値割れ。
+   色分けスキルの check-palette.mjs）。**だから字も並びも外さない。**
+   地としては6色とも読める（文字とのコントラスト 13.4〜14.4）。 */
+.pal[data-g="1"]{background:var(--grade-1)}
+.pal[data-g="2"]{background:var(--grade-2)}
+.pal[data-g="3"]{background:var(--grade-3)}
+.pal[data-g="4"]{background:var(--grade-4)}
+.pal[data-g="5"]{background:var(--grade-5)}
+.pal[data-g="6"]{background:var(--grade-6)}
+/* リセットは束の外。**入れるものではない**ので、束から離して1つ置く */
+.pals>.pal.clear{margin-top:9px}
 .pal{padding:6px 11px;font-size:12.5px;border:1px solid var(--line);border-radius:15px;
   background:var(--card);cursor:grab;user-select:none;line-height:1.3;
   font-family:inherit;color:var(--ink)}

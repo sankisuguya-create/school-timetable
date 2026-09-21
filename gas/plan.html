@@ -69,6 +69,23 @@
   --sub-gakkatsu:#E2EAF0; /* 学活  青灰 */
   --sub-none:#E4E7EA;     /* 時数に数えないもの（図書・行事・給食・クラブ・委員会） */
 
+  /* 学年の淡い地（専科の面のクラスチップ）。**教科チップと同じ淡さ**で、
+     新しい色は作らず、上の教科の色から当てている。
+
+     **色は学年を運ばない。** 運ぶのはチップの字（3-2）と置き場所
+     （1年は左上、2年は右上…と学年の順で並ぶ）。色はその三重目。
+     実測では、この6色は色だけでは見分けられない
+     （2色覚シミュレーションで13組が閾値を割る。色分けスキルの
+     check-palette.mjs による）。字と並びを外さない限り、潰れても使える。
+     地としては6色とも読める（文字とのコントラスト 13.4〜14.4）。 */
+  --grade-1:#FBDAD7;      /* 1年 赤  （体育と同じ） */
+  --grade-2:#F7E9A8;      /* 2年 黄  （社会と同じ） */
+  --grade-3:#D7EDF9;      /* 3年 青  （算数と同じ） */
+  --grade-4:#FBE0EC;      /* 4年 桃  （音楽と同じ） */
+  --grade-5:#E9E2F5;      /* 5年 紫  （生活と同じ） */
+  --grade-6:#F3E3D3;      /* 6年 砂  （家庭と同じ）
+                             **緑にしない** ── 1年の赤と、赤×緑で同じ色になる */
+
   /* 紙（印刷される面） */
   --sheet:#FFFFFF;
   --ink:#1A1A1A; --ink-sub:#616870; --ink-link:#0F5EA8; --ink-alert:#C0330A;
@@ -655,6 +672,27 @@ span.tpin{cursor:default}
 .panel .where{font-size:14px;font-weight:600;margin:0;line-height:1.45}
 
 .pals{display:flex;flex-wrap:wrap;gap:5px}
+/* 専科の面。**クラスを学年ごとに束ね、2列×3段に固める。**
+   20クラスを1列に流すと「4-2 はどこか」を毎回端から探すことになる。
+   左上1年・右上2年・左下3年…と**学年の位置がいつも同じ**なら、一手で届く。
+   区切りの線は引かない（束が6つ見えていれば、線は何も足さない）。 */
+.palg{display:grid;grid-template-columns:1fr 1fr;gap:9px 12px;width:100%}
+.palgg{display:flex;flex-wrap:wrap;align-items:center;gap:5px;min-width:0}
+.palgh{font-size:11px;color:var(--tx-sub);font-weight:700;
+  flex:0 0 2.6em;letter-spacing:.02em}
+/* 学年ごとの地。**色は学年を運ばない。** 運ぶのはチップの字（3-2）と、
+   上の並び（学年の位置が固定）。色はその三重目。
+   実測では、この6色は色だけでは見分けられない（2色覚で13組が閾値割れ。
+   色分けスキルの check-palette.mjs）。**だから字も並びも外さない。**
+   地としては6色とも読める（文字とのコントラスト 13.4〜14.4）。 */
+.pal[data-g="1"]{background:var(--grade-1)}
+.pal[data-g="2"]{background:var(--grade-2)}
+.pal[data-g="3"]{background:var(--grade-3)}
+.pal[data-g="4"]{background:var(--grade-4)}
+.pal[data-g="5"]{background:var(--grade-5)}
+.pal[data-g="6"]{background:var(--grade-6)}
+/* リセットは束の外。**入れるものではない**ので、束から離して1つ置く */
+.pals>.pal.clear{margin-top:9px}
 .pal{padding:6px 11px;font-size:12.5px;border:1px solid var(--line);border-radius:15px;
   background:var(--card);cursor:grab;user-select:none;line-height:1.3;
   font-family:inherit;color:var(--ink)}
@@ -7575,15 +7613,46 @@ function chipHere_(sub){
   return only === "学年" ? (view.kind === "grade" || view.kind === "school") : true;
 }
 
+/* チップ1つぶんの HTML。**どの面でも同じ作り**（引っぱれる・押せる） */
+function palHtml(o){
+  return "<button class='pal" + (o.off ? " off" : "") + (o.clear ? " clear" : "")
+    + (o.trip ? " trip" : "") + (o.none ? " none" : "") + "' draggable='true'"
+    + (o.g ? " data-g='" + escText(o.g) + "'" : "")
+    + " data-v='" + escText(o.v) + "'>" + escText(o.t) + "</button>";
+}
+
 function drawPalette(){
-  const items = (view.kind === "special")
-    ? allClasses().map(c => ({v:c, t:c, off:false}))
-    : SUBJECTS.filter(chipHere_).map(s => ({v:s.code, t:s.name, off:!s.count}));
+  const sp = view.kind === "special";
+
+  /* **専科の面は、クラスを学年ごとに束ねて並べる。**
+     20クラスを1列に流すと「4-2 はどこか」を毎回端から探すことになる。
+     2列×3段（左上1年・右上2年・左下3年…）に固めると、
+     **学年の位置がいつも同じ**なので、目的の組まで一手で届く。
+     区切りの線は引かない ── 束が6つ見えていれば、線は何も足さない。 */
+  if(sp){
+    const groups = gradesAll().map(g => ({
+      g, list: classesOfSpecial(view.sp).filter(c => gradeOf(c) === g)
+    })).filter(x => x.list.length);
+    /* **リセットは専科にも出す。** 専科が入れたコマも全クラスの紙に降りるので、
+       入れるのと同じ手数で取り消せないと、1コマずつ空にして回ることになる */
+    $("pals").innerHTML =
+      "<div class='palg'>"
+      + groups.map(x => "<div class='palgg'><span class='palgh'>"
+          + escText(x.g) + "年</span>"
+          + x.list.map(c => palHtml({v:c, t:c, g:x.g})).join("")
+          + "</div>").join("")
+      + "</div>"
+      + palHtml({v:PAL_CLEAR, t:"リセット", clear:true});
+    wirePalette();
+    return;
+  }
+
+  const items = SUBJECTS.filter(chipHere_).map(s => ({v:s.code, t:s.name, off:!s.count}));
 
   /* **校外行事はどの面にも出す。** 学級だけの校外学習も、学年の自然学校もある */
-  if(view.kind !== "special") items.push({v:PAL_TRIP, t:"校外行事", trip:true});
+  items.push({v:PAL_TRIP, t:"校外行事", trip:true});
   /* **授業なしもどの面にも出す。** 1学級だけ潰れる日も、学年で潰れる日もある */
-  if(view.kind !== "special") items.push({v:PAL_NONE, t:"授業なし", none:true});
+  items.push({v:PAL_NONE, t:"授業なし", none:true});
 
   /* **学年・全学年には「リセット」を出す。**
      ここで入れたコマは全クラスに降りる。入れるのと同じ手数で取り消せないと、
@@ -7592,10 +7661,12 @@ function drawPalette(){
   const canClear = (view.kind === "grade" || view.kind === "school");
   if(canClear) items.push({v:PAL_CLEAR, t:"リセット", clear:true});
 
-  $("pals").innerHTML = items.map(o =>
-    "<button class='pal" + (o.off ? " off" : "") + (o.clear ? " clear" : "")
-    + (o.trip ? " trip" : "") + (o.none ? " none" : "") + "' draggable='true'"
-    + " data-v='" + escText(o.v) + "'>" + escText(o.t) + "</button>").join("");
+  $("pals").innerHTML = items.map(palHtml).join("");
+  wirePalette();
+}
+
+/* 押す・引っぱるの結線。**チップを組み直すたびに呼ぶ** */
+function wirePalette(){
 
   if(typeof applyLock === "function") setTimeout(applyLock, 0);
   /* 使い方は ？ の中（HELP.pals）。押す口のとなりに5行の説明を置くと、

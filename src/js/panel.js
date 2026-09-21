@@ -28,15 +28,46 @@ function chipHere_(sub){
   return only === "学年" ? (view.kind === "grade" || view.kind === "school") : true;
 }
 
+/* チップ1つぶんの HTML。**どの面でも同じ作り**（引っぱれる・押せる） */
+function palHtml(o){
+  return "<button class='pal" + (o.off ? " off" : "") + (o.clear ? " clear" : "")
+    + (o.trip ? " trip" : "") + (o.none ? " none" : "") + "' draggable='true'"
+    + (o.g ? " data-g='" + escText(o.g) + "'" : "")
+    + " data-v='" + escText(o.v) + "'>" + escText(o.t) + "</button>";
+}
+
 function drawPalette(){
-  const items = (view.kind === "special")
-    ? allClasses().map(c => ({v:c, t:c, off:false}))
-    : SUBJECTS.filter(chipHere_).map(s => ({v:s.code, t:s.name, off:!s.count}));
+  const sp = view.kind === "special";
+
+  /* **専科の面は、クラスを学年ごとに束ねて並べる。**
+     20クラスを1列に流すと「4-2 はどこか」を毎回端から探すことになる。
+     2列×3段（左上1年・右上2年・左下3年…）に固めると、
+     **学年の位置がいつも同じ**なので、目的の組まで一手で届く。
+     区切りの線は引かない ── 束が6つ見えていれば、線は何も足さない。 */
+  if(sp){
+    const groups = gradesAll().map(g => ({
+      g, list: classesOfSpecial(view.sp).filter(c => gradeOf(c) === g)
+    })).filter(x => x.list.length);
+    /* **リセットは専科にも出す。** 専科が入れたコマも全クラスの紙に降りるので、
+       入れるのと同じ手数で取り消せないと、1コマずつ空にして回ることになる */
+    $("pals").innerHTML =
+      "<div class='palg'>"
+      + groups.map(x => "<div class='palgg'><span class='palgh'>"
+          + escText(x.g) + "年</span>"
+          + x.list.map(c => palHtml({v:c, t:c, g:x.g})).join("")
+          + "</div>").join("")
+      + "</div>"
+      + palHtml({v:PAL_CLEAR, t:"リセット", clear:true});
+    wirePalette();
+    return;
+  }
+
+  const items = SUBJECTS.filter(chipHere_).map(s => ({v:s.code, t:s.name, off:!s.count}));
 
   /* **校外行事はどの面にも出す。** 学級だけの校外学習も、学年の自然学校もある */
-  if(view.kind !== "special") items.push({v:PAL_TRIP, t:"校外行事", trip:true});
+  items.push({v:PAL_TRIP, t:"校外行事", trip:true});
   /* **授業なしもどの面にも出す。** 1学級だけ潰れる日も、学年で潰れる日もある */
-  if(view.kind !== "special") items.push({v:PAL_NONE, t:"授業なし", none:true});
+  items.push({v:PAL_NONE, t:"授業なし", none:true});
 
   /* **学年・全学年には「リセット」を出す。**
      ここで入れたコマは全クラスに降りる。入れるのと同じ手数で取り消せないと、
@@ -45,10 +76,12 @@ function drawPalette(){
   const canClear = (view.kind === "grade" || view.kind === "school");
   if(canClear) items.push({v:PAL_CLEAR, t:"リセット", clear:true});
 
-  $("pals").innerHTML = items.map(o =>
-    "<button class='pal" + (o.off ? " off" : "") + (o.clear ? " clear" : "")
-    + (o.trip ? " trip" : "") + (o.none ? " none" : "") + "' draggable='true'"
-    + " data-v='" + escText(o.v) + "'>" + escText(o.t) + "</button>").join("");
+  $("pals").innerHTML = items.map(palHtml).join("");
+  wirePalette();
+}
+
+/* 押す・引っぱるの結線。**チップを組み直すたびに呼ぶ** */
+function wirePalette(){
 
   if(typeof applyLock === "function") setTimeout(applyLock, 0);
   /* 使い方は ？ の中（HELP.pals）。押す口のとなりに5行の説明を置くと、
