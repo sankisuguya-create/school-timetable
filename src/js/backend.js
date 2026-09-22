@@ -1000,6 +1000,21 @@ const Backend = (function(){
       .apiPlaceUnit(fy(), id, expectedAt, date, slot);
   }
 
+  function detachUnitProgress(id, expectedAt, date, slot, ok, ng){
+    if(!onGas) return ng("単元の再配当はGAS版で確認してください");
+    google.script.run
+      .withSuccessHandler(r => ok(r || {}))
+      .withFailureHandler(e => ng(String((e && e.message) || "単元から外せなかった")))
+      .apiDetachUnit(fy(), id, expectedAt, date, slot);
+  }
+  function moveUnitProgress(id, expectedAt, fromDate, fromSlot, toDate, toSlot, ok, ng){
+    if(!onGas) return ng("単元チップの移動はGAS版で確認してください");
+    google.script.run
+      .withSuccessHandler(r => ok(r || {}))
+      .withFailureHandler(e => ng(String((e && e.message) || "単元チップを移動できなかった")))
+      .apiMoveUnit(fy(), id, expectedAt, fromDate, fromSlot, toDate, toSlot);
+  }
+
   function resetUnitProgress(id, expectedAt, ok, ng){
     if(!onGas){
       const y = localUnits_(), u = y.unitProgress.find(x => x.id === id);
@@ -1130,7 +1145,8 @@ const Backend = (function(){
           saveRoster, saveSubjects, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,
           tpTargets, saveTpTargets, testTpTarget, tpSubmit,
-          unitManager, saveUnitProgress, placeUnitProgress, resetUnitProgress, resetUnitProgressAll, deleteUnitProgress, saveUnitTerms,
+          unitManager, saveUnitProgress, placeUnitProgress, detachUnitProgress, moveUnitProgress,
+          resetUnitProgress, resetUnitProgressAll, deleteUnitProgress, saveUnitTerms,
           yearSetup, tickYearSetup, setupPlanSheets, saveVariantOrigin, saveEvents,
           exportPlanSheet};
 })();
