@@ -1157,7 +1157,10 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   align-items:center;min-width:0;overflow:hidden;
   border-top:.6px solid var(--rule-soft)}
 .cper>i:first-child{border-top:0}
+/* 題名の欄。**行の高さいっぱいに伸ばす。** 教科の色（--tint）を地に敷くので、
+   字の高さだけ塗ると、行の中に色の帯が浮いて、どの校時のことか読みにくい */
 .cper b{font-weight:600;font-size:calc(7.5pt*var(--k));line-height:1;
+  align-self:stretch;display:flex;align-items:center;justify-content:center;
   text-align:center;overflow:hidden;white-space:nowrap}
 /* 専科の面はクラス名（4-3）。**枠に収める**ため、そこだけ字を落とす */
 .cvpaper[data-face=special] .cper b{font-size:calc(6pt*var(--k));letter-spacing:-.02em}
@@ -1244,15 +1247,20 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
    .helpq は既定で margin-left:auto（並びの右端へ寄せる作り）なので、
    ここでは 0 に戻して、ボタンとの間は gap で取る */
 /* 時数のまわりの小さいボタン。**.btn と同じ形で、ひとまわり小さく。**
-   ここまで .mini には1行も当たっておらず、ブラウザ既定のボタンのまま出ていた
-   ── 右メニューのほかの押す口と形も字も違い、そこだけ浮いて見えていた。 */
-.mini{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
+   ここまでこの形には1行も当たっておらず、ブラウザ既定のボタンのまま出ていた
+   ── 右メニューのほかの押す口と形も字も違い、そこだけ浮いて見えていた。
+
+   **class 名は .sbtn。** はじめ .mini と名づけたが、4週の面の紙も
+   `.sheet.mini` で、`.mini` の1枚が紙にも当たっていた ── 紙に
+   `padding:6px 11px` と `white-space:nowrap` が乗り、版面が痩せて
+   コマの中の字が折り返さなくなっていた（同じ名前を2つの物に使わない）。 */
+.sbtn{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
   padding:6px 11px;font-size:12.5px;font-family:inherit;color:var(--tx);
   cursor:pointer;white-space:nowrap;line-height:1.35;
   transition:background .12s,border-color .12s}
-.mini:hover{background:var(--hover);border-color:var(--tx-sub)}
-.mini:focus-visible{outline:2px solid var(--ink-link);outline-offset:1px}
-.mini:disabled{opacity:.45;cursor:default}
+.sbtn:hover{background:var(--hover);border-color:var(--tx-sub)}
+.sbtn:focus-visible{outline:2px solid var(--ink-link);outline-offset:1px}
+.sbtn:disabled{opacity:.45;cursor:default}
 .tlybtn{display:flex;align-items:center;gap:6px;margin-top:7px}
 .tlybtn>.helpq{margin-left:0}
-.tlyin>.mini{margin-top:7px}
+.tlyin>.sbtn{margin-top:7px}

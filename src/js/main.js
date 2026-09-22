@@ -162,7 +162,15 @@ function autoFit(){
   applyZoom();
 }
 let fitT = 0;
-addEventListener("resize", () => { clearTimeout(fitT); fitT = setTimeout(autoFit, 120); });
+addEventListener("resize", () => {
+  clearTimeout(fitT);
+  fitT = setTimeout(() => {
+    autoFit();
+    /* 中央に出ている面（4週・学年・カレンダー）も測り直す。
+       紙の大きさは枠の大きさで決まるので、窓を広げたら倍率も変わる */
+    if(typeof refitCenter === "function") refitCenter();
+  }, 120);
+});
 
 /* ── 週 ──────────────────────────────────────── */
 function syncVariant(){

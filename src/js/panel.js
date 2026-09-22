@@ -110,6 +110,25 @@ function wirePalette(){
 function chipMode(){
   return view.kind === "class" ? ((Y().chipModes || {})[view.cls] || "off") : "off";
 }
+/* その面で色を出すか。**クラスの面だけが本人の設定で、ほかは既定で出す。**
+
+   *クラスの面*：担任の紙。既定は出さない ── 毎週の紙に13色が乗ると、
+   その週に何が起きるかより色のほうが目に立つ。出したい人が出す。
+
+   *専科の面*：コマの中身が「行き先のクラス」なので、色は**学年の目印**。
+   1・2年をまとめて回した日が、紙の上でひと塊に見える。
+
+   *学年・全学年の面*：入れたものが全クラスに降りる面で、見るのは
+   「同じ教科がどの曜日に並んでいるか」。色があると塊が先に見える。
+
+   **どちらも「紙にも」で出す。** これらの面を刷るのは、担任の紙ではなく
+   組み替えのための下敷きで、色が飛ぶと見るために出した意味が無くなる。
+   （クラスの面の「画面だけ／紙にも」は、そのままそのクラスの設定） */
+function faceChipMode(){
+  if(typeof view === "undefined" || !view) return "off";
+  if(view.kind === "class") return (Y().chipModes || {})[view.cls] || "off";
+  return "output";
+}
 function paintChipSeg(){
   const w = $("chipWrap");
   if(!w) return;

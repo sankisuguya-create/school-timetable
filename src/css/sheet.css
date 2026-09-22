@@ -54,6 +54,10 @@
   border-right:.6px solid var(--rule);border-bottom:.6px solid var(--rule);
   min-width:0;position:relative}
 .sheet>.lastcol{border-right:none}
+/* **日の列そのものも痩せられるようにする。** 既定の min-width:auto だと
+   1fr が中身の最小幅より下がれず、紙より広い格子になって右の列が切れる
+   （コマの側には min-width:0 が入っているが、列の側には入っていなかった） */
+.sheet>.daycol{min-width:0}
 
 /* ── 列ごとの格子 ────────────────────────────────
    **外の格子は「見出し／本体／週メモ」の3行だけ。**
@@ -168,36 +172,86 @@
    淡い13色は色覚型によって互いに潰れる（実測：1型で 国語×理科 ΔE00 1.4）ので、
    色だけで教科を探せるとは約束しない。字を消したり、色だけの凡例を作ったりしない。
 
-   出すかどうかはクラスごと（右メニューの「教科に色をつける」）。
-   紙にも出すと、モノクロ印刷では灰色の濃淡になる ── 選んだ人の紙にだけ出す。 */
-.sheet.chips-screen .cell[data-subject=kokugo]   .t{background:var(--sub-kokugo)}
-.sheet.chips-screen .cell[data-subject=shakai]   .t{background:var(--sub-shakai)}
-.sheet.chips-screen .cell[data-subject=sansu]    .t{background:var(--sub-sansu)}
-.sheet.chips-screen .cell[data-subject=rika]     .t{background:var(--sub-rika)}
-.sheet.chips-screen .cell[data-subject=seikatsu] .t,
-.sheet.chips-screen .cell[data-subject=sogo]     .t{background:var(--sub-seikatsu)}
-.sheet.chips-screen .cell[data-subject=ongaku]   .t{background:var(--sub-ongaku)}
-.sheet.chips-screen .cell[data-subject=zuko]     .t{background:var(--sub-zuko)}
-.sheet.chips-screen .cell[data-subject=katei]    .t{background:var(--sub-katei)}
-.sheet.chips-screen .cell[data-subject=taiiku]   .t{background:var(--sub-taiiku)}
-.sheet.chips-screen .cell[data-subject=doutoku]  .t{background:var(--sub-doutoku)}
-.sheet.chips-screen .cell[data-subject=gaikoku]  .t{background:var(--sub-gaikoku)}
-.sheet.chips-screen .cell[data-subject=gakkatsu] .t{background:var(--sub-gakkatsu)}
+   **教科と色の結びつきは、ここ1か所だけ。** 色を出す面は3つある
+   （週の紙／学年の面／カレンダー）ので、面ごとに13行を書くと 39行になり、
+   教科を1つ足したときに1か所だけ古くなる。ここで `--tint` に入れて、
+   下の3行がそれを読む。
+
+   出す・出さないの決まりは面ごとに違う（→ このあとの3行のコメント）。 */
+[data-subject=kokugo]   {--tint:var(--sub-kokugo)}
+[data-subject=shakai]   {--tint:var(--sub-shakai)}
+[data-subject=sansu]    {--tint:var(--sub-sansu)}
+[data-subject=rika]     {--tint:var(--sub-rika)}
+[data-subject=seikatsu],
+[data-subject=sogo]     {--tint:var(--sub-seikatsu)}
+[data-subject=ongaku]   {--tint:var(--sub-ongaku)}
+[data-subject=zuko]     {--tint:var(--sub-zuko)}
+[data-subject=katei]    {--tint:var(--sub-katei)}
+[data-subject=taiiku]   {--tint:var(--sub-taiiku)}
+[data-subject=doutoku]  {--tint:var(--sub-doutoku)}
+[data-subject=gaikoku]  {--tint:var(--sub-gaikoku)}
+[data-subject=gakkatsu] {--tint:var(--sub-gakkatsu)}
 /* 時数に数えないもの（図書・行事・給食・クラブ・委員会）。**灰の地で1つ。**
    色で見分ける対象ではないので、13色の輪に入れずにまとめる */
-.sheet.chips-screen .cell[data-subject=tosho]    .t,
-.sheet.chips-screen .cell[data-subject=gyoji]    .t,
-.sheet.chips-screen .cell[data-subject=kyushoku] .t,
-.sheet.chips-screen .cell[data-subject=club]     .t,
-.sheet.chips-screen .cell[data-subject=iinkai]   .t{background:var(--sub-none)}
+[data-subject=tosho],
+[data-subject=gyoji],
+[data-subject=kyushoku],
+[data-subject=club],
+[data-subject=iinkai]   {--tint:var(--sub-none)}
 /* 合同でやるもの。**元の教科と同じ地**（時数の数え方と同じ考え） */
-.sheet.chips-screen .cell[data-subject=goudo_taiiku] .t{background:var(--sub-taiiku)}
-.sheet.chips-screen .cell[data-subject=goudo_ongaku] .t{background:var(--sub-ongaku)}
-.sheet.chips-screen .cell[data-subject=gakunen_shukai] .t{background:var(--sub-gakkatsu)}
+[data-subject=goudo_taiiku]   {--tint:var(--sub-taiiku)}
+[data-subject=goudo_ongaku]   {--tint:var(--sub-ongaku)}
+[data-subject=gakunen_shukai] {--tint:var(--sub-gakkatsu)}
+
+/* ── 専科の面の色は「学年」──────────────────────
+   **専科の面のコマの中身は、行き先のクラス**（4-3）であって教科ではない。
+   教科で塗ると音楽専科の紙は1色になり、何も言わない。学年で塗れば
+   「1・2年をまとめて回した日」が紙の上でひと塊に見える。
+
+   色は右メニューのクラスチップと同じもの（app.css の .pal[data-g]）。
+   **色は学年を運ばない** ── どの学級かはコマの字（4-3）が言っている。
+   位置も固定なので、色が潰れて見える人にも読める。 */
+[data-cg="1"]{--tint:var(--grade-1)}
+[data-cg="2"]{--tint:var(--grade-2)}
+[data-cg="3"]{--tint:var(--grade-3)}
+[data-cg="4"]{--tint:var(--grade-4)}
+[data-cg="5"]{--tint:var(--grade-5)}
+[data-cg="6"]{--tint:var(--grade-6)}
+
+/* 色を出すのは3つの面。**出す・出さないの決まりが面ごとに違う。**
+
+   *週の紙と4週*：クラスの面は本人の設定（右メニューの「教科に色をつける」）。
+   専科・学年・全学年の面は既定で出す（sheet.js の faceChipMode）。
+   *学年の面とカレンダー*：いつも出す。どちらも**見るだけの面**で、
+   並べたコマの塊を読むために出しているので、消す道は作っていない。 */
+.chips-screen .cell .t{background:var(--tint)}
+.gsheet .cell .t{background:var(--tint)}
+.cper b{background:var(--tint)}
 .cell.brk .t{height:100%;font-weight:400;
   font-size:calc(var(--fs-b)*var(--k)*var(--fit,1))}
 .cell .n{flex:1;font-size:calc(var(--fs-n)*var(--k));color:var(--ink-sub);
   border-top:.6px dashed var(--rule-soft);padding-top:calc(.6mm*var(--k))}
+/* ── 4週の面のコマ。**題名を左・備考を右に並べる。** ──────────
+   週の紙は縦に積む（題名 8mm ／備考 21mm）。4週の面は1コマ 13mm しかないので、
+   同じ縦積みだと題名 7mm・備考 6mm で、どちらも1行ぶんの高さに痩せる。
+
+   横に並べると、題名と備考の**どちらも 13mm の高さを丸ごと使える**。
+   4週を並べて読むのは「単元がどう配ってあるか」なので、備考の行数が効く
+   ── 縦積みの 6mm では 6.5pt が1行、横並びなら3行入る。
+
+   幅は題名 45%・備考 55%。1コマ 25.6mm なので題名は 11.5mm ＝ 2文字ぶん。
+   3文字以上は、そのコマの中で折り返す（高さが 13mm あるので3行まで入る）。
+
+   **土だけは縦のまま。** 土の列は 20mm しかなく、45% に割ると題名が 9mm ＝
+   1文字ぶんになる。土に入るのは行事の名前だけなので、列の幅を丸ごと題名に回す。 */
+.sheet.mini .daycol:not(.lastcol) .cell.lesson{flex-direction:row}
+.sheet.mini .daycol:not(.lastcol) .cell.lesson>.t{height:100%;width:45%;flex:none}
+/* 仕切りは**縦の線**へ（横並びにしたので、上の破線は何も分けない） */
+.sheet.mini .daycol:not(.lastcol) .cell.lesson>.n{border-top:none;padding-top:1px;
+  border-left:.6px dashed var(--rule-soft)}
+/* 授業なしの斜め線は、題名の欄のぶんだけ。**備考の上には引かない** */
+.sheet.mini .daycol:not(.lastcol) .cell.lesson .noneslash{right:auto;width:45%;height:100%}
+
 .cell .t:focus,.cell .n:focus{background:#FFFBEA;
   box-shadow:inset 0 0 0 1.6px var(--ink-link)}
 .cell.sel{box-shadow:inset 0 0 0 1.6px var(--ink-link)}
@@ -402,7 +456,7 @@
   /* **紙の高さは page のぶんだけ取る。** 0 にすると、余りが放課後に渡らず
      版面が下 15mm ほど空いたまま刷られる（画面では 1fr が吸っているので気づかない）。
      枠線ぶんの 1.5mm を引いてあるのは、ぴったりだと2ページ目が出るため。 */
-  .sheet{box-shadow:none;border-radius:0;width:auto;border-color:#000;
+  .sheet{box-shadow:none;border-radius:0;width:auto;max-width:100%;border-color:#000;
     min-height:calc(var(--ph) - var(--pm)*2 - 1.5mm)}
   .cell.upper,.cell.clash,.cell.drop{background:transparent;outline:none}
   .row-break,.row-break .lab{background:#EFEFEF}
@@ -423,6 +477,10 @@
 /* 紙の見た目（地・罫・影・palt）と内側の罫線は `.sheet` と共有。
    ここで持つのは**この面だけの寸法**（幅いっぱい・時程の列を細く・備考の行が無い）。 */
 .gsheet{
+  /* **縮ませない。** 刷るときは紙の幅（281mm）を --pw に入れる。flex の
+     既定（flex-shrink:1）のままだと画面の枠の幅まで押し戻され、
+     そこで測った高さで倍率を決めてしまう */
+  flex:0 0 auto;
   --k:1; --pw:100%;
   /* **題名は1文字。** 列も紙もそのぶん細くてよい。
      時程の列は「1」「業間」が入る幅、コマの列は1字が入る幅 */
