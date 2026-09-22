@@ -121,5 +121,82 @@ for(const [d, slot, was, now, want, what] of TP_CASES){
      {server, screen, want});
 }
 
+
+console.log("\n■ 単元進捗");
+
+/* 通常5時間＋テスト。候補の番号は保存せず、配置だけ返す */
+const CAND = [
+  "2026-09-24|p2", "2026-09-25|p3", "2026-09-28|p1",
+  "2026-09-29|p2", "2026-10-01|p3", "2026-10-02|p1",
+  "2026-10-05|p2", "2026-10-06|p3", "2026-10-08|p1"
+];
+let unit = D.normalizeUnitPlan({
+  id:"u1", year:2026, className:"3-1", subject:"sansuu", name:"暗算",
+  lessonCount:5, hasTest:true
+});
+let rr = D.reconcileUnit(unit, CAND, [], "2026-10-31");
+ok("5時間＋テストを順に配置",
+   rr.unit.assignments.join(",") === CAND.slice(0, 5).join(",") &&
+   rr.unit.testAssignment === CAND[5] && !rr.warning, rr);
+
+/* 途中を人が外したら、そのコマを再利用せず後ろから補う */
+unit = D.normalizeUnitPlan(Object.assign({}, rr.unit, {
+  assignments:[CAND[0], CAND[1], CAND[3], CAND[4]],
+  excludedSlots:[CAND[2]]
+}));
+rr = D.reconcileUnit(unit, CAND, [], "2026-10-31");
+ok("除外したコマは復活させず、後ろから補充",
+   rr.unit.assignments.join(",") === [CAND[0],CAND[1],CAND[3],CAND[4],CAND[5]].join(",")
+   && rr.unit.testAssignment === CAND[6], rr);
+
+/* 別単元のコマを黙って上書きしない */
+unit = D.normalizeUnitPlan({
+  id:"u2", year:2026, className:"3-1", subject:"sansuu", name:"分数",
+  lessonCount:3, hasTest:false
+});
+rr = D.reconcileUnit(unit, CAND, [CAND[1], CAND[3]], "2026-10-31");
+ok("別単元が使うコマを飛ばす",
+   rr.unit.assignments.join(",") === [CAND[0],CAND[2],CAND[4]].join(","), rr);
+
+/* 時数を増やしても既存の前半は保つ。旧テスト位置は次の通常授業に使える */
+unit = D.normalizeUnitPlan({
+  id:"u3", year:2026, className:"3-1", subject:"sansuu", name:"暗算",
+  lessonCount:6, hasTest:true,
+  assignments:CAND.slice(0,5),
+  testAssignment:CAND[5]
+});
+rr = D.reconcileUnit(unit, CAND, [], "2026-10-31");
+ok("5→6時間では旧テスト位置を6時間目に転用し、テストを後ろへ送る",
+   rr.unit.assignments.join(",") === CAND.slice(0,6).join(",") &&
+   rr.unit.testAssignment === CAND[6], rr);
+
+/* 時数を減らしたときは末尾だけを外す */
+unit = D.normalizeUnitPlan({
+  id:"u4", year:2026, className:"3-1", subject:"sansuu", name:"暗算",
+  lessonCount:3, hasTest:false,
+  assignments:CAND.slice(0,5)
+});
+rr = D.reconcileUnit(unit, CAND, [], "2026-10-31");
+ok("5→3時間は前3コマを保つ",
+   rr.unit.assignments.join(",") === CAND.slice(0,3).join(","), rr);
+
+/* 学期末で入りきらない場合は、越境せず不足を返す */
+unit = D.normalizeUnitPlan({
+  id:"u5", year:2026, className:"3-1", subject:"sansuu", name:"暗算",
+  lessonCount:5, hasTest:true
+});
+rr = D.reconcileUnit(unit, CAND, [], "2026-09-29");
+ok("学期末を越境せず不足警告",
+   rr.unit.assignments.length === 4 && rr.unit.testAssignment === "" &&
+   rr.warning && rr.warning.missingLessons === 1 && rr.warning.missingTest === true, rr);
+
+/* 同じコマが重複していても1件に正規化する */
+unit = D.normalizeUnitPlan({
+  id:"u6", lessonCount:2, assignments:[CAND[0], CAND[0], CAND[1]],
+  excludedSlots:[CAND[3], CAND[3]]
+});
+ok("UnitPlanの配置・除外は重複を除く",
+   unit.assignments.length === 2 && unit.excludedSlots.length === 1, unit);
+
 console.log(ng ? "\n× " + ng + " 件だめだった" : "\n○ ぜんぶ通った");
 process.exit(ng ? 1 : 0);
