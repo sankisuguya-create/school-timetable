@@ -31,9 +31,16 @@
 const SPW_SLOT = "wish:";
 /* 保つ印。**中身は英字だけ**にしてある ── 題名は HTML として持つ欄なので、
    記号を入れると escape の往復で字が変わる */
-const SPW_FLAGS = ["am", "pair", "base", "spread", "off"];
+const SPW_FLAGS = ["avoid", "am", "pair", "base", "spread", "off"];
 
-const spwBlank = () => ({am:false, pair:false, base:false, spread:false, off:false, days:[]});
+/* **どの希望も、チェックを入れたときだけ効く。** 避ける日も同じ形にしてある
+   ── 日付を押した時点で効く作りだと、この欄だけ「チェックを外して止める」が
+   できず、一度選んだ日を消して回ることになる。日付は残したまま切れる。 */
+const spwBlank = () => ({avoid:false, am:false, pair:false, base:false,
+                         spread:false, off:false, days:[]});
+/* その希望が、いま効いているか。**チェックと中身の両方を見る**
+   （避ける日は、チェックが入っていても日付が1つも無ければ効きようがない） */
+const spwOn = (w, k) => !!(w && w[k]) && (k !== "avoid" || (w.days || []).length > 0);
 
 function spwParse(s){
   const w = spwBlank();
@@ -120,40 +127,68 @@ const spPairOf = si => Math.floor(si / 2);
 const spPaired = (a, b) => a !== b && spPairOf(a) === spPairOf(b);
 
 /* ── 重み ──────────────────────────────────────
-   **順は、希望がぶつかったときに何を先に通すかで決めてある。**
+   **チェックを入れた希望は、破らない。** 破るのは「そうしないとそのコマを
+   どこにも置けない」ときだけで、そのときは**破ったことを画面で言う**。
+   チェックを入れたのに黙って破られるのでは、チェック欄が飾りになる。
 
-     置けない            どんな希望よりも重い。置けないものを置いたと言わない
-     避ける日・午前のみ  本人が行けないと言っているもの。ほとんど破らない
-     別の週へ動かす      その週の時数が変わる。希望のために動かす幅ではない
-     2コマくっつける     図工・家庭のように2コマで1つの授業になるもの
-     基本時間割に近づける 担任の紙の書き直しを減らす（同じ週の中のずれ）
-     クラス分散          特定の週に同じクラスが固まらないようにする
+   順は上から。**1つ上を1回破るより、下を何回か破るほうが軽い**ように、
+   段のあいだを大きく空けてある（1手で動くのは1〜2コマなので、
+   下の段を全部足してもの上の段1つに届かない）。
 
-   「基本時間割に近づける」にチェックを入れると重みが上がるが、
-   **2コマくっつけるは越えない** ── 行事で崩れた2コマ授業を、
-   基本の位置に居座らせるために1コマずつに割るのでは、直した意味が無い。 */
-const SPW_UNPLACED = 10000;
-const SPW_AVOID    = 900;      /* 避ける日に置いた */
-const SPW_AM       = 900;      /* 午前のみの人を5・6校時に置いた */
-/* **別の週へ動かすのは、希望より重い。** そのクラスのその週の時数が変わる
-   ── 時数は週ごとに数えるもの（時数集計表も週ごとのシート）で、
-   「2コマにしたい」のために動かしてよい幅ではない。
-   週をまたぐのは、その週に置く場所がもう無いときだけ（置けないは 10000）。
+     置けない            200000  そのコマがどこにも無くなる
+     避ける日            100000  出張・年休。**学校に居ない日に授業を置く案は、
+                                 実行できない案**。時数が動くことより悪い
+     別の週へ動かす       50000  その週の時数が変わる。ほかの希望では釣り合わない額
+     午前のみ              5000  居るけれど、その時間は受け持たないと言っている
+     2コマくっつける       1200  図工・家庭のように2コマで1つの授業になるもの
+     基本時間割に近づける   300  同じ週の中のずれ（チェックしないと 25）
+     クラス分散             150  特定の週に同じクラスが固まらないようにする
 
-   ここを 2コマくっつけるより軽くしていたときは、片割れが行事でつぶれた
-   図工の2コマが、**そろって次の週へ飛んだ**（実測）。その週の図工が0になり、
-   飛んだ先の週が4コマになる。 */
-const SPW_WEEK     = 400;
-const SPW_PAIR     = 200;      /* 2コマにならなかった1コマぶん */
+   *避ける日を「別の週へ動かす」より重くした理由*：出張で1週まるごと空ける人に、
+   その週の授業を割り当てた案は**そもそも実行できない**。時数がずれた案は
+   人が直せるが、居ない人が教えている案は直しようがない。だから、避ける日を
+   守るためなら週をまたいでよい（またいだぶんは「クラス分散」が均す）。
+
+   *午前のみを「別の週へ動かす」より軽くした理由*：こちらは**学校には居る**。
+   午後に入った案は実行できる。そのために週をまたいで時数を動かすのは高すぎる。
+
+   *「別の週へ動かす」を 2コマくっつけるより重いままにした理由*：
+   週をまたぐとそのクラスのその週の**時数が変わる**（時数は週ごとに数えるもので、
+   時数集計表も週ごとのシート）。ここを軽くしていたときは、片割れが行事で
+   つぶれた図工の2コマが、**そろって次の週へ飛んだ**（実測）。
+   その週の図工が0になり、飛んだ先の週が4コマになる。
+   「チェックしたら絶対」は、**その週の中で絶対**という意味にしてある。
+
+   *「基本時間割に近づける」を絶対にしない理由*：あれは「近づける」であって
+   「動かすな」ではない。絶対にすると、行事でつぶれたコマを振り替えられない。 */
+const SPW_UNPLACED = 200000;
+/* **避ける日は、週をまたいででも守る。** 出張・年休で学校に居ない日に
+   授業を置いた案は、そもそも実行できない。時数がずれた案は人が直せるが、
+   居ない人が教えている案は直しようがない。
+   破るのは、どの週にも置く場所が無いときだけ（置けないは 200000）。 */
+const SPW_AVOID    = 100000;   /* 避ける日に置いた */
+/* **午前のみは、週をまたいでまでは守らない。** こちらは学校には居るので、
+   午後に入った案は実行できる。そのために時数を動かすのは高すぎる。 */
+const SPW_AM       = 5000;     /* 午前のみの人を5・6校時に置いた */
+/* **別の週へ動かすのは、避ける日を除くどの希望を何回破るよりも重い。**
+   残りの希望を全部足しても届かない額にしてある ── 週をまたぐ値打ちがあるのは
+   「その週にはもう置く場所が無い」ときと、避ける日を守るときだけ。
+
+   ここを希望と釣り合う額（2000）にしていたときは、片割れが行事でつぶれた
+   図工の2コマが**そろって次の週へ飛んだ**（実測）。2コマの減点は1コマごとに
+   付くので、2コマぶん（2400）が週またぎ（2000）を超えていた。
+   避ける日を除けば、「チェックしたら破らない」は**その週の中で破らない**の意味。 */
+const SPW_WEEK     = 50000;
+const SPW_PAIR     = 1200;     /* 2コマにならなかった1コマぶん */
 /* 同じ週の中でのずれ。左＝ふだん／右＝「近づける」にチェックしたとき */
-const SPW_BASE = {slot:[10, 30], day:[25, 60]};
+const SPW_BASE = {slot:[10, 150], day:[25, 300]};
 /* 同じクラスを同じ日に2回。**クラス分散にチェックを入れたときだけ効く。**
    いつでも効かせると、基本時間割がもともと持っている2コマ続き
    （図図・理理・家家）を割りにいく ── 希望を1つも入れていないのに
    基本から 158コマ動く案が出た（実測）。基本の並びは、動かす理由が
    無いかぎり動かさない。 */
-const SPW_SAMEDAY  = 50;
-const SPW_SPREAD   = 20;       /* その週に、基本より多く入れた1コマぶん（2乗で効く） */
+const SPW_SAMEDAY  = 150;
+const SPW_SPREAD   = 150;      /* その週に、基本より多く入れた1コマぶん（2乗で効く） */
 
 /* ── 下ごしらえ ────────────────────────────────
    週ごとに `monday` を差し替えて読む（freeTally と同じ手）。
@@ -292,10 +327,8 @@ function spUnitCost(cx, u){
   const w = cx.wishes[u.sp] || spwBlank();
   let c = 0;
   const wi = cx.posWi(u.at), d = cx.posD(u.at), si = cx.posSi(u.at);
-  if(w.days.length){
-    const iso_ = iso(addDays(cx.weeks[wi], d));
-    if(w.days.indexOf(iso_) >= 0) c += SPW_AVOID;
-  }
+  if(spwOn(w, "avoid") && w.days.indexOf(iso(addDays(cx.weeks[wi], d))) >= 0)
+    c += SPW_AVOID;
   /* 午前のみ。**「午前」は時程で決める**（校時の数が学校で違う）。
      昼休みより前の授業のコマを午前とみなす */
   if(w.am && si >= cx.amCut) c += SPW_AM;
@@ -438,16 +471,28 @@ function spSolve(cx){
   function bestMove(i){
     const u = U[i], list = cx.allow[u.cls] || [];
     const from = u.at;
+    /* **動かす前の減点は、候補ごとに数え直さない。** 動かしていないのだから
+       どの候補から見ても同じ値で、ここが候補の数だけ走っていた */
+    const cU0 = spUnitCost(cx, u), gU0 = gcost(u.sp, u.cls);
+    /* **別の週の候補は、いつも見るわけではない。**
+       週をまたぐのは 50000 で、同じ週の中のずれ（最大 300）では釣り合わない。
+       避ける日（100000）と置けない（200000）だけが、またぐ値打ちを持つ。
+       またぐ値打ちがあるのは、いま高い減点を払っているコマ
+       （置けていない・希望を破っている・2コマが割れている）だけなので、
+       そのときだけ全部の週を見る。6人が希望を全部入れた月で
+       **3.0秒 → 1.8秒。破った希望の数は変わらない。** */
+    const wideWeek = from < 0 || cU0 + gU0 >= SPW_PAIR;
+    const homeWi = cx.posWi(u.home);
     let bestP = -1, bestSwap = -1, bestGain = 0;
     for(const p of list){
       if(p === from) continue;
+      if(!wideWeek && cx.posWi(p) !== homeWi) continue;
       const b = blocker(i, p);
       if(b === null) continue;
       let gain;
       if(b === -1){
-        const was = spUnitCost(cx, u) + gcost(u.sp, u.cls);
         lift(i); put(i, p);
-        gain = was - (spUnitCost(cx, u) + gcost(u.sp, u.cls));
+        gain = (cU0 + gU0) - (spUnitCost(cx, u) + gcost(u.sp, u.cls));
         lift(i); if(from >= 0) put(i, from);
       }else{
         /* 入れ替える。**相手が、自分のいた場所へ入れるときだけ。**
@@ -462,9 +507,8 @@ function spSolve(cx){
         if(!can) continue;
         /* 同じ専科×同じクラスのときは、まとまりが1つしかない。2回数えない */
         const same = (u.sp === v.sp && u.cls === v.cls);
-        const gWas = same ? gcost(u.sp, u.cls)
-                          : gcost(u.sp, u.cls) + gcost(v.sp, v.cls);
-        const cWas = spUnitCost(cx, u) + spUnitCost(cx, v);
+        const gWas = same ? gU0 : gU0 + gcost(v.sp, v.cls);
+        const cWas = cU0 + spUnitCost(cx, v);
         lift(i); lift(b); put(i, p); put(b, from);
         const gNow = same ? gcost(u.sp, u.cls)
                           : gcost(u.sp, u.cls) + gcost(v.sp, v.cls);
@@ -513,7 +557,7 @@ function spWishNg(cx, res){
     const w = cx.wishes[u.sp] || spwBlank(), n = out[u.sp];
     if(!n) continue;
     const wi = cx.posWi(u.at), d = cx.posD(u.at), si = cx.posSi(u.at);
-    if(w.days.length && w.days.indexOf(iso(addDays(cx.weeks[wi], d))) >= 0) n.avoid++;
+    if(spwOn(w, "avoid") && w.days.indexOf(iso(addDays(cx.weeks[wi], d))) >= 0) n.avoid++;
     if(w.am && si >= cx.amCut) n.am++;
     if(u.at !== u.home) n.base++;
   }
@@ -705,7 +749,11 @@ function spmDrawWish(){
     return "<tr><td>" + cb("on", !w.off) + "</td>"
       + "<td class='spmname'>" + escText(spLabel(s))
       + (spmCarried[s.code] ? "<i class='spmcar'>先月から</i>" : "") + "</td>"
-      + "<td><button class='btn spmdays' data-sp='" + escText(s.code) + "'>"
+      /* **チェックと日付を並べる。** ほかの希望と同じ形にしておく ──
+         日付を押した時点で効く作りだと、この欄だけ「チェックを外して止める」が
+         できず、一度選んだ日を消して回ることになる */
+      + "<td class='spmdcell'>" + cb("avoid", w.avoid)
+      + "<button class='btn spmdays' data-sp='" + escText(s.code) + "'>"
       + (w.days.length ? w.days.length + "日" : "選ぶ") + "</button></td>"
       + "<td>" + cb("am", w.am) + "</td><td>" + cb("pair", w.pair) + "</td>"
       + "<td>" + cb("base", w.base) + "</td><td>" + cb("spread", w.spread) + "</td></tr>";
@@ -755,6 +803,9 @@ function spmDrawDays(){
     b.onclick = () => {
       const i = w.days.indexOf(b.dataset.d);
       if(i < 0) w.days.push(b.dataset.d); else w.days.splice(i, 1);
+      /* **選んだら、チェックも入れる。** 選んだのに効かない状態を作らない。
+         止めたいときはチェックを外す（日付は残る） */
+      if(w.days.length) w.avoid = true;
       spmDirty = true; spmRes = null;
       spmDrawDays(); spmDrawWish(); spmDrawOut();
     };
@@ -777,6 +828,17 @@ function spmRun(){
     } finally { Wait.end(w); }
     spmDrawOut();
   }, 30);
+}
+
+/* チェックを入れたのに破った数の合計。**破るのは、そうしないと
+   そのコマをどこにも置けないときだけ。** それでも黙っては済ませない */
+function spmBroke(r){
+  let n = 0;
+  for(const s of r.cx.sps){
+    const w = r.cx.wishes[s.code] || spwBlank(), g = r.wishNg[s.code] || {};
+    for(const k of ["avoid", "am", "pair", "spread"]) if(spwOn(w, k)) n += g[k] || 0;
+  }
+  return n;
 }
 
 const spmWhen = (cx, wi, d, si) =>
@@ -806,6 +868,7 @@ function spmDrawOut(){
     + "<b>" + n + "コマ</b>を組んだ"
     + "　置けなかった <b class='" + (r.unplaced.length ? "ng" : "") + "'>"
     + r.unplaced.length + "</b>"
+    + "　<b class='" + (spmBroke(r) ? "ng" : "") + "'>希望を破った " + spmBroke(r) + "</b>"
     + "　基本から動かした <b>" + r.moved.length + "</b>"
     + "　ほかの人の予定を潰す <b class='" + (r.over.length ? "ng" : "") + "'>"
     + r.over.length + "</b></div>";
@@ -891,11 +954,15 @@ function spmDrawOut(){
     const g = r.wishNg[s.code] || {};
     const w = spmWish[s.code] || spwBlank();
     const part = [];
-    if(w.days.length) part.push("避ける日 " + (g.avoid || 0));
-    if(w.am)     part.push("午前のみ " + (g.am || 0));
-    if(w.pair)   part.push("2コマ " + (g.pair || 0));
-    if(w.spread) part.push("クラス分散 " + (g.spread || 0));
-    part.push("基本から動いた " + (g.base || 0));
+    /* **破った希望は立てる。** チェックを入れたのに破ったところが、
+       この窓でいちばん先に読まれないといけない */
+    const one = (k, name, n) => { if(!spwOn(w, k)) return;
+      part.push(n ? "<b class='ng'>" + name + " " + n + "</b>" : name + " 0"); };
+    one("avoid",  "避ける日",   g.avoid  || 0);
+    one("am",     "午前のみ",   g.am     || 0);
+    one("pair",   "2コマ",      g.pair   || 0);
+    one("spread", "クラス分散", g.spread || 0);
+    part.push("<span class='spmdim'>基本から動いた " + (g.base || 0) + "</span>");
     html += "<tr><th>" + escText(spLabel(s)) + "</th><td>" + part.join("　") + "</td></tr>";
   }
   html += "</table>";

@@ -2645,21 +2645,72 @@ const spmWishChk = await p.evaluate(() => {
   };
   const cnt = ({cx, res}, f) => res.placed.filter(u => u.sp === code
       && f(cx.posWi(u.at), cx.posD(u.at), cx.posSi(u.at), cx)).length;
-  const A = run(w => { w.days = [avoid]; });
+  const A = run(w => { w.days = [avoid]; w.avoid = true; });
+  /* **日付を選んでもチェックを外していれば効かない。** ほかの希望と同じ形 */
+  const N = run(w => { w.days = [avoid]; w.avoid = false; });
   const B = run(w => { w.am = true; });
   const C = run(() => {});
+  const onDay = (o) => cnt(o, (wi, dd, si, cx) => iso(addDays(cx.weeks[wi], dd)) === avoid);
   return {
-    avoidOn:  cnt(A, (wi, dd, si, cx) => iso(addDays(cx.weeks[wi], dd)) === avoid),
-    avoidOff: cnt(C, (wi, dd, si, cx) => iso(addDays(cx.weeks[wi], dd)) === avoid),
+    avoidOn: onDay(A), avoidUnchecked: onDay(N), avoidNone: onDay(C),
     amOn:  cnt(B, (wi, dd, si, cx) => si >= cx.amCut),
     amOff: cnt(C, (wi, dd, si, cx) => si >= cx.amCut),
     ngShape: JSON.stringify(Object.keys(B.res.wishNg[code]).sort())
   };
 });
-ok("避ける日には、その専科を置かない", spmWishChk.avoidOn === 0, spmWishChk);
+ok("避ける日にチェックを入れると、その専科を置かない", spmWishChk.avoidOn === 0, spmWishChk);
+ok("チェックを外すと、日付を選んでいても効かない",
+   spmWishChk.avoidUnchecked === spmWishChk.avoidNone
+   && spmWishChk.avoidNone > 0, spmWishChk);
 ok("午前のみで、午後のコマが減る", spmWishChk.amOn < spmWishChk.amOff, spmWishChk);
 ok("希望の通らなかった数を数えている",
    spmWishChk.ngShape === '["am","avoid","base","pair","spread"]', spmWishChk);
+
+/* **チェックを入れた希望は、破らずに済むかぎり破らない。**
+   1人だけが希望を入れた月なら、ほかの専科が譲るので通り切る。
+   避ける日を1週ぶん丸ごと選んでも、その週には1コマも置かない。 */
+const spmAbs = await p.evaluate(() => {
+  const d = new Date(monday), Y0 = d.getFullYear(), M0 = d.getMonth();
+  const cx0 = spBuild(Y0, M0, (() => { const w = {};
+    for(const s of specials()) w[s.code] = spwBlank(); return w; })(), true);
+  /* 受け持ちのいちばん少ない枠で見る（多い枠は午前の数が足りない） */
+  const code = cx0.sps.map(s => s.code)
+    .sort((a, b) => classesOfSpecial(a).length - classesOfSpecial(b).length)[0];
+  const week2 = cx0.days[2].map(dd => iso(addDays(cx0.weeks[2], dd)));
+  const wishes = {};
+  for(const s of specials()) wishes[s.code] = spwBlank();
+  wishes[code].avoid = true; wishes[code].days = week2;
+  wishes[code].am = true;
+  const cx = spBuild(Y0, M0, wishes, true), res = spSolve(cx);
+  let onAvoid = 0, pm = 0;
+  for(const u of res.placed){
+    if(u.sp !== code) continue;
+    const wi = cx.posWi(u.at), dd = cx.posD(u.at);
+    if(week2.indexOf(iso(addDays(cx.weeks[wi], dd))) >= 0) onAvoid++;
+    if(cx.posSi(u.at) >= cx.amCut) pm++;
+  }
+  return {code, days:week2.length, onAvoid, pm,
+          unplaced:res.unplaced.filter(u => u.sp === code).length};
+});
+ok("1週ぶん丸ごと避けても、その週には置かない", spmAbs.onAvoid === 0, spmAbs);
+ok("受け持ちの少ない枠なら、午前のみを破らずに済む", spmAbs.pm === 0, spmAbs);
+
+/* **破った数を、まとめの帯で数えている。** 破ったことを黙らない */
+const spmBrokeChk = await p.evaluate(() => {
+  const d = new Date(monday), Y0 = d.getFullYear(), M0 = d.getMonth();
+  const mk = f => { const w = {};
+    for(const s of specials()) w[s.code] = spwBlank(); f(w); return w; };
+  /* 全員が午前のみ＝午前の枠がぜんぜん足りない。**破らざるを得ない** */
+  const hard = spSolve(spBuild(Y0, M0, mk(w => {
+    for(const k in w) w[k].am = true; }), true));
+  const easy = spSolve(spBuild(Y0, M0, mk(() => {}), true));
+  return {hard: spmBroke(hard), easy: spmBroke(easy),
+          unplaced: hard.unplaced.length};
+});
+ok("破らざるを得ない月では、破った数を出す", spmBrokeChk.hard > 0, spmBrokeChk);
+ok("希望を入れていない月は、破った数が 0", spmBrokeChk.easy === 0, spmBrokeChk);
+/* **破ってでも置く。** 置けないままにするより、破ったと言って置くほうがよい */
+ok("破ることになっても、コマは置き切る", spmBrokeChk.unplaced === 0, spmBrokeChk);
 
 /* 2コマくっつける。**片割れが行事でつぶれても、2コマに戻る** */
 const spmPair = await p.evaluate(() => {

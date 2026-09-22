@@ -1340,3 +1340,8 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .spmcopy{margin:7px 0 14px;display:flex;justify-content:flex-end}
 /* 押せないボタンは、押せないと見える。**色だけで言わない**（形も薄くする） */
 .dlg .btn[disabled]{opacity:.45;cursor:not-allowed}
+/* 避ける日の欄。**チェックと日付を横に並べる**（ほかの希望と同じ形にする） */
+.spmwish td.spmdcell{display:flex;gap:6px;align-items:center;justify-content:center}
+.spmwish td.spmdcell .btn{padding:2px 8px;font-size:12px}
+.spmng b.ng{color:var(--cat-clash)}
+.spmdim{color:var(--tx-sub)}
