@@ -581,7 +581,7 @@ function wire(){
   on("spmPrev","click", () => spmStep(-1));
   on("spmNext","click", () => spmStep(1));
   on("spmRun","click",  spmRun);
-  on("spmMove","change", ev => { spmMoveBroken = ev.target.checked; spmRes = null; });
+  on("spmMove","change", ev => { spmMoveBroken = ev.target.checked; spmInvalidate(); });
   /* 案の面。**押すまで週案には1文字も書かない** */
   on("spmFPrev","click", () => spmFaceStep(-1));
   on("spmFNext","click", () => spmFaceStep(1));

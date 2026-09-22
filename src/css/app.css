@@ -1319,18 +1319,6 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 直さないと先へ進めない数だけを立てる。**数そのものは色に頼らない**
    （字の太さと語が運ぶ。色は言い直しているだけ） */
 .spmsum b.ng{color:var(--cat-clash)}
-.spmwk{width:100%;margin:2px 0 12px;table-layout:fixed}
-.spmwk th{font-size:11.5px;padding:3px}
-.spmwk th i{display:block;font-style:normal;font-size:10px;color:var(--tx-sub);font-weight:400}
-.spmwk td{vertical-align:top;height:2.4em;padding:2px}
-/* その月の外の日。**斜線は敷かない** ── ここは組む対象ではないというだけで、
-   ふさがっているわけではない。地を落として、読む順から外す */
-.spmwk td.spmoff{background:var(--bg)}
-.spmcell{display:block;font-size:11px;line-height:1.5;white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis}
-/* 基本時間割から動いたコマ。**印は記号ではなく、左の線と太字で出す** ──
-   1コマに何人も並ぶので、記号を足すと字が押し出されてクラス名が切れる */
-.spmcell.mv{font-weight:700;border-left:3px solid var(--ink-link);padding-left:4px}
 .spmlist{margin:0 0 12px;padding-left:1.15em;font-size:12px;line-height:1.85;
   color:var(--tx-sub);max-height:15em;overflow:auto}
 .spmlist b{color:var(--tx)}
@@ -1350,8 +1338,12 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 避ける日の欄。**チェックと日付を横に並べる**（ほかの希望と同じ形にする） */
 .spmwish td.spmdcell{display:flex;gap:6px;align-items:center;justify-content:center}
 .spmwish td.spmdcell .btn{padding:2px 8px;font-size:12px}
+/* 計算に入れない専科。**表から外すが、名指しで断る** */
+.spmwish td.spmskip{font-size:11.5px;color:var(--tx-sub);text-align:left}
 .spmng b.ng{color:var(--cat-clash)}
 .spmdim{color:var(--tx-sub)}
+/* 行の右端の印の凡例。**印だけ置くと、何の印かが分からない */
+.spmlegend{display:block;margin-top:4px;font-size:11px;color:var(--tx-sub)}
 
 /* ── 専科の月予定（案）の面 ──────────────────────
    **4週の面と同じ紙を、週の数だけ2列に並べる。**
@@ -1362,9 +1354,10 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   justify-items:center;align-items:start}
 .spmwk{display:flex;flex-direction:column;gap:3px;align-items:center}
 .spmwklab{font-size:12px;color:var(--tx-sub);font-weight:600}
-/* 案の紙。**授業のコマを高くする** ── 1コマに専科が6人まで並ぶ。
+/* 案の紙。**授業のコマを高くする** ── 1コマに専科が全員ぶんの段で並ぶ
+   （段は専科ごとに決まっていて、居ないところは空段）。
    備考は出さないので、そのぶんの高さを題名へ回す */
-.sheet.spmsheet{--h-title:19mm; --h-note:0mm; --fs-t:7pt}
+.sheet.spmsheet{--h-title:24mm; --h-note:0mm; --fs-t:7pt}
 .sheet.spmsheet .cell.lesson>.n{display:none}
 /* **紙の高さは中身で決める。** 週案の紙は B5 の高さ（--ph）まで必ず伸びるので、
    放課後（1fr の行）が余りを全部もらって 10cm の空欄になる。
@@ -1382,10 +1375,19 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
    コマ全体に色を敷くと、6人並んだコマが1色になって誰も見分けられない。
    色は識別を担わない ── どの教科かは行の字が言っている
    （--tint の割り当ては sheet.css の [data-subject]）。 */
-.spx{display:block;background:var(--tint);border-radius:2px;
-  padding:0 1px;white-space:nowrap;text-align:left;line-height:1.28}
-/* 基本時間割から動いたコマ。**左の線で言う**（記号を足すとクラス名が切れる） */
+.spx{display:flex;align-items:baseline;gap:2px;background:var(--tint);border-radius:2px;
+  padding:0 1px;text-align:left;line-height:1.28}
+.spxtxt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ずれは行の右端の印が言う。**⇄ 基本から動いた／⚠ チェックした希望を破った** */
+.spxmark{margin-left:auto;font-style:normal;font-weight:700;padding-right:1px}
+/* 居ない専科の段。**上に詰めない**（どのコマでも同じ高さに同じ専科が出る） */
+.spxemp{display:block;height:1.28em}
+/* 基本時間割から動いたコマ。**左の線も立てる**（印だけだと探す目が要る） */
 .spx.mv{box-shadow:inset 2px 0 0 var(--ink-link);padding-left:3px}
+/* 希望を破った行。**印の色は同じ語に合わせる** */
+.spx.ng .spxmark{color:var(--cat-clash)}
+/* 動いたコマの元の場所に残る基本の字。**生きている予定ではない**ので薄く */
+.spx.st{opacity:.5}
 /* 仮採用ずみの行。**基本時間割と同じ薄さ** */
 .spx.tent{color:var(--ink-sub)}
 .spmout{padding:0 2px 8px}

@@ -2616,11 +2616,28 @@ const spmHard = await p.evaluate(() => {
     if(byCls[u.at + "|" + u.cls]) twoCls++; byCls[u.at + "|" + u.cls] = 1;
     if(bySp[u.at + "|" + u.sp]) twoSp++;    bySp[u.at + "|" + u.sp]   = 1;
   }
-  return {ms, units:cx.units.length, placed:res.placed.length, unplaced:res.unplaced.length,
+  /* 組むコマは、**計算に入る専科の**基本時間割の数とぴったり合う
+     （別経路で数え直す ── 受け持ちの重ならない専科は数に入らない） */
+  const keepM = monday;
+  let expect = 0, aloneOut = 0;
+  for(let wi = 0; wi < cx.weeks.length; wi++){
+    monday = cx.weeks[wi];
+    for(const s of cx.sps) for(const cls of classesOfSpecial(s.code))
+      for(const dd of cx.days[wi]) for(const sl of cx.lessons){
+        const b = baseCell(cls, dd, sl.id);
+        if(b && b.subject === spSubjectOf(s.code)) expect++;
+      }
+  }
+  for(const u of cx.units) if(!cx.inRun[u.sp]) aloneOut++;
+  monday = keepM;
+  return {ms, units:cx.units.length, expect, aloneOut,
+          placed:res.placed.length, unplaced:res.unplaced.length,
           moved:res.moved.length, onSchool, onGrade, onOff, twoCls, twoSp, outMonth,
           weeks:cx.weeks.length};
 });
-ok("組むコマを、基本時間割から数えている", spmHard.units > 100, spmHard);
+ok("組むコマを、基本時間割から数えている",
+   spmHard.units > 0 && spmHard.units === spmHard.expect, spmHard);
+ok("受け持ちの重ならない専科は計算に入らない", spmHard.aloneOut === 0, spmHard);
 ok("全校の予定のコマには置かない",   spmHard.onSchool === 0, spmHard);
 ok("学年の予定のコマには置かない",   spmHard.onGrade  === 0, spmHard);
 ok("休みの日には置かない",           spmHard.onOff    === 0, spmHard);
@@ -2634,7 +2651,10 @@ ok("1ヶ月ぶんを 3秒以内で組む", spmHard.ms < 3000, spmHard);
 const spmWishChk = await p.evaluate(() => {
   const d = new Date(monday), Y0 = d.getFullYear(), M0 = d.getMonth();
   const ws = spMonthWeeks(Y0, M0);
-  const code = specials()[0].code;
+  /* **計算に入る専科**で見る（受け持ちの重ならない専科は、希望の効きようがない） */
+  const probe = spBuild(Y0, M0, (() => { const w = {};
+    for(const s of specials()) w[s.code] = spwBlank(); return w; })(), true);
+  const code = probe.sps[0].code;
   const avoid = iso(addDays(ws[1], 1));
   const run = set => {
     const wishes = {};
@@ -2716,7 +2736,11 @@ ok("破ることになっても、コマは置き切る", spmBrokeChk.unplaced =
 const spmPair = await p.evaluate(() => {
   const d = new Date(monday), Y0 = d.getFullYear(), M0 = d.getMonth();
   const ws = spMonthWeeks(Y0, M0), lessons = SLOTS.filter(s => s.kind === "lesson");
-  const sp = specials().find(s => s.subject === "zuko" && (s.grades || []).indexOf("1") >= 0);
+  /* **計算に入る専科**で見る（外された枠には、くっつける希望は効かない） */
+  const probe = spBuild(Y0, M0, (() => { const w = {};
+    for(const s of specials()) w[s.code] = spwBlank(); return w; })(), true);
+  const sp = probe.sps.find(s => s.subject === "zuko" && (s.grades || []).indexOf("1") >= 0)
+          || probe.sps.find(s => s.subject === "zuko");
   if(!sp) return {skip:true};
   const cls = classesOfSpecial(sp.code)[0];
   const keep = monday;
@@ -2843,8 +2867,18 @@ ok("くむと、窓が閉じて紙が出る",
    && (await p.locator("#spmView").isVisible()) === true);
 const spmSheets = await p.locator("#spmPaper .sheet").count();
 ok("週の数だけ紙が並ぶ", spmSheets >= 4 && spmSheets <= 6, spmSheets);
-const spmLines = await p.locator("#spmPaper .spx").count();
-ok("1コマに専科が並ぶ", spmLines > 100, spmLines);
+const spmLines = await p.evaluate(() => {
+  const cells = [...document.querySelectorAll("#spmPaper .cell.lesson .t")];
+  let max = 0;
+  for(const c of cells){
+    const n = c.querySelectorAll(".spx").length;
+    if(n > max) max = n;
+  }
+  return {lines: document.querySelectorAll("#spmPaper .spx").length,
+          empty: document.querySelectorAll("#spmPaper .spxemp").length, max};
+});
+ok("1コマに専科が並ぶ", spmLines.lines > 40 && spmLines.max >= 2, spmLines);
+ok("専科の段が決まっている（空の段も置く）", spmLines.empty > 0, spmLines);
 /* **色は1行ずつに敷く。** コマ全体に敷くと、6人並んだコマが1色になる */
 const spmCol = await p.evaluate(() => {
   const a = [...document.querySelectorAll("#spmPaper .spx")].slice(0, 80);

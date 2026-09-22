@@ -1450,18 +1450,6 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 直さないと先へ進めない数だけを立てる。**数そのものは色に頼らない**
    （字の太さと語が運ぶ。色は言い直しているだけ） */
 .spmsum b.ng{color:var(--cat-clash)}
-.spmwk{width:100%;margin:2px 0 12px;table-layout:fixed}
-.spmwk th{font-size:11.5px;padding:3px}
-.spmwk th i{display:block;font-style:normal;font-size:10px;color:var(--tx-sub);font-weight:400}
-.spmwk td{vertical-align:top;height:2.4em;padding:2px}
-/* その月の外の日。**斜線は敷かない** ── ここは組む対象ではないというだけで、
-   ふさがっているわけではない。地を落として、読む順から外す */
-.spmwk td.spmoff{background:var(--bg)}
-.spmcell{display:block;font-size:11px;line-height:1.5;white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis}
-/* 基本時間割から動いたコマ。**印は記号ではなく、左の線と太字で出す** ──
-   1コマに何人も並ぶので、記号を足すと字が押し出されてクラス名が切れる */
-.spmcell.mv{font-weight:700;border-left:3px solid var(--ink-link);padding-left:4px}
 .spmlist{margin:0 0 12px;padding-left:1.15em;font-size:12px;line-height:1.85;
   color:var(--tx-sub);max-height:15em;overflow:auto}
 .spmlist b{color:var(--tx)}
@@ -1481,8 +1469,12 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 避ける日の欄。**チェックと日付を横に並べる**（ほかの希望と同じ形にする） */
 .spmwish td.spmdcell{display:flex;gap:6px;align-items:center;justify-content:center}
 .spmwish td.spmdcell .btn{padding:2px 8px;font-size:12px}
+/* 計算に入れない専科。**表から外すが、名指しで断る** */
+.spmwish td.spmskip{font-size:11.5px;color:var(--tx-sub);text-align:left}
 .spmng b.ng{color:var(--cat-clash)}
 .spmdim{color:var(--tx-sub)}
+/* 行の右端の印の凡例。**印だけ置くと、何の印かが分からない */
+.spmlegend{display:block;margin-top:4px;font-size:11px;color:var(--tx-sub)}
 
 /* ── 専科の月予定（案）の面 ──────────────────────
    **4週の面と同じ紙を、週の数だけ2列に並べる。**
@@ -1493,9 +1485,10 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   justify-items:center;align-items:start}
 .spmwk{display:flex;flex-direction:column;gap:3px;align-items:center}
 .spmwklab{font-size:12px;color:var(--tx-sub);font-weight:600}
-/* 案の紙。**授業のコマを高くする** ── 1コマに専科が6人まで並ぶ。
+/* 案の紙。**授業のコマを高くする** ── 1コマに専科が全員ぶんの段で並ぶ
+   （段は専科ごとに決まっていて、居ないところは空段）。
    備考は出さないので、そのぶんの高さを題名へ回す */
-.sheet.spmsheet{--h-title:19mm; --h-note:0mm; --fs-t:7pt}
+.sheet.spmsheet{--h-title:24mm; --h-note:0mm; --fs-t:7pt}
 .sheet.spmsheet .cell.lesson>.n{display:none}
 /* **紙の高さは中身で決める。** 週案の紙は B5 の高さ（--ph）まで必ず伸びるので、
    放課後（1fr の行）が余りを全部もらって 10cm の空欄になる。
@@ -1513,10 +1506,19 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
    コマ全体に色を敷くと、6人並んだコマが1色になって誰も見分けられない。
    色は識別を担わない ── どの教科かは行の字が言っている
    （--tint の割り当ては sheet.css の [data-subject]）。 */
-.spx{display:block;background:var(--tint);border-radius:2px;
-  padding:0 1px;white-space:nowrap;text-align:left;line-height:1.28}
-/* 基本時間割から動いたコマ。**左の線で言う**（記号を足すとクラス名が切れる） */
+.spx{display:flex;align-items:baseline;gap:2px;background:var(--tint);border-radius:2px;
+  padding:0 1px;text-align:left;line-height:1.28}
+.spxtxt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ずれは行の右端の印が言う。**⇄ 基本から動いた／⚠ チェックした希望を破った** */
+.spxmark{margin-left:auto;font-style:normal;font-weight:700;padding-right:1px}
+/* 居ない専科の段。**上に詰めない**（どのコマでも同じ高さに同じ専科が出る） */
+.spxemp{display:block;height:1.28em}
+/* 基本時間割から動いたコマ。**左の線も立てる**（印だけだと探す目が要る） */
 .spx.mv{box-shadow:inset 2px 0 0 var(--ink-link);padding-left:3px}
+/* 希望を破った行。**印の色は同じ語に合わせる** */
+.spx.ng .spxmark{color:var(--cat-clash)}
+/* 動いたコマの元の場所に残る基本の字。**生きている予定ではない**ので薄く */
+.spx.st{opacity:.5}
 /* 仮採用ずみの行。**基本時間割と同じ薄さ** */
 .spx.tent{color:var(--ink-sub)}
 .spmout{padding:0 2px 8px}
@@ -3220,7 +3222,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.36.0";
+let APP_VERSION = "1.37.0";
 let BUILD_DATE  = "2026-09-22";
 
 /* 時程。行を固定しない（学校ごとに違う）。
@@ -7357,6 +7359,29 @@ function spwText(w){
    読みも書きもここ1つを通すので、落ちた先でもずれない。 */
 const spwAnchor = (y, m) => mondayOf(new Date(y, m, 1));
 
+/* ── 計算に入る専科 ────────────────────────────
+   **「組む」にチェックが入っていて、ほかの組む側と受け持ちが重なる人だけ。**
+   受け持つクラスがほかの組む側と1つも重ならない専科には、この計算で
+   動かせるものが何も無い ── 奪う枠も奪われる枠も無いので、入れても出る案は
+   基本時間割のまま。希望を入れられなくなるぶんだけ損なので、
+   画面にも計算にも入れず、名指しで断る（12図工 のような枠がこれに当たる）。
+
+   **組む側のあいだで見る。** 重なりの相手が「組む」を外していれば、
+   その専科どうしも干渉しない（相手のいない計算に希望は要らない）。 */
+function spmRunSet(wishes){
+  const cand = specials().filter(s => !(wishes[s.code] || spwBlank()).off);
+  const sets = {};
+  for(const s of cand) sets[s.code] = new Set(classesOfSpecial(s.code));
+  const alone = {}, run = [];
+  for(const s of cand){
+    const mine = sets[s.code];
+    const lonely = cand.every(t => t.code === s.code
+                                || ![...mine].some(c => sets[t.code].has(c)));
+    if(lonely) alone[s.code] = true; else run.push(s);
+  }
+  return {cand, alone, run};
+}
+
 /* いま入っている希望を読む。**無ければ前の月のぶんを既定にする。**
    戻り値の `carried` は「前の月から持ってきた」印で、画面がそう断る。 */
 function spWishRead(y, m, code){
@@ -7500,7 +7525,9 @@ function spHardBusy(d, sid, cls){
 function spBuild(y, m, wishes, move){
   const weeks = spMonthWeeks(y, m);
   const lessons = spLessons(), nS = lessons.length;
-  const sps = specials().filter(s => !(wishes[s.code] || spwBlank()).off);
+  /* **干渉しない専科は入れない**（→ spmRunSet）。彼らのコマは、
+     いま入っているまま残るので、計算に入れても案は変わらない */
+  const rs = spmRunSet(wishes), sps = rs.run, alone = rs.alone;
   const inRun = {};
   for(const s of sps) inRun[s.code] = true;
   /* **見るのは、参加した専科が受け持つクラスだけ。** 全クラスを judge に掛けると、
@@ -7588,7 +7615,7 @@ function spBuild(y, m, wishes, move){
     else seen[k] = u.cls;
   }
 
-  return {y, m, weeks, days, lessons, nS, sps, inRun, units, hard, taken,
+  return {y, m, weeks, days, lessons, nS, sps, alone, inRun, units, hard, taken,
           allow:allowByCls, notes, baseClash, wishes, pos, posWi, posD, posSi};
 }
 
@@ -7992,7 +8019,7 @@ function openSpMonth(){
   if(spmRes){ setCenter("spm"); return; }
   const now = new Date(monday);
   spmY = now.getFullYear(); spmM = now.getMonth();
-  spmRes = null; spmPreview = null; spmAdoptedAs = "";
+  spmRes = null; spmPreview = null; spmStale = {}; spmAdoptedAs = "";
   spmLoad(() => { $("spmDlg").showModal(); });
 }
 
@@ -8021,7 +8048,7 @@ function spmLoad(after){
 function spmStep(n){
   const d = new Date(spmY, spmM + n, 1);
   spmY = d.getFullYear(); spmM = d.getMonth();
-  spmRes = null; spmPreview = null; spmAdoptedAs = "";
+  spmRes = null; spmPreview = null; spmStale = {}; spmAdoptedAs = "";
   spmLoad();
 }
 
@@ -8034,13 +8061,24 @@ function spmDraw(){
   spmDrawOut();
 }
 
-/* 希望の表。**1行が1人ぶんの枠。** 列は効き方の強い順に左から並べる */
+/* いまの案を捨てる。**希望を1つでも触ったら、組み直しが要る** ──
+   古い案が紙に残ったままだと、入れられない案が入れられるように見える。 */
+function spmInvalidate(){
+  spmRes = null; spmPreview = null; spmStale = {}; spmAdoptedAs = "";
+  spmDrawOut();
+  if(spmFace()) drawSpMonthView();
+}
+
+/* 希望の表。**1行が1人ぶんの枠。** 列は効き方の強い順に左から並べる。
+   受け持ちがほかの組む側と重ならない専科は、干渉しようがないので表から外す
+   （→ spmRunSet。外した人は下に名指しで断る） */
 function spmDrawWish(){
   const box = $("spmWish");
   const head = "<tr><th>組む</th><th>専科</th><th>避ける日</th>"
     + "<th>午前のみ</th><th>2コマ<br>くっつける</th><th>基本に<br>近づける</th>"
     + "<th>クラス<br>分散</th></tr>";
-  const rows = specials().map(s => {
+  const rs = spmRunSet(spmWish);
+  const rows = rs.run.map(s => {
     const w = spmWish[s.code] || (spmWish[s.code] = spwBlank());
     const cb = (k, on) => "<input type='checkbox' data-sp='" + escText(s.code)
       + "' data-w='" + k + "'" + (on ? " checked" : "") + ">";
@@ -8056,13 +8094,23 @@ function spmDrawWish(){
       + "<td>" + cb("am", w.am) + "</td><td>" + cb("pair", w.pair) + "</td>"
       + "<td>" + cb("base", w.base) + "</td><td>" + cb("spread", w.spread) + "</td></tr>";
   }).join("");
-  box.innerHTML = head + rows;
+  /* **外した人は名指しで断る。** 表から消えるだけだと、
+     いるはずの人がいない画面になる */
+  const skip = rs.cand.filter(s => rs.alone[s.code]);
+  const foot = skip.length
+    ? "<tr><td></td><td colspan='6' class='spmskip'>受け持ちがほかの専科と"
+      + "重ならないので計算に入れない："
+      + skip.map(s => escText(spLabel(s))).join("・") + "</td></tr>"
+    : "";
+  box.innerHTML = head + rows + foot;
   for(const c of box.querySelectorAll("input[type=checkbox]"))
     c.onchange = () => {
       const w = spmWish[c.dataset.sp];
       if(c.dataset.w === "on") w.off = !c.checked;
       else w[c.dataset.w] = c.checked;
-      spmDirty = true; spmRes = null; spmDrawOut();
+      /* **組むを外すと、干渉の網目も変わる**（相手のいなくなった専科が
+         外れ、逆も起きる）ので、表を描き直す */
+      spmDirty = true; spmInvalidate(); spmDrawWish();
     };
   for(const b of box.querySelectorAll(".spmdays"))
     b.onclick = () => spmOpenDays(b.dataset.sp);
@@ -8104,15 +8152,17 @@ function spmDrawDays(){
       /* **選んだら、チェックも入れる。** 選んだのに効かない状態を作らない。
          止めたいときはチェックを外す（日付は残る） */
       if(w.days.length) w.avoid = true;
-      spmDirty = true; spmRes = null;
-      spmDrawDays(); spmDrawWish(); spmDrawOut();
+      spmDirty = true; spmInvalidate();
+      spmDrawDays(); spmDrawWish();
     };
 }
 
 /* ── くむ ────────────────────────────────────── */
 function spmRun(){
-  const on = specials().filter(s => !(spmWish[s.code] || spwBlank()).off);
-  if(!on.length) return toast("<b>組む専科を1人以上えらぶ</b>");
+  const rs = spmRunSet(spmWish);
+  if(!rs.run.length) return toast(rs.cand.length
+    ? "<b>受け持ちの重なる専科がいません</b>。干渉しようがないので、くむものがありません"
+    : "<b>組む専科を1人以上えらぶ</b>");
   const w = Wait.begin("専科の月予定をくんでいます");
   /* 待ちの表示を1回出させてから解く。**解いているあいだは画面が止まる**ので、
      止まる前に「いま計算している」と出しておく（そうしないと、押したのに
@@ -8147,13 +8197,13 @@ function spmBroke(r){
 const spmWhen = (cx, wi, d, si) =>
   md(addDays(cx.weeks[wi], d)) + "（" + DOW[d] + "）" + cx.lessons[si].name + "校時";
 const spmSpName = code => { const s = spOf(code); return s ? spLabel(s) : code; };
-/* 週の表に出す名前。**教科名だけ。**
-   同じ教科の枠が2つある学校（理科3・4年／理科5・6年）でも、
-   となりに出るクラス名が学年を言うので、枠の学年まで書かなくても見分けられる。
-   1つのコマに何人も並ぶので、ここが長いとクラス名のほうが切れる。 */
+/* 週の表に出す名前。**教科名の1文字。** 1コマに何人も並ぶので、
+   ここが長いとクラス名のほうが切れる。同じ教科の枠が2つあっても
+   （理科3・4年／理科5・6年）、**段が決まっているのでどちらか分かる**
+   ── となりのクラス名が学年を言う。 */
 function spmShort(code){
   const sub = SUB_BY_CODE[spSubjectOf(code)];
-  return sub ? sub.name : spmSpName(code);
+  return (sub ? sub.name : spmSpName(code)).slice(0, 1);
 }
 
 /* 紙の下に出す、数えたもの。**紙に出ないことだけを字で言う。**
@@ -8173,8 +8223,17 @@ function spmDrawOut(){
     + r.unplaced.length + "</b>"
     + "　<b class='" + (spmBroke(r) ? "ng" : "") + "'>希望を破った " + spmBroke(r) + "</b>"
     + "　基本から動かした <b>" + r.moved.length + "</b>"
-    + "　ほかの人の予定を潰す <b class='" + (r.over.length ? "ng" : "") + "'>"
-    + r.over.length + "</b></div>";
+    /* **潰すのは本採用だけ。** 仮採用は本物の校時とは別の行に入るので、
+       誰の予定も潰さない（→ TENT_SLOT） */
+    + "　採用すると潰す <b class='" + (r.over.length ? "ng" : "") + "'>"
+    + r.over.length + "</b>"
+    + "<span class='spmlegend'>⇄ 基本から動いた　⚠ チェックした希望を破った</span></div>";
+  /* **外した人は名指しで断る**（窓の表と同じ） */
+  const rs = spmRunSet(spmWish);
+  const skip = rs.cand.filter(s => rs.alone[s.code]);
+  if(skip.length) html += "<p class='spmlead'>受け持ちがほかの専科と重ならないので"
+    + "<b>計算に入れていない</b>："
+    + skip.map(s => escText(spLabel(s))).join("・") + "</p>";
   if(r.cut) html += "<p class='spmlead'>計算に時間がかかったので、"
     + "<b>途中の案で止めた</b>。希望を減らすと、もう少し良い案が出ることがある。</p>";
   if(cx.notes.length) html += "<p class='spmlead'>行事でつぶれた <b>"
@@ -8319,7 +8378,8 @@ function spmAdopt(tent){
 function spmSaveWish(){
   if(!spmDirty) return 0;
   let n = 0;
-  for(const s of specials()) if(spWishWrite(spmY, spmM, s.code, spmWish[s.code])) n++;
+  for(const s of specials())
+    if(spWishWrite(spmY, spmM, s.code, spmWish[s.code] || spwBlank())) n++;
   spmDirty = false;
   if(n) save();
   return n;
@@ -8343,16 +8403,30 @@ const spmFace = () => typeof centerMode !== "undefined" && centerMode === "spm";
 
 /* 案（まだ週案に入れていないもの）。**入れたら消す。**
    消したあとは週案そのものを読むので、同じ紙が実物になる。 */
-let spmPreview = null;           /* "月曜|曜日|時程" → [{sp, cls, moved}] */
+let spmPreview = null;           /* "月曜|曜日|時程" → [{sp, cls, moved, broke}] */
+/* **元の場所に基本の字が残るコマ。** 「月曜|曜日|時程|クラス|身元」→ 1。
+   案の面では、その段を薄くして「ここに残るのは基本の字」と分かるようにする */
+let spmStale = {};
 
 function spmSetPreview(res){
-  const cx = res.cx, map = {};
+  const cx = res.cx, map = {}, stale = {};
   for(const u of res.placed){
     const wi = cx.posWi(u.at), d = cx.posD(u.at), si = cx.posSi(u.at);
+    const w = cx.wishes[u.sp] || spwBlank();
+    /* **希望ずれ。** 避ける日と午前のみを破ったコマは、行の右端に ⚠ が出る
+       （数だけでなく、どのコマかが紙から読めるように） */
+    const broke = (spwOn(w, "avoid")
+                   && w.days.indexOf(iso(addDays(cx.weeks[wi], d))) >= 0)
+               || (w.am && si >= cx.amCut);
     const k = iso(cx.weeks[wi]) + "|" + d + "|" + cx.lessons[si].id;
-    (map[k] || (map[k] = [])).push({sp:u.sp, cls:u.cls, moved:u.at !== u.home});
+    (map[k] || (map[k] = [])).push({sp:u.sp, cls:u.cls,
+                                   moved:u.at !== u.home, broke});
+    if(u.at !== u.home)
+      stale[iso(cx.weeks[u.wi]) + "|" + u.d + "|" + cx.lessons[u.si].id
+            + "|" + u.cls + "|" + u.sp] = 1;
   }
   spmPreview = map;
+  spmStale = stale;
 }
 
 /* いま週案に入っている、そのコマの専科。**合成したあとで見る。**
@@ -8373,7 +8447,14 @@ function spmStoreEntries(d, sid){
 
 /* 案の面の1コマ。**紙の下敷きは全学年の紙。**
    授業のコマだけ、専科の並びに差し替える。全校の予定が入っているコマは
-   そのまま出す ── そこは全クラスが塞がっていて、専科は行けない。 */
+   そのまま出す ── そこは全クラスが塞がっていて、専科は行けない。
+
+   **案に行が無いコマは、実物を出す。** 案は「計算に入れた専科の行き先」
+   だけを持つので、そのまま出すと、組む側ではない専科の予定や、動いたコマの
+   元の場所が「空き」に見える。入れたあとの姿に近いのは ──
+     ・基本時間割が出しているコマ（動いたコマの元の場所にも残る）
+     ・組む側ではない専科のコマ（計算が触れないので、そのまま残る）
+   組む側の専科がいま入れているコマは、入れるときに消えるので出さない。 */
 function spmCellFor(d, s){
   const sl = SLOT_BY_ID[s] || {}, w = week();
   const sc = w.school[ck(d, s)];
@@ -8381,20 +8462,68 @@ function spmCellFor(d, s){
                         : {title:"", note:"", subject:null, layer:"base", clash:null};
   if(sl.kind !== "lesson") return asIs();
   if(sc && plain(sc.title).trim()) return asIs();
-  const list = spmPreview ? (spmPreview[wkKey() + "|" + d + "|" + s] || [])
-                          : spmStoreEntries(d, s);
+  const key = wkKey() + "|" + d + "|" + s;
+  let list;
+  if(spmPreview){
+    const plan = spmPreview[key] || [];
+    if(plan.length) list = plan;
+    else list = spmStoreEntries(d, s)
+      .filter(e => e.base || !spmInRun(e.sp))
+      .map(e => spmStale[key + "|" + e.cls + "|" + e.sp]
+              ? Object.assign({}, e, {stale:true}) : e);
+  }else{
+    list = spmStoreEntries(d, s);
+  }
   if(!list.length) return {title:"", note:"", subject:null, layer:"base", clash:null};
-  /* 並びは教科コード順。**同じコマが、週ごとに並び替わらないようにする**
-     （並び替わると、同じ専科を目で追えない） */
-  const sorted = list.slice().sort((a, b) => {
-    const x = spSubjectOf(a.sp), y = spSubjectOf(b.sp);
-    return x < y ? -1 : x > y ? 1 : clsRank_(a.cls, b.cls);
-  });
-  const html = sorted.map(e =>
-    "<span class='spx" + (e.tent ? " tent" : "") + (e.moved ? " mv" : "")
+  return {title: spmRowsHtml(list), note:"", subject:null, layer:"base", clash:null};
+}
+
+const spmInRun = code => !!(spmRes && spmRes.cx.inRun[code]);
+
+/* **コマの中の1行は、専科ごとに決まった段。** どのコマでも同じ高さに
+   同じ専科が並ぶので、上から順に読めばすぐ見つけられる。
+   居ないところは空の段を置く ── 上に詰めると、コマごとに段がずれて
+   目で追えなくなる（段は教科の並び順で固定） */
+function spmLanes(){
+  const ord = SUBJECTS.map(x => x.code), out = {};
+  specials().slice().sort((a, b) => {
+    const x = ord.indexOf(spSubjectOf(a.code)), y = ord.indexOf(spSubjectOf(b.code));
+    return ((x < 0 ? 99 : x) - (y < 0 ? 99 : y))
+         || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0);
+  }).forEach((s, i) => out[s.code] = i);
+  return out;                            /* 身元 → 段（0起き） */
+}
+function spmRowsHtml(list){
+  const laneOf = spmLanes(), rows = [], extra = [];
+  for(const e of list){
+    const i = laneOf[e.sp];
+    if(i === undefined) extra.push(e);
+    else (rows[i] || (rows[i] = [])).push(e);
+  }
+  let html = "";
+  const emit = row => {
+    row.sort((a, b) => clsRank_(a.cls, b.cls));
+    for(const e of row) html += spmRowHtml(e);
+  };
+  for(let i = 0; i < specials().length; i++){
+    if(!rows[i]){ html += "<span class='spxemp'></span>"; continue; }
+    emit(rows[i]);
+  }
+  /* 枠に無い身元（退いた専科の残り）は、いちばん下に出す */
+  emit(extra);
+  return html;
+}
+function spmRowHtml(e){
+  /* **ずれは行の右端の印が言う。** ⇄ は基本時間割から動いた、
+     ⚠ はチェックを入れた希望を破った。字を足すとクラス名が切れるので記号 */
+  const marks = (e.moved ? "⇄" : "") + (e.broke ? "⚠" : "");
+  return "<span class='spx" + (e.tent ? " tent" : "") + (e.moved ? " mv" : "")
+    + (e.broke ? " ng" : "") + (e.stale ? " st" : "")
     + "' data-subject='" + escText(spSubjectOf(e.sp)) + "'>"
-    + escText(spmShort(e.sp)) + " " + escText(e.cls) + "</span>").join("");
-  return {title: html, note:"", subject:null, layer:"base", clash:null};
+    + "<span class='spxtxt'>" + escText(spmShort(e.sp)) + " " + escText(e.cls)
+    + "</span>"
+    + (marks ? "<i class='spxmark'>" + marks + "</i>" : "")
+    + "</span>";
 }
 
 /* 面を描く。**週の数だけ紙を作る**（4〜6枚）。 */
@@ -8452,7 +8581,7 @@ function fitSpm(){
 function spmFaceStep(n){
   const d = new Date(spmY, spmM + n, 1);
   spmY = d.getFullYear(); spmM = d.getMonth();
-  spmRes = null; spmPreview = null; spmAdoptedAs = "";
+  spmRes = null; spmPreview = null; spmStale = {}; spmAdoptedAs = "";
   spmLoad(() => drawSpMonthView());
 }
 /* ▲ src/js/spmonth.js ▲ */
@@ -13208,6 +13337,10 @@ const HELP = {
        "<b>何コマ組むかは、基本時間割から数えます。</b>"
        + "教科と担当学年が合うコマが、その専科の持ちコマです。"
        + "入れてもらう数字はありません。",
+       "<b>受け持ちの重ならない専科は、表からも計算からも外れます。</b>"
+       + "ほかの専科と同じクラスを1つも受け持たない人は、"
+       + "誰ともぶつからないので、くむものがありません"
+       + "（窓の下に名指しで出ます）。",
        "<b>絶対に守るもの</b>は4つです。全校の予定・学年の予定が入っているコマに置かない。"
        + "休み・特別校時・校外行事・授業なしのコマに置かない。"
        + "同じ時刻に、同じクラスへ2人の専科が行かない。"
@@ -13248,6 +13381,9 @@ const HELP = {
        + "専科の層には「このコマはもう無い」と書く手がないためで、"
        + "そこは担任が入れ直すところです。"
        + "窓の下に<b>その一覧</b>を出すので、そのまま渡してください。",
+       "<b>案の紙では、どのコマでも同じ高さに同じ専科が並びます。</b>"
+       + "行の右端の印は、<b>⇄ が基本時間割から動いた</b>、"
+       + "<b>⚠ がチェックを入れた希望を破った</b>ものです。",
        "<b>希望は月ごとに持ちます。</b>空のときは先月のぶんを既定にするので、"
        + "毎月入れ直す必要はありません（先月から持ってきたものには印が付きます）。",
        "<b>案は、4週の面と同じ紙で出します。</b>"
@@ -14628,7 +14764,7 @@ function wire(){
   on("spmPrev","click", () => spmStep(-1));
   on("spmNext","click", () => spmStep(1));
   on("spmRun","click",  spmRun);
-  on("spmMove","change", ev => { spmMoveBroken = ev.target.checked; spmRes = null; });
+  on("spmMove","change", ev => { spmMoveBroken = ev.target.checked; spmInvalidate(); });
   /* 案の面。**押すまで週案には1文字も書かない** */
   on("spmFPrev","click", () => spmFaceStep(-1));
   on("spmFNext","click", () => spmFaceStep(1));
