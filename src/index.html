@@ -72,7 +72,7 @@
            見出しの「週案」と、その右のグリッド（入口へ飛ぶ口）は外した。
            **字だけの見出しは何も決めない**し、入口へ行く口は少し下の
            「ほかの週案を開く」と同じもので、同じ場所に2つあった。
-           空いたところへ、中央のかたち（週案・4週・学年・カレンダー）を上げた ──
+           空いたところへ、中央のかたち（週案・4週・カレンダー・学年）を上げた ──
            いちばんよく押すのに、いちばん下の紙のとなりにあった。 -->
       <div class="wk">
         <div class="pill">
@@ -91,12 +91,14 @@
         </div>
         <select class="target" id="target" aria-label="開いているもの"></select>
         <!-- 中央に出すかたち。**紙の外**（刷られない）。
-             書けるのは週の紙1枚だけ。4週・学年・カレンダーは見るだけの面 -->
+             書けるのは週の紙1枚だけ。4週・カレンダー・学年は見るだけの面。
+             並びは**繰る幅の順**（1週 → 4週 → 2ヶ月）。学年だけは幅ではなく
+             「同じ週を横に並べる」面なので、いちばん端に置く -->
         <div class="seg viewseg" id="centerTabs" role="group" aria-label="中央に出すもの">
           <button data-center="week"  aria-pressed="true">週案</button
           ><button data-center="month" aria-pressed="false">4週</button
-          ><button data-center="grade" aria-pressed="false">学年</button
-          ><button data-center="cal" aria-pressed="false">カレンダー</button>
+          ><button data-center="cal" aria-pressed="false">カレンダー</button
+          ><button data-center="grade" aria-pressed="false">学年</button>
         </div>
       </div>
 

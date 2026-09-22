@@ -553,6 +553,9 @@ span.tpin{cursor:default}
    左上1年・右上2年・左下3年…と**学年の位置がいつも同じ**なら、一手で届く。
    区切りの線も、束の見出し（「3年」）も置かない ── チップの字の頭が
    その学年で、束の位置も学年の順に固定してある。書き足しても何も増えない。 */
+/* 担当学年が決まっていない枠の断り書き。**状態であって説明ではない**ので
+   ？ ではなくここに出す（決めれば消える）。直す口をその場に置く */
+.spunset{margin:0 0 9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .palg{display:grid;grid-template-columns:1fr 1fr;gap:9px 12px;width:100%}
 .palgg{display:flex;flex-wrap:wrap;align-items:center;gap:5px;min-width:0}
 /* 学年ごとの地。**色は学年を運ばない。** 運ぶのはチップの字（3-2）と、

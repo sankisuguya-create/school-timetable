@@ -52,13 +52,26 @@ function drawPalette(){
        入れるのと同じ手数で取り消せないと、1コマずつ空にして回ることになる */
     /* **束に見出しは付けない。** チップの字（3-2）の頭がその学年で、
        束の位置も学年の順に固定してある。「3年」と書き足しても何も増えない */
+    /* 出すのは**担当学年のクラスだけ**（classesOfSpecial が絞っている）。
+       担当学年が決まっていない枠は、全クラスが出る ── 書いていない学校を
+       「どの学年も受け持たない専科」にしないための逃げ道。
+       **黙って全部出さない。** そうと分からないと、20クラスの中から
+       自分の行き先を毎回さがすことになる。直す場所まで1手で行けるようにする。 */
+    const unset = !spGradesOf(view.sp);
     $("pals").innerHTML =
-      "<div class='palg'>"
+      (unset
+        ? "<p class='hint spunset'>担当学年が決まっていないので、"
+          + "<b>全クラス</b>を出しています。"
+          + "<button type='button' class='sbtn' id='palSpFix'>学級編成で決める</button></p>"
+        : "")
+      + "<div class='palg'>"
       + groups.map(x => "<div class='palgg' data-g='" + escText(x.g) + "'>"
           + x.list.map(c => palHtml({v:c, t:c, g:x.g})).join("")
           + "</div>").join("")
       + "</div>"
       + palHtml({v:PAL_CLEAR, t:"リセット", clear:true});
+    const fix = $("palSpFix");
+    if(fix) fix.onclick = () => openRosterDlg();
     wirePalette();
     return;
   }

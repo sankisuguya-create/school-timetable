@@ -195,12 +195,19 @@ const Store = (function(){
     const rank = c => { const m = String(c).match(/^(\d+)-(\d+)$/);
                         return m ? (+m[1]) * 100 + (+m[2]) : 9999; };
     for(const k in tanpopo) tanpopo[k].sort(function(x, y){ return rank(x) - rank(y); });
+    /* **身元（教科コード）と教科は別の列。** 同じ教科に専科が2人いる学校では
+       身元が zuko_2 のような字になる。教科の列が空なら古いファイルなので、
+       身元をそのまま教科として渡す（画面側がさらに表示名からも引く）。
+       表示名は**そのまま渡す** ── 身元で埋めない。埋めると、画面に
+       「zuko_2」という教科名が出る（画面は教科コードから名前を作れる）。 */
     const specials = pickYear_("専科", year)
-      .map(r => ({code: String(r["教科コード"] || "").trim(),
-                  label: String(r["表示名"] || "").trim(),
-                  grades: gradeList_(r["担当学年"])}))
+      .map(r => ({code:    String(r["教科コード"] || "").trim(),
+                  subject: String(r["教科"] || "").trim(),
+                  label:   String(r["表示名"] || "").trim(),
+                  grades:  gradeList_(r["担当学年"])}))
       .filter(s => s.code)
-      .map(s => ({code: s.code, label: s.label || s.code, grades: s.grades}));
+      .map(s => ({code: s.code, subject: s.subject || s.code,
+                  label: s.label, grades: s.grades}));
     let week1 = "";
     for(const r of Sheets.readAll("年設定").rows)
       if(String(r["年度"]) === String(year) && r["第1週の月曜"]) week1 = ymd(r["第1週の月曜"]);
@@ -1781,6 +1788,9 @@ const Store = (function(){
          引き継がないと、学級編成を1回直すたびに連絡先が全部消える。 */
       const mailOf = keep_("クラス", year, r => Sheets.asClass(r["クラス"]), r => String(r["担任メール"] || ""));
       const spMail = keep_("専科", year, r => String(r["教科コード"] || "").trim(), r => String(r["メール"] || ""));
+      /* 表示名も人の手の欄。**画面はもう持っていない**（教科コードから名前を作る）ので、
+         画面から来た値で上書きせず、いまの行の字をそのまま残す */
+      const spName = keep_("専科", year, r => String(r["教科コード"] || "").trim(), r => String(r["表示名"] || ""));
       const clsRows = [];
       for(const g of Object.keys(classes || {}).sort())
         for(const c of classes[g]) clsRows.push({
@@ -1790,9 +1800,15 @@ const Store = (function(){
       replaceYear_("クラス", year, clsRows);
       /* **担当学年を書き戻す。** 落とすと、学級編成をいじるたびに
          シートの「担当学年」が空になり、専科の基本時間割が全学年に広がる */
+      /* **教科も書き戻す。** 落とすと、学級編成を1回直すたびに
+         「図工3・4・5・6年」の枠が教科を見失い（身元の zuko_2 が教科として読まれ）、
+         その枠には基本時間割のコマが1つも出なくなる */
       replaceYear_("専科", year, (specials || []).map(s =>
-        ({"年度":year, "教科コード":s.code, "表示名":s.label, "メール": spMail[s.code] || "",
-          "担当学年": (s.grades || []).join(",")})));
+        ({"年度":year, "教科コード":s.code,
+          "表示名": String(s.label || spName[s.code] || ""),
+          "メール": spMail[s.code] || "",
+          "担当学年": (s.grades || []).join(","),
+          "教科": String(s.subject || s.code)})));
       if(week1) replaceYear_("年設定", year, [{"年度":year, "第1週の月曜":week1}]);
       SpreadsheetApp.flush();
       return readRoster(year);

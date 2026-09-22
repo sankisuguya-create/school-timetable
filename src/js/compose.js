@@ -211,7 +211,9 @@ function spSubjectOf(code){
 function spLabel(sp){
   if(!sp) return "";
   const sub = SUB_BY_CODE[sp.subject || sp.code];
-  const name = sp.label || (sub ? sub.name : (sp.subject || sp.code));
+  /* **教科が分かるなら、その名前。** 表示名（シートの人の手の欄）を先に見ていたころは、
+     枠の教科を「図工 → 理科」に変えても、名前が「図工」のまま残っていた */
+  const name = sub ? sub.name : (sp.label || sp.subject || sp.code);
   const gs = sp.grades || [];
   if(!gs.length) return name;                 /* 空欄＝全学年 */
   /* **学年の数ではなく、中身で比べる。** 数で見ると、いまある学年が

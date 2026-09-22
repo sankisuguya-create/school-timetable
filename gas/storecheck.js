@@ -584,6 +584,29 @@ ok("2026年度は変わらない（既定のまま20学級）",
    Object.keys(r26.classes).reduce((a,g) => a + r26.classes[g].length, 0) === 20);
 ok("2027年度の専科は1つ", r27.specials.length === 1, r27.specials);
 
+/* **同じ教科に専科が2人いる学校。** 図工1・2年／図工3〜6年のように分ける。
+   枠の身元（教科コード）は週案の棚に字として入っているので変えられず、
+   2人目は zuko_2 のような字になる。受け持つ教科は別の列（教科）が持つ。
+   ここが往復で落ちると、2人目の枠に基本時間割のコマが1つも出なくなる。 */
+console.log("\n■ 同じ教科を2つに分けた専科が、往復しても教科を見失わない");
+ev(`Store.writeRoster(2029, {"1":["1-1"],"3":["3-1"]},
+    [{code:"zuko",   subject:"zuko", grades:["1","2"]},
+     {code:"zuko_2", subject:"zuko", grades:["3","4","5","6"]}], "2029-04-02")`);
+const r29 = ev("Store.readRoster(2029)");
+ok("枠は2つのまま", r29.specials.length === 2, r29.specials);
+ok("身元（教科コード）はそのまま残る",
+   r29.specials.map(s => s.code).join(",") === "zuko,zuko_2", r29.specials);
+ok("受け持つ教科は、どちらも図工",
+   r29.specials.every(s => s.subject === "zuko"), r29.specials);
+ok("担当学年も残る",
+   r29.specials[0].grades.join(",") === "1,2"
+   && r29.specials[1].grades.join(",") === "3,4,5,6", r29.specials);
+/* 教科の列が無い古いファイル。**身元をそのまま教科として読む** */
+ev(`Store.writeRoster(2031, {"1":["1-1"]}, [{code:"ongaku", label:"音楽"}], "")`);
+ok("教科を書かない枠は、身元がそのまま教科になる",
+   ev("Store.readRoster(2031)").specials[0].subject === "ongaku",
+   ev("Store.readRoster(2031)").specials);
+
 console.log("\n■ 空の編成では上書きしない");
 const keep26 = Object.keys(ev("Store.readRoster(2026).classes"))
   .reduce((a, g) => a + ev("Store.readRoster(2026).classes")[g].length, 0);
