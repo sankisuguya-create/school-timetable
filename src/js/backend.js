@@ -991,6 +991,15 @@ const Backend = (function(){
       .withFailureHandler(e => ng(String((e && e.message) || "単元を保存できなかった")))
       .apiWriteUnit(fy(), input);
   }
+  function placeUnitProgress(id, expectedAt, date, slot, ok, ng){
+    if(!onGas)
+      return ng("単元の自動配置はGAS版で確認してください");
+    google.script.run
+      .withSuccessHandler(r => ok(r || {}))
+      .withFailureHandler(e => ng(String((e && e.message) || "単元を配置できなかった")))
+      .apiPlaceUnit(fy(), id, expectedAt, date, slot);
+  }
+
   function resetUnitProgress(id, expectedAt, ok, ng){
     if(!onGas){
       const y = localUnits_(), u = y.unitProgress.find(x => x.id === id);
@@ -1121,7 +1130,7 @@ const Backend = (function(){
           saveRoster, saveSubjects, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,
           tpTargets, saveTpTargets, testTpTarget, tpSubmit,
-          unitManager, saveUnitProgress, resetUnitProgress, resetUnitProgressAll, deleteUnitProgress, saveUnitTerms,
+          unitManager, saveUnitProgress, placeUnitProgress, resetUnitProgress, resetUnitProgressAll, deleteUnitProgress, saveUnitTerms,
           yearSetup, tickYearSetup, setupPlanSheets, saveVariantOrigin, saveEvents,
           exportPlanSheet};
 })();
