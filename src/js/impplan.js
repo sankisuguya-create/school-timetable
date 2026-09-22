@@ -113,7 +113,7 @@ function impTallyRead(grid){
       const now = cellFor(d, sl.id);
       const nowT = plain(now.title).trim();
       const nowMark = !nowT ? "" : nowT === NO_LESSON ? "／"
-                                 : shortOf(now.subject, now.title);
+                                 : shortOf(now.subject, now.title, now.short);
       if(impNorm(nowMark) === v) continue;               /* すでに同じ */
       if(v === "／" || v === "/"){
         out.push({d, slot:sl.id, sub:null, mark:NO_LESSON});

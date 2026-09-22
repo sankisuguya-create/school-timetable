@@ -75,6 +75,9 @@ const Store = (function(){
           title:   String(r["題名"] || ""),
           note:    String(r["詳細"] || ""),
           subject: String(r["教科コード"] || "") || null,
+          /* 時数名。**手で決めた1文字の控え。** 空なら画面側が教科の1文字か
+             題名の頭文字を出す（→ src/js/compose.js shortOf）。 */
+          short:   String(r["時数名"] || ""),
           at:      Sheets.isDate(r["更新時刻"]) ? r["更新時刻"].getTime() : 0,
           /* **競合を見るための物差し。** at とは別に持つ。
              at は層の重ね順（あとから書いたものが上に出る）にも使うので、
@@ -861,7 +864,8 @@ const Store = (function(){
             "年度":year, "日付":date, "曜日":DOW_[new Date(date + "T00:00:00").getDay()],
             "時程":p.slot, "題名":String(p.title || ""), "詳細":String(p.note || ""),
             "教科コード":String(p.subject || ""), "層":p.layer, "対象":target,
-            "担当":String(p.sp || ""), "更新者":me, "更新時刻":now
+            "担当":String(p.sp || ""), "更新者":me, "更新時刻":now,
+            "時数名":String(p.short || "")
           };
           if(i !== undefined){
             /* **新しい中身にも行番号を持たせる。** 持たせないと、同じコマが

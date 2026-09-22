@@ -969,8 +969,12 @@ ok("シートにも入っている", await p.evaluate(() => {
        && bank[k] && bank[k].title === "理科");
    }) === true, await p.evaluate(() => window.__sheet()));
 
-console.log("\n■ 「上位に戻す」はシートにも届く");
-/* **前はここが手元だけで消えていた。** 戻したように見えて、次に開くと戻ってきた。
+console.log("\n■ 「空にする」はシートにも届く");
+/* **前は「上位に戻す」という別のボタンもあった。** 中身を見ると、
+   自分の層の行を消す点は「空にする」と同じだった（空の題名・備考で
+   書くと isEmptyCell が立ち、compose.js writeCell がその場で行を消す）。
+   2つの押す口で同じ結果になっていたので、「空にする」1本にまとめた。
+   ここでは、その「空にする」が最後まで（シートまで）届くことを確かめる。
    ほかの検査が見ているコマを触らないよう、5-3 の使っていないコマでやる */
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='5-3']").click(); await p.waitForTimeout(400);
@@ -982,13 +986,11 @@ await p.locator("#saveBtn").click(); await p.waitForTimeout(700);
 await p.evaluate(() => { window.__calls.length = 0; });
 await p.locator("#sheet .cell[data-d='4'][data-s='p3'] .t").click();
 await p.waitForTimeout(150);
-ok("担任が入れたコマには「上位に戻す」が出る",
-   await p.locator("#pRevert").isVisible());
-await p.locator("#pRevert").click(); await p.waitForTimeout(200);
+await p.locator("#pClear").click(); await p.waitForTimeout(200);
 await p.locator("#saveBtn").click(); await p.waitForTimeout(800);
 const rev = await p.evaluate(() =>
   window.__calls.filter(c => c.name === "apiWriteCells").map(c => c.args[1]).flat());
-ok("戻したことがシートへ届く（消す指示になる）",
+ok("空にしたことがシートへ届く（消す指示になる）",
    rev.length > 0 && rev.some(q => q.slot === "p3" && q.layer === "home"
                                  && (q.remove || (!q.title && !q.note))), rev);
 ok("シートの側からも消えている", await p.evaluate(() => {
@@ -996,13 +998,14 @@ ok("シートの側からも消えている", await p.evaluate(() => {
      const bank = st[["2026","home","5-3"].join("\u0001")] || {};
      return Object.keys(bank).some(k => k.indexOf("|p3") > 0);
    }) === false, await p.evaluate(() => window.__sheet()));
-/* **開き直しても戻ったまま。** 前はシートに行が残っていたので戻ってきた */
+/* **開き直しても空いたまま。** 手元だけで消していたころは、シートに行が
+   残っていたので開き直すと戻ってきた（→「空にする」もそこを直してある） */
 await p.reload(); await p.waitForTimeout(1400);
 await p.locator(".tile[data-c='5-3']").click(); await p.waitForTimeout(500);
 ok("開き直しても、担任のコマは戻ってこない",
    await p.evaluate(() => !((week().home["5-3"] || {})["4|p3"])) === true,
    await p.evaluate(() => (week().home["5-3"] || {})["4|p3"]));
-ok("上位に戻したので、上位か基本時間割のものが出る",
+ok("空にしたので、上位か基本時間割のものが出る",
    await p.evaluate(() => cellFor(4, "p3").layer) !== "home",
    await p.evaluate(() => cellFor(4, "p3").layer));
 
@@ -1758,10 +1761,11 @@ const closeDlgs = async () => {
 };
 await p.evaluate(() => openView({kind:"grade", grade:"5"}));
 await p.waitForTimeout(300); await closeDlgs();
-/* かたちの切り替えは左上へ上げた（紙のとなりの帯は無くなった） */
-ok("左上にかたちの切り替えが出る",
-   await p.evaluate(() => $("centerTabs").hidden) === false);
-await p.locator('#centerTabs [data-center="grade"]').click();
+/* かたちの切り替えは左メニューの「週案を出す」に一本化した
+   （専用の帯・#centerTabs は無い。data-center が現在地も言う） */
+ok("左メニューにかたちの切り替えが出る",
+   await p.evaluate(() => document.querySelectorAll(".nav[data-center]").length) === 4);
+await p.locator('.nav[data-center="grade"]').click();
 await p.waitForTimeout(400);
 ok("学年の面に入れ替わる", await p.evaluate(() =>
    $("gradeView").hidden === false && $("stage").hidden === true) === true);
@@ -1796,7 +1800,7 @@ ok("週を繰ると、学年の面も動く",
 ok("学年の面のまま、週の紙へ戻っていない",
    await p.evaluate(() => $("gradeView").hidden) === false);
 await closeDlgs();
-await p.locator('#centerTabs [data-center="month"]').click();
+await p.locator('.nav[data-center="month"]').click();
 await p.waitForTimeout(600);
 ok("4週の面へも入れ替わる", await p.evaluate(() =>
    $("monthView").hidden === false && $("gradeView").hidden === true) === true);
@@ -1804,7 +1808,7 @@ ok("4週の紙も見るだけ",
    await p.evaluate(() =>
      document.querySelectorAll("#mPaper [contenteditable]").length) === 0);
 await closeDlgs();
-await p.locator('#centerTabs [data-center="week"]').click();
+await p.locator('.nav[data-center="week"]').click();
 await p.waitForTimeout(400);
 ok("週の紙へ戻る", await p.evaluate(() =>
    $("stage").hidden === false && $("monthView").hidden === true) === true);
@@ -2124,7 +2128,7 @@ await p.evaluate(() => {
 console.log("\n■ カレンダーの面（2ヶ月・A4よこ1枚）");
 await p.evaluate(() => { openView({kind:"class", cls:"5-1"}); });
 await p.waitForTimeout(400); await closeDlgs();
-await p.locator('#centerTabs [data-center="cal"]').click();
+await p.locator('.nav[data-center="cal"]').click();
 await p.waitForTimeout(900); await closeDlgs();
 ok("カレンダーの面に入れ替わる", await p.evaluate(() =>
    $("calView").hidden === false && $("stage").hidden === true) === true);
@@ -2325,7 +2329,7 @@ ok("年度ごとの先頭の月曜が、その年度に入っている", await p
      return Object.keys(g).every(y =>
        String(fyOf(parseISO(Object.keys(g[y]).sort()[0]))) === y);
    }) === true);
-await p.locator('#centerTabs [data-center="week"]').click();
+await p.locator('.nav[data-center="week"]').click();
 await p.waitForTimeout(400); await closeDlgs();
 
 console.log("\n■ 右メニューの時数");

@@ -181,8 +181,18 @@ button,select,input,textarea{font:inherit;color:inherit}
 
 .stage{grid-area:3/1/4/2;overflow:auto;padding:10px;display:flex;justify-content:center;
   align-items:flex-start;min-height:0;min-width:0;gap:6px}
+
+/* 週の紙を出す口。**右メニューと紙のあいだの、もともと空いていた行。**
+   4週・学年・カレンダーはそれぞれの面の中に同じ並びの口を持つ（.mbar）ので、
+   ここは週の紙のぶんだけ。縦に並べる ── 横だと3つめの折り返しが右端の
+   パネルと詰まる。刷るときは出さない（@media print の .side,.panel と同じ扱い）。 */
+.weekbar{grid-area:2/1/3/2;display:flex;flex-direction:column;align-items:flex-end;
+  gap:6px;padding:8px 16px 0}
+.weekbar .btn{min-width:9em;justify-content:center}
+.weekbar .hint{margin:0;font-size:11.5px;color:var(--tx-sub);text-align:right;max-width:15em}
+
 /* 出し入れするものは1本にまとめる。**書き漏らすと、面が2つ重なって出る** */
-.stage[hidden],.mview[hidden],.gvview[hidden],.cvview[hidden],.tpview[hidden],
+.stage[hidden],.weekbar[hidden],.mview[hidden],.gvview[hidden],.cvview[hidden],.tpview[hidden],
 .cbar[hidden],.freebox[hidden],.viewseg[hidden]{display:none!important}
 
 /* 紙の左右で週を繰る。**左メニューの ◀ ▶ と同じことをする。**
@@ -499,21 +509,11 @@ span.tpin{cursor:default}
    帯には空き枠しか残っておらず、面を開くたび紙の上に1行が出たり消えたりして、
    紙の位置が上下に動いていた。ここでは縦に積む（右メニューは細長い）。 */
 .panel .freebox{display:block;margin:0}
-/* 畳める見出し（時数・日の形・空き枠で同じ形） */
-#dayFold>summary,#tallyFold>summary,#freeFold>summary{list-style:none;cursor:pointer;
-  display:flex;align-items:center;gap:8px;padding:7px 9px;
-  border:1px solid var(--line);border-radius:var(--r-sm);
-  background:var(--card);font-size:13px;font-weight:700;color:var(--tx)}
-#dayFold>summary::-webkit-details-marker,
-#freeFold>summary::-webkit-details-marker{display:none}
-#dayFold>summary::before,#freeFold>summary::before{content:"▸";font-size:11px;
-  color:var(--tx-sub);transition:transform .12s}
-#dayFold[open]>summary::before,
-#freeFold[open]>summary::before{transform:rotate(90deg)}
-#dayFold>summary:hover,#freeFold>summary:hover{border-color:var(--ink-link)}
-#dayFold>summary i,#freeFold>summary i{font-style:normal;font-weight:400;
-  font-size:12px;color:var(--tx-sub);margin-left:auto}
+/* 畳める見出し。**右メニューはこの1つの形に統一する**（→ .fold）。
+   中身は details/summary の既定の形（open のとき中身が出る）そのままで、
+   見た目だけを付け替える。 */
 .dayin{padding-top:9px}
+.foldin{padding-top:11px;display:flex;flex-direction:column;gap:12px}
 /* 空き枠の中身。**段の名前が長い**ので、縦に積んで折り返させない */
 .freein{padding-top:9px;display:flex;flex-direction:column;gap:7px}
 .freein .seg{flex-direction:column;width:100%}
@@ -666,17 +666,33 @@ span.tpin{cursor:default}
 /* 紙の字の大きさ（＋−）。**数は真ん中に出す。**
    押したものと変わったものが並んでいないと、効いたかどうか分からない。
    端まで来たら押せなくする（無反応にすると、壊れたのか端なのか読めない） */
-/* 畳める見出し。**押せると分かる形にする**（▸ と、押せる地）。
-   中身は毎日見るものではないので、既定は畳んでおく */
-#tallyFold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;
-  padding:7px 9px;border:1px solid var(--line);border-radius:var(--r-sm);
+/* ── 右メニューの畳める見出し（.fold）─────────────────
+   **押せると分かる形にする。** 前は ▸ の三角だけだったが、「畳んである／
+   開いている」をひと目で読める字数で言えていなかった（三角の向きは、
+   90度回っていることに気づかないと意味が伝わらない）。
+
+   **スイッチの絵**（丸いつまみが左右に動く、いわゆるトグル）に替えた。
+   つまみの位置と地の色の両方が開閉を言うので、三角より遠目からでも読める。
+   summary の中身（見出しの字・畳んだままでも見える要約）はそのまま。 */
+.fold{margin:0}
+.fold>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;
+  padding:7px 9px 7px 40px;position:relative;
+  border:1px solid var(--line);border-radius:var(--r-sm);
   background:var(--card);font-size:13px;font-weight:700;color:var(--tx)}
-#tallyFold>summary::-webkit-details-marker{display:none}
-#tallyFold>summary::before{content:"▸";font-size:11px;color:var(--tx-sub);
-  transition:transform .12s}
-#tallyFold[open]>summary::before{transform:rotate(90deg)}
-#tallyFold>summary:hover{border-color:var(--ink-link)}
-#tallyFold>summary i{font-style:normal;font-weight:400;font-size:12px;
+.fold>summary::-webkit-details-marker{display:none}
+/* スイッチの地（トラック）。開くと色が付く */
+.fold>summary::before{content:"";position:absolute;left:9px;top:50%;
+  transform:translateY(-50%);width:26px;height:15px;border-radius:8px;
+  background:var(--line);transition:background .15s}
+.fold[open]>summary::before{background:var(--ink-link)}
+/* つまみ。開くと右へ動く */
+.fold>summary::after{content:"";position:absolute;left:11px;top:50%;
+  transform:translateY(-50%);width:11px;height:11px;border-radius:50%;
+  background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.28);transition:left .15s}
+.fold[open]>summary::after{left:22px}
+.fold>summary:hover::before{background:var(--tx-sub)}
+.fold[open]>summary:hover::before{background:var(--ink-link);filter:brightness(1.1)}
+.fold>summary i{font-style:normal;font-weight:400;font-size:12px;
   color:var(--tx-sub);margin-left:auto}
 .tlyin{padding-top:9px}
 /* 押して切り替える帯のボタン（カレンダーの「備考：空欄／出す」）。
@@ -708,6 +724,14 @@ span.tpin{cursor:default}
   padding:7px 10px;font-size:13px;font-family:inherit;color:var(--ink);
   width:100%;box-sizing:border-box;outline:none}
 .pinp:focus{border-color:var(--ink-link);box-shadow:inset 0 0 0 1px var(--ink-link)}
+
+/* 教科名・行事名（広い）と時数名（1〜2文字）を横に並べる。
+   時数名の欄は数字1つぶんの幅で足りる ── 広げても中身が伸びない。 */
+.pnamerow{display:flex;gap:10px;align-items:flex-start}
+.pnamerow #pTitleWrap{flex:1;min-width:0}
+#pShortWrap{flex:0 0 4.6em}
+#pShortWrap input{text-align:center}
+.pallwrap[hidden]{display:none!important}
 
 .fld{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
   padding:8px 10px;font-size:13px;line-height:1.5;min-height:36px;outline:none;

@@ -58,7 +58,7 @@ function drawGate(){
   for(let i = 0; i < cols; i++)
     out.push(sp[i]
       ? "<button class='tile sp' data-go='special' data-s='" + escText(sp[i].code) + "'>"
-        + "<i></i>" + escText(spLabel(sp[i])) + "</button>"
+        + "<i></i>" + escText(spGridLabel(sp[i])) + "</button>"
       : "<span class='tile none'></span>");
   /* いちばん下にたんぽぽ。ここで交流級を選び、ここからだけ出す */
   out.push("<button class='master tp' data-go='tanpopo'><i></i>たんぽぽ</button>");
@@ -107,11 +107,11 @@ function openView(v){
     $("tpView").hidden = !tp;
     if(tp){
       $("stage").hidden = true;
+      $("weekBar").hidden = true;
       $("monthView").hidden = true;
       $("gradeView").hidden = true;
       document.querySelector(".panel").hidden = true;
       document.querySelector(".work").classList.add("no-panel");
-      $("centerTabs").hidden = true;
     }
     /* たんぽぽの面には紙が無い。紙から出す操作（印刷・時数）は伏せる */
     showPlanOutputs(!tp);

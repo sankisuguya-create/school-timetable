@@ -95,9 +95,14 @@ console.log("\n■ 手の届くところ");
 /* 見出しの「週案」と、その右のグリッド（入口へ飛ぶ口）は外した。
    **字だけの見出しは何も決めない**し、入口へ行く口はすぐ下の
    「ほかの週案を開く」と同じもので、同じ場所に2つあった。
-   空いたところへ、中央のかたち（週案・4週・学年・カレンダー）を上げてある */
-ok("左上に「中央に出すもの」の4つが出る",
-   await p.locator(".side #centerTabs [data-center]").count() === 4);
+
+   専用の帯（#centerTabs）もやめた。**「週案を出す」の並びと中身が同じで、
+   押す場所が2つに分かれていた。** いまはこの並びが現在地も言う
+   （→ data-center・aria-current。「ほかの週案を開く」と同じ仕組み） */
+ok("左メニューの「週案を出す」に、面を切り替える4つが並ぶ",
+   await p.locator(".side .nav[data-center]").count() === 4);
+ok("かたちを入れ替える専用の帯は無い（左メニューに一本化した）",
+   await p.locator("#centerTabs").count() === 0);
 ok("入口へ行く口は1つだけ",
    await p.locator('[data-act="gate"]').count() === 1);
 ok("「時間割の入力」の右に保存がある",
@@ -158,8 +163,15 @@ ok("放課後は備考だけ（題名の欄を作らない）",
    && await p.locator("#sheet .cell[data-s='after'] .t").count() === 0,
    [await p.locator("#sheet .cell[data-s='after'] .n").count(),
     await p.locator("#sheet .cell[data-s='after'] .t").count()]);
-ok("時程に時刻が出る",
-   (await p.locator("#sheet .lab .tm").first().innerText()).includes(":"));
+/* 時刻（8:45〜9:30）は出さない方針にした。教務必携そのものに刷ってあり、
+   同じ情報が2か所に並んでいた。空いた高さは校時の数字（.lab .no）へ回した */
+ok("時程に時刻は出さない（教務必携に刷ってある）",
+   await p.locator("#sheet .lab .tm").count() === 0);
+ok("空いたぶん、校時の数字を大きくしてある（14pt 超）", await p.evaluate(() => {
+     const cs = getComputedStyle(document.querySelector("#sheet .lab .no"));
+     return parseFloat(cs.fontSize);
+   }) > 18 /* 17pt×--k、画面では --k が1を超えることが多いのでpxで緩めに見る */,
+   await p.evaluate(() => getComputedStyle(document.querySelector("#sheet .lab .no")).fontSize));
 const fit = await p.evaluate(() => db.settings.vz);
 ok("紙が画面に合わせて拡大される", fit > 40 && fit <= 160, fit);
 
@@ -552,11 +564,17 @@ ok("同じ上書きについては二度出ない",
    await p.locator("#owDlg").evaluate(d => d.open) === false);
 
 /* **層（どこから来たか）と人（誰が入れたか）は別のもの。**
-   前は同じ欄に層の名前を入れていたので、他人の予定かどうかを判定できなかった */
+   前はパネルに文で出していた（#pWho）。読まれず、コマを選び直すたびに
+   同じ情報を2度読むことになるので外した ── いまは紙の左端の札（.src）が、
+   降りてきたコマにだけ層を言う（→ compose.js srcLabel）。データそのものは
+   変わっていないので、ここでは cellFor と紙の札の両方で確かめる。 */
 await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").click(); await p.waitForTimeout(200);
-ok("パネルに、いま入っているものの層を出す",
-   (await p.locator("#pWho").innerText()).indexOf("学年") >= 0,
-   await p.locator("#pWho").innerText());
+ok("いま入っているものの層はデータに残る（学年）",
+   await p.evaluate(() => cellFor(3, "p4").layer) === "grade",
+   await p.evaluate(() => cellFor(3, "p4").layer));
+ok("紙の左端の札にも層が出る",
+   (await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .src").innerText()).indexOf("年") >= 0,
+   await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .src").innerText());
 ok("手元では「自分」と決めつけない", await p.evaluate(() => isMe("")) === false);
 ok("人の名前は @ より前だけ出す",
    await p.evaluate(() => whoName("tanaka@edu.nishi.or.jp")) === "tanaka");
@@ -943,7 +961,7 @@ await p.locator("#baseDlg .dlgx").click(); await p.waitForTimeout(250);
 console.log("\n■ 学年・全学年には「リセット」を出す");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='1-1']").click(); await p.waitForTimeout(400);
-ok("担任の画面には出さない（そちらは「上位に戻す」がある）",
+ok("担任の画面には出さない（自分のクラスに「上位からのぶんを消す」概念が無い）",
    await p.locator(".pal.clear").count() === 0);
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".master[data-g='1']").click(); await p.waitForTimeout(400);
@@ -1052,8 +1070,9 @@ await p.emulateMedia({media:"print"});
 await p.waitForTimeout(200);
 ok("刷るとき、まわりの操作は消える", await p.locator(".side").isHidden());
 ok("刷るとき、層の印は消える", await p.locator("#sheet .tag").first().isHidden());
-ok("刷るとき、時刻は出さない（版面を動かさない）",
-   await p.locator("#sheet .lab .tm").first().isHidden());
+ok("刷るときも、時程の列は同じ幅（時刻を出していた頃だけ画面と刷るときで幅が違った）",
+   await p.evaluate(() => getComputedStyle($("sheet")).getPropertyValue("--labw").trim()) === "10mm",
+   await p.evaluate(() => getComputedStyle($("sheet")).getPropertyValue("--labw")));
 ok("刷っても枠からはみ出さない（刷るときの列の幅で測っている）",
    await p.evaluate(() => [...document.querySelectorAll("#sheet .cell .t")]
      .every(t => t.scrollWidth <= t.clientWidth + 1)) === true,
@@ -2276,20 +2295,56 @@ ok("「？」を押しても、その項目そのものは開かない",
 ok("説明は、何が起きるかを字で書いてある",
    (await p.locator("#helpBody").innerText()).length > 40,
    (await p.locator("#helpBody").innerText()).length);
-ok("はじめての人がつまずくところを添える",
-   (await p.locator("#helpBody").innerText()).indexOf("はじめの人がつまずくところ") >= 0);
+/* **「はじめの人がつまずくところ」は書かない方針にした。**
+   つまずきどころを1つだけ足すやり方は、結局どの項目も長くなり、
+   読む前に閉じられた（→ dialogs.js HELP の書き方の決まり） */
+ok("説明にその方針どおり「はじめの人がつまずくところ」が無い",
+   (await p.locator("#helpBody").innerText()).indexOf("はじめの人がつまずくところ") < 0);
 await p.locator("#helpDlg .dlgx").click(); await p.waitForTimeout(250);
 ok("説明の窓は ✕ で閉じる",
    await p.locator("#helpDlg").evaluate(d => d.open) === false);
 ok("文字サイズはタイトルと詳細を別々に設定できる",
    await p.locator("#stTitle").count()===1 && await p.locator("#stNote").count()===1);
-ok("B5出力には印刷・画像・Google Sheetがある",
-   await p.locator("#outPrint,#outImage,#outSheet").count()===3);
+/* 印刷・画像・Google Sheet は窓を挟まず、紙のとなりの帯（#weekBar）に出る
+   （4週・学年・カレンダーの .mbar と同じ形にそろえた） */
+ok("週の紙にも印刷・画像・Google Sheetがある",
+   await p.locator("#weekPrint,#weekImage,#weekSheet").count()===3);
+ok("教務必携用の窓（#outDlg）は無い", await p.locator("#outDlg").count()===0);
 ok("B4出力にも印刷・画像・Google Sheetがある",
    await p.locator("#mPrint,#mImage,#mSheet").count()===3);
 /* 押す口は窓から右メニューの帯へ移った（#chipSeg。なし／画面だけ／紙にも） */
 ok("教科チップは3段階から選べる",
    await p.locator("#chipSeg [data-chip]").count()===3);
+
+console.log("\n■ 「週案を出す」の並びは現在地も言う");
+/* 直前の節は入口（#gate）を開いたまま、閉じるボタンの字だけ見て終わっている。
+   入口の面では中央のかたちを切り替えられない（centerOk() が false）ので、
+   ここで改めてクラスを開く */
+await p.locator(".tile[data-c='1-1']").click(); await p.waitForTimeout(400);
+/* 繰る幅の順（1週 → 4週 → 2ヶ月）。学年は「同じ週を横に並べる」面なので末尾。
+   時数をコピーは面を切り替える操作ではないので、さらにその下。 */
+ok("並びは 教務必携用→4週→カレンダー→学年→時数をコピー", await p.evaluate(() => {
+     const t = [...document.querySelectorAll(".side .nav[data-act], .side .nav[data-plan-output]")]
+       .map(e => e.dataset.act).filter(a => ["outweek","month","cal","grade","tally"].includes(a));
+     return t.join(",");
+   }) === "outweek,month,cal,grade,tally",
+   await p.evaluate(() => [...document.querySelectorAll(".side [data-plan-output]")]
+     .map(e => e.dataset.act)));
+ok("カレンダーには大きさの表記がある（2ヶ月・A4）",
+   (await p.locator('.nav[data-act="cal"]').innerText()).indexOf("2ヶ月") >= 0);
+ok("学年でならべるにも大きさの表記がある（A4よこ）",
+   (await p.locator('.nav[data-act="grade"]').innerText()).indexOf("A4") >= 0);
+/* 現在地は aria-current で言う（「ほかの週案を開く」と同じ仕組み） */
+await p.locator('.nav[data-act="month"]').click(); await p.waitForTimeout(500);
+ok("4週へ移ると、そこだけ aria-current になる", await p.evaluate(() =>
+     document.querySelector('.nav[data-center="month"]').getAttribute("aria-current") === "true"
+     && document.querySelector('.nav[data-center="week"]').getAttribute("aria-current") === "false"));
+ok("週の紙のぶんの出力（#weekBar）は、いまは隠れている",
+   await p.locator("#weekBar").isHidden() === true);
+await p.locator('.nav[data-act="outweek"]').click(); await p.waitForTimeout(500);
+ok("週の紙へ戻ると、また現在地になる", await p.evaluate(() =>
+     document.querySelector('.nav[data-center="week"]').getAttribute("aria-current") === "true"));
+ok("週の紙のぶんの出力も、また出る", await p.locator("#weekBar").isVisible() === true);
 
 
 console.log("\n■ 窓を閉じるところは、窓枠の右上");

@@ -173,7 +173,12 @@ function srcLabel(c, mine){
    **空のときは表示名の1文字目に落とす。** 時数に数えない教科（図書・行事・給食・
    クラブ・委員会）は1文字を空にしてある ── あれは「時数表に書くな」の意味で、
    「画面にも出すな」ではない。空のまま出すと、予定が入っているコマが空欄に見える。 */
-function shortOf(code, title){
+/* own ＝ そのコマに手で決めた1文字（パネルの「時数名」欄）。**あれば最優先。**
+   教科コードに無い自由記述の行事名は題名の頭文字が出るが、同じ頭文字の
+   行事が並ぶと学年の面・カレンダーで見分けがつかない。そのときだけ人が決める。 */
+function shortOf(code, title, own){
+  const o = plain(own || "").trim();
+  if(o) return o.slice(0, 2);
   const s = SUB_BY_CODE[code];
   if(s && s.short) return s.short;
   const t = plain((s && s.name) || title || "").trim();
@@ -222,6 +227,28 @@ function spLabel(sp){
   const all = gradesAll();
   if(all.length && all.every(g => gs.indexOf(g) >= 0)) return name;
   return name + gs.join("・") + "年";
+}
+
+/* 入口のグリッドに出す名前。**spLabel とは別もの。**
+   spLabel は「理科3・4年」のように学年を丁寧に書く（週案の見出し・
+   確認ダイアログなど、字数に余裕がある場所むけ）。
+   グリッドのタイルは幅が狭く、同じ形の升目が並ぶところなので、
+   「12図工」「34理科」のように**数字をそのまま詰めて**教科名の前に置く。
+
+   **学年を付けるのは、同じ教科の枠が2つ以上あるときだけ。**
+   外国語のように枠が1つしか無ければ、どの学年を受け持つかは
+   紙を開けば分かることで、タイルの字数を削ってまで書く理由が無い
+   （担当学年が全学年でなくても「外国語」とだけ出す）。 */
+function spGridLabel(sp){
+  if(!sp) return "";
+  const sub = SUB_BY_CODE[sp.subject || sp.code];
+  const name = sub ? sub.name : (sp.label || sp.subject || sp.code);
+  const subject = sp.subject || sp.code;
+  const siblings = specials().filter(x => (x.subject || x.code) === subject);
+  if(siblings.length <= 1) return name;
+  const gs = sp.grades || [];
+  if(!gs.length) return name;
+  return gs.join("") + name;
 }
 
 /* その専科が受け持つ学年。**空なら null＝全学年。**
@@ -1108,6 +1135,9 @@ function writeCell(d, s, patch){
   if("title"   in patch) e.title   = clean(patch.title);
   if("note"    in patch) e.note    = clean(patch.note);
   if("subject" in patch) e.subject = patch.subject;
+  /* 時数名。**手で決めた1文字の控え。** 教科コードに無い自由記述の行事名は、
+     いまは題名の頭文字がそのまま出るので、紛らわしいときだけここで決め直す */
+  if("short"   in patch) e.short   = clean(patch.short);
   e.by = myEmail();          /* 層ではなく人。層は開いている面から分かる */
   e.at = Date.now();
   if(isEmptyCell(e)) delete st[key]; else { e.sat = was; st[key] = e; }

@@ -152,6 +152,7 @@ const Backend = (function(){
             note:    e ? e.note  : "",
             subject: e ? (e.subject || "") : "",
             sp:      e ? (e.sp || "")      : "",
+            short:   e ? (e.short || "")   : "",
             remove:  !e,
             /* **この編集を始めたとき、自分が知っていたサーバの更新時刻。**
                サーバは、いまシートに入っている時刻とこれを見比べる。

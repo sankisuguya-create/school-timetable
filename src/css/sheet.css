@@ -17,8 +17,9 @@
 .sheet{
   --k:1;
   --pw:182mm; --ph:257mm; --pm:8mm;      /* B5・余白。設定から動く */
-  --labw:15mm;                            /* 時程の列（校時と時刻） */
-  --labw-print:9mm;                       /* 刷るときは時刻を出さないので狭い */
+  /* 時程の列。**時刻は出さない**ので、校時の数字と「朝学習」ぶんの幅で足りる。
+     画面でも刷るときでも同じ幅（前は画面のほうが時刻ぶん広かった）。 */
+  --labw:10mm;
   --satw:20mm;                            /* 土の列。**月〜金より狭い。**
                                              土は行事しか入らないので、ここを
                                              広げると月〜金の詳細欄がそのぶん痩せる */
@@ -143,12 +144,16 @@
 .hd .dow{font-size:calc(var(--fs-s)*var(--k));color:var(--ink-sub);font-weight:400}
 .hd.sat .dow{color:var(--ink-link)}
 
-/* 時程の列。校時の数字の下に時刻を小さく置く（画面でも紙でも同じ） */
+/* 時程の列。**時刻は置かない**（画面でも紙でも同じ ── 教務必携に刷ってある）。
+   校時の数字だけが立つので、離れた位置からでも拾える大きさにしてある。 */
 .lab{display:flex;flex-direction:column;align-items:center;justify-content:center;
   text-align:center;font-size:calc(var(--fs-s)*var(--k));color:var(--ink-sub);
   line-height:1.2;padding:0 1px;gap:.15em}
-.lab .no{font-size:calc(11pt*var(--k));font-weight:700;color:var(--ink);line-height:1}
-.lab .tm{font-size:calc(5pt*var(--k));letter-spacing:-.02em;white-space:nowrap}
+/* **時刻を消したぶん、校時の数字を大きくした**（11pt → 17pt）。
+   離れた位置からでも「いま何校時か」が拾えるようにする */
+.lab .no{font-size:calc(17pt*var(--k));font-weight:700;color:var(--ink);line-height:1}
+/* 朝学習・業間・昼休みなど、数字を持たない行の名前も、同じぶん底上げした */
+.lab>span:not(.no){font-size:calc(7pt*var(--k));line-height:1.15}
 .row-break .lab,.row-break{background:var(--band)}
 
 /* コマ */
@@ -393,7 +398,7 @@
    画面のものは何も刷らない。層の色も印も刷らない。
    リンクは下線だけ残す。URL は刷らない。 */
 @media print{
-  .side,.panel,.gate,.toast,.tpview,.busy,.arc,.wait,.wkarrow{display:none!important}
+  .side,.panel,.gate,.toast,.tpview,.busy,.arc,.wait,.wkarrow,.weekbar{display:none!important}
   /* 中央のかたちを入れ替える帯と、学年の面。**どちらも紙の外のもの** */
   .cbar,.gvview{display:none!important}
   /* カレンダーの面を刷るとき。**まわりの操作も、週の1枚も出さない** */
@@ -433,10 +438,6 @@
   body.printing-month .sheet.mini{width:calc(var(--pw) - var(--pm)*2)}
   body:not(.printing-month) .mview{display:none!important}
   .app::before{display:none!important}   /* 待っている印は刷らない */
-  /* 時刻は画面だけのもの。紙の版面は教務必携の枠に合わせたまま動かさない
-     （時程の列は 9mm。ここを広げると曜日の列がその分だけ痩せる） */
-  .sheet{--labw:var(--labw-print)}
-  .lab .tm{display:none}
   /* 選んでいる印・打ち込み中の色も刷らない */
   .cell.sel{box-shadow:none}
   .hd.pick{background:transparent!important;cursor:default}
