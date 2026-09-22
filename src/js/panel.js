@@ -60,6 +60,7 @@ function drawPalette(){
       + "</div>"
       + palHtml({v:PAL_CLEAR, t:"リセット", clear:true});
     wirePalette();
+    if(typeof paintUnitManagerButton === "function") paintUnitManagerButton();
     return;
   }
 
