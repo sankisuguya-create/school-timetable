@@ -321,7 +321,7 @@ function impEvWrite(rows){
       /* **どの週のコマかを渡す。** 渡さないと「いま開いている週」として
          送られ、別の週のコマを書き替えることになる */
       Backend.cellChanged(r.to.layer, r.to.target, d, r.slot, was,
-                          {year:fy(), week:wkKey()}, wasT);
+                          {year:fy(), monday:wkKey()}, wasT);
       n++;
     }
   } finally{ monday = keep; }
