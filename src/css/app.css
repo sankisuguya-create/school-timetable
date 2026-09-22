@@ -1288,6 +1288,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .unitpal:hover{border-color:var(--ink-link);box-shadow:inset 0 0 0 1px var(--ink-link)}
 .unitpal:active{cursor:grabbing}
 .unitpal:disabled{cursor:wait;opacity:.55}
+.unitpal.unitreset{background:var(--hover);border-style:dashed;color:var(--tx-sub)}
 .unitpal b{font-size:12px;max-width:10em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .unitpal small{font-size:10.5px;color:var(--tx-sub);white-space:nowrap}
 .unitpal[data-subject=kokugo]{background:var(--sub-kokugo)}
@@ -1320,7 +1321,6 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .unitterm small{font-size:11.5px;color:var(--tx-sub);line-height:1.55}
 .unitbar{display:flex;align-items:center;justify-content:space-between;margin:6px 0 7px}
 .unitbaracts{display:flex;align-items:center;gap:6px}
-.unitadmin{white-space:nowrap}
 .unitlist{display:flex;flex-direction:column;gap:5px;max-height:30vh;overflow:auto}
 .unitrow{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;
   padding:9px 11px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);
