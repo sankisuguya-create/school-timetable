@@ -727,6 +727,85 @@ const Store = (function(){
     }finally{ lock.releaseLock(); }
   }
 
+  /* 単元チップをコマへ置く。
+     - 未配置なら、そのコマを起点に学期末まで自動配置
+     - 1/n に同じチップを置くと全配置を解除
+     - 2/n以降に同じチップを置くと、そのコマだけ除外して後ろへ詰める
+     別単元との交換は Phase 4。ここでは黙って上書きしない。 */
+  function placeUnit(year, id, expectedUpdatedAt, startDate, startSlot){
+    const y = +year, unitId = String(id || "").trim();
+    const date = isoDate_(startDate), slot = String(startSlot || "").trim();
+    const startKey = TimetableDomain.unitSlotKey(date + "|" + slot);
+    if(!unitId || !startKey) throw new Error("単元を置くコマが分かりません");
+
+    const beforeAll = readUnits(y);
+    const before = beforeAll.filter(u => u.id === unitId)[0];
+    if(!before) throw new Error("この単元は、別の画面ですでに削除されています");
+    if(String(expectedUpdatedAt || "") !== unitUpdatedAt_(before))
+      throw new Error("別の先生がこの単元を変更しました。開き直して確認してください");
+
+    const peersVersion = unitPeersVersion_(beforeAll, before.className, before.subject, before.id);
+    const occupied = occupiedByOtherUnits_(beforeAll, before.className, before.subject, before.id);
+    if(occupied.indexOf(startKey) >= 0)
+      throw new Error("このコマには別の単元が設定されています。交換は単元チップを移動して行ってください");
+
+    let planned = TimetableDomain.normalizeUnitPlan(before);
+    let warning = null, action = "placed";
+    const pos = planned.assignments.indexOf(startKey);
+    const isTest = planned.testAssignment === startKey;
+
+    if(pos === 0){
+      /* 起点へもう一度置く＝単元全体を外す */
+      planned.assignments = [];
+      planned.testAssignment = "";
+      planned.excludedSlots = [];
+      action = "reset";
+    }else if(pos > 0 || isTest){
+      /* 途中の1コマだけ外し、自動で同じコマへ戻らないよう除外する */
+      planned.assignments = planned.assignments.filter(k => k !== startKey);
+      if(isTest) planned.testAssignment = "";
+      if(planned.excludedSlots.indexOf(startKey) < 0) planned.excludedSlots.push(startKey);
+      const first = firstUnitSlot_(planned);
+      if(first){
+        const c = unitCandidates(y, planned.className, planned.subject, first.date, first.slot, "");
+        const rr = TimetableDomain.reconcileUnit(planned, c.slots, occupied, c.to);
+        planned = rr.unit; warning = rr.warning;
+      }
+      action = "excluded";
+    }else{
+      /* すでに配置済みの単元を、空いている別コマから再起動はしない。
+         既存配置を壊す操作になるため、移動は Phase 4 の既存チップ操作に分ける。 */
+      if((planned.assignments || []).length || planned.testAssignment)
+        throw new Error("この単元はすでに配置されています。配置済みの単元チップを移動してください");
+
+      const c = unitCandidates(y, planned.className, planned.subject, date, slot, "");
+      if(c.slots.indexOf(startKey) < 0)
+        throw new Error("このコマは「" + planned.name + "」の対象教科ではありません");
+      const rr = TimetableDomain.reconcileUnit(planned, c.slots, occupied, c.to);
+      planned = rr.unit; warning = rr.warning;
+    }
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try{
+      Sheets.setup();
+      const currentAll = readUnits(y);
+      const current = currentAll.filter(u => u.id === unitId)[0];
+      if(!current) throw new Error("この単元は、別の画面ですでに削除されています");
+      if(String(expectedUpdatedAt || "") !== unitUpdatedAt_(current))
+        throw new Error("別の先生がこの単元を変更しました。開き直して確認してください");
+      if(peersVersion !== unitPeersVersion_(currentAll, before.className, before.subject, before.id))
+        throw new Error("別の先生が同じ教科の単元配置を変更しました。開き直して確認してください");
+
+      const me = (function(){ try{ return Gate.activeEmail(); }catch(e){ return ""; } })();
+      Sheets.setRow("単元進捗", current.row, unitRowObject_(planned, me, new Date()));
+      SpreadsheetApp.flush();
+      const saved = readUnits(y, planned.className, planned.subject)
+        .filter(u => u.id === unitId)[0];
+      return {unit:saved, warning:warning, action:action};
+    }finally{ lock.releaseLock(); }
+  }
+
   function resetUnit(year, id, expectedUpdatedAt){
     const y = +year, unitId = String(id || "").trim();
     const lock = LockService.getScriptLock();
@@ -2497,7 +2576,7 @@ const Store = (function(){
   }
 
   return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects, writeSubjects,
-          readTerms, readUnits, unitCandidates, unitManager, writeTerms, writeUnit, resetUnit, resetUnits, deleteUnit,
+          readTerms, readUnits, unitCandidates, unitManager, writeTerms, writeUnit, placeUnit, resetUnit, resetUnits, deleteUnit,
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste, exportPlanSheet,
           writeTally, readTally, TALLY_NAME,
           exportWeek, weekSheetName, weekOrder, migratePlan, checkYear, readEvents,
@@ -2609,6 +2688,10 @@ function apiWriteTerms(year, list, expectedVersion){
 function apiWriteUnit(year, input){
   Gate.check();
   return Store.writeUnit(year || new Date().getFullYear(), input);
+}
+function apiPlaceUnit(year, id, expectedUpdatedAt, startDate, startSlot){
+  Gate.check();
+  return Store.placeUnit(year || new Date().getFullYear(), id, expectedUpdatedAt, startDate, startSlot);
 }
 function apiResetUnit(year, id, expectedUpdatedAt){
   Gate.check();
