@@ -113,22 +113,17 @@ function shortDate_(iso){
 }
 function renderUnitTerm_(){
   const box = $("unitTermInfo");
-  const admin = !!Backend.info().isAdmin;
-  const action = admin
-    ? "<button class='btn' id='unitTermOpen'>" + (unitState.terms.length ? "期間を直す" : "学期を設定") + "</button>"
-    : "<small class='unitadmin'>学期の期間は管理者が設定します</small>";
   if(!unitState.terms.length){
     box.className = "unitterm warn";
     box.innerHTML = "<span><b>学期の期間が未設定</b><small>単元登録はできます。自動配置と学期末警告には期間が必要です。</small></span>"
-      + action;
+      + "<button class='btn' id='unitTermOpen'>学期を設定</button>";
   }else{
     box.className = "unitterm";
     box.innerHTML = "<span><b>学期</b><small>"
       + unitState.terms.map(t => escText(t.name) + " " + shortDate_(t.start) + "〜" + shortDate_(t.end)).join("　")
-      + "</small></span>" + action;
+      + "</small></span><button class='btn' id='unitTermOpen'>期間を直す</button>";
   }
-  const b = $("unitTermOpen");
-  if(b) b.onclick = openUnitTerms;
+  $("unitTermOpen").onclick = openUnitTerms;
 }
 function unitStatus_(u){
   const n = (u.assignments || []).length;
@@ -283,7 +278,6 @@ function deleteUnit_(){
 /* ── 学期設定 ─────────────────────────────────── */
 let termDraft = [];
 function openUnitTerms(){
-  if(!Backend.info().isAdmin) return toast("学期の期間は<b>管理者だけ</b>が変更できます");
   termDraft = clone(unitState.terms);
   if(!termDraft.length) termDraft.push({name:"", start:"", end:""});
   drawTermRows_();
