@@ -177,6 +177,10 @@ function newYear(y){
     /* 年間行事計画表から読んだもの。**日付にしか結びついていない**
        （校時への割り付けは人がする。docs/spec.md 6節） */
     events:{},
+    /* 単元進捗。手元プレビューでも管理画面を試せるよう年度ごとに持つ。
+       本番では正本はシートで、開いたときに読み直す。 */
+    unitProgress:[],
+    unitTerms:[],
     /* たんぽぽ児童を、**たんぽぽの組ごとに**持つ。{"1":["1-3","3-2"], "2":["4-1"]}。
        たんぽぽ時間割は児童ごとに1列で、たんぽぽ担当は組ごとに見るので、
        出す列も 1組の全員 → 2組の全員 … の順に並べる。
@@ -197,6 +201,8 @@ function Y(){
   if(!Yr.weeks) Yr.weeks = {};
   if(!Yr.week1) Yr.week1 = firstMonday(+y);
   if(!Yr.events || typeof Yr.events !== "object") Yr.events = {};
+  if(!Array.isArray(Yr.unitProgress)) Yr.unitProgress = [];
+  if(!Array.isArray(Yr.unitTerms)) Yr.unitTerms = [];
   /* **毎回作り直さない。** 作り直すと、直した中身が次の呼び出しで捨てられる。
      組ごとの並び（値が配列）になっていなければ、そのときだけ直す。 */
   if(!Yr.tanpopo || typeof Yr.tanpopo !== "object" || Array.isArray(Yr.tanpopo)

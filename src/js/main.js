@@ -372,6 +372,8 @@ function wire(){
   on('guideOpen', 'click', () => openGuide(false));
   on('guideDlg', 'close', finishGuide);
 
+  if(typeof wireUnitProgress === "function") wireUnitProgress();
+
 
   on("prevWk","click", () => goWeek(-7));
   on("nextWk","click", () => goWeek(7));

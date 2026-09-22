@@ -79,6 +79,7 @@ function drawPalette(){
 
   $("pals").innerHTML = items.map(palHtml).join("");
   wirePalette();
+  if(typeof paintUnitManagerButton === "function") paintUnitManagerButton();
 }
 
 /* 押す・引っぱるの結線。**チップを組み直すたびに呼ぶ** */

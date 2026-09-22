@@ -272,6 +272,8 @@ const sandbox = {
     })
   },
   Utilities: {
+    _uuidSeq:0,
+    getUuid(){ this._uuidSeq++; return "storecheck-" + this._uuidSeq; },
     /* **形の指定どおりに返す。** 「yyyy-MM-dd」だけを返す偽物にしていると、
        退避したシートの名前が本物と違う形になり、そこを検査できない */
     formatDate(d, tz, fmt){
@@ -1963,6 +1965,127 @@ console.log("\n■ 単元進捗 Phase 1");
      cand.readSheets <= 3, cand.readSheets);
 })();
 
+console.log("\n■ 単元進捗 Phase 2");
+(function(){
+  const y = 2032;
+  let why = "";
+
+  let terms = ev("Store.writeTerms(" + y + ", " + JSON.stringify([
+    {name:"1学期",start:"2032-04-08",end:"2032-07-20"},
+    {name:"2学期",start:"2032-09-01",end:"2032-12-24"},
+    {name:"3学期",start:"2033-01-08",end:"2033-03-24"}
+  ]) + ', "[]")');
+  ok("学期を任意の期間として保存できる",
+     terms.terms.length === 3 && terms.terms[1].name === "2学期", terms);
+
+  why = "";
+  try{
+    ev("Store.writeTerms(" + y + ", " + JSON.stringify([
+      {name:"前期",start:"2032-03-01",end:"2032-09-30"}
+    ]) + ", " + JSON.stringify(terms.version) + ")");
+  }catch(e){ why = String(e && e.message); }
+  ok("学期の日付を年度外へ出せない", why.indexOf("2032年度") >= 0, why);
+
+  why = "";
+  try{
+    ev("Store.writeTerms(" + y + ", " + JSON.stringify([
+      {name:"前期",start:"2032-04-08",end:"2032-10-01"},
+      {name:"後期",start:"2032-09-20",end:"2033-03-24"}
+    ]) + ", " + JSON.stringify(terms.version) + ")");
+  }catch(e){ why = String(e && e.message); }
+  ok("学期の期間重複を弾く", why.indexOf("重なっています") >= 0, why);
+
+  why = "";
+  try{
+    ev("Store.writeTerms(" + y + ", " + JSON.stringify([
+      {name:"通年",start:"2032-04-08",end:"2033-03-24"}
+    ]) + ', "[]")');
+  }catch(e){ why = String(e && e.message); }
+  ok("古い学期設定から上書きできない", why.indexOf("別の先生") >= 0, why);
+
+  let made = ev("Store.writeUnit(" + y + ", " + JSON.stringify({
+    className:"3-1",subject:"sansu",name:"暗算",lessonCount:5,hasTest:true
+  }) + ")");
+  ok("単元を1行で作れる", made.unit && made.unit.name === "暗算"
+     && made.unit.lessonCount === 5 && made.unit.hasTest === true
+     && made.unit.assignments.length === 0, made);
+  const first = made.unit;
+
+  why = "";
+  try{
+    ev("Store.writeUnit(" + y + ", " + JSON.stringify({
+      className:"3-1",subject:"sansu",name:"　暗算　",lessonCount:4,hasTest:false
+    }) + ")");
+  }catch(e){ why = String(e && e.message); }
+  ok("同じクラス・教科の同名単元を二重登録できない",
+     why.indexOf("すでにあります") >= 0, why);
+
+  why = "";
+  try{
+    ev("Store.writeUnit(" + y + ", " + JSON.stringify({
+      id:first.id,expectedUpdatedAt:"古い時刻",className:"3-1",subject:"sansu",
+      name:"暗算",lessonCount:6,hasTest:true
+    }) + ")");
+  }catch(e){ why = String(e && e.message); }
+  ok("古い単元から編集できない", why.indexOf("別の先生") >= 0, why);
+
+  why = "";
+  try{
+    ev("Store.writeUnit(" + y + ", " + JSON.stringify({
+      id:first.id,expectedUpdatedAt:first.updatedAt,className:"3-1",subject:"kokugo",
+      name:"暗算",lessonCount:5,hasTest:true
+    }) + ")");
+  }catch(e){ why = String(e && e.message); }
+  ok("既存単元のクラス・教科は後から変更できない",
+     why.indexOf("作成後に変更できません") >= 0, why);
+
+  let edited = ev("Store.writeUnit(" + y + ", " + JSON.stringify({
+    id:first.id,expectedUpdatedAt:first.updatedAt,className:"3-1",subject:"sansu",
+    name:"暗算",lessonCount:6,hasTest:false
+  }) + ")");
+  ok("授業数とテスト有無を編集できる",
+     edited.unit.lessonCount === 6 && edited.unit.hasTest === false, edited);
+
+  let made2 = ev("Store.writeUnit(" + y + ", " + JSON.stringify({
+    className:"3-1",subject:"sansu",name:"分数",lessonCount:4,hasTest:false
+  }) + ")");
+
+  (function(){
+    const h = ev('Sheets.head("単元進捗")');
+    for(const rr of SHEETS["単元進捗"]){
+      if(String(rr[h.at["単元ID"]]) === first.id)
+        rr[h.at["割当JSON"]] = JSON.stringify(["2032-09-06|p1"]);
+      if(String(rr[h.at["単元ID"]]) === made2.unit.id)
+        rr[h.at["割当JSON"]] = JSON.stringify(["2032-09-07|p2"]);
+    }
+  })();
+
+  const current = ev('Store.readUnits(' + y + ', "3-1", "sansu")');
+  const ver = current.map(u => u.id + "@" + u.updatedAt).sort().join("|");
+  const resetAll = ev("Store.resetUnits(" + y + ', "3-1", "sansu", ' + JSON.stringify(ver) + ")");
+  ok("現在のクラス×教科の全単元配置を一括リセットできる",
+     resetAll.length === 2 && resetAll.every(u => !(u.assignments || []).length
+       && !u.testAssignment && !(u.excludedSlots || []).length), resetAll);
+
+  why = "";
+  try{ ev("Store.resetUnits(" + y + ', "3-1", "sansu", "古い版")'); }
+  catch(e){ why = String(e && e.message); }
+  ok("全リセットも古い一覧から実行できない", why.indexOf("別の先生") >= 0, why);
+
+  const one = resetAll.find(u => u.id === first.id);
+  const resetOne = ev("Store.resetUnit(" + y + ", " + JSON.stringify(one.id)
+      + ", " + JSON.stringify(one.updatedAt) + ")");
+  ok("個別リセットは単元定義を残す", resetOne.id === one.id
+     && resetOne.lessonCount === 6 && resetOne.assignments.length === 0, resetOne);
+
+  const del = ev("Store.deleteUnit(" + y + ", " + JSON.stringify(resetOne.id)
+      + ", " + JSON.stringify(resetOne.updatedAt) + ")");
+  ok("単元を削除できる", del.deleted === resetOne.id, del);
+
+  const mgr = ev('Store.unitManager(' + y + ', "3-1", "sansu")');
+  ok("管理画面用読取は学期と単元をまとめて返す",
+     mgr.terms.length === 3 && mgr.units.length === 1 && mgr.units[0].name === "分数", mgr);
+})();
 console.log("\n■ ロック");
 ok("書き込みのあとロックは残らない", locks.held === 0, locks.held);
 

@@ -936,6 +936,124 @@ const Backend = (function(){
       .apiTestTpTarget(url);
   }
 
+
+  /* ── 単元進捗 ────────────────────────────────
+     管理画面を開いたときだけ読む。通常の週読み・打鍵保存には混ぜない。 */
+  function localUnits_(){
+    const y = Y();
+    if(!Array.isArray(y.unitProgress)) y.unitProgress = [];
+    if(!Array.isArray(y.unitTerms)) y.unitTerms = [];
+    return y;
+  }
+  function unitManager(cls, subject, ok, ng){
+    if(!onGas){
+      const y = localUnits_();
+      return ok({
+        terms: clone(y.unitTerms),
+        termVersion: JSON.stringify(y.unitTerms),
+        units: clone(y.unitProgress.filter(u =>
+          (!cls || u.className === cls) && (!subject || u.subject === subject)))
+      });
+    }
+    google.script.run
+      .withSuccessHandler(r => ok(r || {terms:[], termVersion:"[]", units:[]}))
+      .withFailureHandler(e => ng(String((e && e.message) || "単元を読めなかった")))
+      .apiUnitManager(fy(), cls || "", subject || "");
+  }
+  function saveUnitProgress(input, ok, ng){
+    if(!onGas){
+      const y = localUnits_(), now = new Date().toISOString(), x = clone(input || {});
+      let old = x.id && y.unitProgress.find(u => u.id === x.id);
+      if(old && x.expectedUpdatedAt !== old.updatedAt)
+        return ng("別の画面でこの単元が変更されています。開き直してください");
+      if(old && (old.className !== x.className || old.subject !== x.subject))
+        return ng("単元のクラス・教科は作成後に変更できません");
+      const nk = v => String(v || "").normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+      if(y.unitProgress.some(u => u.id !== x.id && u.className === x.className
+          && u.subject === x.subject && nk(u.name) === nk(x.name)))
+        return ng("同じクラス・教科に「" + x.name + "」という単元がすでにあります");
+      if(old){
+        old.name = x.name; old.lessonCount = +x.lessonCount || 1; old.hasTest = !!x.hasTest;
+        old.updatedAt = now; old.updatedBy = "（手元）";
+      }else{
+        old = {id:"unit-local-" + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+               year:fy(), className:x.className, subject:x.subject, name:x.name,
+               lessonCount:+x.lessonCount || 1, hasTest:!!x.hasTest,
+               assignments:[], testAssignment:"", excludedSlots:[],
+               updatedAt:now, updatedBy:"（手元）"};
+        y.unitProgress.push(old);
+      }
+      save();
+      return ok({unit:clone(old), warning:null});
+    }
+    google.script.run
+      .withSuccessHandler(r => ok(r))
+      .withFailureHandler(e => ng(String((e && e.message) || "単元を保存できなかった")))
+      .apiWriteUnit(fy(), input);
+  }
+  function resetUnitProgress(id, expectedAt, ok, ng){
+    if(!onGas){
+      const y = localUnits_(), u = y.unitProgress.find(x => x.id === id);
+      if(!u) return ng("この単元は見つかりません");
+      if(expectedAt !== u.updatedAt) return ng("別の画面でこの単元が変更されています。開き直してください");
+      u.assignments = []; u.testAssignment = ""; u.excludedSlots = [];
+      u.updatedAt = new Date().toISOString(); u.updatedBy = "（手元）"; save();
+      return ok(clone(u));
+    }
+    google.script.run
+      .withSuccessHandler(ok)
+      .withFailureHandler(e => ng(String((e && e.message) || "配置をリセットできなかった")))
+      .apiResetUnit(fy(), id, expectedAt);
+  }
+  function resetUnitProgressAll(cls, subject, expectedVersion, ok, ng){
+    const versionOf = list => (list || []).filter(u => u.className === cls && u.subject === subject)
+      .map(u => u.id + "@" + String(u.updatedAt || "")).sort().join("|");
+    if(!onGas){
+      const y = localUnits_();
+      if(String(expectedVersion || "") !== versionOf(y.unitProgress))
+        return ng("別の画面でこの教科の単元が変更されています。開き直してください");
+      const now = new Date().toISOString();
+      for(const u of y.unitProgress)
+        if(u.className === cls && u.subject === subject){
+          u.assignments=[]; u.testAssignment=""; u.excludedSlots=[];
+          u.updatedAt=now; u.updatedBy="（手元）";
+        }
+      save();
+      return ok(clone(y.unitProgress.filter(u => u.className === cls && u.subject === subject)));
+    }
+    google.script.run
+      .withSuccessHandler(r => ok(r || []))
+      .withFailureHandler(e => ng(String((e && e.message) || "全配置をリセットできなかった")))
+      .apiResetUnits(fy(), cls, subject, expectedVersion);
+  }
+
+  function deleteUnitProgress(id, expectedAt, ok, ng){
+    if(!onGas){
+      const y = localUnits_(), i = y.unitProgress.findIndex(x => x.id === id);
+      if(i < 0) return ok({deleted:id, already:true});
+      if(expectedAt !== y.unitProgress[i].updatedAt)
+        return ng("別の画面でこの単元が変更されています。開き直してください");
+      y.unitProgress.splice(i, 1); save(); return ok({deleted:id});
+    }
+    google.script.run
+      .withSuccessHandler(ok)
+      .withFailureHandler(e => ng(String((e && e.message) || "単元を削除できなかった")))
+      .apiDeleteUnit(fy(), id, expectedAt);
+  }
+  function saveUnitTerms(list, expectedVersion, ok, ng){
+    if(!onGas){
+      const y = localUnits_();
+      if(expectedVersion !== JSON.stringify(y.unitTerms))
+        return ng("別の画面で学期設定が変更されています。開き直してください");
+      y.unitTerms = clone(list || []); save();
+      return ok({terms:clone(y.unitTerms), version:JSON.stringify(y.unitTerms)});
+    }
+    google.script.run
+      .withSuccessHandler(ok)
+      .withFailureHandler(e => ng(String((e && e.message) || "学期設定を保存できなかった")))
+      .apiWriteTerms(fy(), list || [], expectedVersion);
+  }
+
   /* ── 新年度の設定 ────────────────────────────
      手順と、いまどこまで済んでいるか。**シートを見ないと分からない。** */
   function yearSetup(ok, ng){
@@ -1003,6 +1121,7 @@ const Backend = (function(){
           saveRoster, saveSubjects, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,
           tpTargets, saveTpTargets, testTpTarget, tpSubmit,
+          unitManager, saveUnitProgress, resetUnitProgress, resetUnitProgressAll, deleteUnitProgress, saveUnitTerms,
           yearSetup, tickYearSetup, setupPlanSheets, saveVariantOrigin, saveEvents,
           exportPlanSheet};
 })();
