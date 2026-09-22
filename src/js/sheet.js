@@ -219,7 +219,20 @@ function cellEl(d, s){
   if(t) t.setAttribute("aria-label", where + " 教科名・行事名");
   if(n) n.setAttribute("aria-label", where + " 詳細・備考");
 
-  const focus = () => selectCell(d, s.id, e);
+  const focus = () => {
+    /* 教科チップを持っているあいだは、コマを押すとその教科が入る
+       （つづけて入れるための「持ち歩き」）。
+       同じ教科のコマは触っても何もしない ── ただ選ぶ */
+    if(pickSub && view.kind !== "special"){
+      const c = cellFor(d, s.id);
+      if(rootSubject(c.subject || "") !== pickSub){
+        selectCell(d, s.id, e);          /* 入らなくても見られるように、先に選ぶ */
+        applyPalette(d, s.id, pickSub, e);
+        return;
+      }
+    }
+    selectCell(d, s.id, e);
+  };
   if(t) t.addEventListener("focus", focus);
   if(n) n.addEventListener("focus", focus);
 
@@ -396,6 +409,11 @@ function paintCell(e, c, d, s, mine){
     ? gradeOf(normCls(plain(c.title || ""))) : "";
   if(cg) e.dataset.cg = cg; else delete e.dataset.cg;
   e.classList.toggle("has-sub", !!c.subject);
+  /* **持っている教科チップの強調。** その教科のコマだけが目立つように、
+     ちがう教科のコマは薄くする（pickSub。panel.js） */
+  const hit = !!pickSub && rootSubject(c.subject || "") === pickSub;
+  e.classList.toggle("subhot", hit);
+  e.classList.toggle("subdim", !!pickSub && !hit);
   /* 仮採用は**基本時間割と同じ薄さ**で出す（→ config.js の TENT_SLOT）。
      どちらから来たかは、右上の札の字（仮）が言う */
   e.classList.toggle("from-base", c.layer === "base" || c.layer === "tent");

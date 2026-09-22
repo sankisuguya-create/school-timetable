@@ -712,6 +712,8 @@ span.tpin{cursor:default}
 .pal{padding:6px 11px;font-size:12.5px;border:1px solid var(--line);border-radius:15px;
   background:var(--card);cursor:grab;user-select:none;line-height:1.3;
   font-family:inherit;color:var(--ink)}
+/* 持っている教科チップ（pickSub）。色の上から押さえた印を重ねる */
+.pal[aria-pressed=true]{outline:2px solid var(--ink);outline-offset:1px;font-weight:700}
 /* 教科ごとの地。**色は識別を担わない。** チップには教科名が書いてあり、
    並ぶ位置も毎週同じ。色は、既に字が運んでいる情報を二重にするだけ。
    淡い地どうしは色覚型によって潰れるので、**色だけで探せるとは約束しない**
@@ -1567,6 +1569,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .unitrow b{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .unitrow small{font-size:11.5px;color:var(--tx-sub)}
 .unitrow em{font-style:normal;font-size:11.5px;color:var(--tx-sub);white-space:nowrap}
+.unitrow .unitcls{display:flex;flex-direction:column;gap:1px;text-align:right;flex-shrink:0}
 .unitempty{padding:18px;text-align:center;color:var(--tx-sub);border:1px dashed var(--line);
   border-radius:var(--r-sm);font-size:12px;line-height:1.8}
 .unitform{margin-top:14px;padding-top:13px;border-top:1px solid var(--line-soft)}
@@ -1734,6 +1737,11 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
    （「学年行事のため」「自習」を書ける）。休みの日の斜め線と同じ描き方。 */
 .cell{position:relative}
 .cell.nolesson .t{visibility:hidden}
+/* **持っている教科チップの強調**（pickSub）。その教科のコマだけが目立ち、
+   ちがう教科のコマは薄くなる。刷るものではないので、印刷では出さない */
+.cell.subdim{opacity:.38}
+.cell.subhot{box-shadow:inset 0 0 0 2px var(--ink-link);border-radius:2px}
+@media print{.cell.subdim,.cell.subhot{opacity:1;box-shadow:none}}
 .noneslash{position:absolute;left:0;right:0;top:0;
   height:calc(var(--h-title)*var(--k));pointer-events:none;z-index:2}
 .noneslash svg{position:absolute;inset:0;width:100%;height:100%;display:block}
@@ -2696,7 +2704,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   <h2 id="unitTitle">単元進捗管理 <span class="subttl" id="unitFy"></span></h2>
   <p class="unitintro">単元名と授業数を登録します。配置は時間割の単元チップから行います。</p>
   <div class="unitctx">
-    <label>クラス<select id="unitCls"></select></label>
+    <label><span id="unitClsLbl">クラス</span><select id="unitCls"></select></label>
     <label>教科<select id="unitSub"></select></label>
   </div>
   <div class="unitterm" id="unitTermInfo"></div>
@@ -9267,7 +9275,20 @@ function cellEl(d, s){
   if(t) t.setAttribute("aria-label", where + " 教科名・行事名");
   if(n) n.setAttribute("aria-label", where + " 詳細・備考");
 
-  const focus = () => selectCell(d, s.id, e);
+  const focus = () => {
+    /* 教科チップを持っているあいだは、コマを押すとその教科が入る
+       （つづけて入れるための「持ち歩き」）。
+       同じ教科のコマは触っても何もしない ── ただ選ぶ */
+    if(pickSub && view.kind !== "special"){
+      const c = cellFor(d, s.id);
+      if(rootSubject(c.subject || "") !== pickSub){
+        selectCell(d, s.id, e);          /* 入らなくても見られるように、先に選ぶ */
+        applyPalette(d, s.id, pickSub, e);
+        return;
+      }
+    }
+    selectCell(d, s.id, e);
+  };
   if(t) t.addEventListener("focus", focus);
   if(n) n.addEventListener("focus", focus);
 
@@ -9444,6 +9465,11 @@ function paintCell(e, c, d, s, mine){
     ? gradeOf(normCls(plain(c.title || ""))) : "";
   if(cg) e.dataset.cg = cg; else delete e.dataset.cg;
   e.classList.toggle("has-sub", !!c.subject);
+  /* **持っている教科チップの強調。** その教科のコマだけが目立つように、
+     ちがう教科のコマは薄くする（pickSub。panel.js） */
+  const hit = !!pickSub && rootSubject(c.subject || "") === pickSub;
+  e.classList.toggle("subhot", hit);
+  e.classList.toggle("subdim", !!pickSub && !hit);
   /* 仮採用は**基本時間割と同じ薄さ**で出す（→ config.js の TENT_SLOT）。
      どちらから来たかは、右上の札の字（仮）が言う */
   e.classList.toggle("from-base", c.layer === "base" || c.layer === "tent");
@@ -10409,6 +10435,32 @@ function chipHere_(sub){
   return only === "学年" ? (view.kind === "grade" || view.kind === "school") : true;
 }
 
+/* **持っている教科チップ。** 教科チップを押すと持ち上がる（=選択）。
+   持っているあいだ：
+     ・紙の中でその教科のコマだけが目立つ（ほかは薄く）
+     ・単元チップはその教科のものだけに絞られる
+     ・コマを押すとその教科が入る（つづけて入れられる）
+   もう一度チップを押すか、Esc・別の面へ行くと手放す。 */
+let pickSub = "";
+
+/* 持っている教科をチップに出す */
+function paintPickState_(){
+  for(const b of document.querySelectorAll("#pals .pal"))
+    b.setAttribute("aria-pressed", String(!!pickSub && b.dataset.v === pickSub));
+}
+
+/* 持ち替え・手放しのあとの塗り直し一式 */
+function pickRepaint_(){
+  paintPickState_();
+  if(typeof drawPalette === "function") drawPalette();  /* 単元チップの絞り込みが変わる */
+  paintSheet();
+}
+function pickRelease_(){
+  if(!pickSub) return;
+  pickSub = "";
+  pickRepaint_();
+}
+
 /* チップ1つぶんの HTML。**どの面でも同じ作り**（引っぱれる・押せる） */
 function palHtml(o){
   return "<button class='pal" + (o.off ? " off" : "") + (o.clear ? " clear" : "")
@@ -10427,7 +10479,12 @@ function upalsHtml_(){
   if(view.kind !== "class" && view.kind !== "special") return "";
   const chips = upPaletteUnits_();
   if(!chips.length) return "";
-  const anyStarted = chips.some(x => (x.unit.start || {}).date);
+  /* 専科の面のチップは学年に1つだけ（各クラスぶんの代表）。
+     リセットを出すかは、束ねた中身まで見ないと分からない */
+  const anyStarted = (view.kind === "special"
+      ? (typeof upViewUnits_ === "function" ? upViewUnits_() : chips.map(x => x.unit))
+      : chips.map(x => x.unit))
+    .some(u => (u.start || {}).date);
   return chips.map(u => palHtml({v:u.v, t:u.t, unit:true})).join("")
     + (anyStarted ? palHtml({v:PAL_URESET, t:"単元リセット", ureset:true}) : "");
 }
@@ -10513,10 +10570,25 @@ function wirePalette(){
     });
     b.addEventListener("dragend", () => b.classList.remove("drag"));
     b.addEventListener("click", () => {
+      const v = b.dataset.v;
+      /* 教科チップは「持つ／手放す」でもある。持つと、紙の中でその教科の
+         コマだけが目立ち、単元チップがその教科に絞られる。
+         コマが選んであるなら、いままでどおりそのコマに入る */
+      if(SUB_BY_CODE[v]){
+        if(pickSub === v){ pickRelease_(); return; }
+        pickSub = v;
+        pickRepaint_();
+        if(!selCell)
+          return toast("<b>" + escText(SUB_BY_CODE[v].name) + "</b>を強調しています。"
+                     + "コマを押すと入ります（もう一度チップを押すと解除）");
+        applyPalette(selCell.d, selCell.s, v);
+        return;
+      }
       if(!selCell) return toast("先にコマを選ぶ");
-      applyPalette(selCell.d, selCell.s, b.dataset.v);
+      applyPalette(selCell.d, selCell.s, v);
     });
   }
+  paintPickState_();
 }
 
 /* 教科の色。**クラスごとに持つ**（学級によって使いたい人と使わない人がいる）。
@@ -11548,10 +11620,45 @@ function upCanDrop_(unit, d, s){
    起点がまだ無い → このコマを起点にして、その教科の後続コマへ連番が付く。
    起点に落とした → 全消滅（起点を消し、全部の印を外す）。
    それ以外のコマ → そのコマだけ単元から外す／外したのを戻す（番号は繰り上がる） */
+/* 落としたコマのクラス（専科の面で）。明示の割付が無いときは
+   基本時間割の当たりを見る ── クラスが1つに決まらなければ空を返す */
+function upCellClass_(d, s){
+  const c = cellFor(d, s);
+  if(c && c.cls) return String(c.cls);
+  const bs = spBaseClasses(d, s, view.sp);
+  return bs.length === 1 ? bs[0] : "";
+}
+
 function upDropChip_(unit, d, s){
   const why = upCanDrop_(unit, d, s);
   if(why) return toast(why);
   const dt = iso(addDays(monday, d)), wk = wkKey();
+
+  /* **専科の面のチップは学年のもの。** 落とす先のクラスのぶんを取る。
+     学年のクラスにまだ無ければ、ここで同じものを作る
+     （学年の単元は全クラスに同じものがある持ち方） */
+  if(view.kind === "special"){
+    const cls = upCellClass_(d, s);
+    if(!cls) return toast("このコマのクラスが分かりません");
+    if(gradeOf(cls) !== gradeOf(unit.target))
+      return toast("「" + escText(unit.name) + "」は " + escText(gradeOf(unit.target))
+                   + "年の単元です。" + gradeOf(cls) + "年のコマには落とせません");
+    const mine = UP.units.find(u => u.layer === "special" && u.sp === unit.sp
+      && u.subject === unit.subject && u.name === unit.name && u.target === cls);
+    if(mine) unit = mine;
+    else{
+      Backend.saveUnit({layer:"special", target:cls, sp:unit.sp,
+                        subject:unit.subject, name:unit.name,
+                        lessonCount:unit.lessonCount, hasTest:unit.hasTest},
+        saved => {
+          if(saved){
+            UP.units.push(saved);
+            upDropChip_(saved, d, s);
+          }
+        }, why2 => toast(why2));
+      return;
+    }
+  }
 
   /* 起点が無い → ここを起点にする */
   if(!(unit.start || {}).date){
@@ -11817,7 +11924,7 @@ function upViewChanged_(){
 
 /* ── 管理画面（作る・直す・消す・学期設定） ── */
 
-const unitState = {cls:"", subject:"", editing:"", loading:false, units:[]};
+const unitState = {cls:"", gr:"", subject:"", editing:"", editIds:[], loading:false, units:[]};
 
 function unitSubjects_(){
   return SUBJECTS.filter(s => s.count && !s.only);
@@ -11828,10 +11935,27 @@ function unitContext_(){
     return {kind:"class", classes:[view.cls], subjects:unitSubjects_()};
   if(view.kind === "special"){
     const code = spSubjectOf(view.sp), sub = SUB_BY_CODE[code];
-    return {kind:"special", classes:classesOfSpecial(view.sp),
+    /* **専科の単元は学年で持つ。** 教科は枠で決まっているので選ぶものはなく、
+       「何年の単元か」でまとめて管理する ── 学年の各クラスに同じ名前の
+       単元が1つずつある、という持ち方 */
+    const classes = classesOfSpecial(view.sp);
+    const grades = [...new Set(classes.map(gradeOf))];
+    return {kind:"special", classes:classes, grades:grades,
             subjects:sub ? [sub] : []};
   }
   return null;
+}
+/* 選んだ学年に入る、この専科の担当クラス */
+function unitGradeClasses_(){
+  const ctx = unitContext_();
+  if(!ctx || ctx.kind !== "special") return [];
+  return ctx.classes.filter(c => gradeOf(c) === unitState.gr);
+}
+/* 学年の単元＝その学年の各クラスに同じ名前で1つずつある単元、をまとめて返す */
+function unitGroupOf_(name){
+  if(view.kind !== "special") return [];
+  return UP.units.filter(u => u.layer === "special" && u.sp === view.sp
+    && u.name === name && gradeOf(u.target) === unitState.gr);
 }
 function paintUnitManagerButton(){
   const wrap = $("unitEntry");
@@ -11840,7 +11964,7 @@ function paintUnitManagerButton(){
   wrap.hidden = !ctx;
   if(!ctx) return;
   $("unitOpenSub").textContent = ctx.kind === "special"
-    ? "クラスごとの単元" : "教科ごとの単元と授業数";
+    ? "学年ごとの単元" : "教科ごとの単元と授業数";
 }
 
 function unitSelectHtml_(list, value, valueOf, labelOf){
@@ -11854,6 +11978,8 @@ function unitDefaultSubject_(){
   const ctx = unitContext_();
   if(!ctx || !ctx.subjects.length) return "";
   if(ctx.kind === "special") return ctx.subjects[0].code;
+  /* 持っている教科チップがあれば、その教科を開く */
+  if(pickSub && ctx.subjects.some(s => s.code === pickSub)) return pickSub;
   if(selCell){
     const c = cellFor(selCell.d, selCell.s);
     const code = rootSubject(c.subject || "");
@@ -11874,13 +12000,27 @@ function unitDefaultClass_(){
   if(unitState.cls && ctx.classes.indexOf(unitState.cls) >= 0) return unitState.cls;
   return ctx.classes[0];
 }
+/* 専科の面：開く学年の既定。選んでいるコマのクラス → 前に見ていた学年 → 先頭 */
+function unitDefaultGrade_(){
+  const ctx = unitContext_();
+  if(!ctx || !(ctx.grades || []).length) return "";
+  if(selCell){
+    const c = cellFor(selCell.d, selCell.s);
+    const g = c.cls ? gradeOf(c.cls) : "";
+    if(g && ctx.grades.indexOf(g) >= 0) return g;
+  }
+  if(unitState.gr && ctx.grades.indexOf(unitState.gr) >= 0) return unitState.gr;
+  return ctx.grades[0];
+}
 
 function openUnitManager(){
   const ctx = unitContext_();
   if(!ctx) return toast("単元進捗管理は<b>学級または専科の週案</b>で使います");
   unitState.cls = unitDefaultClass_();
+  unitState.gr = unitDefaultGrade_();
   unitState.subject = unitDefaultSubject_();
   unitState.editing = "";
+  unitState.editIds = [];
   drawUnitContext_();
   $("unitForm").hidden = true;
   $("unitStat").textContent = "読み込んでいます…";
@@ -11892,26 +12032,34 @@ function drawUnitContext_(){
   const ctx = unitContext_();
   if(!ctx) return;
   $("unitFy").textContent = fy() + "年度";
-  $("unitCls").innerHTML = unitSelectHtml_(ctx.classes, unitState.cls, x => x, x => x);
+  /* 専科の面は学年で管理する。選ぶものは「何年の単元か」──
+     教科は枠で決まっているので、教科の欄は値だけ見せて触れなくする */
+  const sp = ctx.kind === "special";
+  if($("unitClsLbl")) $("unitClsLbl").textContent = sp ? "学年" : "クラス";
+  $("unitCls").innerHTML = sp
+    ? unitSelectHtml_(ctx.grades, unitState.gr, x => x, x => x + "年")
+    : unitSelectHtml_(ctx.classes, unitState.cls, x => x, x => x);
   $("unitSub").innerHTML = unitSelectHtml_(ctx.subjects, unitState.subject, x => x.code, x => x.name);
   $("unitCls").disabled = ctx.kind === "class";
-  $("unitSub").disabled = ctx.kind === "special";
+  $("unitSub").disabled = sp;
 }
 function loadUnitManager(after){
   if(unitState.loading) return;
   unitState.loading = true;
   $("unitStat").textContent = "読み込んでいます…";
   const ctx = unitContext_();
+  /* 専科は学年で持つので、クラスを絞らずこの枠の単元をぜんぶ読む */
   const owner = ctx.kind === "special"
-    ? {layer:"special", target:unitState.cls, sp:view.sp}
+    ? {layer:"special", target:"", sp:view.sp}
     : {layer:"home", target:unitState.cls, sp:""};
   Backend.unitManager(owner, unitState.subject, r => {
     unitState.loading = false;
     const got = (r && r.units) || [];
     /* この持ち主＋教科の分を新しくする（ほかの教科の分は残す） */
-    UP.units = UP.units.filter(u =>
-      !(u.target === unitState.cls && u.subject === unitState.subject
-        && u.layer === owner.layer && (owner.layer !== "special" || u.sp === owner.sp)))
+    UP.units = UP.units.filter(u => ctx.kind === "special"
+      ? !(u.layer === "special" && u.sp === view.sp && u.subject === unitState.subject)
+      : !(u.target === unitState.cls && u.subject === unitState.subject
+          && u.layer === owner.layer))
       .concat(got);
     UP.terms = (r && r.terms) || UP.terms;
     UP.termVersion = (r && r.termVersion) || UP.termVersion;
@@ -11951,7 +12099,40 @@ function unitStatus_(u){
 }
 function renderUnitList_(){
   const box = $("unitList");
-  const list = unitState.units || [];
+  const ctx = unitContext_();
+  let list = unitState.units || [];
+
+  /* **専科の面は学年でまとめる。** 同じ名前の単元が学年の各クラスに1つずつ
+     あるので、名前で束ねて1行にし、クラスごとの配置は小さい字で並べる */
+  if(ctx && ctx.kind === "special"){
+    list = list.filter(u => gradeOf(u.target) === unitState.gr);
+    if(!list.length){
+      box.innerHTML = "<div class='unitempty'>この学年の単元はまだありません。<br>"
+        + "「新しい単元」で登録すると、学年の各クラスに同じものができます。</div>";
+      return;
+    }
+    const order = [], byName = {};
+    for(const u of list){
+      if(!byName[u.name]){ byName[u.name] = []; order.push(u.name); }
+      byName[u.name].push(u);
+    }
+    box.innerHTML = order.map(name => {
+      const g = byName[name], rep = g[0];
+      const per = unitGradeClasses_().map(cls => {
+        const u = g.find(x => x.target === cls);
+        return "<small>" + escText(cls) + " "
+          + escText(u ? unitStatus_(u) : "未配置") + "</small>";
+      }).join("");
+      return "<button class='unitrow' data-unit='" + escText(rep.id) + "'>"
+        + "<span><b>" + escText(name) + "</b><small>"
+        + rep.lessonCount + "時間" + (rep.hasTest ? "＋テスト" : "") + "</small></span>"
+        + "<span class='unitcls'>" + per + "</span></button>";
+    }).join("");
+    for(const b of box.querySelectorAll("[data-unit]"))
+      b.onclick = () => editUnit_(b.dataset.unit);
+    return;
+  }
+
   if(!list.length){
     box.innerHTML = "<div class='unitempty'>まだ単元がありません。<br>「新しい単元」から、単元名と授業数だけ登録します。</div>";
     return;
@@ -11973,7 +12154,8 @@ function renderUnitManager_(){
 }
 function newUnit_(){
   unitState.editing = "";
-  $("unitFormTitle").textContent = "新しい単元";
+  unitState.editIds = [];
+  $("unitFormTitle").textContent = view.kind === "special" ? "新しい単元（学年の各クラスにできます）" : "新しい単元";
   $("unitName").value = "";
   $("unitCount").value = "1";
   $("unitTest").checked = false;
@@ -11986,7 +12168,12 @@ function editUnit_(id){
   const u = (unitState.units || []).find(x => x.id === id);
   if(!u) return;
   unitState.editing = id;
-  $("unitFormTitle").textContent = "単元を直す";
+  /* 専科の学年の単元は、同じ名前のものが学年の各クラスに1つずつある。
+     直す・消す・配置リセットは、まとめてそのぶん全部に効かせる */
+  unitState.editIds = view.kind === "special"
+    ? unitGroupOf_(u.name).map(x => x.id)
+    : [id];
+  $("unitFormTitle").textContent = view.kind === "special" ? "学年の単元を直す" : "単元を直す";
   $("unitName").value = u.name || "";
   $("unitCount").value = String(u.lessonCount || 1);
   $("unitTest").checked = !!u.hasTest;
@@ -12004,13 +12191,53 @@ function saveUnitForm_(){
   if(!name) return void ($("unitWarn").hidden = false, $("unitWarn").textContent = "単元名を入れてください。");
   if(n < 1 || n > 99) return void ($("unitWarn").hidden = false, $("unitWarn").textContent = "授業数は1〜99時間です。");
   const ctx = unitContext_();
+
+  /* **専科の面：学年の単元として保存。** 学年の各クラスに同じものを
+     1つずつ作る（あるものは直し、無いものは作る）。まとめて同じものを
+     持つので、ここではじめて同じ授業数が全クラスに入る */
+  if(ctx.kind === "special"){
+    const clsList = unitGradeClasses_();
+    if(!clsList.length)
+      return void ($("unitWarn").hidden = false,
+                   $("unitWarn").textContent = "この学年のクラスがありません。");
+    const olds = (unitState.editIds || []).length
+      ? UP.units.filter(u => unitState.editIds.indexOf(u.id) >= 0)
+      : UP.units.filter(u => u.layer === "special" && u.sp === view.sp
+          && u.subject === unitState.subject && u.name === name
+          && gradeOf(u.target) === unitState.gr);
+    const inputs = clsList.map(cls => {
+      const old = olds.find(u => u.target === cls);
+      return {id: old ? old.id : "", expectedUpdatedAt: old ? old.updatedAt : "",
+              layer:"special", target:cls, sp:view.sp, subject:unitState.subject,
+              name:name, lessonCount:n, hasTest:$("unitTest").checked};
+    });
+    $("unitSave").disabled = true;
+    $("unitStat").textContent = "学年の各クラスに保存しています…";
+    saveUnitFanout_(inputs, 0, () => {
+      $("unitSave").disabled = false;
+      const grp = unitGroupOf_(name);
+      unitState.editing = grp.length ? grp[0].id : "";
+      unitState.editIds = grp.map(u => u.id);
+      renderUnitList_();
+      if(unitState.editing) editUnit_(unitState.editing);
+      UP.seq = {}; paintSheet();
+      if(typeof drawPalette === "function") drawPalette();
+      for(const u of grp) upWarnOne_(u);
+      $("unitStat").textContent = "保存しました。";
+    }, why => {
+      $("unitSave").disabled = false;
+      $("unitStat").textContent = why;
+    });
+    return;
+  }
+
   const old = (unitState.units || []).find(x => x.id === unitState.editing);
   const input = {
     id: old ? old.id : "",
     expectedUpdatedAt: old ? old.updatedAt : "",
-    layer: ctx.kind === "special" ? "special" : "home",
+    layer: "home",
     target: unitState.cls,
-    sp: ctx.kind === "special" ? view.sp : "",
+    sp: "",
     subject: unitState.subject,
     name:name, lessonCount:n, hasTest:$("unitTest").checked
   };
@@ -12037,30 +12264,64 @@ function saveUnitForm_(){
     $("unitStat").textContent = why;
   });
 }
+/* 学年の単元：各クラスぶんを順に1本ずつ保存する
+   （同時に送ると「単元」シートで同じ行を争う） */
+function saveUnitFanout_(inputs, i, done, fail){
+  if(i >= inputs.length) return done();
+  Backend.saveUnit(inputs[i], saved => {
+    if(saved){
+      const ui = UP.units.findIndex(x => x.id === saved.id);
+      if(ui >= 0) UP.units[ui] = saved; else UP.units.push(saved);
+      const li = (unitState.units || []).findIndex(x => x.id === saved.id);
+      if(li >= 0) unitState.units[li] = saved; else unitState.units.push(saved);
+    }
+    saveUnitFanout_(inputs, i + 1, done, fail);
+  }, fail);
+}
 function resetUnit_(){
   const u = (unitState.units || []).find(x => x.id === unitState.editing);
   if(!u) return;
+  const targets = view.kind === "special"
+    ? (unitState.editIds || []).map(id => UP.units.find(x => x.id === id)).filter(Boolean)
+    : [u];
+  if(!targets.length) return;
   askOk({
     title:"「" + u.name + "」の配置をリセットしますか",
-    lines:["<b>単元そのものは残します。</b>",
+    lines:[(targets.length > 1
+              ? "学年の各クラス分（" + targets.length + "クラス）まとめて外します。"
+              : "") + "<b>単元そのものは残します。</b>",
            "時間割に置いた進捗だけを全部外し、後で起点から置き直せる状態に戻します。"],
     goLabel:"配置をリセット",
-    onYes:() => upResetAll_(u, () => {
-      renderUnitList_(); editUnit_(u.id);
-      $("unitStat").textContent = "配置をリセットしました。";
-      UP.seq = {}; paintSheet();
-    })
+    onYes:() => {
+      const seq = i => {
+        if(i >= targets.length){
+          renderUnitList_();
+          if(unitState.editing) editUnit_(unitState.editing);
+          $("unitStat").textContent = "配置をリセットしました。";
+          UP.seq = {}; paintSheet();
+          return;
+        }
+        upResetAll_(targets[i], () => seq(i + 1));
+      };
+      seq(0);
+    }
   });
 }
 function resetAllUnits_(){
-  const list = unitState.units || [];
+  let list = unitState.units || [];
+  /* 専科の面は学年の単元だけを対象にする（ほかの学年は動かない） */
+  if(view.kind === "special")
+    list = list.filter(u => gradeOf(u.target) === unitState.gr);
   if(!list.length) return toast("リセットする単元がありません");
   const sub = (SUB_BY_CODE[unitState.subject] || {}).name || unitState.subject;
+  const scope = view.kind === "special"
+    ? unitState.gr + "年・" + sub
+    : unitState.cls + "・" + sub;
   askOk({
-    title:unitState.cls + "・" + sub + " の配置を全てリセットしますか",
+    title:scope + " の配置を全てリセットしますか",
     lines:["<b>この画面に並んで入る単元全て</b>の進捗配置を外します。",
-           "単元名・授業数・テスト設定は残ります。他の教科には影響しません。"],
-    goLabel:"この教科の配置を全リセット",
+           "単元名・授業数・テスト設定は残ります。"],
+    goLabel:"配置を全リセット",
     onYes:() => {
       let left = list.length;
       for(const u of list) upResetAll_(u, () => {
@@ -12076,23 +12337,39 @@ function resetAllUnits_(){
 function deleteUnit_(){
   const u = (unitState.units || []).find(x => x.id === unitState.editing);
   if(!u) return;
+  /* 専科の学年の単元は、各クラスのぶんをまとめて消す */
+  const targets = view.kind === "special"
+    ? (unitState.editIds || []).map(id => UP.units.find(x => x.id === id)).filter(Boolean)
+    : [u];
+  if(!targets.length) return;
   askOk({
     title:"「" + u.name + "」を削除しますか",
-    lines:["<b>単元の登録そのものを削除します。</b>時間割への配置情報も消えます。",
+    lines:["<b>単元の登録そのものを削除します。</b>時間割への配置情報も消えます。"
+           + (targets.length > 1
+              ? "学年の各クラス分（" + targets.length + "クラス）をまとめて消します。" : ""),
            "配置だけを外したい場合は「配置をリセット」を使ってください。"],
     goLabel:"単元を削除",
     onYes:() => {
-      /* 印を外してから単元を消す */
-      upResetAll_(u, () => {
-        Backend.deleteUnit(u.id, u.updatedAt, () => {
-          unitState.units = (unitState.units || []).filter(x => x.id !== u.id);
-          UP.units = UP.units.filter(x => x.id !== u.id);
-          unitState.editing = ""; $("unitForm").hidden = true; renderUnitList_();
+      const ids = targets.map(x => x.id);
+      const seq = i => {
+        if(i >= targets.length){
+          unitState.units = (unitState.units || []).filter(x => ids.indexOf(x.id) < 0);
+          UP.units = UP.units.filter(x => ids.indexOf(x.id) < 0);
+          unitState.editing = ""; unitState.editIds = [];
+          $("unitForm").hidden = true; renderUnitList_();
           UP.seq = {}; paintSheet();
           if(typeof drawPalette === "function") drawPalette();
           $("unitStat").textContent = "単元を削除しました。";
-        }, why => $("unitStat").textContent = why);
-      });
+          return;
+        }
+        const t = targets[i];
+        /* 印を外してから単元を消す */
+        upResetAll_(t, () => {
+          Backend.deleteUnit(t.id, t.updatedAt, () => seq(i + 1),
+            why => $("unitStat").textContent = why);
+        });
+      };
+      seq(0);
     }
   });
 }
@@ -12148,7 +12425,24 @@ function upChipLabel_(u){
   return view.kind === "special" ? t + "・" + u.target : t;
 }
 function upPaletteUnits_(){
-  return upViewUnits_().map(u => ({v:"unit:" + u.id, t:upChipLabel_(u), unit:u}));
+  let list = upViewUnits_();
+  /* 持っている教科チップがあるときは、その教科の単元だけに絞る */
+  if(view.kind === "class" && pickSub)
+    list = list.filter(u => u.subject === pickSub);
+  if(view.kind !== "special")
+    return list.map(u => ({v:"unit:" + u.id, t:upChipLabel_(u), unit:u}));
+  /* **専科の面の単元は学年で持つ。** 学年の各クラスに同じ名前の単元が
+     1つずつあるので、チップは学年に1つだけ出す ── 落とす先のコマの
+     クラスのぶんを、落とすときにこちらで選ぶ（upDropChip_） */
+  const seen = {}, out = [];
+  for(const u of list){
+    const g = gradeOf(u.target), k = g + "|" + u.name;
+    if(seen[k]) continue;
+    seen[k] = u;
+    const t = (u.name || "").slice(0, 4) || u.name || "単元";
+    out.push({v:"unit:" + u.id, t:t + "・" + g + "年", unit:u});
+  }
+  return out;
 }
 function unitById_(id){
   return upViewUnits_().find(u => u.id === id) || null;
@@ -12158,7 +12452,20 @@ function unitById_(id){
 function wireUnitProgress(){
   const on = (id, ev, fn) => { const e = $(id); if(e) e.addEventListener(ev, fn); };
   on("unitOpen","click",openUnitManager);
-  on("unitCls","change",e => { unitState.cls=e.target.value; unitState.editing=""; $("unitForm").hidden=true; loadUnitManager(); });
+  on("unitCls","change",e => {
+    /* 専科の面ではこの欄は学年を選ぶ（欄の中身は drawUnitContext_ が入れ替える）。
+       学年を変えても読み直すものはない ── 枠の単元は全部持っているので、
+       並びを学年で絞り直すだけ */
+    if(view.kind === "special"){
+      unitState.gr = e.target.value;
+      unitState.editing = ""; unitState.editIds = [];
+      $("unitForm").hidden = true; renderUnitManager_();
+      return;
+    }
+    unitState.cls = e.target.value;
+    unitState.editing = ""; unitState.editIds = [];
+    $("unitForm").hidden = true; loadUnitManager();
+  });
   on("unitSub","change",e => { unitState.subject=e.target.value; unitState.editing=""; $("unitForm").hidden=true; loadUnitManager(); });
   on("unitNew","click",newUnit_);
   on("unitResetAll","click",resetAllUnits_);
@@ -12896,6 +13203,7 @@ function openView(v){
   view = v;
   lastTarget = v;
   selCell = null;
+  pickSub = "";          /* 持っていた教科チップは、面を出ると手放す */
   /* 単元は「どの面の単元か」で読むものが変わる。面が決まった時点で読みに行く */
   if(typeof upViewChanged_ === "function") upViewChanged_();
 
@@ -13951,6 +14259,10 @@ const HELP = {
        + "（Slide は1枚の絵として入ります。Sheet より投影・掲示に向いています）。"]},
   pals: {t:"教科・行事",
     b:["<b>コマへ引っぱって入れます。</b>コマを選んでから押しても入ります。",
+       "<b>教科チップを押すと持ち上がります。</b>持っているあいだは"
+       + "その教科のコマだけが目立ち、単元チップはその教科に絞られ、"
+       + "コマを押すとその教科が入ります"
+       + "（つづけて入れられます。もう一度チップを押すか Esc で手放します）。",
        "<b>校外行事</b>を落とすと、そのコマに薄く「校外学習」が出ます"
        + "（題名・備考には入りません。続けて置くと枠がつながります）。",
        "<b>授業なし</b>を落とすと、そのコマに斜め線を引きます"
@@ -15273,6 +15585,11 @@ const inField = e => !!(e && (e.isContentEditable
   || /^(INPUT|TEXTAREA|SELECT)$/.test(e.tagName || "")));
 
 document.addEventListener("keydown", ev => {
+  /* 持っている教科チップを手放す。窓が開いているときは、窓を閉じるほうに使う */
+  if(ev.key === "Escape" && pickSub && !document.querySelector("dialog[open]")){
+    pickRelease_();
+    return;
+  }
   const mod = ev.ctrlKey || ev.metaKey;
   if(!mod) return;
   const k = (ev.key || "").toLowerCase();

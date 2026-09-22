@@ -114,6 +114,11 @@
    （「学年行事のため」「自習」を書ける）。休みの日の斜め線と同じ描き方。 */
 .cell{position:relative}
 .cell.nolesson .t{visibility:hidden}
+/* **持っている教科チップの強調**（pickSub）。その教科のコマだけが目立ち、
+   ちがう教科のコマは薄くなる。刷るものではないので、印刷では出さない */
+.cell.subdim{opacity:.38}
+.cell.subhot{box-shadow:inset 0 0 0 2px var(--ink-link);border-radius:2px}
+@media print{.cell.subdim,.cell.subhot{opacity:1;box-shadow:none}}
 .noneslash{position:absolute;left:0;right:0;top:0;
   height:calc(var(--h-title)*var(--k));pointer-events:none;z-index:2}
 .noneslash svg{position:absolute;inset:0;width:100%;height:100%;display:block}
