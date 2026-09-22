@@ -1890,7 +1890,7 @@ console.log("\n■ 単元進捗 Phase 1");
   row[at["年度"]] = 2030;
   row[at["単元ID"]] = "unit-check";
   row[at["対象クラス"]] = "3-1";
-  row[at["教科コード"]] = "sansuu";
+  row[at["教科コード"]] = "sansu";
   row[at["単元名"]] = "暗算";
   row[at["授業数"]] = 5;
   row[at["テスト"]] = true;
@@ -1899,7 +1899,7 @@ console.log("\n■ 単元進捗 Phase 1");
   row[at["除外JSON"]] = JSON.stringify(["2030-09-04|p3"]);
   SHEETS["単元進捗"].push(row);
 
-  const units = ev('Store.readUnits(2030, "3-1", "sansuu")');
+  const units = ev('Store.readUnits(2030, "3-1", "sansu")');
   ok("単元をJSONからUnitPlanへ戻す",
      units.length === 1 && units[0].name === "暗算" &&
      units[0].assignments[0] === "2030-09-03|p2" &&
@@ -1910,14 +1910,14 @@ console.log("\n■ 単元進捗 Phase 1");
   ev(`Store.writeBaseAll(2030, {
     "3-1":{
       A:{
-        "0|p1":{title:"算数",subject:"sansuu"},
-        "1|p2":{title:"算数",subject:"sansuu"},
-        "2|p3":{title:"算数",subject:"sansuu"}
+        "0|p1":{title:"算数",subject:"sansu"},
+        "1|p2":{title:"算数",subject:"sansu"},
+        "2|p3":{title:"算数",subject:"sansu"}
       },
       B:{
-        "0|p1":{title:"算数",subject:"sansuu"},
-        "1|p2":{title:"算数",subject:"sansuu"},
-        "2|p3":{title:"算数",subject:"sansuu"}
+        "0|p1":{title:"算数",subject:"sansu"},
+        "1|p2":{title:"算数",subject:"sansu"},
+        "2|p3":{title:"算数",subject:"sansu"}
       }
     }
   })`);
@@ -1931,10 +1931,10 @@ console.log("\n■ 単元進捗 Phase 1");
      title:"休み",note:"",subject:""}
   ])`);
 
-  const cand = ev('Store.unitCandidates(2030, "3-1", "sansuu", "2030-09-02", "p1", "")');
+  const cand = ev('Store.unitCandidates(2030, "3-1", "sansu", "2030-09-02", "p1", "")');
   ok("開始日の学期末を自動で使う",
      cand.to === "2030-09-30" && cand.term && cand.term.name === "1学期", cand);
-  const capped = ev('Store.unitCandidates(2030, "3-1", "sansuu", "2030-09-02", "p1", "2030-12-31")');
+  const capped = ev('Store.unitCandidates(2030, "3-1", "sansu", "2030-09-02", "p1", "2030-12-31")');
   ok("呼び出し側が後の日を渡しても学期末を越境しない",
      capped.to === "2030-09-30", capped);
   ok("全校行事で上書きされた算数は候補にしない",
@@ -1950,10 +1950,10 @@ console.log("\n■ 単元進捗 Phase 1");
     {date:"2030-09-11",slot:"p3",layer:"home",target:"3-1",
      title:"<a href=\\\"https://example.invalid\\\">算数</a>",note:"",subject:""}
   ])`);
-  const linked = ev('Store.unitCandidates(2030, "3-1", "sansuu", "2030-09-11", "p3", "")');
+  const linked = ev('Store.unitCandidates(2030, "3-1", "sansu", "2030-09-11", "p3", "")');
   ok("リンク付き手入力の教科名も見えている字で判定",
      linked.slots.indexOf("2030-09-11|p3") >= 0, linked.slots);
-  const sameDay = ev('Store.unitCandidates(2030, "3-1", "sansuu", "2030-09-03", "p3", "")');
+  const sameDay = ev('Store.unitCandidates(2030, "3-1", "sansu", "2030-09-03", "p3", "")');
   ok("起点より前の同日コマへ戻らない",
      sameDay.slots.every(x => x.slice(0,10) !== "2030-09-03" || x.endsWith("|p3")), sameDay.slots);
 
