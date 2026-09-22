@@ -2203,16 +2203,16 @@ console.log("\n■ 単元進捗 Phase 4");
      && b.assignments.indexOf(bTo)<0, sw);
 
   /* タイトル変更相当：所属コマを1つ外し、後ろへ1コマ補う */
-  const cut=a.assignments[0], cp=cut.split("|"), beforeLast=a.assignments[a.assignments.length-1];
+  const cut=a.assignments[0], cp=cut.split("|");
   let de=ev("Store.detachUnit(" + y + ", " + JSON.stringify(a.id)
     + ", " + JSON.stringify(a.updatedAt)
     + ", " + JSON.stringify(cp[0]) + ", " + JSON.stringify(cp[1]) + ")");
-  ok("タイトル変更でそのコマだけ単元から外し後ろへ補充",
+  ok("タイトル変更でそのコマだけ単元から外し後ろの空きへ補充",
      de.action==="detached"
      && de.unit.assignments.length===5
      && de.unit.assignments.indexOf(cut)<0
      && de.unit.excludedSlots.indexOf(cut)>=0
-     && de.unit.assignments[de.unit.assignments.length-1]!==beforeLast, de);
+     && de.unit.assignments.every(k => k > cut), de);
 })();
 
 console.log("\n■ ロック");
