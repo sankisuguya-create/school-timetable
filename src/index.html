@@ -146,6 +146,8 @@
         <button class="btn" id="sbGImage">画像</button>
         <button class="btn" id="sbGSheet">Sheet</button>
       </div>
+      <button class="nav" data-act="renraku" data-help="renraku" data-plan-output>
+        <svg width="17" height="17"><use href="#i-print"/></svg><span>連絡帳用（A4よこ）</span></button>
       <button class="nav" data-act="tally" data-help="tally" data-plan-output>
         <svg width="17" height="17"><use href="#i-copy"/></svg><span>時数をコピー</span></button>
 
@@ -1089,6 +1091,29 @@
   <div class="end"><button class="btn go" data-close="spmDaysDlg">決めた</button></div>
 </div></dialog>
 
+<!-- 連絡帳（A4よこ）。**選んだ日のぶんを縦書きで1枚に焼く。**
+     宿題・持ち物はここで書く（週案の紙には載らない児童向けの帯なので、
+     コマの備考とは別に持つ） -->
+<dialog id="renDlg"><div class="dlg wide">
+  <h2>連絡帳用（A4よこ）</h2>
+  <p>選んだ<b>日付のぶん</b>を、右詰めの縦書き・ルビつきで1枚に出します。
+     児童が連絡帳へ写す・掲示に貼る形です。<br>
+     宿題・持ち物は下に書きます。<b>漢字（かな）</b>と書くと「かな」がルビになります。
+     1行が縦の1列です。</p>
+  <div class="row"><span>クラス</span><select id="renCls"></select>
+    <span>日付</span><input type="date" id="renDate"></div>
+  <div class="row"><span>宿題</span>
+    <textarea id="renHw" rows="2" placeholder="例：算数（さんすう）のカード"></textarea>
+    <span>持ち物</span>
+    <textarea id="renItem" rows="2" placeholder="例：上履き（うわばき）"></textarea></div>
+  <div id="renView" style="text-align:center"></div>
+  <div class="row"><span class="hint" id="renStat"></span></div>
+  <div class="end"><button class="btn" data-close="renDlg">やめる</button>
+    <button class="btn" id="renPrint">印刷</button>
+    <button class="btn" id="renImage">画像</button>
+    <button class="btn go" id="renSlide">Google Slide</button></div>
+</div></dialog>
+
 <script>
 "use strict";
 /* @include js/config.js */
@@ -1106,6 +1131,7 @@
 /* @include js/tanpopo.js */
 /* @include js/gate.js */
 /* @include js/dialogs.js */
+/* @include js/renraku.js */
 /* @include js/main.js */
 </script>
 </body>

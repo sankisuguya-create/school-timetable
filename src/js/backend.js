@@ -1109,6 +1109,14 @@ const Backend = (function(){
       .apiExportPlanSheet(name, sheets);
   }
 
+  /* 連絡帳の画像を1枚のGoogle Slideにする。png は dataURL。 */
+  function exportSlide(name, png, ok, ng){
+    if(!onGas) return ng("手元ではGoogle Slideを作れない");
+    google.script.run.withSuccessHandler(ok)
+      .withFailureHandler(e => ng(String((e && e.message) || "Slideを作れなかった")))
+      .apiExportSlide(name, png);
+  }
+
   /* 画面を閉じる前に、貯めたぶんを出し切る。
      出し切れないうちに閉じられそうなときは、引き止める。 */
   addEventListener("beforeunload", ev => {
@@ -1131,5 +1139,5 @@ const Backend = (function(){
           tpTargets, saveTpTargets, testTpTarget, tpSubmit,
           unitManager, saveUnit, clearUnitStart, deleteUnit, saveUnitTerms, unitCapacity,
           yearSetup, tickYearSetup, setupPlanSheets, saveVariantOrigin, saveEvents,
-          exportPlanSheet};
+          exportPlanSheet, exportSlide};
 })();

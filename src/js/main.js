@@ -453,6 +453,8 @@ function wire(){
          印刷・画像・Google Sheet は紙のとなりの帯（#weekBar）から直に押す
          ── 前は窓を1つ挟んでいたが、4週・学年・カレンダーと同じ形にそろえた */
       if(a === "outweek") return openWeekView();
+      /* 連絡帳（A4よこ）。面ではなく、日付を選ぶ窓を開く */
+      if(a === "renraku") return openRenrakuDlg();
     });
   for(const b of document.querySelectorAll("[data-close]"))
     b.addEventListener("click", () => $(b.dataset.close).close());
@@ -613,6 +615,33 @@ function wire(){
     catch(e){ $("weekBarStat").textContent="画像を作れませんでした（"+escText(e.message||e)+"）"; }
   });
   on("weekSheet","click", exportWeekSheet);
+  /* 連絡帳。クラス・日付・宿題・持ち物が変わるたびに焼き直す */
+  on("renCls",  "change", renrakuRender);
+  on("renDate", "change", renrakuRender);
+  on("renHw",   "input",  renrakuRender);
+  on("renItem", "input",  renrakuRender);
+  on("renImage","click", () => {
+    const cv = renrakuCanvas(); if(!cv) return;
+    cv.toBlob(b => { downloadBlob(b, renrakuName() + ".png");
+                     $("renStat").textContent = "画像を保存しました"; }, "image/png");
+  });
+  on("renPrint","click", () => {
+    const cv = renrakuCanvas(); if(!cv) return;
+    const w = window.open("", "_blank");
+    if(!w){ $("renStat").textContent = "窓が開けませんでした（ポップアップを許可してください）"; return; }
+    const src = cv.toDataURL("image/png");
+    w.document.write("<html><head><title>" + escText(renrakuName()) + "</title>"
+      + "<style>@page{size:A4 landscape;margin:0}body{margin:0}img{display:block;width:100vw;height:100vh}</style>"
+      + "</head><body><img src='" + src + "' onload='setTimeout(function(){print()},60)'></body></html>");
+    w.document.close();
+  });
+  on("renSlide","click", () => {
+    const cv = renrakuCanvas(); if(!cv) return;
+    $("renStat").textContent = "Google Slideを作っています";
+    Backend.exportSlide(renrakuName(), cv.toDataURL("image/png"), r => {
+      $("renStat").innerHTML = "作りました → <a href='" + escText(r.url) + "' target='_blank' rel='noopener'>" + escText(r.name) + "</a>";
+    }, e => { $("renStat").textContent = e; });
+  });
   /* 左メニューの三つ組み。**その面の中にある口と同じ動き**にする ──
      ここで別の動きを書くと、帯と面の中で結果がずれる。
      sb* は対応する面のボタンを押すだけ（sbCSheet/sbGSheet は

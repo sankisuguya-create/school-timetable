@@ -2440,6 +2440,22 @@ const Store = (function(){
     return {name:book.getName(), url:book.getUrl()};
   }
 
+  /* 連絡帳の画像を1枚だけ入れた Slide。新規プレゼンのページ寸法は
+     Apps Script から変えられないので、画像はA4よこのまま、
+     ページの中に収まる大きさで中央へ置く（はみ出して伸ばさない）。 */
+  function exportSlide(name, png){
+    const m = /^data:image\/png;base64,(.+)$/.exec(String(png || ""));
+    if(!m) throw new Error("画像がありません");
+    const blob = Utilities.newBlob(Utilities.base64Decode(m[1]), "image/png",
+                                   String(name || "連絡帳") + ".png");
+    const pres = SlidesApp.create(String(name || "連絡帳"));
+    const W = pres.getPageWidth(), H = pres.getPageHeight();
+    const k = Math.min(W / 1414, H / 1000);   /* 紙はA4よこ（1414:1000）で焼いてある */
+    const w = 1414 * k, h = 1000 * k;
+    pres.getSlides()[0].insertImage(blob, (W - w) / 2, (H - h) / 2, w, h);
+    return {name:pres.getName(), url:pres.getUrl()};
+  }
+
   function addDays_(isoStr, n){
     const p = String(isoStr).split("-");
     return new Date(+p[0], +p[1] - 1, +p[2] + n);
@@ -2448,7 +2464,7 @@ const Store = (function(){
   return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects, writeSubjects,
           readTerms, readUnits, unitManager, writeTerms, writeUnit, clearUnitStart,
           deleteUnit, unitCandidates,
-          writeCells, writeRoster, writeBase, writeBaseAll, readPaste, exportPlanSheet,
+          writeCells, writeRoster, writeBase, writeBaseAll, readPaste, exportPlanSheet, exportSlide,
           writeTally, readTally, TALLY_NAME,
           exportWeek, weekSheetName, weekOrder, migratePlan, checkYear, readEvents,
           archiveCount, archiveVerify, archivePurge, archivedAll, ymd,
@@ -2687,4 +2703,8 @@ function apiReadTally(year){
 function apiExportPlanSheet(name, sheets){
   Gate.check();
   return Store.exportPlanSheet(name, sheets);
+}
+function apiExportSlide(name, png){
+  Gate.check();
+  return Store.exportSlide(name, png);
 }
