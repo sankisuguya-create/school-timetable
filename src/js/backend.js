@@ -69,6 +69,9 @@ const Backend = (function(){
     acknowledged = false;
     touched = true;
     editEpoch++;
+    /* **どの年度のコマかで書き出す年度が決まる。** いま開いている週とは限らない
+       （競合の入れ直し・行事取り込みは別の年度のコマを触りうる） */
+    markYearDirty(where ? where.year : fy());
     if(typeof markTpEdited === "function")
       markTpEdited(layer, target, where, d, slotId, wasTitle);
     if(!onGas) return;
@@ -514,6 +517,10 @@ const Backend = (function(){
       notify("<b>基本時間割シートに読めない行がある</b>（" + r.warn.length + "行）：<br>"
            + r.warn.slice(0, 3).map(escText).join("<br>")
            + (r.warn.length > 3 ? "<br>ほか " + (r.warn.length - 3) + "行" : ""));
+    /* 生の形を入れたので、形そろえの印を落とす（store.js の yearStale）。
+       入れた中身は端末の控えにも残す */
+    yearStale(Yr);
+    markYearDirty(y);
     loadedYear[y] = true;
   }
 
@@ -696,6 +703,7 @@ const Backend = (function(){
     dataTick++;                      /* 数えたものの取り置きを古くする */
     const y = (year === undefined) ? fy() : year;
     const m = (mon  === undefined) ? wkKey() : mon;
+    markYearDirty(y);                /* 届いた中身を端末の控えにも残す */
     const Yr = db.years[String(y)];
     if(!Yr || !Yr.weeks) return;      /* その年度がもう無い */
     const cur = Yr.weeks[m] || (Yr.weeks[m] =
