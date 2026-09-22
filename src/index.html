@@ -426,7 +426,7 @@
       <div id="hasSel" hidden style="display:flex;flex-direction:column;gap:15px">
         <!-- 選んでいるコマの日付・校時・誰が入れたかは、紙の上の選択枠が言う。
              ここに文で重ねて出すと、コマを選び直すたびに同じ情報を2度読むことになる。
-             層と誰が入れたかは、コマの左端の色と右上の札（.tag）でみ分ける。 -->
+             層と誰が入れたかは、コマの左端の色と右上の札（.tag）で見分ける。 -->
         <div class="pnamerow">
           <div id="pTitleWrap">
             <label id="pTitleLabel" for="pTitle">教科名・行事名</label>
@@ -615,9 +615,9 @@
 
 <dialog id="guideDlg" aria-labelledby="guideTitle"><div class="dlg">
   <h2 id="guideTitle">週案の使い方</h2>
-  <p>① 左上で週を確認し、中央から自分の学級を開決ます。</p>
+  <p>① 左上で週を確認し、中央から自分の学級を開きます。</p>
   <p>② コマを選び、右の授業チップで教科を入れます。詳細・備考も書けます。</p>
-  <p>③ 変更後は右上の保存状態を確認します。保存ボタンでも保存で決ます。</p>
+  <p>③ 変更後は右上の保存状態を確認します。保存ボタンでも保存できます。</p>
   <p>学年・全学年を開いて入力すると、その範囲の全クラスに反映されます。</p>
   <p>右の授業チップは常に使えます。週案のマスを色付きにする設定は、右の「週案のチップ表示」です。</p>
   <p>この説明は左の「使い方」から、いつでも開けます。</p>
@@ -631,7 +631,7 @@
   <div class="waitbox">
     <span class="waitspin" aria-hidden="true"></span>
     <span class="waitwd"><b id="waitTxt">処理しています</b>
-      <small>終わるまで、他の操作はで決ません</small></span>
+      <small>終わるまで、他の操作はできません</small></span>
   </div>
 </dialog>
 
@@ -840,7 +840,7 @@
 <dialog id="linkDlg"><div class="dlg">
   <h2>選んだ文字を、リンクにする</h2>
   <p>選んで入るのは「<b id="linkText"></b>」です。
-     <b>紙の上でも、その文字を押すと開決ます。</b>刷ると下線だけが残ります。</p>
+     <b>紙の上でも、その文字を押すと開きます。</b>刷ると下線だけが残ります。</p>
   <div class="row"><span>リンク先のURL</span>
     <input type="url" id="linkUrl" placeholder="https://"
            style="flex:1;min-width:16em"></div>
@@ -944,7 +944,7 @@
   <div id="ckOut"></div>
   <hr>
   <h3 style="margin:12px 0 4px;font-size:14px">年度の退避</h3>
-  <p>年度末に1回。<b>本体のURLは変わりません。</b>新年度も、教員は今までと同じURLを開決ます。<br>
+  <p>年度末に1回。<b>本体のURLは変わりません。</b>新年度も、教員は今までと同じURLを開きます。<br>
      複製した写しが保管庫になり、本体からはその年度の行だけが消えます。
      基本時間割・クラス・専科は残るので「前年度から写す」はそのまま使えます。</p>
   <div class="row"><span>退避する年度</span>
@@ -959,7 +959,7 @@
       <li>ドライブで <b id="arFile"></b> を右クリック →「<b>コピーを作成</b>」</li>
       <li>名前を <b id="arName"></b> にする</li>
       <li>共有を<b>管理者だけ</b>にする（教員には配らない）</li>
-      <li>コピーの Apps Script は<b>デプロイしない</b>（デプロイは複製されないので、放って置けば動決ません）</li>
+      <li>コピーの Apps Script は<b>デプロイしない</b>（デプロイは複製されないので、放って置けば動きません）</li>
       <li>コピーのURLを下に貼る</li>
     </ol>
     <div class="row"><span>退避先のURL</span>
@@ -985,7 +985,7 @@
   <h2>この日の形</h2>
   <p><b id="dayWhen"></b> の形を決めます。
      <b>全クラスの週案に入ります</b>（学校全体が入れたものとして出ます）。<br>
-     いつでも「ふつう」に戻せます。<b>戻すと、書いてある予定はそのまま出て決ます</b>
+     いつでも「ふつう」に戻せます。<b>戻すと、書いてある予定はそのまま出てきます</b>
      ——休みにしても、コマの中身は消していません。</p>
   <div class="dayforms" id="dayForms"></div>
   <div id="dayEvWrap" hidden>
@@ -1102,7 +1102,7 @@
   <h2>連絡帳用（A4横）</h2>
   <p>選んだ<b>日付のぶん</b>を、右詰めの縦書き・ルビつきで1枚に出します。
      児童が連絡帳へ写す・掲示に貼る形です。<br>
-     宿題・持ち物は下に書決ます。<b>漢字（かな）</b>と書くと「かな」がルビになります。
+     宿題・持ち物は下に書きます。<b>漢字（かな）</b>と書くと「かな」がルビになります。
      1行が縦の1列です。</p>
   <div class="row"><span>クラス</span><select id="renCls"></select>
     <span>日付</span><input type="date" id="renDate"></div>

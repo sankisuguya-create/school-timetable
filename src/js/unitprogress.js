@@ -19,7 +19,7 @@
 const PAL_URESET = "__ureset";   /* パレットの「単元をリセット」チップ */
 
 const UP = {
-  key:"",              /* いまの面の持ち主のみ分け（home/3-3/, special//rika） */
+  key:"",              /* いまの面の持ち主の見分け（home/3-3/, special//rika） */
   units:[],            /* この面に関係する単元 */
   terms:[], termVersion:"[]",
   warns:{},            /* 単元ID -> 学期末に入りきらない旨の文 */
@@ -424,7 +424,7 @@ function upDropChip_(unit, d, s){
       paintSheet();
       toast("「" + escText(unit.name) + "」を " + md(addDays(monday, d))
             + " から始めた。この後の" + escText(unit.name.slice(0, 3))
-            + "のコマに番号が付決ます");
+            + "のコマに番号が付きます");
     }, why2 => toast(why2));
     return;
   }
@@ -532,7 +532,7 @@ function upMoveStart_(data, d, s){
   const wasStart = unit.start.date === srcDt && unit.start.slot === srcS;
   if(wasStart && !upSubjectHit_(w, unit, d, s)){
     const subName = (SUB_BY_CODE[unit.subject] || {}).name || unit.subject;
-    return toast("起点は<b>" + escText(subName) + "</b>のコマに置決ます");
+    return toast("起点は<b>" + escText(subName) + "</b>のコマに置きます");
   }
   if(wasStart){
     Backend.saveUnit(Object.assign({}, unit,
@@ -621,7 +621,7 @@ function upWarnOne_(unit){
       const short = need - Math.min(placed, r.count);
       if(short > 0)
         UP.warns[unit.id] = "学期末までに " + short + "コマ足りません。"
-          + "空きコマに置き直すか、授業数をみ直してください。";
+          + "空きコマに置き直すか、授業数を見直してください。";
       else delete UP.warns[unit.id];
       paintSheet();
     }, () => {});
@@ -786,7 +786,7 @@ function renderUnitTerm_(){
   const box = $("unitTermInfo");
   if(!UP.terms.length){
     box.className = "unitterm warn";
-    box.innerHTML = "<span><b>学期の期間が未設定</b><small>単元登録はで決ます。自動配置と学期末警告には期間が必要です。</small></span>"
+    box.innerHTML = "<span><b>学期の期間が未設定</b><small>単元登録はできます。自動配置と学期末警告には期間が必要です。</small></span>"
       + "<button class='btn' id='unitTermOpen'>学期を設定</button>";
   }else{
     box.className = "unitterm";
@@ -800,7 +800,7 @@ function unitStatus_(u){
   if(!(u.start || {}).date) return "未配置";
   const seq = upSeqFor_(u);
   const cap = u.lessonCount + (u.hasTest ? 1 : 0);
-  if(seq.count > cap) return "配置 " + cap + "（は見出し " + (seq.count - cap) + "）";
+  if(seq.count > cap) return "配置 " + cap + "（はみ出し " + (seq.count - cap) + "）";
   return "配置 " + seq.count + "/" + cap;
 }
 function renderUnitList_(){

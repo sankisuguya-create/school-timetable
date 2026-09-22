@@ -52,7 +52,7 @@ function paintSave(){
    **担任が「今週ぶんは書き終えた」と言う印。** 週ごとに立て直す。
 
    1コマでも書いてあれば済、にはしない。ちょっと触っただけの週と、
-   出してよい週を、たんぽぽ担当がみ分けられなくなる。
+   出してよい週を、たんぽぽ担当が見分けられなくなる。
    たんぽぽ担当はこれを見て支援員を組むので、あとから変わるとやり直しになる。
 
    **たんぽぽの児童がいるクラスにだけ出す。** 全クラスに出すと、
@@ -534,7 +534,7 @@ function wire(){
      競合の窓が開いていたら先に閉じる（残しておくと、捨てたぶんを
      その窓から入れ直せてしまう） */
   on("discardBtn","click", () => {
-    if(Wait.guard()) return;
+    if(!Wait.guard()) return;
     if(cfAsk && $("cfDlg").open) $("cfDlg").close();
     setBusy(true, "シートの状態に戻しています");
     Backend.discardChanges(had => {
@@ -638,7 +638,7 @@ function wire(){
   on("weekPrint","click", () => { if(centerOk()) setCenter("week"); window.print(); });
   on("weekImage","click", async () => {
     $("weekBarStat").textContent = "";
-    try{ await nodePng($("sheet"), outputName("B5")+".png"); $("weekBarStat").textContent="画像を保存しました。Google Chatへ添付で決ます。"; }
+    try{ await nodePng($("sheet"), outputName("B5")+".png"); $("weekBarStat").textContent="画像を保存しました。Google Chatへ添付できます。"; }
     catch(e){ $("weekBarStat").textContent="画像を作れませんでした（"+escText(e.message||e)+"）"; }
   });
   on("weekSheet","click", exportWeekSheet);
@@ -712,7 +712,7 @@ function wire(){
       title: one ? cs[0] + " の時数を数えますか"
                  : cs.length + "クラスぶんの時数を数えますか",
       lines: ["4月からこの月までを、<b>" + (one ? cs[0] : cs.length + "クラスぶん")
-              + "</b>数えて、スプレッドシートの<b>「時数集計」シート</b>に置決ます。",
+              + "</b>数えて、スプレッドシートの<b>「時数集計」シート</b>に置きます。",
               one ? "<b>たいてい数十秒で終わります。</b>年度の後半ほど長くかかります"
                     + "（読む週が増えるため）。"
                   : "<b>1〜3分かかります。</b>年度の後半ほど長くかかります"

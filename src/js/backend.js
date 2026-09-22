@@ -1025,7 +1025,7 @@ const Backend = (function(){
         return ng("別の画面でこの単元が変更されています。開き直してください");
       if(old && (old.layer !== x.layer || old.target !== x.target
                  || old.sp !== (x.sp || "") || old.subject !== x.subject))
-        return ng("単元のクラス・教科は作成後に変更で決ません");
+        return ng("単元のクラス・教科は作成後に変更できません");
       const nk = v => String(v || "").normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
       if(y.units.some(u => u.id !== x.id && unitSameOwner_(u, x)
           && u.subject === x.subject && nk(u.name) === nk(x.name)))

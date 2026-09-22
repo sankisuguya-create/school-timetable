@@ -758,6 +758,6 @@ function tallyWriteRows(months, classes){
     Wait.end(w2);
     drawTallyPanel();
     if(r) toast("「" + r.name + "」シートに "
-                + classes.length + "クラス × " + months.length + "ヶ月ぶんを置決ました");
+                + classes.length + "クラス × " + months.length + "ヶ月ぶんを置きました");
   });
 }
