@@ -389,11 +389,16 @@ function paintCell(e, c, d, s, mine){
      色は学年で付ける（→ sheet.css の [data-cg]）。教科で塗ると、
      音楽専科の紙はぜんぶ音楽の色になり、何も言わない印になる。
      色そのものは右メニューのクラスチップと同じもの。 */
-  const cg = (view.kind === "special" && (SLOT_BY_ID[s] || {}).kind === "lesson")
+  /* **案の面はコマに何人も並ぶ**ので、コマ全体を1つの学年で塗らない
+     （塗る相手は中の1行ずつ。→ spmonth.js の spmCellFor） */
+  const cg = (view.kind === "special" && !(typeof spmFace === "function" && spmFace())
+              && (SLOT_BY_ID[s] || {}).kind === "lesson")
     ? gradeOf(normCls(plain(c.title || ""))) : "";
   if(cg) e.dataset.cg = cg; else delete e.dataset.cg;
   e.classList.toggle("has-sub", !!c.subject);
-  e.classList.toggle("from-base", c.layer === "base");
+  /* 仮採用は**基本時間割と同じ薄さ**で出す（→ config.js の TENT_SLOT）。
+     どちらから来たかは、右上の札の字（仮）が言う */
+  e.classList.toggle("from-base", c.layer === "base" || c.layer === "tent");
   if(mine) e.classList.toggle("upper", RANK[c.layer] > RANK[mine] && !c.clash);
   e.classList.toggle("clash", !!c.clash);
 
@@ -428,7 +433,8 @@ function paintCell(e, c, d, s, mine){
      **色は情報を運ばない。** 記号（△ ×）と斜線の密度が運ぶ。
      塗りは使わない ── 紙の塗り2色は「降ってきた」「重なっている」で
      もう埋まっていて、3色目を足すと淡色どうしが潰れる。 */
-  const fr = e.dataset.cls ? freeAtClass(d, s, e.dataset.cls) : freeAt(d, s, c);
+  const fr = (typeof spmFace === "function" && spmFace()) ? null
+           : e.dataset.cls ? freeAtClass(d, s, e.dataset.cls) : freeAt(d, s, c);
   const want = fr ? (e.dataset.cls ? e.dataset.cls + "　" : "")
                     + FREE_WHY[fr.st] + (fr.why ? "：" + fr.why : "")
                   : (e.dataset.cls || "");
@@ -573,6 +579,7 @@ function applyCenter(kind){
   $("monthView").hidden = kind !== "month";
   $("gradeView").hidden = kind !== "grade";
   $("calView").hidden   = kind !== "cal";
+  $("spmView").hidden   = kind !== "spm";
   document.querySelector(".panel").hidden = !wk;
   document.querySelector(".work").classList.toggle("no-panel", !wk);
   paintNavLocation();
@@ -595,6 +602,17 @@ function paintNavLocation(){
   for(const b of document.querySelectorAll(".nav[data-center]"))
     b.setAttribute("aria-current", String(b.dataset.center === centerMode));
   paintFree();
+  paintSpMonthNav();
+}
+
+/* 専科の月予定への口。**専科と全学年の面にだけ出す。**
+   担任の面に出しても押すものが無い（担任は専科の巡りを決めない）。
+   学年の面にも出さない ── 決まるのは学校ぜんたいの専科の巡りで、
+   1つの学年だけを見て決められるものではない。 */
+function paintSpMonthNav(){
+  const b = $("navSpMonth");
+  if(!b) return;
+  b.hidden = !(view.kind === "special" || view.kind === "school");
 }
 
 /* ── 空き枠さがしの操作 ────────────────────────
@@ -665,6 +683,7 @@ function refitCenter(){
   if(centerMode === "grade") fitGrade();
   else if(centerMode === "month") fitMonth();
   else if(centerMode === "cal") fitCal();
+  else if(centerMode === "spm") fitSpm();
 }
 function redrawCenter(rebuild){
   if(centerMode === "month"){
@@ -675,6 +694,8 @@ function redrawCenter(rebuild){
   }else if(centerMode === "cal"){
     if(rebuild) calFrom = new Date(monday.getFullYear(), monday.getMonth(), 1);
     drawCalView();
+  }else if(centerMode === "spm"){
+    drawSpMonthView();
   }else if(rebuild){
     buildSheet();
     autoFit();

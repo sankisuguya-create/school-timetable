@@ -149,6 +149,14 @@
       <button class="nav" data-act="tally" data-help="tally" data-plan-output>
         <svg width="17" height="17"><use href="#i-copy"/></svg><span>時数をコピー</span></button>
 
+      <!-- 専科どうしの月予定。**専科と全学年の面にだけ出す。**
+           担任の面に出しても押すものが無い（担任は専科の巡りを決めない）。
+           「週案を出す」の並びには入れない ── 刷るものではなく、
+           1ヶ月ぶんの枠を決める作業のほう -->
+      <button class="nav" data-act="spmonth" id="navSpMonth" data-help="spmonth" hidden>
+        <svg width="17" height="17"><use href="#i-users"/></svg>
+        <span>専科の月予定をくむ</span></button>
+
       <!-- 新年度の設定が未了のあいだだけ出る。**ふだんは管理・システムの中だけ。**
            4/1 から、全部が済むまで出し続ける（消えると忘れる） -->
       <button class="nav ny" data-act="newyear" id="navNewYear" data-help="newyear" hidden>
@@ -237,6 +245,31 @@
           <button class="btn" id="cvClose">週の紙へ戻る</button>
         </div>
         <div class="cvpaper" id="cvPaper"></div>
+      </div>
+
+      <!-- 専科の月予定（案）の面。**4週の面と同じ紙で出す。**
+           出すのは全学年の紙に専科の巡りを重ねたもので、1コマに
+           「音楽 2-2 ／ 理科 4-1」と並び、それぞれが教科の色で塗られる。
+           全校の予定・休み・校外行事は全学年の紙がそのまま持っているので、
+           専科がそこへ行けない理由が同じ紙の上に見える。
+           **画面だけ。刷らない**（週が4〜6枚あり、B4 の 2×2 に収まらない） -->
+      <div class="spmview" id="spmView" hidden>
+        <div class="mbar" data-help="spmonth">
+          <button class="btn" id="spmFPrev">◀ 前の月</button>
+          <b id="spmTtl"></b>
+          <button class="btn" id="spmFNext">次の月 ▶</button>
+          <span class="grow"></span>
+          <button class="btn" id="spmWishOpen">希望を直す</button>
+          <!-- 採用と仮採用。**押すまで週案には1文字も書かない。**
+               仮採用は基本時間割と同じ薄さ・同じ低さで入る -->
+          <button class="btn go" id="spmTake" disabled>採用</button>
+          <button class="btn" id="spmTakeTent" disabled>仮採用</button>
+          <button class="btn" id="spmClose">週の紙へ戻る</button>
+        </div>
+        <div class="spmbody">
+          <div class="spmpaper" id="spmPaper"></div>
+          <div class="spmout" id="spmOut"></div>
+        </div>
       </div>
 
       <!-- たんぽぽの面。週案の紙ではないので、紙の代わりにここを出す -->
@@ -1013,6 +1046,49 @@
   <div class="end"><button class="btn go" data-close="warnDlg">確かめた</button></div>
 </div></dialog>
 
+<!-- 専科どうしの月予定（仮）。**画面だけのもの。紙には出さない。**
+     枠を決めている最中の作業であって、刷って残す情報ではない
+     （空き枠さがし・年間行事の印と同じ扱い）。
+     「くむ」を押すまで、そして「入れる」を押すまで、週案には1文字も書かない -->
+<dialog id="spmDlg"><div class="dlg wide">
+  <h2>専科の月予定をくむ（仮）</h2>
+  <p><b>1ヶ月ぶんの専科の巡りを、干渉が起きないように計算して出す。</b>
+     全校の予定・学年の予定・休み・校外行事の入っているコマには置かない。
+     同じ時刻に、同じクラスへ2人の専科が行くことも、1人が2クラスへ行くこともない。<br>
+     <b>チェックを入れた希望は破らない。</b>
+     破るのは「そうしないと、そのコマをどこにも置けない」ときだけで、
+     破ったら<b>その数を下に出す</b>。ぶつかったときに先に通る順は
+     避ける日 ＞ 別の週へ動かさない ＞ 午前のみ ＞ 2コマくっつける
+     ＞ 基本に近づける ＞ クラス分散。</p>
+  <div class="row">
+    <button class="btn" id="spmPrev">◀ 前の月</button>
+    <b id="spmMonth"></b>
+    <button class="btn" id="spmNext">次の月 ▶</button>
+    <span class="spmrange" id="spmRange"></span>
+  </div>
+  <!-- 境界の週は、その月に入る日だけを組む。触ると翌月を組んだときに
+       同じ日を二度組むことになり、あとから組んだほうが前の案を黙って潰す -->
+  <div class="row">
+    <label class="spmopt"><input type="checkbox" id="spmMove" checked><span>行事でつぶれたコマを、別の枠へ移す</span></label>
+    <span class="grow"></span>
+    <button class="btn go" id="spmRun">くむ</button>
+  </div>
+  <table class="grid2 spmwish" id="spmWish"></table>
+  <p class="spmlead"><b>「くむ」を押すと、案を紙で出す。</b>
+     4週の面と同じ紙で、1コマに「音楽 2-2 ／ 理科 4-1」と並ぶ。
+     採用するかどうかは、その紙を見てから決める。</p>
+</div></dialog>
+
+<!-- 避ける日。**その月のカレンダーから押して選ぶ。**
+     打ち込ませると、書き方（10/15・10月15日・2026-10-15）が人ごとに割れる -->
+<dialog id="spmDaysDlg"><div class="dlg">
+  <h2 id="spmDaysTtl">避ける日</h2>
+  <p>押した日には<b>その専科の授業を置かない</b>。出張・年休・研修のように、
+     その月だけの都合を入れるところ。<b>もう一度押すと外れる。</b></p>
+  <div id="spmDaysBody"></div>
+  <div class="end"><button class="btn go" data-close="spmDaysDlg">決めた</button></div>
+</div></dialog>
+
 <script>
 "use strict";
 /* @include js/config.js */
@@ -1023,6 +1099,7 @@
 /* @include js/fixed.js */
 /* @include js/impplan.js */
 /* @include js/compose.js */
+/* @include js/spmonth.js */
 /* @include js/sheet.js */
 /* @include js/panel.js */
 /* @include js/unitprogress.js */
