@@ -585,6 +585,17 @@ function paintNavLocation(){
   for(const b of document.querySelectorAll(".nav[data-center]"))
     b.setAttribute("aria-current", String(b.dataset.center === centerMode));
   paintFree();
+  paintSpMonthNav();
+}
+
+/* 専科の月予定への口。**専科と全学年の面にだけ出す。**
+   担任の面に出しても押すものが無い（担任は専科の巡りを決めない）。
+   学年の面にも出さない ── 決まるのは学校ぜんたいの専科の巡りで、
+   1つの学年だけを見て決められるものではない。 */
+function paintSpMonthNav(){
+  const b = $("navSpMonth");
+  if(!b) return;
+  b.hidden = !(view.kind === "special" || view.kind === "school");
 }
 
 /* ── 空き枠さがしの操作 ────────────────────────

@@ -2570,6 +2570,216 @@ await p.locator('#guideOpen').click();
 ok("使い方から再表示", await p.locator('#guideDlg').isVisible());
 await p.locator('[data-close="guideDlg"]').click();
 
+console.log("\n■ 専科どうしの月予定（仮）");
+/* この節は、基本時間割を同梱の写しで満たしてから見る。
+   **空の基本時間割では、組むコマが1つも出ない**（需要は基本から数える） */
+await shut();
+await p.evaluate(() => { applyFixed(fixedBuiltin()); openView({kind:"class", cls:"3-1"}); });
+await p.waitForTimeout(250); await shut();
+ok("担任の面には、月予定の口を出さない", await p.locator("#navSpMonth").isHidden());
+await p.evaluate(() => openView({kind:"school"})); await p.waitForTimeout(250); await shut();
+ok("全学年の面には出る", await p.locator("#navSpMonth").isVisible());
+await p.evaluate(() => openView({kind:"special", sp:specials()[0].code}));
+await p.waitForTimeout(250); await shut();
+ok("専科の面にも出る", await p.locator("#navSpMonth").isVisible());
+
+/* 硬い制約。**全校の予定・学年の予定・休みのコマには置かない。**
+   判定は空き枠さがしと同じ freeOne を通っているので、画面の ○△× と食い違わない */
+const spmHard = await p.evaluate(() => {
+  const d = new Date(monday), Y0 = d.getFullYear(), M0 = d.getMonth();
+  const ws = spMonthWeeks(Y0, M0), keep = monday;
+  monday = ws[1];
+  const w = week();
+  w.school[ck(1, "p2")] = {title:"全校朝会", note:"", subject:null,
+                           by:"x@edu.nishi.or.jp", at:Date.now()};
+  (w.grade["3"] || (w.grade["3"] = {}))[ck(3, "p4")] =
+    {title:"学年集会", note:"", subject:null, by:"x@edu.nishi.or.jp", at:Date.now()};
+  monday = ws[2];
+  week().school[ck(2, DAY_SLOT)] = {title:"休み", note:"", subject:null,
+                                    by:"x@edu.nishi.or.jp", at:Date.now()};
+  monday = keep; save();
+  const wishes = {};
+  for(const s of specials()) wishes[s.code] = spwBlank();
+  const t0 = performance.now();
+  const cx = spBuild(Y0, M0, wishes, true);
+  const res = spSolve(cx);
+  const ms = Math.round(performance.now() - t0);
+  let onSchool = 0, onGrade = 0, onOff = 0, twoCls = 0, twoSp = 0, outMonth = 0;
+  const byCls = {}, bySp = {};
+  for(const u of res.placed){
+    const wi = cx.posWi(u.at), dd = cx.posD(u.at), si = cx.posSi(u.at);
+    const sid = cx.lessons[si].id;
+    if(wi === 1 && dd === 1 && sid === "p2") onSchool++;
+    if(wi === 1 && dd === 3 && sid === "p4" && gradeOf(u.cls) === "3") onGrade++;
+    if(wi === 2 && dd === 2) onOff++;
+    if(cx.days[wi].indexOf(dd) < 0) outMonth++;
+    if(byCls[u.at + "|" + u.cls]) twoCls++; byCls[u.at + "|" + u.cls] = 1;
+    if(bySp[u.at + "|" + u.sp]) twoSp++;    bySp[u.at + "|" + u.sp]   = 1;
+  }
+  return {ms, units:cx.units.length, placed:res.placed.length, unplaced:res.unplaced.length,
+          moved:res.moved.length, onSchool, onGrade, onOff, twoCls, twoSp, outMonth,
+          weeks:cx.weeks.length};
+});
+ok("組むコマを、基本時間割から数えている", spmHard.units > 100, spmHard);
+ok("全校の予定のコマには置かない",   spmHard.onSchool === 0, spmHard);
+ok("学年の予定のコマには置かない",   spmHard.onGrade  === 0, spmHard);
+ok("休みの日には置かない",           spmHard.onOff    === 0, spmHard);
+ok("同じ時刻に、同じクラスへ2人は行かない", spmHard.twoCls === 0, spmHard);
+ok("同じ時刻に、1人が2クラスへは行かない",  spmHard.twoSp  === 0, spmHard);
+ok("月の外の日には組まない",         spmHard.outMonth === 0, spmHard);
+/* **速さも見る。** 押してから返らないと、組み直して見比べる使い方ができない */
+ok("1ヶ月ぶんを 3秒以内で組む", spmHard.ms < 3000, spmHard);
+
+/* 希望。**チェックを入れたものが、案に効いている** */
+const spmWishChk = await p.evaluate(() => {
+  const d = new Date(monday), Y0 = d.getFullYear(), M0 = d.getMonth();
+  const ws = spMonthWeeks(Y0, M0);
+  const code = specials()[0].code;
+  const avoid = iso(addDays(ws[1], 1));
+  const run = set => {
+    const wishes = {};
+    for(const s of specials()) wishes[s.code] = spwBlank();
+    set(wishes[code]);
+    const cx = spBuild(Y0, M0, wishes, true);
+    return {cx, res: spSolve(cx)};
+  };
+  const cnt = ({cx, res}, f) => res.placed.filter(u => u.sp === code
+      && f(cx.posWi(u.at), cx.posD(u.at), cx.posSi(u.at), cx)).length;
+  const A = run(w => { w.days = [avoid]; });
+  const B = run(w => { w.am = true; });
+  const C = run(() => {});
+  return {
+    avoidOn:  cnt(A, (wi, dd, si, cx) => iso(addDays(cx.weeks[wi], dd)) === avoid),
+    avoidOff: cnt(C, (wi, dd, si, cx) => iso(addDays(cx.weeks[wi], dd)) === avoid),
+    amOn:  cnt(B, (wi, dd, si, cx) => si >= cx.amCut),
+    amOff: cnt(C, (wi, dd, si, cx) => si >= cx.amCut),
+    ngShape: JSON.stringify(Object.keys(B.res.wishNg[code]).sort())
+  };
+});
+ok("避ける日には、その専科を置かない", spmWishChk.avoidOn === 0, spmWishChk);
+ok("午前のみで、午後のコマが減る", spmWishChk.amOn < spmWishChk.amOff, spmWishChk);
+ok("希望の通らなかった数を数えている",
+   spmWishChk.ngShape === '["am","avoid","base","pair","spread"]', spmWishChk);
+
+/* 2コマくっつける。**片割れが行事でつぶれても、2コマに戻る** */
+const spmPair = await p.evaluate(() => {
+  const d = new Date(monday), Y0 = d.getFullYear(), M0 = d.getMonth();
+  const ws = spMonthWeeks(Y0, M0), lessons = SLOTS.filter(s => s.kind === "lesson");
+  const sp = specials().find(s => s.subject === "zuko" && (s.grades || []).indexOf("1") >= 0);
+  if(!sp) return {skip:true};
+  const cls = classesOfSpecial(sp.code)[0];
+  const keep = monday;
+  let found = null;
+  for(let wi = 1; wi < ws.length - 1 && !found; wi++){
+    monday = ws[wi];
+    for(let dd = 0; dd < WEEKDAYS && !found; dd++)
+      for(let si = 0; si + 1 < lessons.length; si += 2){
+        const a = baseCell(cls, dd, lessons[si].id), b2 = baseCell(cls, dd, lessons[si+1].id);
+        if(a && b2 && a.subject === "zuko" && b2.subject === "zuko"){ found = {wi, dd, si}; break; }
+      }
+  }
+  if(!found){ monday = keep; return {skip:true}; }
+  monday = ws[found.wi];
+  const w = week(), g = gradeOf(cls);
+  (w.grade[g] || (w.grade[g] = {}))[ck(found.dd, lessons[found.si].id)] =
+    {title:"学年行事", note:"", subject:null, by:"x@edu.nishi.or.jp", at:Date.now()};
+  monday = keep; save();
+  const run = pair => {
+    const wishes = {};
+    for(const s of specials()) wishes[s.code] = spwBlank();
+    wishes[sp.code].pair = pair;
+    const cx = spBuild(Y0, M0, wishes, true), res = spSolve(cx);
+    const byDay = {};
+    let inWeek = 0;
+    for(const u of res.placed){
+      if(u.sp !== sp.code || u.cls !== cls || cx.posWi(u.at) !== found.wi) continue;
+      inWeek++;
+      (byDay[cx.posD(u.at)] || (byDay[cx.posD(u.at)] = [])).push(cx.posSi(u.at));
+    }
+    let paired = 0;
+    for(const k in byDay){
+      const a = byDay[k].sort((x, y) => x - y);
+      for(let i = 0; i + 1 < a.length; i += 2) if(spPaired(a[i], a[i+1])) paired += 2;
+    }
+    return {paired, inWeek};
+  };
+  return {off: run(false), on: run(true)};
+});
+ok("片割れがつぶれても、くっつける希望で2コマに戻る",
+   spmPair.skip === true || spmPair.on.paired === 2, spmPair);
+/* **その週から追い出して2コマにしない。** 追い出すと、その週の時数が変わる */
+ok("2コマにするために、別の週へ逃がさない",
+   spmPair.skip === true || spmPair.on.inWeek === spmPair.off.inWeek, spmPair);
+
+/* 入れる。**基本時間割がそのまま出すコマは書かない**（行だけ増えて紙は変わらない） */
+const spmPut = await p.evaluate(() => {
+  const d = new Date(monday), Y0 = d.getFullYear(), M0 = d.getMonth();
+  const wishes = {};
+  for(const s of specials()) wishes[s.code] = spwBlank();
+  const cx = spBuild(Y0, M0, wishes, true), res = spSolve(cx);
+  res.over = spWouldOverwrite(res);
+  const a = spApply(res);
+  const b2 = spApply(spSolve(spBuild(Y0, M0, wishes, true)));   /* 2回目 */
+  const keep = monday;
+  let cells = 0, outMonth = 0;
+  for(let wi = 0; wi < cx.weeks.length; wi++){
+    monday = cx.weeks[wi];
+    const w = week();
+    for(const c of allClasses()) for(let dd = 0; dd < WEEKDAYS; dd++)
+      for(const s of cx.lessons){
+        if(!((w.special[c] || {})[ck(dd, s.id)])) continue;
+        cells++;
+        if(cx.days[wi].indexOf(dd) < 0) outMonth++;
+      }
+  }
+  monday = keep;
+  return {units:cx.units.length, moved:res.moved.length, wrote:a.wrote,
+          stale:a.stale.length, again:b2.wrote, cleared:b2.cleared, cells, outMonth};
+});
+ok("基本がそのまま出すコマは書かない", spmPut.wrote < spmPut.units / 4, spmPut);
+ok("動かしたコマは書く",               spmPut.wrote >= spmPut.moved, spmPut);
+ok("月の外の日には書かない",           spmPut.outMonth === 0, spmPut);
+ok("2回組んでも、専科のコマは増え続けない", spmPut.again === spmPut.cells, spmPut);
+/* **元の場所に基本の字が残ることを数えている。**
+   そこは担任が入れ直すところなので、黙って残さない */
+ok("基本の字が残るコマを数えている", spmPut.stale > 0, spmPut);
+
+/* 希望の持ち方。**専用の入れ物を作らない**（全校層の1コマ・時程は wish:） */
+const spmWishIO = await p.evaluate(() => {
+  const d = new Date(monday), Y0 = d.getFullYear(), M0 = d.getMonth();
+  const code = specials()[0].code;
+  const w1 = spwBlank();
+  w1.am = true; w1.pair = true; w1.days = ["2026-10-15"];
+  spWishWrite(Y0, M0, code, w1);
+  const back = spWishRead(Y0, M0, code);
+  /* 次の月は空。**先月のぶんが既定になる**（毎月入れ直させない） */
+  const next = spWishRead(Y0, M0 + 1, code);
+  /* 空にすれば、コマごと消える */
+  spWishWrite(Y0, M0, code, spwBlank());
+  const gone = spwRaw_(spwAnchor(Y0, M0), code);
+  return {am:back.wish.am, pair:back.wish.pair, days:back.wish.days,
+          carried:next.carried, nextAm:next.wish.am, gone};
+});
+ok("希望を書いて、読み戻せる",
+   spmWishIO.am === true && spmWishIO.pair === true
+   && spmWishIO.days.join() === "2026-10-15", spmWishIO);
+ok("次の月は、先月の希望を既定にする",
+   spmWishIO.carried === true && spmWishIO.nextAm === true, spmWishIO);
+ok("空にすると、コマごと消える", spmWishIO.gone === null, spmWishIO);
+/* **窓を開いて閉じただけでは、1コマも書き出さない。**
+   書き出すと、先月から引き継いだ希望が「見ただけ」で今月のものになり、
+   触っていない人のぶんまで未保存として出る */
+const spmUntouched = await p.evaluate(() => {
+  const before = Backend.unsaved();
+  spmDirty = false;
+  const n = spmSaveWish();
+  return {n, grew: Backend.unsaved() - before};
+});
+ok("希望を触っていなければ、1コマも書き出さない",
+   spmUntouched.n === 0 && spmUntouched.grew === 0, spmUntouched);
+
+await shut();
+
 console.log(errs.length ? "\n【エラー】\n" + errs.join("\n") : "\nJSエラーなし");
 if(errs.length) ng += errs.length;
 console.log(ng ? "\n× " + ng + " 件だめだった" : "\n○ ぜんぶ通った");

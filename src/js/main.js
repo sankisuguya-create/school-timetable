@@ -438,6 +438,7 @@ function wire(){
       if(a === "admin")   return openAdminDlg();
       if(a === "newyear") return openNewYearDlg();
       if(a === "month")   return openMonth();
+      if(a === "spmonth") return openSpMonth();
       /* 学年・カレンダーも「週案を出す」から開ける。**この並びが現在地も言う。**
          刷るものを探している人は、左の「出す」の並びを見にいく */
       if(a === "grade")   return centerOk() ? setCenter("grade")
@@ -572,6 +573,16 @@ function wire(){
   });
   on("mSheet","click", exportMonthSheet);
   addEventListener("resize", () => { if(!$("monthView").hidden) fitMonth(); });
+
+  /* 専科どうしの月予定（仮）。**「入れる」を押すまで週案には書かない** */
+  on("spmPrev","click", () => spmStep(-1));
+  on("spmNext","click", () => spmStep(1));
+  on("spmRun","click",  spmRun);
+  on("spmApply","click", spmApply);
+  on("spmMove","change", ev => { spmMoveBroken = ev.target.checked; spmRes = null; spmDrawOut(); });
+  /* **案を入れずに閉じても、希望は残す。** 希望はその人の持ちもので、
+     案とは別のもの（触っていなければ1コマも書かない） */
+  on("spmDlg","close", () => { if(spmSaveWish()) toast("<b>専科の希望を控えた。</b>保存を押す"); });
   /* 新年度の設定。**ふだんは管理・システムの中だけ。**
      未了のあいだだけ、左メニューにも出る（結線は dialogs.js） */
   on("nyOpen","click", () => { $("adminDlg").close(); openNewYearDlg(); });
