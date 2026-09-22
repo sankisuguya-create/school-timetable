@@ -171,7 +171,10 @@
   border:1px solid var(--ink-sub);border-radius:calc(1.4mm*var(--k));
   background:var(--sheet);color:var(--ink-sub);
   font-size:calc(5.8pt*var(--k));font-weight:700;line-height:1.45;
-  pointer-events:none}
+  cursor:grab;pointer-events:auto}
+.unitmark.drag{opacity:.45}
+.sheet.ro .unitmark{pointer-events:none;cursor:default}
+@media print{.unitmark{pointer-events:none;cursor:default}}
 .cell.has-unit .n{padding-left:calc(21mm*var(--k))}
 .cell.trip.has-unit .n{padding-left:calc(21mm*var(--k));padding-right:calc(9.2mm*var(--k))}
 
