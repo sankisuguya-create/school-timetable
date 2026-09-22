@@ -251,11 +251,16 @@ function paintUnitQuick(){
     hint.hidden=false; hint.textContent="この教科の単元はまだ登録されていません。"; box.innerHTML=""; return;
   }
   hint.hidden=true;
+  const here=unitAtCell(selCell.d, selCell.s);
   box.innerHTML=list.map(u =>
     "<button class='unitpal' type='button' draggable='true' data-unit='"+escText(u.id)
     +"' data-subject='"+escText(u.subject)+"'"+(unitViewState.placing ? " disabled" : "")+">"
     +"<b>"+escText(u.name)+"</b><small>"+escText(unitQuickStatus_(u))+"</small></button>"
-  ).join("");
+  ).join("")
+  + (here ? "<button class='unitpal unitreset' type='button' draggable='true' data-unit='"
+      +escText(here.unit.id)+"' data-subject='"+escText(here.unit.subject)+"'"
+      +(unitViewState.placing ? " disabled" : "")+"><b>リセット</b><small>"
+      +(here.index===0 ? "この単元を全解除" : "このコマだけ外す")+"</small></button>" : "");
   for(const b of box.querySelectorAll(".unitpal")){
     b.onclick=()=>placeUnitAt(b.dataset.unit, selCell.d, selCell.s);
     b.addEventListener("dragstart", ev => {
