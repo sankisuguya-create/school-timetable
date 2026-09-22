@@ -415,7 +415,10 @@ const Store = (function(){
     if(!from) throw new Error("単元の開始日が分かりません");
 
     const term = termForDate_(year, from);
-    const to = isoDate_(termEnd) || (term && term.end) || "";
+    const askedEnd = isoDate_(termEnd);
+    /* 学期設定があるときは、呼び出し側がそれより後の日を渡しても越境させない。
+       学期末警告の境界をクライアント任せにしない。 */
+    const to = term ? (!askedEnd || askedEnd > term.end ? term.end : askedEnd) : askedEnd;
     if(!to) throw new Error("この日を含む学期の終了日がありません。「学期設定」を入れてください");
     if(to < from) throw new Error("学期末が単元開始日より前になっています");
 
