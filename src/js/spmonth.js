@@ -599,27 +599,33 @@ function spWishNg(cx, res){
 
    まず、参加した専科がその月に入れてある専科コマをどける。どけないと、
    前に組んだ案の残りが新しい案と混ざり、どちらの案でもない月になる。 */
-function spApply(res){
+/* `tent` を立てると**仮採用**。基本時間割と同じ薄さ・同じ低さで入る
+   （時程のIDが `tent:時程` になるだけで、置き方も消し方も本採用と同じ）。
+   どけるほうは**いつも両方**どける ── 本採用と仮採用が同じコマに二重に残ると、
+   どちらが生きているのか紙からは読めない。 */
+function spApply(res, tent){
   const cx = res.cx, keep = monday;
   let wrote = 0, cleared = 0;
   const stale = [];
+  const put = (sid) => tent ? TENT_SLOT + sid : sid;
   try{
-    /* 1. どける */
+    /* 1. どける（本採用のぶんも、仮採用のぶんも） */
     for(let wi = 0; wi < cx.weeks.length; wi++){
       monday = cx.weeks[wi];
       const w = week();
       for(const cls of allClasses()){
         const bank = w.special[cls];
         if(!bank) continue;
-        for(const d of cx.days[wi]) for(let si = 0; si < cx.nS; si++){
-          const key = ck(d, cx.lessons[si].id), e = bank[key];
-          if(!e || !e.sp || !cx.inRun[e.sp]) continue;
-          const was = e.sat || 0, wasT = plain(e.title);
-          delete bank[key];
-          Backend.cellChanged("special", cls, d, cx.lessons[si].id, was,
-                              {year:fy(), monday:wkKey()}, wasT);
-          cleared++;
-        }
+        for(const d of cx.days[wi]) for(let si = 0; si < cx.nS; si++)
+          for(const slot of [cx.lessons[si].id, TENT_SLOT + cx.lessons[si].id]){
+            const key = ck(d, slot), e = bank[key];
+            if(!e || !e.sp || !cx.inRun[e.sp]) continue;
+            const was = e.sat || 0, wasT = plain(e.title);
+            delete bank[key];
+            Backend.cellChanged("special", cls, d, slot, was,
+                                {year:fy(), monday:wkKey()}, wasT);
+            cleared++;
+          }
       }
     }
     /* 2. 書く。**基本がそのまま出しているコマは書かない** */
@@ -629,13 +635,13 @@ function spApply(res){
       const sid = cx.lessons[si].id, sub = SUB_BY_CODE[spSubjectOf(u.sp)];
       const cur = compose(u.cls, d, sid);
       if(cur.layer === "base" && rootSubject(cur.subject) === spSubjectOf(u.sp)) continue;
-      const w = week(), key = ck(d, sid);
+      const w = week(), key = ck(d, put(sid));
       const bank = w.special[u.cls] || (w.special[u.cls] = {});
       const was = (bank[key] || {}).sat || 0, wasT = plain((bank[key] || {}).title);
       bank[key] = {title: escText(sub ? sub.name : spLabel(spOf(u.sp))),
                    subject: spSubjectOf(u.sp), sp: u.sp, note: (bank[key] || {}).note || "",
                    sat: was, by: myEmail(), at: Date.now()};
-      Backend.cellChanged("special", u.cls, d, sid, was,
+      Backend.cellChanged("special", u.cls, d, put(sid), was,
                           {year:fy(), monday:wkKey()}, wasT);
       wrote++;
     }
@@ -681,6 +687,7 @@ let spmY = 0, spmM = 0;          /* 組む月 */
 let spmWish = {};                /* 専科の身元 → 希望 */
 let spmCarried = {};             /* 前の月から持ってきた印 */
 let spmRes = null;               /* いまの案。入れるまで週案には触らない */
+let spmAdoptedAs = "";           /* ""／"real"／"tent"。入れたあとの印 */
 let spmMoveBroken = true;        /* 行事でつぶれたコマを別の枠へ移すか */
 /* **この窓で希望を触ったか。** 触っていないのに書き出すと、窓を開いて
    閉じただけで6人ぶんの未保存が出る（先月から引き継いだ希望が、
@@ -692,9 +699,12 @@ function openSpMonth(){
     return toast("専科か全学年の週案を開いてから押す");
   if(!specials().length)
     return toast("専科の枠がありません。<b>学級編成の「専科」</b>で足す");
+  /* **組んである案は捨てない。** 左のメニューをもう一度押しただけで
+     案が消えると、押した本人には何が起きたのか分からない */
+  if(spmRes){ setCenter("spm"); return; }
   const now = new Date(monday);
   spmY = now.getFullYear(); spmM = now.getMonth();
-  spmRes = null;
+  spmRes = null; spmPreview = null; spmAdoptedAs = "";
   spmLoad(() => { $("spmDlg").showModal(); });
 }
 
@@ -723,7 +733,7 @@ function spmLoad(after){
 function spmStep(n){
   const d = new Date(spmY, spmM + n, 1);
   spmY = d.getFullYear(); spmM = d.getMonth();
-  spmRes = null;
+  spmRes = null; spmPreview = null; spmAdoptedAs = "";
   spmLoad();
 }
 
@@ -825,8 +835,13 @@ function spmRun(){
       spmRes = cx.units.length ? spSolve(cx) : {cx, cut:false, placed:[], unplaced:[],
                                                 moved:[], score:0, wishNg:{}};
       spmRes.over = spWouldOverwrite(spmRes);
+      spmSetPreview(spmRes);
+      spmAdoptedAs = "";
     } finally { Wait.end(w); }
-    spmDrawOut();
+    $("spmDlg").close();
+    /* **案は紙で見る。** 窓の中に小さな表で出していたころは、
+       ふだん読んでいる週案の形と別物で、読み方をもう一度覚えることになった */
+    setCenter("spm");
   }, 30);
 }
 
@@ -853,18 +868,18 @@ function spmShort(code){
   return sub ? sub.name : spmSpName(code);
 }
 
+/* 紙の下に出す、数えたもの。**紙に出ないことだけを字で言う。**
+   置けなかったコマ・基本から動かしたコマ・希望を破った数は、
+   紙の上では「そこに何も無い」としか見えない。 */
 function spmDrawOut(){
   const box = $("spmOut");
-  const btn = $("spmApply");
-  if(!spmRes){
-    box.innerHTML = "<p class='spmlead'>希望を入れてから<b>「くむ」</b>を押す。"
-      + "押すまで週案には何も書かない。</p>";
-    btn.disabled = true;
-    return;
-  }
+  if(!box) return;
+  if(!spmRes){ box.innerHTML = ""; return; }
   const r = spmRes, cx = r.cx;
   const n = r.placed.length + r.unplaced.length;
   let html = "<div class='spmsum'>"
+    + (spmAdoptedAs === "tent" ? "<b class='ok'>仮採用ずみ</b>　"
+     : spmAdoptedAs === "real" ? "<b class='ok'>採用ずみ</b>　" : "")
     + "<b>" + n + "コマ</b>を組んだ"
     + "　置けなかった <b class='" + (r.unplaced.length ? "ng" : "") + "'>"
     + r.unplaced.length + "</b>"
@@ -884,36 +899,6 @@ function spmDrawOut(){
     + "コマぶんある。</b>そこは希望を入れなくても必ず動く"
     + "（直すのは基本時間割の側で、この計算では直せない）。"
     + "下の「基本時間割から動かしたコマ」に入っている。</p>";
-
-  /* 週ごとの表。**「いつ・誰が・どこへ」を1枚で読む。**
-     専科ごとに分けて出すと、干渉していないことがその画面では分からない */
-  for(let wi = 0; wi < cx.weeks.length; wi++){
-    const at = {};
-    for(const u of r.placed){
-      if(cx.posWi(u.at) !== wi) continue;
-      const k = cx.posD(u.at) + "|" + cx.posSi(u.at);
-      (at[k] || (at[k] = [])).push(u);
-    }
-    html += "<h3>" + md(cx.weeks[wi]) + " の週</h3>"
-      + "<table class='grid2 spmwk'><tr><th></th>"
-      + DOW.slice(0, WEEKDAYS).map((x, d) =>
-          "<th>" + x + (cx.days[wi].indexOf(d) < 0 ? "<i>月外</i>" : "") + "</th>").join("")
-      + "</tr>";
-    for(let si = 0; si < cx.nS; si++){
-      html += "<tr><th>" + escText(cx.lessons[si].name) + "</th>";
-      for(let d = 0; d < WEEKDAYS; d++){
-        if(cx.days[wi].indexOf(d) < 0){ html += "<td class='spmoff'></td>"; continue; }
-        const list = (at[d + "|" + si] || []).slice()
-          .sort((a, b) => a.sp < b.sp ? -1 : a.sp > b.sp ? 1 : 0);
-        html += "<td>" + list.map(u =>
-            "<span class='spmcell" + (u.at === u.home ? "" : " mv") + "'>"
-            + escText(spmShort(u.sp)) + " " + escText(u.cls) + "</span>").join("")
-          + "</td>";
-      }
-      html += "</tr>";
-    }
-    html += "</table>";
-  }
 
   /* **置けなかったものを、黙って落とさない。** 入らなかったものを入れたと言わない */
   if(r.unplaced.length){
@@ -967,7 +952,6 @@ function spmDrawOut(){
   }
   html += "</table>";
   box.innerHTML = html;
-  btn.disabled = !r.placed.length;
   const cp = $("spmCopy");
   if(cp) cp.onclick = () => copyText(
     spMonthName(spmY, spmM) + "　専科の月予定で、基本時間割から動かしたコマ\n"
@@ -990,39 +974,53 @@ function spmMovedRows(r){
                  || (a.sp < b.sp ? -1 : a.sp > b.sp ? 1 : 0));
 }
 
-/* ── 入れる ────────────────────────────────────
+/* ── 採用・仮採用 ──────────────────────────────
    **ここまで週案には1文字も書いていない。** 押したときだけ書く。
-   既定は「やめる」（askOk の決まり）。 */
-function spmApply(){
+   既定は「やめる」（askOk の決まり）。
+
+   採用   … ふつうの専科のコマとして入る。紙では専科の層の字
+   仮採用 … **基本時間割と同じ薄さ・同じ低さ**で入る。誰かがその校時へ
+            本物の予定を書いた瞬間に負ける（→ config.js の TENT_SLOT） */
+function spmAdopt(tent){
   if(!spmRes) return;
   const locked = whyLocked();
   if(locked) return toast(locked);
   const r = spmRes;
+  if(!r.placed.length) return toast("入れるコマがありません");
+  const what = tent ? "仮採用" : "採用";
   const lines = ["<b>" + r.placed.length + "コマ</b>ぶんの専科の予定を、"
     + escText(spMonthName(spmY, spmM)) + "の週案に入れる。"
     + "<b>基本時間割がそのまま出しているコマは書かない</b>"
     + "（書いても紙は変わらないので、行だけが増える）。"];
-  if(r.over.length) lines.push("<b>ほかの人の予定を " + r.over.length
+  if(tent) lines.push("<b>仮採用は、基本時間割と同じ薄さで入る。</b>"
+    + "誰かがその校時へ予定を書いたら、そちらが出る"
+    + "（仮のほうは黙って引っ込む）。紙に出ているあいだは、"
+    + "時数にもたんぽぽにも基本時間割と同じように数える。");
+  else if(r.over.length) lines.push("<b>ほかの人の予定を " + r.over.length
     + "コマ潰す。</b>潰された人には、次にその週を開いたときに知らせが出る。");
   if(r.moved.length) lines.push("基本時間割から動かした <b>" + r.moved.length
     + "コマ</b>は、<b>元の場所に基本時間割の字が残る。</b>"
-    + "そこは担任が入れ直すところなので、上の一覧をそのまま渡す。");
+    + "そこは担任が入れ直すところなので、下の一覧をそのまま渡す。");
   lines.push("入れたあとは<b>保存を押す</b>。押すまでシートには送らない。");
   askOk({
-    title: spMonthName(spmY, spmM) + "の専科の予定を、週案に入れますか",
-    lines, goLabel:"入れる",
+    title: spMonthName(spmY, spmM) + "の専科の予定を、" + what + "しますか",
+    lines, goLabel: what + "する",
     onYes: () => {
       const w = Wait.begin("週案に入れています");
+      let out;
       try{
         spmSaveWish();
-        const out = spApply(r);
-        $("spmDlg").close();
-        refreshWeek();
-        toast("<b>" + out.wrote + "コマ</b>を入れた"
-          + (out.cleared ? "（前の案を " + out.cleared + "コマ どけた）" : "")
-          + (out.stale.length ? "　基本の字が残るコマ " + out.stale.length : "")
-          + "　<b>保存を押す</b>");
+        out = spApply(r, tent);
+        /* **案を消して、紙を週案そのものに戻す。** 入れたあとの紙が
+           案のままだと、入ったのかどうかが紙から読めない */
+        spmPreview = null;
+        spmAdoptedAs = tent ? "tent" : "real";
       } finally { Wait.end(w); }
+      drawSpMonthView();
+      toast("<b>" + out.wrote + "コマ</b>を" + what + "した"
+        + (out.cleared ? "（前の案を " + out.cleared + "コマ どけた）" : "")
+        + (out.stale.length ? "　基本の字が残るコマ " + out.stale.length : "")
+        + "　<b>保存を押す</b>");
     }
   });
 }
@@ -1037,4 +1035,135 @@ function spmSaveWish(){
   spmDirty = false;
   if(n) save();
   return n;
+}
+
+/* ══ 案の面 ══════════════════════════════════════════
+   **4週の面と同じ紙で出す。** 組み立ては週の紙と同じ buildSheet を使う
+   （紙を2つ持つと、片方だけ直した版が出る）。違うのは中身の読み方だけで、
+   それは cellFor → spmCellFor の1か所にある。
+
+   出すのは**全学年の紙に、専科の巡りを重ねたもの**。1コマに
+   「音楽 2-2 ／ 理科 4-1 ／ 図工 5-2」と並び、**それぞれを教科の色で塗る**。
+   専科ごとに分けて出すと、干渉が起きていないことがその画面では分からない。
+
+   全校の予定・休み・特別校時・校外行事は、全学年の紙がそのまま持っている
+   ── 専科がそこへ行けない理由が、同じ紙の上に見える。
+
+   **画面だけ。刷らない。** 週は4〜6枚あり、B4 の 2×2 には収まらない
+   （刷る「4週まとめて（B4）」は今までどおり別にある）。 */
+const spmFace = () => typeof centerMode !== "undefined" && centerMode === "spm";
+
+/* 案（まだ週案に入れていないもの）。**入れたら消す。**
+   消したあとは週案そのものを読むので、同じ紙が実物になる。 */
+let spmPreview = null;           /* "月曜|曜日|時程" → [{sp, cls, moved}] */
+
+function spmSetPreview(res){
+  const cx = res.cx, map = {};
+  for(const u of res.placed){
+    const wi = cx.posWi(u.at), d = cx.posD(u.at), si = cx.posSi(u.at);
+    const k = iso(cx.weeks[wi]) + "|" + d + "|" + cx.lessons[si].id;
+    (map[k] || (map[k] = [])).push({sp:u.sp, cls:u.cls, moved:u.at !== u.home});
+  }
+  spmPreview = map;
+}
+
+/* いま週案に入っている、そのコマの専科。**合成したあとで見る。**
+   基本時間割のぶんも拾う（基本は教師を持っていないので、担当学年から引く）。
+   学年や全校が上から潰していれば、そこに専科は行かない ── だから出さない。 */
+function spmStoreEntries(d, sid){
+  const out = [];
+  for(const cls of allClasses()){
+    const cur = compose(cls, d, sid);
+    if(cur.layer === "special"){ if(cur.sp) out.push({sp:cur.sp, cls}); continue; }
+    if(cur.layer === "tent"){ if(cur.sp) out.push({sp:cur.sp, cls, tent:true}); continue; }
+    if(cur.layer !== "base" || !cur.subject) continue;
+    const owner = spOwnerOf_(cls, cur.subject);
+    if(owner) out.push({sp:owner, cls, base:true});
+  }
+  return out;
+}
+
+/* 案の面の1コマ。**紙の下敷きは全学年の紙。**
+   授業のコマだけ、専科の並びに差し替える。全校の予定が入っているコマは
+   そのまま出す ── そこは全クラスが塞がっていて、専科は行けない。 */
+function spmCellFor(d, s){
+  const sl = SLOT_BY_ID[s] || {}, w = week();
+  const sc = w.school[ck(d, s)];
+  const asIs = () => sc ? Object.assign({}, sc, {layer:"school", clash:null, over:[]})
+                        : {title:"", note:"", subject:null, layer:"base", clash:null};
+  if(sl.kind !== "lesson") return asIs();
+  if(sc && plain(sc.title).trim()) return asIs();
+  const list = spmPreview ? (spmPreview[wkKey() + "|" + d + "|" + s] || [])
+                          : spmStoreEntries(d, s);
+  if(!list.length) return {title:"", note:"", subject:null, layer:"base", clash:null};
+  /* 並びは教科コード順。**同じコマが、週ごとに並び替わらないようにする**
+     （並び替わると、同じ専科を目で追えない） */
+  const sorted = list.slice().sort((a, b) => {
+    const x = spSubjectOf(a.sp), y = spSubjectOf(b.sp);
+    return x < y ? -1 : x > y ? 1 : clsRank_(a.cls, b.cls);
+  });
+  const html = sorted.map(e =>
+    "<span class='spx" + (e.tent ? " tent" : "") + (e.moved ? " mv" : "")
+    + "' data-subject='" + escText(spSubjectOf(e.sp)) + "'>"
+    + escText(spmShort(e.sp)) + " " + escText(e.cls) + "</span>").join("");
+  return {title: html, note:"", subject:null, layer:"base", clash:null};
+}
+
+/* 面を描く。**週の数だけ紙を作る**（4〜6枚）。 */
+function drawSpMonthView(){
+  const box = $("spmPaper");
+  if(!box) return;
+  const weeks = spmRes ? spmRes.cx.weeks : spMonthWeeks(spmY, spmM);
+  $("spmTtl").textContent = spMonthName(spmY, spmM) + "　専科の月予定"
+    + (spmPreview ? "（案）" : spmAdoptedAs === "tent" ? "（仮採用ずみ）"
+     : spmAdoptedAs === "real" ? "（採用ずみ）" : "");
+  /* 押せるのは、まだ入れていない案があるときだけ */
+  for(const id of ["spmTake", "spmTakeTent"]){
+    const b = $(id);
+    if(b) b.disabled = !spmPreview || !spmRes || !spmRes.placed.length;
+  }
+  box.textContent = "";
+  for(const mon of weeks){
+    const wrap = el("div", "spmwk");
+    wrap.appendChild(el("div", "spmwklab", escText(md(mon)) + " の週"));
+    const sh = el("div", "sheet mini spmsheet");
+    wrap.appendChild(sh);
+    box.appendChild(wrap);
+    buildSheet(sh, mon, true);
+  }
+  fitSpm();
+  spmDrawOut();
+}
+
+/* 紙の大きさ。**2列に並べ、列の幅に合わせて縮める。**
+   4週の面（fitMonth）は B4 に刷るので1画面へ収めるが、こちらは画面だけで
+   週が6枚になることもあるので、**縦は転がす**（無理に収めると字が読めない）。 */
+const SPM_COLS = 2;
+function fitSpm(){
+  const box = $("spmPaper");
+  if(!box) return;
+  const sheets = [...box.querySelectorAll(".sheet")];
+  if(!sheets.length) return;
+  const w = (box.clientWidth - M_GAP * (SPM_COLS - 1)) / SPM_COLS - 2;
+  if(w < 40) return;
+  /* 1mm が何 px か。**測って出す**（決め打ちにすると、拡大表示でずれる） */
+  const probe = el("div");
+  probe.style.cssText = "position:absolute;visibility:hidden;width:100mm";
+  document.body.appendChild(probe);
+  const mm = probe.getBoundingClientRect().width / 100;
+  probe.remove();
+  const k = Math.max(.3, Math.min(1, w / (182 * mm)));
+  for(const sh of sheets){
+    sh.style.setProperty("--pw", w + "px");
+    sh.style.setProperty("--pm", "0px");
+    sh.style.setProperty("--k", String(k));
+  }
+}
+
+/* 月を繰る。**案は持ち越さない**（別の月の案を、その月の紙に出さない） */
+function spmFaceStep(n){
+  const d = new Date(spmY, spmM + n, 1);
+  spmY = d.getFullYear(); spmM = d.getMonth();
+  spmRes = null; spmPreview = null; spmAdoptedAs = "";
+  spmLoad(() => drawSpMonthView());
 }

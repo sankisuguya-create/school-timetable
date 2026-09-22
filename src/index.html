@@ -234,6 +234,31 @@
         <div class="cvpaper" id="cvPaper"></div>
       </div>
 
+      <!-- 専科の月予定（案）の面。**4週の面と同じ紙で出す。**
+           出すのは全学年の紙に専科の巡りを重ねたもので、1コマに
+           「音楽 2-2 ／ 理科 4-1」と並び、それぞれが教科の色で塗られる。
+           全校の予定・休み・校外行事は全学年の紙がそのまま持っているので、
+           専科がそこへ行けない理由が同じ紙の上に見える。
+           **画面だけ。刷らない**（週が4〜6枚あり、B4 の 2×2 に収まらない） -->
+      <div class="spmview" id="spmView" hidden>
+        <div class="mbar" data-help="spmonth">
+          <button class="btn" id="spmFPrev">◀ 前の月</button>
+          <b id="spmTtl"></b>
+          <button class="btn" id="spmFNext">次の月 ▶</button>
+          <span class="grow"></span>
+          <button class="btn" id="spmWishOpen">希望を直す</button>
+          <!-- 採用と仮採用。**押すまで週案には1文字も書かない。**
+               仮採用は基本時間割と同じ薄さ・同じ低さで入る -->
+          <button class="btn go" id="spmTake" disabled>採用</button>
+          <button class="btn" id="spmTakeTent" disabled>仮採用</button>
+          <button class="btn" id="spmClose">週の紙へ戻る</button>
+        </div>
+        <div class="spmbody">
+          <div class="spmpaper" id="spmPaper"></div>
+          <div class="spmout" id="spmOut"></div>
+        </div>
+      </div>
+
       <!-- たんぽぽの面。週案の紙ではないので、紙の代わりにここを出す -->
       <div class="tpview" id="tpView" hidden>
         <div class="tphead" data-help="tanpopo">
@@ -969,8 +994,9 @@
     <button class="btn go" id="spmRun">くむ</button>
   </div>
   <table class="grid2 spmwish" id="spmWish"></table>
-  <div id="spmOut"></div>
-  <div class="end"><button class="btn danger" id="spmApply" disabled>この案を週案に入れる</button></div>
+  <p class="spmlead"><b>「くむ」を押すと、案を紙で出す。</b>
+     4週の面と同じ紙で、1コマに「音楽 2-2 ／ 理科 4-1」と並ぶ。
+     採用するかどうかは、その紙を見てから決める。</p>
 </div></dialog>
 
 <!-- 避ける日。**その月のカレンダーから押して選ぶ。**

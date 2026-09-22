@@ -192,7 +192,8 @@ button,select,input,textarea{font:inherit;color:inherit}
 .weekbar .hint{margin:0;font-size:11.5px;color:var(--tx-sub);text-align:right;max-width:15em}
 
 /* 出し入れするものは1本にまとめる。**書き漏らすと、面が2つ重なって出る** */
-.stage[hidden],.weekbar[hidden],.mview[hidden],.gvview[hidden],.cvview[hidden],.tpview[hidden],
+.stage[hidden],.weekbar[hidden],.mview[hidden],.gvview[hidden],.cvview[hidden],
+.spmview[hidden],.tpview[hidden],
 .cbar[hidden],.freebox[hidden],.viewseg[hidden]{display:none!important}
 
 /* 紙の左右で週を繰る。**左メニューの ◀ ▶ と同じことをする。**
@@ -285,7 +286,7 @@ body.is-unsaved[data-scope="school"] .stage{
    **帯 ＋ 紙 の2行。** 説明はどれも ？ の中へ移したので、あいだの1行は無い。
    行を3つ書いたままにすると、紙が `1fr` の行に入らず中身の高さで止まる
    ── 学年の面が画面の 28% で止まっていた（実測 280px / 1000px）。 */
-.mview,.gvview,.cvview{grid-area:3/1/4/2;display:grid;
+.mview,.gvview,.cvview,.spmview{grid-area:3/1/4/2;display:grid;
   grid-template-rows:auto minmax(0,1fr);
   gap:8px;padding:12px 16px 16px;min-height:0;min-width:0}
 /* 帯。**同じ並べ方を3つの名前で書かない**（月の面・中央のかたち・空き枠） */
@@ -1345,3 +1346,41 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .spmwish td.spmdcell .btn{padding:2px 8px;font-size:12px}
 .spmng b.ng{color:var(--cat-clash)}
 .spmdim{color:var(--tx-sub)}
+
+/* ── 専科の月予定（案）の面 ──────────────────────
+   **4週の面と同じ紙を、週の数だけ2列に並べる。**
+   4週の面は B4 に刷るので1画面へ収めるが、こちらは画面だけで週が
+   6枚になることもあるので、**縦は転がす**（無理に収めると字が読めない）。 */
+.spmbody{min-height:0;min-width:0;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.spmpaper{display:grid;grid-template-columns:1fr 1fr;gap:6px;
+  justify-items:center;align-items:start}
+.spmwk{display:flex;flex-direction:column;gap:3px;align-items:center}
+.spmwklab{font-size:12px;color:var(--tx-sub);font-weight:600}
+/* 案の紙。**授業のコマを高くする** ── 1コマに専科が6人まで並ぶ。
+   備考は出さないので、そのぶんの高さを題名へ回す */
+.sheet.spmsheet{--h-title:19mm; --h-note:0mm; --fs-t:7pt}
+.sheet.spmsheet .cell.lesson>.n{display:none}
+/* **紙の高さは中身で決める。** 週案の紙は B5 の高さ（--ph）まで必ず伸びるので、
+   放課後（1fr の行）が余りを全部もらって 10cm の空欄になる。
+   ここは刷らない面なので、余りを作らない */
+.sheet.spmsheet{min-height:0}
+/* 放課後と週のメモは出さない。**専科の巡りとは別のもの**で、
+   出すと空欄が紙の半分を占める */
+.sheet.spmsheet .cell.note,.sheet.spmsheet .foot{display:none}
+/* 4週の面の「題名は左・備考は右」は、ここでは要らない（備考が無い） */
+.sheet.mini.spmsheet .daycol:not(.lastcol) .cell.lesson{flex-direction:column}
+.sheet.mini.spmsheet .daycol:not(.lastcol) .cell.lesson>.t{width:100%;height:100%}
+.sheet.spmsheet .cell .t{display:flex;flex-direction:column;gap:.4px;
+  align-items:stretch;justify-content:flex-start}
+/* **1コマの中の1行ずつを、教科の色で塗る。**
+   コマ全体に色を敷くと、6人並んだコマが1色になって誰も見分けられない。
+   色は識別を担わない ── どの教科かは行の字が言っている
+   （--tint の割り当ては sheet.css の [data-subject]）。 */
+.spx{display:block;background:var(--tint);border-radius:2px;
+  padding:0 1px;white-space:nowrap;text-align:left;line-height:1.28}
+/* 基本時間割から動いたコマ。**左の線で言う**（記号を足すとクラス名が切れる） */
+.spx.mv{box-shadow:inset 2px 0 0 var(--ink-link);padding-left:3px}
+/* 仮採用ずみの行。**基本時間割と同じ薄さ** */
+.spx.tent{color:var(--ink-sub)}
+.spmout{padding:0 2px 8px}
+.spmsum b.ok{color:var(--ink-link)}

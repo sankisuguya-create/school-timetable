@@ -139,6 +139,10 @@ function chipMode(){
    （クラスの面の「画面だけ／紙にも」は、そのままそのクラスの設定） */
 function faceChipMode(){
   if(typeof view === "undefined" || !view) return "off";
+  /* 案の面は**コマごとではなく、コマの中の1行ずつ**を教科の色で塗る
+     （1コマに何人も並ぶ。→ spmonth.js の spmCellFor）。
+     ここで面ぜんたいに色を付けると、教科を持たないコマまで地が付く */
+  if(typeof spmFace === "function" && spmFace()) return "off";
   if(view.kind === "class") return (Y().chipModes || {})[view.cls] || "off";
   return "output";
 }

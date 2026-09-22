@@ -578,8 +578,15 @@ function wire(){
   on("spmPrev","click", () => spmStep(-1));
   on("spmNext","click", () => spmStep(1));
   on("spmRun","click",  spmRun);
-  on("spmApply","click", spmApply);
-  on("spmMove","change", ev => { spmMoveBroken = ev.target.checked; spmRes = null; spmDrawOut(); });
+  on("spmMove","change", ev => { spmMoveBroken = ev.target.checked; spmRes = null; });
+  /* 案の面。**押すまで週案には1文字も書かない** */
+  on("spmFPrev","click", () => spmFaceStep(-1));
+  on("spmFNext","click", () => spmFaceStep(1));
+  on("spmWishOpen","click", () => $("spmDlg").showModal());
+  on("spmTake","click",     () => spmAdopt(false));
+  on("spmTakeTent","click", () => spmAdopt(true));
+  on("spmClose","click", () => setCenter("week"));
+  addEventListener("resize", () => { if(!$("spmView").hidden) fitSpm(); });
   /* **案を入れずに閉じても、希望は残す。** 希望はその人の持ちもので、
      案とは別のもの（触っていなければ1コマも書かない） */
   on("spmDlg","close", () => { if(spmSaveWish()) toast("<b>専科の希望を控えた。</b>保存を押す"); });

@@ -2829,6 +2829,119 @@ const spmUntouched = await p.evaluate(() => {
 ok("希望を触っていなければ、1コマも書き出さない",
    spmUntouched.n === 0 && spmUntouched.grew === 0, spmUntouched);
 
+console.log("\n■ 専科の月予定は、4週の面と同じ紙で出す");
+/* **窓ではなく紙で見る。** ふだん読んでいる週案の形と別物だと、
+   読み方をもう一度覚えることになる */
+await shut();
+await p.evaluate(() => openView({kind:"special", sp:specials()[0].code}));
+await p.waitForTimeout(250); await shut();
+await p.locator("#navSpMonth").click(); await p.waitForTimeout(700);
+ok("窓が開く", await p.locator("#spmDlg").isVisible());
+await p.locator("#spmRun").click(); await p.waitForTimeout(4000);
+ok("くむと、窓が閉じて紙が出る",
+   (await p.locator("#spmDlg").isVisible()) === false
+   && (await p.locator("#spmView").isVisible()) === true);
+const spmSheets = await p.locator("#spmPaper .sheet").count();
+ok("週の数だけ紙が並ぶ", spmSheets >= 4 && spmSheets <= 6, spmSheets);
+const spmLines = await p.locator("#spmPaper .spx").count();
+ok("1コマに専科が並ぶ", spmLines > 100, spmLines);
+/* **色は1行ずつに敷く。** コマ全体に敷くと、6人並んだコマが1色になる */
+const spmCol = await p.evaluate(() => {
+  const a = [...document.querySelectorAll("#spmPaper .spx")].slice(0, 80);
+  const set = {};
+  for(const e of a) set[getComputedStyle(e).backgroundColor] = 1;
+  const cellBg = new Set([...document.querySelectorAll("#spmPaper .cell.lesson>.t")]
+    .slice(0, 40).map(e => getComputedStyle(e).backgroundColor));
+  return {kinds:Object.keys(set).length, cellKinds:cellBg.size,
+          subj:a.slice(0, 4).map(e => e.dataset.subject)};
+});
+ok("教科ごとに色が変わる", spmCol.kinds >= 3, spmCol);
+ok("色はコマ全体ではなく、1行ずつに付く", spmCol.cellKinds <= 1, spmCol);
+/* 全校の予定・休みは、下敷きの全学年の紙がそのまま持っている */
+const spmCtx = await p.evaluate(() => {
+  const cx = spmRes.cx, keep = monday;
+  let onSchool = 0, onOff = 0;
+  monday = cx.weeks[1];
+  const w = week();
+  w.school[ck(1, "p2")] = {title:"全校朝会", note:"", subject:null,
+                           by:"x@edu.nishi.or.jp", at:Date.now()};
+  monday = keep;
+  drawSpMonthView();
+  const sheets = document.querySelectorAll("#spmPaper .sheet");
+  const cell = sheets[1] && sheets[1].querySelector(".cell[data-d='1'][data-s='p2']");
+  const txt = cell ? cell.textContent : "";
+  for(const e of document.querySelectorAll("#spmPaper .spx")) onSchool += 0;
+  return {txt, lines: cell ? cell.querySelectorAll(".spx").length : -1,
+          slash: !!document.querySelector("#spmPaper .cell .noneslash, #spmPaper .daycol .offslash")};
+});
+ok("全校の予定のコマは、その予定がそのまま出る",
+   spmCtx.txt.indexOf("全校朝会") >= 0 && spmCtx.lines === 0, spmCtx);
+
+/* 仮採用。**基本時間割と同じ薄さ・同じ低さで入る** */
+const spmTent = await p.evaluate(() => {
+  const r = spmRes, cx = r.cx;
+  spmSaveWish();
+  const out = spApply(r, true);
+  spmPreview = null; spmAdoptedAs = "tent";
+  const keep = monday;
+  let tent = 0, real = 0, found = null;
+  for(const mon of cx.weeks){
+    monday = mon;
+    const w = week();
+    for(const c of allClasses()) for(const k in (w.special[c] || {})){
+      if(k.indexOf("|" + TENT_SLOT) >= 0) tent++; else real++;
+    }
+  }
+  monday = cx.weeks[0];
+  for(const c of allClasses()){
+    for(let d = 0; d < WEEKDAYS && !found; d++) for(const sl of cx.lessons){
+      const cur = compose(c, d, sl.id);
+      if(cur.layer === "tent"){ found = {c, d, s:sl.id, t:plain(cur.title)}; break; }
+    }
+    if(found) break;
+  }
+  let beaten = "", own = "";
+  if(found){
+    /* **本物を書いた瞬間に負ける。** それが「優先度がいちばん低い」の中身 */
+    const w = week();
+    (w.home[found.c] || (w.home[found.c] = {}))[ck(found.d, found.s)] =
+      {title:"国語", note:"", subject:"kokugo", by:"y@edu.nishi.or.jp", at:Date.now()};
+    beaten = compose(found.c, found.d, found.s).layer;
+    delete w.home[found.c][ck(found.d, found.s)];
+    /* 専科の自分の週にも、薄く出る */
+    const e = (week().special[found.c] || {})[ck(found.d, TENT_SLOT + found.s)];
+    if(e) own = ownCell(found.d, found.s, e.sp).layer;
+  }
+  monday = keep;
+  return {tent, real, found, beaten, own, wrote:out.wrote};
+});
+ok("仮採用は tent: の行に入る（本物の校時には書かない）",
+   spmTent.tent > 0 && spmTent.real === 0, spmTent);
+ok("仮採用のコマが、紙に出る", !!spmTent.found, spmTent);
+ok("誰かが本物を書くと、仮は引っ込む", spmTent.beaten === "home", spmTent);
+ok("専科の自分の週にも、薄く出る", spmTent.own === "tent", spmTent);
+
+/* 採用しなおすと、仮のぶんはどける。**二重に残さない** */
+const spmSwap = await p.evaluate(() => {
+  const r = spmRes, cx = r.cx;
+  const out = spApply(r, false);
+  const keep = monday;
+  let tent = 0, real = 0;
+  for(const mon of cx.weeks){
+    monday = mon;
+    const w = week();
+    for(const c of allClasses()) for(const k in (w.special[c] || {})){
+      if(k.indexOf("|" + TENT_SLOT) >= 0) tent++; else real++;
+    }
+  }
+  monday = keep;
+  return {tent, real, cleared:out.cleared, wrote:out.wrote};
+});
+ok("採用しなおすと、仮のぶんは残らない",
+   spmSwap.tent === 0 && spmSwap.real > 0, spmSwap);
+
+await p.evaluate(() => setCenter("week"));
+await p.waitForTimeout(200);
 await shut();
 
 console.log(errs.length ? "\n【エラー】\n" + errs.join("\n") : "\nJSエラーなし");

@@ -89,6 +89,14 @@ function compose(cls, d, s){
   if(sp) cand.push(Object.assign({}, sp, {layer:"special", at:sp.at || 0, note:""}));
   push((w.home[cls] || {})[key], "home");
 
+  /* **仮採用は、本物のコマが1つも無いときだけ出る。**
+     誰かがこの校時へ書いた瞬間に負ける ── それが「優先度がいちばん低い」の中身。
+     基本時間割より上に出すのは、行事で崩れた基本を置き換えるための案だから
+     （→ config.js の TENT_SLOT）。 */
+  if(!cand.length || (cand.length === 1 && cand[0].layer === "base")){
+    const tv = (w.special[cls] || {})[ck(d, TENT_SLOT + s)];
+    if(tv) return Object.assign({}, tv, {layer:"tent", clash:null});
+  }
   if(!cand.length) return {title:"", note:"", subject:null, layer:"base", clash:null};
   if(cand.length > 1)
     cand.sort((x, y) => (x.at - y.at) || (RANK[x.layer] - RANK[y.layer]));
@@ -300,7 +308,14 @@ function ownCell(d, s, sp){
     if(e && e.sp === me)
       return {title:escText(c), note:e.note || "", layer:"special", cls:c, clash:null};
   }
-  /* 2. 基本時間割が割り当てているコマ。**淡く出る**（layer が base なので） */
+  /* 2. 自分が仮採用で入れたコマ。**淡く出る**（layer が tent）。
+     本物のコマが先に見つかればそちらが出るので、ここでも順は同じ */
+  for(const c of allClasses()){
+    const e = (w.special[c] || {})[ck(d, TENT_SLOT + s)];
+    if(e && e.sp === me)
+      return {title:escText(c), note:e.note || "", layer:"tent", cls:c, clash:null};
+  }
+  /* 3. 基本時間割が割り当てているコマ。**淡く出る**（layer が base なので） */
   const hit = spBaseClasses(d, s, me);
   if(hit.length)
     /* **2クラス以上に当たったら、隠さずに言う。** 同じ教科の専科が2人いて
@@ -317,6 +332,9 @@ function ownCell(d, s, sp){
 
 /* いま開いている面から見た1コマ。画面はこれだけを見る。 */
 function cellFor(d, s){
+  /* 専科の月予定の面。**1コマに全専科を並べる**（→ spmonth.js の spmCellFor）。
+     面が「誰の紙か」を決めるのはここ1か所なので、あちらに紙を組み直させない */
+  if(typeof spmFace === "function" && spmFace()) return spmCellFor(d, s);
   if(view.kind === "class")   return compose(view.cls, d, s);
   if(view.kind === "special") return ownCell(d, s);
   const e = (masterBank() || {})[ck(d, s)];
