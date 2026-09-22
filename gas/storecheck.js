@@ -2086,6 +2086,79 @@ console.log("\n■ 単元進捗 Phase 2");
   ok("管理画面用読取は学期と単元をまとめて返す",
      mgr.terms.length === 3 && mgr.units.length === 1 && mgr.units[0].name === "分数", mgr);
 })();
+
+console.log("\n■ 単元進捗 Phase 3");
+(function(){
+  const y = 2032;
+
+  /* 2学期に、月p1・火p2・水p3の算数を繰り返す */
+  ev(`Store.writeBaseAll(2032, {
+    "3-1":{
+      A:{
+        "0|p1":{title:"算数",subject:"sansu"},
+        "1|p2":{title:"算数",subject:"sansu"},
+        "2|p3":{title:"算数",subject:"sansu"}
+      },
+      B:{
+        "0|p1":{title:"算数",subject:"sansu"},
+        "1|p2":{title:"算数",subject:"sansu"},
+        "2|p3":{title:"算数",subject:"sansu"}
+      }
+    }
+  })`);
+
+  let made = ev(`Store.writeUnit(2032, {
+    className:"3-1", subject:"sansu", name:"暗算", lessonCount:5, hasTest:true
+  })`);
+  let p = ev("Store.placeUnit(" + y + ", " + JSON.stringify(made.unit.id)
+    + ", " + JSON.stringify(made.unit.updatedAt)
+    + ', "2032-09-06", "p1")');
+  ok("起点から5時間＋テストを自動配置",
+     p.action === "placed"
+     && p.unit.assignments.length === 5
+     && p.unit.assignments[0] === "2032-09-06|p1"
+     && !!p.unit.testAssignment
+     && !p.warning, p);
+
+  const removed = p.unit.assignments[1], rp = removed.split("|");
+  const beforeLast = p.unit.assignments[p.unit.assignments.length - 1];
+  p = ev("Store.placeUnit(" + y + ", " + JSON.stringify(p.unit.id)
+    + ", " + JSON.stringify(p.unit.updatedAt)
+    + ", " + JSON.stringify(rp[0]) + ", " + JSON.stringify(rp[1]) + ")");
+  ok("途中のa/nへ再投入するとそのコマを除外し後ろへ補充",
+     p.action === "excluded"
+     && p.unit.assignments.length === 5
+     && p.unit.assignments.indexOf(removed) < 0
+     && p.unit.excludedSlots.indexOf(removed) >= 0
+     && p.unit.assignments[p.unit.assignments.length - 1] !== beforeLast, p);
+
+  const first = p.unit.assignments[0], fp = first.split("|");
+  p = ev("Store.placeUnit(" + y + ", " + JSON.stringify(p.unit.id)
+    + ", " + JSON.stringify(p.unit.updatedAt)
+    + ", " + JSON.stringify(fp[0]) + ", " + JSON.stringify(fp[1]) + ")");
+  ok("1/nへ同じ単元を再投入すると全配置を解除",
+     p.action === "reset"
+     && p.unit.assignments.length === 0
+     && !p.unit.testAssignment
+     && p.unit.excludedSlots.length === 0, p);
+
+  /* 別単元が使う起点は上書きしない */
+  p = ev("Store.placeUnit(" + y + ", " + JSON.stringify(p.unit.id)
+    + ", " + JSON.stringify(p.unit.updatedAt)
+    + ', "2032-09-06", "p1")');
+  const other = ev(`Store.writeUnit(2032, {
+    className:"3-1", subject:"sansu", name:"小数", lessonCount:3, hasTest:false
+  })`);
+  let why = "";
+  try{
+    ev("Store.placeUnit(" + y + ", " + JSON.stringify(other.unit.id)
+      + ", " + JSON.stringify(other.unit.updatedAt)
+      + ', "2032-09-06", "p1")');
+  }catch(e){ why = String(e && e.message); }
+  ok("別単元の配置を黙って上書きしない",
+     why.indexOf("別の単元") >= 0, why);
+})();
+
 console.log("\n■ ロック");
 ok("書き込みのあとロックは残らない", locks.held === 0, locks.held);
 
