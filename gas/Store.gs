@@ -396,10 +396,25 @@ const Store = (function(){
     return Sheets.isDate(r["更新時刻"]) ? r["更新時刻"].getTime() : 0;
   }
 
+  function unitTitleText_(v){
+    /* 題名にはリンクHTMLを入れられる。教科コードの無い手入力コマも、
+       画面の countSub() と同じく「見えている字」で教科へ戻す。 */
+    return String(v == null ? "" : v)
+      .replace(/<br\s*\/?\s*>/gi, " ")
+      .replace(/<[^>]*>/g, "")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .trim();
+  }
+
   function unitSubject_(cell, byName){
     const code = String((cell && cell.subject) || "").trim();
     if(code) return code;
-    return byName[String((cell && cell.title) || "").trim()] || "";
+    return byName[unitTitleText_(cell && cell.title)] || "";
   }
 
   /* class × subject の候補を、開始日から学期末までまとめて返す。
