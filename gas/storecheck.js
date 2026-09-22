@@ -1931,10 +1931,10 @@ console.log("\n■ 単元進捗 Phase 1");
      title:"休み",note:"",subject:""}
   ])`);
 
-  const cand = ev('Store.unitCandidates(2030, "3-1", "sansuu", "2030-09-02", "")');
+  const cand = ev('Store.unitCandidates(2030, "3-1", "sansuu", "2030-09-02", "p1", "")');
   ok("開始日の学期末を自動で使う",
      cand.to === "2030-09-30" && cand.term && cand.term.name === "1学期", cand);
-  const capped = ev('Store.unitCandidates(2030, "3-1", "sansuu", "2030-09-02", "2030-12-31")');
+  const capped = ev('Store.unitCandidates(2030, "3-1", "sansuu", "2030-09-02", "p1", "2030-12-31")');
   ok("呼び出し側が後の日を渡しても学期末を越境しない",
      capped.to === "2030-09-30", capped);
   ok("全校行事で上書きされた算数は候補にしない",
@@ -1945,6 +1945,9 @@ console.log("\n■ 単元進捗 Phase 1");
      cand.slots.indexOf("2030-09-03|p2") >= 0 &&
      cand.slots.indexOf("2030-09-04|p3") >= 0 &&
      cand.slots.indexOf("2030-09-10|p2") >= 0, cand.slots);
+  const sameDay = ev('Store.unitCandidates(2030, "3-1", "sansuu", "2030-09-03", "p3", "")');
+  ok("起点より前の同日コマへ戻らない",
+     sameDay.slots.every(x => x.slice(0,10) !== "2030-09-03" || x.endsWith("|p3")), sameDay.slots);
 
   /* 週ごとに読む実装へ戻っていないことを、返した読取枚数でも見る。
      最大でも 全校・3年・3-1 の3枚。 */
