@@ -117,10 +117,10 @@ button,select,input,textarea{font:inherit;color:inherit}
 /* **紙の上下には何も置かない。** 週の移動も凡例も左へ寄せてある。
    置くたびに紙が縮み、いちばん見たいものが小さくなる。 */
 .center{grid-area:1/2/2/3;display:grid;
-  /* 退避の知らせ／かたちの帯／中身、の3行。**中身は必ず3行目に置く。**
+  /* 退避の知らせ／中身、の2行。**中身は必ず下の行に置く。**
      行を決めずに並べさせると、足した帯のぶんだけ中身が下の行へ押し出され、
      帯が紙の下に回り込む（実際にそうなった） */
-  grid-template-rows:auto auto minmax(0,1fr);
+  grid-template-rows:auto minmax(0,1fr);
   min-width:0;min-height:0}
 
 /* 退避ずみの年度の知らせ。**紙の外**（刷られない）。隠れているあいだは高さ0 */
@@ -179,17 +179,23 @@ button,select,input,textarea{font:inherit;color:inherit}
 .ftally b{color:var(--tx);font-weight:700}
 .ftally .fw{color:var(--tx-sub);font-weight:400}
 
-.stage{grid-area:3/1/4/2;overflow:auto;padding:10px;display:flex;justify-content:center;
+.stage{grid-area:2/1/3/2;overflow-y:auto;overflow-x:hidden;padding:10px;display:flex;
+  /* **横スクロールは絶対に出さない。** 紙＋左右の矢印が、
+     autoFit の倍率で枠に収まる計算にしてある。はみ出すより紙が縮む */
+  justify-content:center;
   align-items:flex-start;min-height:0;min-width:0;gap:6px}
 
-/* 週の紙を出す口。**右メニューと紙のあいだの、もともと空いていた行。**
-   4週・学年・カレンダーはそれぞれの面の中に同じ並びの口を持つ（.mbar）ので、
-   ここは週の紙のぶんだけ。縦に並べる ── 横だと3つめの折り返しが右端の
-   パネルと詰まる。刷るときは出さない（@media print の .side,.panel と同じ扱い）。 */
-.weekbar{grid-area:2/1/3/2;display:flex;flex-direction:column;align-items:flex-end;
-  gap:6px;padding:8px 16px 0}
-.weekbar .btn{min-width:9em;justify-content:center}
-.weekbar .hint{margin:0;font-size:11.5px;color:var(--tx-sub);text-align:right;max-width:15em}
+/* 週案を出す口。**左メニュー「週案を出す」の各項目のすぐ下の小さな帯。**
+   紙の上の帯にあったころ、帯が紙を下に押して狭い画面で紙が縮んでいた。
+   入力の右メニューへは置かない（右メニューは入力だけの決まり）。
+   その面を開いているときだけ出る ── 刷るものを出す口は、出す面のそばに
+   置く。4週・2ヶ月・学年の面も同じ帯を持つ（押すと面の中の同じ口と
+   同じ動き）。刷るときは出さない（紙の外のものだから）。 */
+.weekbar{display:flex;flex-direction:row;align-items:center;gap:5px;
+  justify-content:flex-end;margin:2px 4px 8px}
+.weekbar .btn{min-width:0;justify-content:center;white-space:nowrap;
+  padding:6px 8px;font-size:12.5px}
+.weekbar .hint{margin:0;font-size:11.5px;color:var(--tx-sub)}
 
 /* 出し入れするものは1本にまとめる。**書き漏らすと、面が2つ重なって出る** */
 .stage[hidden],.weekbar[hidden],.mview[hidden],.gvview[hidden],.cvview[hidden],
@@ -286,7 +292,7 @@ body.is-unsaved[data-scope="school"] .stage{
    **帯 ＋ 紙 の2行。** 説明はどれも ？ の中へ移したので、あいだの1行は無い。
    行を3つ書いたままにすると、紙が `1fr` の行に入らず中身の高さで止まる
    ── 学年の面が画面の 28% で止まっていた（実測 280px / 1000px）。 */
-.mview,.gvview,.cvview,.spmview{grid-area:3/1/4/2;display:grid;
+.mview,.gvview,.cvview,.spmview{grid-area:2/1/3/2;display:grid;
   grid-template-rows:auto minmax(0,1fr);
   gap:8px;padding:12px 16px 16px;min-height:0;min-width:0}
 /* 帯。**同じ並べ方を3つの名前で書かない**（月の面・中央のかたち・空き枠） */
@@ -316,7 +322,7 @@ body.is-unsaved[data-scope="school"] .stage{
 .gvpaper{min-height:0;min-width:0;overflow:auto}
 
 /* たんぽぽの面。週案の紙ではないので、紙と入れ替えて出す */
-.tpview{grid-area:3/1/4/2;overflow:auto;padding:22px 26px;display:flex;
+.tpview{grid-area:2/1/3/2;overflow:auto;padding:22px 26px;display:flex;
   flex-direction:column;gap:18px;min-height:0}
 /* **説明は畳んでおく。** 5行の説明を開いたまま置くと、毎回それを越えないと
    組にも交流級にも手が届かない。読むのは最初の1回だけ。 */
@@ -1384,3 +1390,90 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .spx.tent{color:var(--ink-sub)}
 .spmout{padding:0 2px 8px}
 .spmsum b.ok{color:var(--ink-link)}
+
+/* ── 単元進捗管理 ─────────────────────────────
+   日常の右メニューには入口だけ置く。単元一覧や設定項目を常駐させず、
+   必要なときだけ窓で開く。 */
+.unitentry{margin:2px 0 8px}
+.unitopen{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:10px 11px;border:1px solid var(--line);border-radius:var(--r-sm);
+  background:var(--card);cursor:pointer;text-align:left;font:inherit}
+.unitopen:hover{background:var(--hover);border-color:var(--tx-sub)}
+.unitopen>span{display:flex;flex-direction:column;min-width:0}
+.unitopen b{font-size:13px}
+.unitopen small{font-size:11px;color:var(--tx-sub);font-weight:400;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.unitopen i{font-style:normal;font-size:22px;line-height:1;color:var(--tx-sub)}
+
+.unitdlg{width:min(720px,92vw)}
+.unitintro{margin-top:-4px;color:var(--tx-sub)}
+.unitctx{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+.unitctx label,.unitform>label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--tx-sub)}
+.unitctx select,.unitform input,.termrow input{width:100%;padding:8px 9px;border:1px solid var(--line);
+  border-radius:var(--r-sm);background:var(--card);font:inherit;color:var(--tx)}
+.unitctx select:disabled{opacity:.8;background:var(--fill-a)}
+.unitterm{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin:10px 0 14px;padding:9px 10px;border:1px solid var(--line);border-radius:var(--r-sm);
+  background:var(--fill-a)}
+.unitterm.warn{border-color:var(--cat-clash)}
+.unitterm>span{display:flex;flex-direction:column;min-width:0}
+.unitterm b{font-size:12.5px}
+.unitterm small{font-size:11.5px;color:var(--tx-sub);line-height:1.55}
+.unitbar{display:flex;align-items:center;justify-content:space-between;margin:6px 0 7px}
+.unitbaracts{display:flex;align-items:center;gap:6px}
+.unitlist{display:flex;flex-direction:column;gap:5px;max-height:30vh;overflow:auto}
+.unitrow{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;
+  padding:9px 11px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card);
+  cursor:pointer;text-align:left;font:inherit}
+.unitrow:hover{background:var(--hover);border-color:var(--tx-sub)}
+.unitrow>span{display:flex;flex-direction:column;min-width:0}
+.unitrow b{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.unitrow small{font-size:11.5px;color:var(--tx-sub)}
+.unitrow em{font-style:normal;font-size:11.5px;color:var(--tx-sub);white-space:nowrap}
+.unitempty{padding:18px;text-align:center;color:var(--tx-sub);border:1px dashed var(--line);
+  border-radius:var(--r-sm);font-size:12px;line-height:1.8}
+.unitform{margin-top:14px;padding-top:13px;border-top:1px solid var(--line-soft)}
+.unitform h3{margin:0 0 10px;font-size:13px}
+.unitcount{display:flex;align-items:center;gap:7px;margin:11px 0}
+.unitcount>span:first-child{margin-right:4px}
+.unitcount input{width:64px;text-align:center;padding:7px;border:1px solid var(--line);
+  border-radius:var(--r-sm);background:var(--card);font:inherit}
+.unitcount .btn{width:38px;padding:6px 0;font-size:16px}
+.unitcheck{display:flex!important;flex-direction:row!important;align-items:center;gap:7px!important;
+  color:var(--tx)!important;font-size:13px!important}
+.unitcheck input{width:auto}
+.unitactions{display:flex;justify-content:flex-end;gap:7px;margin-top:12px}
+.unitdanger{display:flex;justify-content:space-between;gap:8px;margin-top:12px;padding-top:10px;
+  border-top:1px solid var(--line-soft)}
+.unitwarn{margin:10px 0 0;padding:8px 10px;border-radius:var(--r-sm);
+  background:var(--fill-b);border:1px solid var(--cat-clash);font-size:12px;line-height:1.6}
+.unitstat{min-height:1.6em;margin:9px 0 0}
+
+.termdlg{width:min(820px,94vw)}
+.termrows{display:flex;flex-direction:column;gap:7px;margin:12px 0}
+.termrow{display:grid;grid-template-columns:minmax(8em,1fr) 150px auto 150px auto;gap:7px;align-items:center}
+.termrow span{color:var(--tx-sub);text-align:center}
+.termrow .danger{white-space:nowrap}
+
+/* パレットの単元チップ。**教科チップと同じ手つき**で落とす。
+   見分けは字の下の薄い線 ── 教科チップと混ざらない目印 */
+.upals{margin-top:10px;padding-top:9px;border-top:1px dashed var(--line)}
+.upalh{font-size:11.5px;color:var(--tx-sub);margin:0 0 5px}
+.pal.unit{border-bottom:2px solid var(--ink-link)}
+.pal.ureset{border-style:dashed;color:var(--cat-clash);border-color:var(--cat-clash)}
+
+/* コマの上の単元バッジ。**番号はここでだけ見える。**
+   備考本文（持ち物・連絡）を押し出さないよう、題名と備考のあいだの細い帯 */
+.ub{display:block;font-size:9.5px;line-height:1.25;color:var(--ink-link);
+  font-weight:600;letter-spacing:.01em;cursor:grab;pointer-events:auto;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ub.start{border-left:2px solid var(--ink-link);padding-left:3px}
+.ub.warn{color:var(--cat-clash)}
+.ub.dim{opacity:.55}
+
+@media (max-width:760px){
+  .unitctx{grid-template-columns:1fr}
+  .termrow{grid-template-columns:1fr 1fr}
+  .termrow input[data-tf=name]{grid-column:1/3}
+  .termrow span{display:none}
+}

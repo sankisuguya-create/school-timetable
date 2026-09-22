@@ -114,12 +114,38 @@
       <h3>週案を出す</h3>
       <button class="nav" data-act="outweek" data-center="week" data-help="print" data-plan-output>
         <svg width="17" height="17"><use href="#i-print"/></svg><span>教務必携用（B5）</span></button>
+      <!-- 週案を出す口。**それぞれの項目のすぐ下、1行に短く並べる。**
+           その面を開いているときだけ出る（出し入れは sheet.js が hidden で
+           切り替える）。押すと、その面の中にある同じ口（.mbar／.gvview／
+           .cvview の印刷・画像・Sheet）と同じことをする ── 口を2つに
+           増やしても動きは1つ（二重に聞かれないよう、sb* は既存の口を押す） -->
+      <div class="weekbar" id="weekBar" hidden>
+        <button class="btn go" id="weekPrint">印刷</button>
+        <button class="btn" id="weekImage">画像</button>
+        <button class="btn" id="weekSheet">Sheet</button>
+        <p class="hint" id="weekBarStat"></p>
+      </div>
       <button class="nav" data-act="month" data-center="month" data-help="month" data-plan-output>
         <svg width="17" height="17"><use href="#i-grid"/></svg><span>4週まとめて（B4）</span></button>
+      <div class="weekbar" id="monthBar" hidden>
+        <button class="btn go" id="sbMPrint">印刷</button>
+        <button class="btn" id="sbMImage">画像</button>
+        <button class="btn" id="sbMSheet">Sheet</button>
+      </div>
       <button class="nav" data-act="cal" data-center="cal" data-help="cal" data-plan-output>
-        <svg width="17" height="17"><use href="#i-cal"/></svg><span>カレンダー（2ヶ月・A4）</span></button>
+        <svg width="17" height="17"><use href="#i-cal"/></svg><span>2ヶ月（A4）</span></button>
+      <div class="weekbar" id="calBar" hidden>
+        <button class="btn go" id="sbCPrint">印刷</button>
+        <button class="btn" id="sbCImage">画像</button>
+        <button class="btn" id="sbCSheet">Sheet</button>
+      </div>
       <button class="nav" data-act="grade" data-center="grade" data-help="gradeview" data-plan-output>
-        <svg width="17" height="17"><use href="#i-users"/></svg><span>学年でならべる（A4よこ）</span></button>
+        <svg width="17" height="17"><use href="#i-users"/></svg><span>学年ごと（A4よこ）</span></button>
+      <div class="weekbar" id="gradeBar" hidden>
+        <button class="btn go" id="sbGPrint">印刷</button>
+        <button class="btn" id="sbGImage">画像</button>
+        <button class="btn" id="sbGSheet">Sheet</button>
+      </div>
       <button class="nav" data-act="tally" data-help="tally" data-plan-output>
         <svg width="17" height="17"><use href="#i-copy"/></svg><span>時数をコピー</span></button>
 
@@ -155,19 +181,6 @@
         <b id="arcTitle"></b><span id="arcNote"></span>
         <a id="arcLink" target="_blank" rel="noopener">保管庫をひらく</a>
       </div>
-      <!-- 週の紙を出す口。**右メニューと紙のあいだの、右上の隙間に置く。**
-           前はここに「かたちを入れ替える帯」があったが、押す場所は左メニューへ
-           移した（この隙間はもともと空いていた行）。4週・カレンダー・学年の面は
-           それぞれの面の中に同じ並びの口を持つ（.mbar／.gvview／.cvview）ので、
-           ここは週の紙のぶんだけ。**縦に並べる**── 右上の細い隙間なので、
-           横に並べると3つめが折り返す。刷るときは出さない（紙の外のもの） -->
-      <div class="weekbar" id="weekBar">
-        <button class="btn go" id="weekPrint">印刷（B5）</button>
-        <button class="btn" id="weekImage">画像</button>
-        <button class="btn" id="weekSheet">Google Sheet</button>
-        <p class="hint" id="weekBarStat"></p>
-      </div>
-
       <!-- ④ 紙の左右で週を繰る。**左メニューの ◀ ▶ と同じことをする。**
            紙を読んでいる目の高さに置く ── 読みながら週を繰るとき、
            左端まで視線を戻さずに済む。**刷るときは出さない**（紙の外のもの） -->
@@ -344,10 +357,11 @@
       <p class="lockmsg" id="lockMsg" hidden>
         <b>この画面はロック中。</b>直すには右上の「ロック中」を押す。</p>
 
-      <!-- 教科・行事のチップ、色分け、字の大きさ。**1つに束ねて畳める。**
-           3つとも「コマの中身の見た目」を決めるものなので、一つ屋根の下に
-           置く。既定は開く ── コマへ引っぱって入れるのは毎回の操作なので、
-           畳んだままだと開く手が増える。畳めるようにはしておく（.fold）。 -->
+      <!-- 教科・行事のチップ、色分け、字の大きさ、選んだコマの中身。
+           **1つに束ねて畳める。** どれも「コマの中身」を決める・直すものなので、
+           一つ屋根の下に置く。既定は開く ── コマへ引っぱって入れるのは
+           毎回の操作なので、畳んだままだと開く手が増える。畳めるようには
+           しておく（.fold）。 -->
       <details class="fold" id="palFold" open>
         <summary data-help="pals"><span>教科・行事</span></summary>
         <div class="foldin">
@@ -389,10 +403,9 @@
                     aria-label="備考の字を大きく">＋</button>
           </div>
         </div>
-        </div>
-      </details>
 
-      <!-- 選んでいるコマ。**教科の並びのすぐ下に置く。**
+        <!-- 選んでいるコマ。**教科・行事の畳み口の中に置く**（題名欄まわりは
+             ここにまとめる）。**教科の並びのすぐ下。**
            チップを押す → 名前を直す → 備考を書く → リンクを付ける、が
            上から下へ1本に並ぶ。前は時数と日の形をまたいだ先にあったので、
            チップを押すたびに画面を送っていた。
@@ -461,6 +474,22 @@
           <button class="btn danger" id="pClear">空にする</button>
         </div>
       </div>
+        </div>
+      </details>
+
+      <!-- 単元進捗。**教科・行事の下・時数の上に置く畳み口。**
+           学級・専科の面だけに出す（単元は「クラス×教科」の持ちものなので、
+           学年・全校の面には置かない）。チップはこの中 ── 作る・直す・消すは
+           「単元進捗管理」の窓。既定は開く（引っぱって落とす毎回の操作）。 -->
+      <details class="fold" id="unitEntry" open hidden>
+        <summary><span>単元管理</span></summary>
+        <div class="foldin">
+          <div class="pals" id="unitPals"></div>
+          <button class="unitopen" id="unitOpen" type="button">
+            <span><b>単元進捗管理</b><small id="unitOpenSub"></small></span><i>›</i>
+          </button>
+        </div>
+      </details>
 
       <!-- 時数。**カレンダーの面と同じ数**（compose.js countSub で数える）。
            カレンダーを開かなくても、書きながら横目で見られるところに置く。
@@ -527,6 +556,57 @@
 </div>
 
 <div class="toast" id="toast" hidden></div>
+<dialog id="unitDlg" aria-labelledby="unitTitle"><div class="dlg unitdlg">
+  <h2 id="unitTitle">単元進捗管理 <span class="subttl" id="unitFy"></span></h2>
+  <p class="unitintro">単元名と授業数を登録します。配置は時間割の単元チップから行います。</p>
+  <div class="unitctx">
+    <label>クラス<select id="unitCls"></select></label>
+    <label>教科<select id="unitSub"></select></label>
+  </div>
+  <div class="unitterm" id="unitTermInfo"></div>
+  <div class="unitbar"><b>単元</b><div class="unitbaracts">
+    <button class="btn" id="unitResetAll" type="button">配置を全リセット</button>
+    <button class="btn go" id="unitNew" type="button">新しい単元</button>
+  </div></div>
+  <div class="unitlist" id="unitList"></div>
+
+  <section class="unitform" id="unitForm" hidden>
+    <h3 id="unitFormTitle">新しい単元</h3>
+    <label>単元名
+      <input id="unitName" maxlength="40" placeholder="例：暗算" autocomplete="off">
+    </label>
+    <div class="unitcount">
+      <span>授業数</span>
+      <button class="btn" id="unitMinus" type="button" aria-label="授業数を1減らす">−</button>
+      <input id="unitCount" type="number" min="1" max="99" value="1" inputmode="numeric" aria-label="授業数">
+      <button class="btn" id="unitPlus" type="button" aria-label="授業数を1増やす">＋</button>
+      <span>時間</span>
+    </div>
+    <label class="unitcheck"><input id="unitTest" type="checkbox">最後にテストを入れる</label>
+    <p class="unitwarn" id="unitWarn" hidden></p>
+    <div class="unitactions">
+      <button class="btn" id="unitCancel" type="button">編集をやめる</button>
+      <button class="btn go" id="unitSave" type="button">保存</button>
+    </div>
+    <div class="unitdanger" id="unitDanger" hidden>
+      <button class="btn" id="unitReset" type="button">配置をリセット</button>
+      <button class="btn danger" id="unitDelete" type="button">単元を削除</button>
+    </div>
+  </section>
+  <p class="hint unitstat" id="unitStat" aria-live="polite"></p>
+</div></dialog>
+
+<dialog id="termDlg" aria-labelledby="termTitle"><div class="dlg wide termdlg">
+  <h2 id="termTitle">学期の期間 <span class="subttl">単元進捗用</span></h2>
+  <p>学期末までに単元が入りきるかを判断する期間です。<b>3学期制・2学期制を決め打ちしません。</b></p>
+  <div class="termrows" id="termRows"></div>
+  <div class="unitactions">
+    <button class="btn" id="termAdd" type="button">学期を追加</button>
+    <button class="btn go" id="termSave" type="button">保存</button>
+  </div>
+  <p class="hint" id="termStat" aria-live="polite"></p>
+</div></dialog>
+
 <dialog id="guideDlg" aria-labelledby="guideTitle"><div class="dlg">
   <h2 id="guideTitle">週案の使い方</h2>
   <p>① 左上で週を確認し、中央から自分の学級を開きます。</p>
@@ -1022,6 +1102,7 @@
 /* @include js/spmonth.js */
 /* @include js/sheet.js */
 /* @include js/panel.js */
+/* @include js/unitprogress.js */
 /* @include js/tanpopo.js */
 /* @include js/gate.js */
 /* @include js/dialogs.js */

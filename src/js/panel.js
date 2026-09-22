@@ -31,9 +31,24 @@ function chipHere_(sub){
 /* チップ1つぶんの HTML。**どの面でも同じ作り**（引っぱれる・押せる） */
 function palHtml(o){
   return "<button class='pal" + (o.off ? " off" : "") + (o.clear ? " clear" : "")
-    + (o.trip ? " trip" : "") + (o.none ? " none" : "") + "' draggable='true'"
+    + (o.trip ? " trip" : "") + (o.none ? " none" : "")
+    + (o.unit ? " unit" : "") + (o.ureset ? " ureset" : "") + "' draggable='true'"
     + (o.g ? " data-g='" + escText(o.g) + "'" : "")
     + " data-v='" + escText(o.v) + "'>" + escText(o.t) + "</button>";
+}
+
+/* 単元のチップ。**「単元管理」の畳み口（#unitPals）に並べる。**
+   作る・直す・消すは「単元進捗管理」の窓 ── ここには落とすもの（チップ）と
+   起点が付いているときの「単元リセット」だけ出す。
+   学級・専科の面にだけ出る（単元は「クラス×教科」の持ちもの） */
+function upalsHtml_(){
+  if(typeof upPaletteUnits_ !== "function") return "";
+  if(view.kind !== "class" && view.kind !== "special") return "";
+  const chips = upPaletteUnits_();
+  if(!chips.length) return "";
+  const anyStarted = chips.some(x => (x.unit.start || {}).date);
+  return chips.map(u => palHtml({v:u.v, t:u.t, unit:true})).join("")
+    + (anyStarted ? palHtml({v:PAL_URESET, t:"単元リセット", ureset:true}) : "");
 }
 
 function drawPalette(){
@@ -70,6 +85,8 @@ function drawPalette(){
           + "</div>").join("")
       + "</div>"
       + palHtml({v:PAL_CLEAR, t:"リセット", clear:true});
+    const up = $("unitPals");
+    if(up) up.innerHTML = upalsHtml_();
     const fix = $("palSpFix");
     if(fix) fix.onclick = () => openRosterDlg();
     wirePalette();
@@ -91,6 +108,8 @@ function drawPalette(){
   if(canClear) items.push({v:PAL_CLEAR, t:"リセット", clear:true});
 
   $("pals").innerHTML = items.map(palHtml).join("");
+  const up = $("unitPals");
+  if(up) up.innerHTML = upalsHtml_();
   wirePalette();
 }
 
@@ -102,8 +121,10 @@ function wirePalette(){
      教科の並びより説明のほうが高くなり、毎回それを越えて押すことになる */
   paintChipSeg();
   drawTallyPanel();               /* 面が変われば数も変わる */
+  /* 単元進捗の入口は、学級・専科の面にだけ出す（学年・全校には単元が無い） */
+  if(typeof paintUnitManagerButton === "function") paintUnitManagerButton();
 
-  for(const b of $("pals").querySelectorAll(".pal")){
+  for(const b of document.querySelectorAll("#pals .pal, #unitPals .pal")){
     b.addEventListener("dragstart", ev => {
       ev.dataTransfer.setData("text/x-timetable", b.dataset.v);
       ev.dataTransfer.effectAllowed = "copy";
@@ -274,6 +295,17 @@ function okToOverwrite(d, sid, to, yes, no, forCls){
 }
 
 function applyPalette(d, sid, v, e){
+  /* 単元。**チップと同じ手つき**（引っぱって落とす／選んで押す）。
+     何が起きるかは落とす先で決まる：起点の無い単元はここを起点に、
+     起点に落とせば全消滅、ほかのコマならそのコマだけ外す ──
+     ぜんぶ unitprogress.js の中。教科の教科名ではないので、
+     下の教科チップの道には流さない */
+  if(v === PAL_URESET) return upResetChip_(d, sid);
+  if(v.slice(0, 5) === "unit:"){
+    const u = unitById_(v.slice(5));
+    if(u) upDropChip_(u, d, sid);
+    return;
+  }
   /* 校外行事。**押すたびに付け外し。** 続けて置けば、描くときに1つの縦長にまとまる。
      **休みの日にも置けるので、下の whyCantWrite より先に見る**
      （自然学校のように休日・祝日をまたぐ行事がある） */

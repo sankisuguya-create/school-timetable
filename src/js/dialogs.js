@@ -120,6 +120,37 @@ function exportMonthSheet(){
     toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>4週のGoogle Sheetを開く</a>");
   }, why => toast(escText(why)));
 }
+/* カレンダーの面。**見えている2ヶ月を、週ごとの週案で出す。**
+   カレンダー形の表は Sheet では潰れる（1コマ数行を2ヶ月分並べられない）ので、
+   範囲内の週案を1週1シートで出す ── 中身は週案と同じ、枚数だけ違う */
+function exportCalSheet(){
+  if(!calFrom) return toast("先に2ヶ月の面を開いてください");
+  const start = mondayOf(calFrom);
+  const lastM = new Date(calFrom.getFullYear(), calFrom.getMonth() + CAL_MONTHS, 0);
+  const count = Math.ceil((addDays(lastM, 1) - start) / (7 * 864e5));
+  Backend.exportPlanSheet(outputName("2ヶ月"), planParts(start, count), r => {
+    toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>2ヶ月のGoogle Sheetを開く</a>");
+  }, why => toast(escText(why)));
+}
+/* 学年の面。**開いている学年のクラスぶんを、クラスごとに1シートずつ。**
+   planValues が読む「いまの面」をクラスに差し替えて組み立て、終わったら戻す */
+function exportGradeSheet(){
+  const list = gClasses();
+  if(!list.length) return toast("この学年にクラスがありません");
+  const keep = view, sheets = [];
+  try{
+    for(const c of list){
+      view = {kind:"class", cls:c};
+      sheets.push({name:c, values:planValues(monday)});
+    }
+  }finally{ view = keep; }
+  /* 名づけに outputName は使わない ── 先頭に「いま開いている面の名前」が
+     入るので、学年のまとめが「1-1 の学年ごと」になってしまう */
+  Backend.exportPlanSheet(escText(gGrade) + "年_学年ごと_" + iso(monday), sheets, r => {
+    toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>"
+          + escText(gGrade) + "年のGoogle Sheetを開く</a>");
+  }, why => toast(escText(why)));
+}
 
 function openBaseDlg(){
   const list = allClasses();

@@ -98,6 +98,8 @@ function openView(v){
   view = v;
   lastTarget = v;
   selCell = null;
+  /* 単元は「どの面の単元か」で読むものが変わる。面が決まった時点で読みに行く */
+  if(typeof upViewChanged_ === "function") upViewChanged_();
 
   const tp = v.kind === "tanpopo";
   const draw = () => {
@@ -108,6 +110,9 @@ function openView(v){
     if(tp){
       $("stage").hidden = true;
       $("weekBar").hidden = true;
+      $("monthBar").hidden = true;
+      $("gradeBar").hidden = true;
+      $("calBar").hidden = true;
       $("monthView").hidden = true;
       $("gradeView").hidden = true;
       document.querySelector(".panel").hidden = true;

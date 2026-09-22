@@ -156,7 +156,7 @@ function autoFit(){
   /* **紙は痩せない。** 左右の ‹ › が取る幅を、そのまま倍率の計算に入れる
      （入れないと、矢印のぶんだけ紙が枠からはみ出す）。隠れていれば 0 */
   const arrows = [...st.querySelectorAll(".wkarrow")]
-    .reduce((n, e) => n + e.offsetWidth + 6, 0);
+    .reduce((n, e) => n + (e.hidden ? 0 : e.offsetWidth + 6), 0);
   const k = Math.min((st.clientWidth - 24 - arrows) / w, (st.clientHeight - 20) / h);
   db.settings.vz = Math.max(30, Math.min(160, Math.round(k * 100)));
   applyZoom();
@@ -373,6 +373,9 @@ function wire(){
   on('guideOpen', 'click', () => openGuide(false));
   on('guideDlg', 'close', finishGuide);
 
+
+  /* 単元進捗の窓と学期設定の結線（→ unitprogress.js） */
+  if(typeof wireUnitProgress === "function") wireUnitProgress();
 
   on("prevWk","click", () => goWeek(-7));
   on("nextWk","click", () => goWeek(7));
@@ -610,6 +613,19 @@ function wire(){
     catch(e){ $("weekBarStat").textContent="画像を作れませんでした（"+escText(e.message||e)+"）"; }
   });
   on("weekSheet","click", exportWeekSheet);
+  /* 左メニューの三つ組み。**その面の中にある口と同じ動き**にする ──
+     ここで別の動きを書くと、帯と面の中で結果がずれる。
+     sb* は対応する面のボタンを押すだけ（sbCSheet/sbGSheet は
+     カレンダー・学年の面の中に口が無いので、ここが唯一の入口） */
+  on("sbMPrint","click", () => $("mPrint").click());
+  on("sbMImage","click", () => $("mImage").click());
+  on("sbMSheet","click", exportMonthSheet);
+  on("sbCPrint","click", () => $("cvPrint").click());
+  on("sbCImage","click", () => $("cvImage").click());
+  on("sbCSheet","click", exportCalSheet);
+  on("sbGPrint","click", () => $("gvPrint").click());
+  on("sbGImage","click", () => $("gvImage").click());
+  on("sbGSheet","click", exportGradeSheet);
   /* 教科の色。**窓を開かせない。** 紙を見ているときに、そのとなりで切り替える */
   for(const b of document.querySelectorAll("#chipSeg [data-chip]"))
     b.addEventListener("click", () => {

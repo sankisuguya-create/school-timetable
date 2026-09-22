@@ -250,6 +250,9 @@ function cellEl(d, s){
   e.addEventListener("dragleave", () => e.classList.remove("drop"));
   e.addEventListener("drop", ev => {
     ev.preventDefault(); e.classList.remove("drop");
+    /* 単元のバッジをつかんできた = その単元のコマを動かす（交換） */
+    const mv = ev.dataTransfer.getData("text/x-unitmove");
+    if(mv) return upMoveStart_(mv, d, s.id);
     const v = ev.dataTransfer.getData("text/x-timetable");
     if(v) applyPalette(d, s.id, v, e);
   });
@@ -439,6 +442,10 @@ function paintCell(e, c, d, s, mine){
   /* **変わっていないときは書かない。** 空き枠さがしを使わない人の面でも
      66コマぶんの属性書きが毎回走っていた */
   if(e.title !== want){ if(want) e.title = want; else e.removeAttribute("title"); }
+
+  /* 単元の印。**番号はここでだけ見える** ── 保存するのは「どの単元か」だけ。
+     描くたびに数えるので、1コマ抜けば後ろの番号は勝手に繰り上がる */
+  if(typeof upPaintBadge_ === "function") upPaintBadge_(e, c, d, s);
 }
 
 /* **自分の予定が上書きされていたら、開いたときに知らせる。**
@@ -566,6 +573,9 @@ function applyCenter(kind){
   const wk = kind === "week";
   $("stage").hidden     = !wk;
   $("weekBar").hidden   = !wk;
+  $("monthBar").hidden  = kind !== "month";
+  $("gradeBar").hidden  = kind !== "grade";
+  $("calBar").hidden    = kind !== "cal";
   $("monthView").hidden = kind !== "month";
   $("gradeView").hidden = kind !== "grade";
   $("calView").hidden   = kind !== "cal";

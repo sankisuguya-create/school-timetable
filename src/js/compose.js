@@ -306,7 +306,8 @@ function ownCell(d, s, sp){
   for(const c of allClasses()){
     const e = (w.special[c] || {})[key];
     if(e && e.sp === me)
-      return {title:escText(c), note:e.note || "", layer:"special", cls:c, clash:null};
+      return {title:escText(c), note:e.note || "", layer:"special", cls:c,
+              u:e.u || "", clash:null};
   }
   /* 2. 自分が仮採用で入れたコマ。**淡く出る**（layer が tent）。
      本物のコマが先に見つかればそちらが出るので、ここでも順は同じ */
@@ -1123,6 +1124,8 @@ function writeCell(d, s, patch){
         title: escText(sub ? sub.name : viewName()),
         subject: spSubjectOf(view.sp), sp: view.sp,
         note: ("note" in patch) ? clean(patch.note) : (cur.note || ""),
+        /* 単元進捗の印。専科の面でつける/外すのは行き先のクラスのコマ */
+        u: ("u" in patch) ? String(patch.u || "") : (cur.u || ""),
         /* **物差しも控えに持たせる。** 持たせないと、サーバの返事が
            戻るまでのあいだに続けて直したぶんが、また 0 を送ることになる */
         sat: wasTarget,
@@ -1148,11 +1151,15 @@ function writeCell(d, s, patch){
   const e   = st[key] || {
     title:   cur.title || "",
     note:    cur.note  || "",
-    subject: cur.subject || null
+    subject: cur.subject || null,
+    u:       cur.u || ""
   };
   if("title"   in patch) e.title   = clean(patch.title);
   if("note"    in patch) e.note    = clean(patch.note);
   if("subject" in patch) e.subject = patch.subject;
+  /* 単元進捗の印（"u12"＝所属／"-"＝外す／""＝規定）。題名や備考の直しでは触らない。
+     印だけ変わるときも pushUndo・cellChanged が既にここを通っている。 */
+  if("u"       in patch) e.u       = String(patch.u || "");
   /* 時数名。**手で決めた1文字の控え。** 教科コードに無い自由記述の行事名は、
      いまは題名の頭文字がそのまま出るので、紛らわしいときだけここで決め直す */
   if("short"   in patch) e.short   = clean(patch.short);
