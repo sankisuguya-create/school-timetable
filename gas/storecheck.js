@@ -2159,6 +2159,62 @@ console.log("\n■ 単元進捗 Phase 3");
      why.indexOf("別の単元") >= 0, why);
 })();
 
+
+console.log("\n■ 単元進捗 Phase 4");
+(function(){
+  const y=2032;
+  let units=ev('Store.readUnits(2032, "3-1", "sansu")');
+  let a=units.find(u => u.name==="暗算");
+  let b=units.find(u => u.name==="小数");
+  ok("移動検査の前提：暗算は配置済み・小数は未配置",
+     !!a && a.assignments.length===5 && !!b && b.assignments.length===0, {a,b});
+
+  /* 通常授業を後ろへ移す。テストは通常授業より後ろへ自動で送り直される */
+  const from=a.assignments[1], fp=from.split("|");
+  let moved=ev("Store.moveUnit(" + y + ", " + JSON.stringify(a.id)
+    + ", " + JSON.stringify(a.updatedAt)
+    + ", " + JSON.stringify(fp[0]) + ", " + JSON.stringify(fp[1])
+    + ', "2032-09-20", "p1")');
+  a=moved.unit;
+  ok("同じ教科の空きコマへ単元チップを移動",
+     moved.action==="moved"
+     && a.assignments.indexOf(from)<0
+     && a.assignments.indexOf("2032-09-20|p1")>=0
+     && a.excludedSlots.indexOf(from)>=0
+     && a.testAssignment > "2032-09-20|p1", moved);
+
+  /* 小数を別の場所から開始し、暗算の1コマを小数のコマへ落として交換 */
+  let pb=ev("Store.placeUnit(" + y + ", " + JSON.stringify(b.id)
+    + ", " + JSON.stringify(b.updatedAt)
+    + ', "2032-09-27", "p1")');
+  b=pb.unit;
+  const aFrom=a.assignments[1], ap=aFrom.split("|");
+  const bTo=b.assignments[0], bp=bTo.split("|");
+  let sw=ev("Store.moveUnit(" + y + ", " + JSON.stringify(a.id)
+    + ", " + JSON.stringify(a.updatedAt)
+    + ", " + JSON.stringify(ap[0]) + ", " + JSON.stringify(ap[1])
+    + ", " + JSON.stringify(bp[0]) + ", " + JSON.stringify(bp[1]) + ")");
+  a=sw.unit; b=sw.swapped;
+  ok("別単元設定済みコマへ落とすと2単元の配置を交換",
+     sw.action==="swapped"
+     && a.assignments.indexOf(bTo)>=0
+     && b.assignments.indexOf(aFrom)>=0
+     && a.assignments.indexOf(aFrom)<0
+     && b.assignments.indexOf(bTo)<0, sw);
+
+  /* タイトル変更相当：所属コマを1つ外し、後ろへ1コマ補う */
+  const cut=a.assignments[0], cp=cut.split("|"), beforeLast=a.assignments[a.assignments.length-1];
+  let de=ev("Store.detachUnit(" + y + ", " + JSON.stringify(a.id)
+    + ", " + JSON.stringify(a.updatedAt)
+    + ", " + JSON.stringify(cp[0]) + ", " + JSON.stringify(cp[1]) + ")");
+  ok("タイトル変更でそのコマだけ単元から外し後ろへ補充",
+     de.action==="detached"
+     && de.unit.assignments.length===5
+     && de.unit.assignments.indexOf(cut)<0
+     && de.unit.excludedSlots.indexOf(cut)>=0
+     && de.unit.assignments[de.unit.assignments.length-1]!==beforeLast, de);
+})();
+
 console.log("\n■ ロック");
 ok("書き込みのあとロックは残らない", locks.held === 0, locks.held);
 
