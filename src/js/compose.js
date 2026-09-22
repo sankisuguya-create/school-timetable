@@ -112,8 +112,20 @@ const scopeClasses = () => view.kind === "school" ? allClasses()
                          : view.kind === "grade"  ? classesOfGrade(view.grade) : [];
 
 /* このマスターのコマを、あとから直したクラスを拾う。
-   compose を回さず、その週の表を直に引く（クラス数×コマ数の掛け算を避ける）。 */
+   compose を回さず、その週の表を直に引く（クラス数×コマ数の掛け算を避ける）。
+
+   **同じコマを週・面・中身が同じうちは2度数えない。** 塗り直しのたびに
+   全コマ×全クラスを通ると、枚数ぶんだけ掛け算になる */
+let ovMark = "", ovCache = {};
 function overriders(d, s){
+  const mark = [view.kind, view.grade || "", wkKey(), dataTick].join("|");
+  if(mark !== ovMark){ ovMark = mark; ovCache = {}; }
+  const k = ck(d, s);
+  if(k in ovCache) return ovCache[k];
+  const out = overridersRaw_(d, s);
+  return ovCache[k] = out;
+}
+function overridersRaw_(d, s){
   const bank = masterBank();
   const mine = bank && bank[ck(d, s)];
   if(!mine) return [];
