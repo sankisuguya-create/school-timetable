@@ -1038,6 +1038,8 @@ function writeCell(d, s, patch){
   /* ここが書き込みの1本道。ここで止めれば、引っぱって入れても、
      打っても、パレットを押しても入らない */
   if(whyCantWrite(d, s)) return false;
+  const unitBefore = (("title" in patch) || ("subject" in patch) || ("cls" in patch))
+    && typeof unitScheduleSnapshot === "function" ? unitScheduleSnapshot(d, s) : null;
   pushUndo(d, s);                 /* 書く前の中身を控える。戻せるようにする */
   const w = week(), key = ck(d, s);
 
@@ -1083,7 +1085,10 @@ function writeCell(d, s, patch){
       };
       Backend.cellChanged("special", target, d, s, wasTarget, undefined, wasTargetT);
     }
-    return save();
+    const saved = save();
+    if(unitBefore && typeof unitScheduleChanged === "function")
+      unitScheduleChanged(d, s, unitBefore);
+    return saved;
   }
 
   const st  = targetStore();
@@ -1110,7 +1115,10 @@ function writeCell(d, s, patch){
   e.at = Date.now();
   if(isEmptyCell(e)) delete st[key]; else { e.sat = was; st[key] = e; }
   Backend.cellChanged(layerOfStore(), targetOfStore(), d, s, was, undefined, wasT);
-  return save();
+  const saved = save();
+  if(unitBefore && typeof unitScheduleChanged === "function")
+    unitScheduleChanged(d, s, unitBefore);
+  return saved;
 }
 
 /* いまの書き込み先を、サーバの言葉（層・対象）に直す */
