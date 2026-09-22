@@ -806,6 +806,181 @@ const Store = (function(){
     }finally{ lock.releaseLock(); }
   }
 
+  function unitSlotCompare_(a, b){
+    const rank = {};
+    readSlots().filter(s => s.kind === "lesson").forEach((s,i) => rank[s.id] = i);
+    const ap=String(a || "").split("|"), bp=String(b || "").split("|");
+    if(ap[0] !== bp[0]) return ap[0] < bp[0] ? -1 : 1;
+    return (rank[ap[1]] == null ? 999 : rank[ap[1]])
+         - (rank[bp[1]] == null ? 999 : rank[bp[1]]);
+  }
+  function earliestUnitKey_(u, extra){
+    const a=(u.assignments || []).slice();
+    if(u.testAssignment) a.push(u.testAssignment);
+    if(extra) a.push(extra);
+    a.sort(unitSlotCompare_);
+    return a[0] || "";
+  }
+  function occupiedExcept_(list, cls, subject, ids){
+    const skip={}; (ids || []).forEach(id => skip[id]=true);
+    const out=[];
+    for(const u of (list || [])){
+      if(u.className !== cls || u.subject !== subject || skip[u.id]) continue;
+      out.push.apply(out, u.assignments || []);
+      if(u.testAssignment) out.push(u.testAssignment);
+    }
+    return out;
+  }
+
+  /* タイトル/教科/専科の行き先が変わったときは、その1コマだけ外す。 */
+  function detachUnit(year, id, expectedUpdatedAt, dateValue, slotValue){
+    const y=+year, unitId=String(id || "").trim();
+    const key=TimetableDomain.unitSlotKey(isoDate_(dateValue)+"|"+String(slotValue || "").trim());
+    if(!unitId || !key) throw new Error("単元から外すコマが分かりません");
+
+    const beforeAll=readUnits(y);
+    const before=beforeAll.filter(u => u.id === unitId)[0];
+    if(!before) throw new Error("この単元は、別の画面ですでに削除されています");
+    if(String(expectedUpdatedAt || "") !== unitUpdatedAt_(before))
+      throw new Error("別の先生がこの単元を変更しました。開き直して確認してください");
+    if((before.assignments || []).indexOf(key) < 0 && before.testAssignment !== key)
+      return {unit:before, warning:null, action:"unchanged"};
+
+    const origin=earliestUnitKey_(before, key), op=origin.split("|");
+    let planned=TimetableDomain.normalizeUnitPlan(before);
+    planned.assignments=planned.assignments.filter(k => k !== key);
+    if(planned.testAssignment === key) planned.testAssignment="";
+    if(planned.excludedSlots.indexOf(key) < 0) planned.excludedSlots.push(key);
+
+    const peerVersion=unitPeersVersion_(beforeAll, before.className, before.subject, before.id);
+    const occupied=occupiedByOtherUnits_(beforeAll, before.className, before.subject, before.id);
+    const c=unitCandidates(y, before.className, before.subject, op[0], op[1], "");
+    const rr=TimetableDomain.reconcileUnit(planned, c.slots, occupied, c.to);
+    planned=rr.unit;
+
+    const lock=LockService.getScriptLock();
+    lock.waitLock(20000);
+    try{
+      const currentAll=readUnits(y);
+      const current=currentAll.filter(u => u.id === unitId)[0];
+      if(!current) throw new Error("この単元は、別の画面ですでに削除されています");
+      if(String(expectedUpdatedAt || "") !== unitUpdatedAt_(current))
+        throw new Error("別の先生がこの単元を変更しました。開き直して確認してください");
+      if(peerVersion !== unitPeersVersion_(currentAll, before.className, before.subject, before.id))
+        throw new Error("別の先生が同じ教科の単元配置を変更しました。開き直して確認してください");
+      const me=(function(){ try{return Gate.activeEmail();}catch(e){return "";} })();
+      Sheets.setRow("単元進捗", current.row, unitRowObject_(planned, me, new Date()));
+      SpreadsheetApp.flush();
+      const saved=readUnits(y, planned.className, planned.subject).filter(u => u.id===unitId)[0];
+      return {unit:saved, warning:rr.warning, action:"detached"};
+    }finally{ lock.releaseLock(); }
+  }
+
+  /* 配置済みチップを同教科・同クラスの別コマへ移す。
+     移動先に別単元があれば、その2コマの所属を交換する。 */
+  function moveUnit(year, id, expectedUpdatedAt, fromDate, fromSlot, toDate, toSlot){
+    const y=+year, unitId=String(id || "").trim();
+    const from=TimetableDomain.unitSlotKey(isoDate_(fromDate)+"|"+String(fromSlot || "").trim());
+    const to=TimetableDomain.unitSlotKey(isoDate_(toDate)+"|"+String(toSlot || "").trim());
+    if(!unitId || !from || !to) throw new Error("単元チップの移動元・移動先が分かりません");
+    if(from === to) return {action:"unchanged"};
+
+    const beforeAll=readUnits(y);
+    const before=beforeAll.filter(u => u.id===unitId)[0];
+    if(!before) throw new Error("この単元は、別の画面ですでに削除されています");
+    if(String(expectedUpdatedAt || "") !== unitUpdatedAt_(before))
+      throw new Error("別の先生がこの単元を変更しました。開き直して確認してください");
+
+    const fromLesson=(before.assignments || []).indexOf(from);
+    const fromTest=before.testAssignment===from;
+    if(fromLesson < 0 && !fromTest) throw new Error("移動元にこの単元のチップがありません");
+    if((before.assignments || []).indexOf(to) >= 0 || before.testAssignment===to)
+      throw new Error("移動先は、すでに同じ単元に含まれています");
+
+    const first=earliestUnitKey_(before), firstP=first.split("|");
+    const fromTerm=termForDate_(y, firstP[0]);
+    const toP=to.split("|"), toTerm=termForDate_(y, toP[0]);
+    if(!fromTerm || !toTerm || fromTerm.start!==toTerm.start || fromTerm.end!==toTerm.end)
+      throw new Error("単元チップは同じ学期の中で移動してください");
+
+    const destCandidates=unitCandidates(y, before.className, before.subject, toP[0], toP[1], "");
+    if(destCandidates.slots.indexOf(to) < 0)
+      throw new Error("移動先は、この単元の対象教科・クラスではありません");
+
+    const other=beforeAll.filter(u => u.id!==before.id && u.className===before.className
+      && u.subject===before.subject
+      && ((u.assignments || []).indexOf(to)>=0 || u.testAssignment===to))[0] || null;
+    const peerVersion=unitPeersVersion_(beforeAll, before.className, before.subject, before.id);
+
+    let a=TimetableDomain.normalizeUnitPlan(before);
+    let b=other ? TimetableDomain.normalizeUnitPlan(other) : null;
+    if(fromTest) a.testAssignment=to;
+    else a.assignments=a.assignments.map(k => k===from ? to : k);
+    a.excludedSlots=a.excludedSlots.filter(k => k!==to);
+    if(a.excludedSlots.indexOf(from)<0) a.excludedSlots.push(from);
+
+    if(b){
+      if(b.testAssignment===to) b.testAssignment=from;
+      else b.assignments=b.assignments.map(k => k===to ? from : k);
+      b.excludedSlots=b.excludedSlots.filter(k => k!==from);
+      if(b.excludedSlots.indexOf(to)<0) b.excludedSlots.push(to);
+    }
+
+    let start=earliestUnitKey_(a, to);
+    if(b){
+      const bs=earliestUnitKey_(b, from);
+      if(unitSlotCompare_(bs,start)<0) start=bs;
+    }
+    const sp=start.split("|");
+    const c=unitCandidates(y, before.className, before.subject, sp[0], sp[1], "");
+
+    let occupiedA=occupiedByOtherUnits_(beforeAll, before.className, before.subject, a.id);
+    if(b) occupiedA=occupiedA.filter(k => k!==to);
+    const ar=TimetableDomain.reconcileUnit(a, c.slots, occupiedA, c.to);
+    a=ar.unit;
+
+    let br=null;
+    if(b){
+      const occupiedB=occupiedExcept_(beforeAll, before.className, before.subject, [a.id,b.id])
+        .concat(a.assignments || []).concat(a.testAssignment ? [a.testAssignment] : []);
+      br=TimetableDomain.reconcileUnit(b, c.slots, occupiedB, c.to);
+      b=br.unit;
+    }
+
+    if(fromTest && a.testAssignment!==to)
+      throw new Error("テストは通常授業の後ろに置いてください");
+    if(b && other.testAssignment===to && b.testAssignment!==from)
+      throw new Error("交換後にテストが通常授業より前になります");
+
+    const lock=LockService.getScriptLock();
+    lock.waitLock(20000);
+    try{
+      const currentAll=readUnits(y);
+      const current=currentAll.filter(u => u.id===unitId)[0];
+      if(!current) throw new Error("この単元は、別の画面ですでに削除されています");
+      if(String(expectedUpdatedAt || "") !== unitUpdatedAt_(current))
+        throw new Error("別の先生がこの単元を変更しました。開き直して確認してください");
+      if(peerVersion !== unitPeersVersion_(currentAll, before.className, before.subject, before.id))
+        throw new Error("別の先生が同じ教科の単元配置を変更しました。開き直して確認してください");
+
+      const now=new Date(), me=(function(){try{return Gate.activeEmail();}catch(e){return "";} })();
+      Sheets.setRow("単元進捗", current.row, unitRowObject_(a, me, now));
+      if(b){
+        const curB=currentAll.filter(u => u.id===b.id)[0];
+        if(!curB) throw new Error("交換相手の単元が削除されています");
+        Sheets.setRow("単元進捗", curB.row, unitRowObject_(b, me, now));
+      }
+      SpreadsheetApp.flush();
+      const saved=readUnits(y, before.className, before.subject);
+      return {
+        unit:saved.filter(u => u.id===a.id)[0],
+        swapped:b ? saved.filter(u => u.id===b.id)[0] : null,
+        warning:ar.warning || (br && br.warning) || null,
+        action:b ? "swapped" : "moved"
+      };
+    }finally{ lock.releaseLock(); }
+  }
+
   function resetUnit(year, id, expectedUpdatedAt){
     const y = +year, unitId = String(id || "").trim();
     const lock = LockService.getScriptLock();
@@ -2576,7 +2751,7 @@ const Store = (function(){
   }
 
   return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects, writeSubjects,
-          readTerms, readUnits, unitCandidates, unitManager, writeTerms, writeUnit, placeUnit, resetUnit, resetUnits, deleteUnit,
+          readTerms, readUnits, unitCandidates, unitManager, writeTerms, writeUnit, placeUnit, detachUnit, moveUnit, resetUnit, resetUnits, deleteUnit,
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste, exportPlanSheet,
           writeTally, readTally, TALLY_NAME,
           exportWeek, weekSheetName, weekOrder, migratePlan, checkYear, readEvents,
@@ -2692,6 +2867,15 @@ function apiWriteUnit(year, input){
 function apiPlaceUnit(year, id, expectedUpdatedAt, startDate, startSlot){
   Gate.check();
   return Store.placeUnit(year || new Date().getFullYear(), id, expectedUpdatedAt, startDate, startSlot);
+}
+function apiDetachUnit(year, id, expectedUpdatedAt, dateValue, slotValue){
+  Gate.check();
+  return Store.detachUnit(year || new Date().getFullYear(), id, expectedUpdatedAt, dateValue, slotValue);
+}
+function apiMoveUnit(year, id, expectedUpdatedAt, fromDate, fromSlot, toDate, toSlot){
+  Gate.check();
+  return Store.moveUnit(year || new Date().getFullYear(), id, expectedUpdatedAt,
+                        fromDate, fromSlot, toDate, toSlot);
 }
 function apiResetUnit(year, id, expectedUpdatedAt){
   Gate.check();
