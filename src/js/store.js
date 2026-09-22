@@ -13,6 +13,17 @@
    切り替えを残すと、切り替えたまま別の年度に書く事故が起きる。 */
 
 const KEY = "school-timetable/v3";
+/* **年度ごとに分けて書く。** 1つの固まりを stringify すると、控えが貯まるほど
+   書き出し自体が重くなる（下の実測コメント）。触った年度だけ書き出せば、
+   いつも新しく開いている年度ぶんだけで済む。
+   meta = 設定とバージョン（小さいので毎回書く）。y/<年度> = その年度の中身。 */
+const MKEY  = KEY + "/meta";
+const YPREF = KEY + "/y/";
+const YKEY  = y => YPREF + y;
+/* 書き出しがまだの年度。save・cellChanged・mergeWeek・pruneWeeks が立てる。
+   put_ が全部書き切れたときに消す（途中で切れたら、残りは次に持ち越す） */
+const saveDirty = {};
+function markYearDirty(y){ saveDirty[String(y)] = 1; }
 
 const blankDb = () => ({
   v: 3,
@@ -30,21 +41,50 @@ let db = blankDb();
 let storeBroken = "";          /* 保存できなくなった理由。空なら健全 */
 
 function loadDb(){
-  let raw = null;
+  /* **年度ごとの鍵を拾う**（いまの形）。1つでも読めたら、それを正本にする */
+  const ys = {};
+  try{
+    for(let i = 0; i < localStorage.length; i++){
+      const k = localStorage.key(i);
+      if(k && k.indexOf(YPREF) === 0){
+        try{ ys[k.slice(YPREF.length)] = JSON.parse(localStorage.getItem(k)); }catch(_){}
+      }
+    }
+  }catch(e){ storeBroken = "この端末では保存できない設定になっている"; }
+
+  let metaRaw = null, raw = null;
+  try{ metaRaw = localStorage.getItem(MKEY); }catch(e){ storeBroken = "この端末では保存できない設定になっている"; }
   try{ raw = localStorage.getItem(KEY); }catch(e){ storeBroken = "この端末では保存できない設定になっている"; }
-  if(!raw) return;
-  let got;
-  try{ got = JSON.parse(raw); }
-  catch(e){
-    /* 壊れた中身で上書きしない。退避してから初期状態で開く */
-    try{ localStorage.setItem(KEY + "/broken/" + Date.now(), raw); }catch(_){}
-    storeBroken = "保存されていた内容を読めなかった。退避して新しく始めた";
-    return;
+
+  let got = null;
+  if(metaRaw){ try{ got = JSON.parse(metaRaw); }catch(_){ got = null; } }
+  if(!got && raw){
+    /* **旧版のひと固まり。** 読めたら年度ぶんを拾い、次の書き出しで分けて置き直す。
+       拾った年度は書き出しがまだ、として印を立てる */
+    try{ got = JSON.parse(raw); }
+    catch(e){
+      /* 壊れた中身で上書きしない。退避してから初期状態で開く */
+      try{ localStorage.setItem(KEY + "/broken/" + Date.now(), raw); }catch(_){}
+      storeBroken = "保存されていた内容を読めなかった。退避して新しく始めた";
+      got = null;
+    }
+  }else if(raw){
+    /* 分割ずみなのに旧版が残っている＝前回の書き出しが途中で切れた。
+       年度の鍵のほうが新しいので、鍵が無い年度だけを旧版から拾う */
+    let old = null;
+    try{ old = JSON.parse(raw); }catch(_){}
+    if(old && old.years && typeof old.years === "object")
+      for(const y in old.years) if(!(y in ys)){ ys[y] = old.years[y]; saveDirty[y] = 1; }
+    /* **ここでは消さない。** 拾った年度を put_ が書き切れたときに消す（put_ 側） */
   }
-  if(!got || typeof got !== "object") return;
-  db.settings = Object.assign(blankDb().settings, got.settings || {});
-  db.settings.tally = Object.assign(blankDb().settings.tally, (got.settings||{}).tally || {});
-  db.years = (got.years && typeof got.years === "object") ? got.years : {};
+  if(got && typeof got === "object"){
+    db.settings = Object.assign(blankDb().settings, got.settings || {});
+    db.settings.tally = Object.assign(blankDb().settings.tally, (got.settings||{}).tally || {});
+    /* 旧版から読んだ年度は、鍵が無いものだけ。あれば書き直すまで待避 */
+    if(!metaRaw && got.years && typeof got.years === "object")
+      for(const y in got.years) if(!(y in ys)){ ys[y] = got.years[y]; saveDirty[y] = 1; }
+  }
+  db.years = ys;
 }
 
 /* ── 古い週の間引き ──────────────────────────
@@ -75,6 +115,7 @@ function pruneWeeks(keep){
   for(const x of all.slice(keep)){
     if(x.k === here) continue;             /* いま見ている週は残す */
     delete db.years[x.y].weeks[x.k];
+    saveDirty[x.y] = 1;                    /* 小さくなったぶんを書き直す年度 */
     n++;
   }
   return n;
@@ -83,7 +124,17 @@ function pruneWeeks(keep){
 /* 保存できなかったことを黙って飲み込まない。
    飲み込むと、教師は書けたつもりで書けていない状態のまま週を進める。 */
 let onStoreError = () => {};
-function put_(){ localStorage.setItem(KEY, JSON.stringify(db)); }
+/* **設定と、触った年度だけを書く。** 全量を stringify すると控えが貯まるほど
+   重くなるので、年度ごとの鍵に分けて、印が立っているものだけ書き直す。 */
+function put_(){
+  localStorage.setItem(MKEY, JSON.stringify({v: db.v, settings: db.settings}));
+  for(const y in saveDirty)
+    if(db.years[y]) localStorage.setItem(YKEY(y), JSON.stringify(db.years[y]));
+  /* ここまで来たら旧版のひと固まりは要らない（全部、新しい鍵へ写っている）。
+     途中で切れたときは残しておく ── 読み込み側が欠けた年度を拾う */
+  try{ localStorage.removeItem(KEY); }catch(_){}
+  for(const y in saveDirty) delete saveDirty[y];
+}
 
 /* ── 手元への書き出し ──────────────────────────
    **打鍵のたびに書き出さない。** db は年度ぶんを丸ごと持っているので、
@@ -151,6 +202,7 @@ let dataTick = 0;
 
 function save(){
   dataTick++;
+  saveDirty[String(fy())] = 1;             /* いま開いている年度を書き直す */
   if(!saveT) saveT = setTimeout(saveNow, SAVE_WAIT);
   return !storeBroken;
 }
@@ -189,24 +241,34 @@ function newYear(y){
     tanpopo: prev ? clone(prev.tanpopo || {}) : {}
   };
 }
+/* **形をそろえた年度を覚えておく。** 配列を走査するのは1回だけにする ──
+   Y() は描画の中で延べ数千回呼ばれるので、そのたびに全部見ると塗りが重くなる。
+   外から生の形が入ってくる場所（年度の読み込み）は、あとで印を落とす */
+const normSeen_ = new WeakSet();
+/* 年度の入れ物に生の形を入れたあとに呼ぶ（backend.js の applyYear） */
+function yearStale(Yr){ normSeen_.delete(Yr); }
+
 /* 読むだけ。**ここでは保存しない**（描画のたびに呼ばれるため）。
    新しい年度を作ったときは、その場で1回 save() する側が呼ぶ。 */
 function Y(){
   const y = String(fy());
   let Yr = db.years[y];
   if(!Yr){ Yr = db.years[y] = newYear(+y); }
-  Yr.classes = normClasses_(Yr.classes);
-  if(!Yr.chipModes || typeof Yr.chipModes !== "object") Yr.chipModes = {};
-  Yr.specials = normSpecials_(Yr.specials);
-  if(!Yr.base)  Yr.base  = {};
-  if(!Yr.weeks) Yr.weeks = {};
-  if(!Yr.week1) Yr.week1 = firstMonday(+y);
-  if(!Yr.events || typeof Yr.events !== "object") Yr.events = {};
-  /* **毎回作り直さない。** 作り直すと、直した中身が次の呼び出しで捨てられる。
-     組ごとの並び（値が配列）になっていなければ、そのときだけ直す。 */
-  if(!Yr.tanpopo || typeof Yr.tanpopo !== "object" || Array.isArray(Yr.tanpopo)
-     || Object.keys(Yr.tanpopo).some(k => !Array.isArray(Yr.tanpopo[k])))
-    Yr.tanpopo = tpNorm_(Yr.tanpopo);
+  if(!normSeen_.has(Yr)){
+    normSeen_.add(Yr);
+    Yr.classes = normClasses_(Yr.classes);
+    if(!Yr.chipModes || typeof Yr.chipModes !== "object") Yr.chipModes = {};
+    Yr.specials = normSpecials_(Yr.specials);
+    if(!Yr.base)  Yr.base  = {};
+    if(!Yr.weeks) Yr.weeks = {};
+    if(!Yr.week1) Yr.week1 = firstMonday(+y);
+    if(!Yr.events || typeof Yr.events !== "object") Yr.events = {};
+    /* **毎回作り直さない。** 作り直すと、直した中身が次の呼び出しで捨てられる。
+       組ごとの並び（値が配列）になっていなければ、そのときだけ直す。 */
+    if(!Yr.tanpopo || typeof Yr.tanpopo !== "object" || Array.isArray(Yr.tanpopo)
+       || Object.keys(Yr.tanpopo).some(k => !Array.isArray(Yr.tanpopo[k])))
+      Yr.tanpopo = tpNorm_(Yr.tanpopo);
+  }
   return Yr;
 }
 

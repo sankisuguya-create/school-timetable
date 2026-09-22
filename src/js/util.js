@@ -21,7 +21,11 @@ const escText = s => String(s == null ? "" : s)
 
 const _sink = document.createElement("div");
 function plain(html){
-  _sink.innerHTML = html || "";
+  const s = String(html || "");
+  /* **たいていはタグも実体参照も無いただの字。** DOMを通さずに済ませる。
+     塗り直しの中で数百回呼ばれるので、ここが地味に効く */
+  if(s.indexOf("<") < 0 && s.indexOf("&") < 0) return s.replace(/\xa0/g," ");
+  _sink.innerHTML = s;
   return (_sink.textContent || "").replace(/ /g," ");
 }
 /* 貼り付けや打鍵で入ってくる余計なタグを落とす。残すのは文字と <a href> だけ。
