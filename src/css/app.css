@@ -1279,6 +1279,30 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .unitopen small{font-size:11px;color:var(--tx-sub);font-weight:400;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
 .unitopen i{font-style:normal;font-size:22px;line-height:1;color:var(--tx-sub)}
+.unitquick{margin-top:7px;padding-top:7px;border-top:1px solid var(--line-soft)}
+.unitquick>small{display:block;color:var(--tx-sub);font-size:11px;line-height:1.45}
+.unitpals{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.unitpal{display:inline-flex;align-items:center;gap:5px;max-width:100%;
+  padding:5px 9px;border:1px solid var(--line);border-radius:14px;background:var(--card);
+  color:var(--tx);font:inherit;font-size:12px;line-height:1.25;cursor:grab;user-select:none}
+.unitpal:hover{border-color:var(--ink-link);box-shadow:inset 0 0 0 1px var(--ink-link)}
+.unitpal:active{cursor:grabbing}
+.unitpal:disabled{cursor:wait;opacity:.55}
+.unitpal b{font-size:12px;max-width:10em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.unitpal small{font-size:10.5px;color:var(--tx-sub);white-space:nowrap}
+.unitpal[data-subject=kokugo]{background:var(--sub-kokugo)}
+.unitpal[data-subject=shakai]{background:var(--sub-shakai)}
+.unitpal[data-subject=sansu]{background:var(--sub-sansu)}
+.unitpal[data-subject=rika]{background:var(--sub-rika)}
+.unitpal[data-subject=seikatsu],.unitpal[data-subject=sogo]{background:var(--sub-seikatsu)}
+.unitpal[data-subject=ongaku]{background:var(--sub-ongaku)}
+.unitpal[data-subject=zuko]{background:var(--sub-zuko)}
+.unitpal[data-subject=katei]{background:var(--sub-katei)}
+.unitpal[data-subject=taiiku]{background:var(--sub-taiiku)}
+.unitpal[data-subject=doutoku]{background:var(--sub-doutoku)}
+.unitpal[data-subject=gaikoku]{background:var(--sub-gaikoku)}
+.unitpal[data-subject=gakkatsu]{background:var(--sub-gakkatsu)}
+
 
 .unitdlg{width:min(720px,92vw)}
 .unitintro{margin-top:-4px;color:var(--tx-sub)}
