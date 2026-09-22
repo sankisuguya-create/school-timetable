@@ -1934,6 +1934,9 @@ console.log("\n■ 単元進捗 Phase 1");
   const cand = ev('Store.unitCandidates(2030, "3-1", "sansuu", "2030-09-02", "")');
   ok("開始日の学期末を自動で使う",
      cand.to === "2030-09-30" && cand.term && cand.term.name === "1学期", cand);
+  const capped = ev('Store.unitCandidates(2030, "3-1", "sansuu", "2030-09-02", "2030-12-31")');
+  ok("呼び出し側が後の日を渡しても学期末を越境しない",
+     capped.to === "2030-09-30", capped);
   ok("全校行事で上書きされた算数は候補にしない",
      cand.slots.indexOf("2030-09-02|p1") < 0, cand.slots);
   ok("休みの日は基本時間割に算数があっても候補にしない",
