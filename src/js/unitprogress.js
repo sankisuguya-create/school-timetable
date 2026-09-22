@@ -19,7 +19,7 @@
 const PAL_URESET = "__ureset";   /* パレットの「単元をリセット」チップ */
 
 const UP = {
-  key:"",              /* いまの面の持ち主の見分け（home/3-3/, special//rika） */
+  key:"",              /* いまの面の持ち主のみ分け（home/3-3/, special//rika） */
   units:[],            /* この面に関係する単元 */
   terms:[], termVersion:"[]",
   warns:{},            /* 単元ID -> 学期末に入りきらない旨の文 */
@@ -119,6 +119,17 @@ function upStartNewer_(a, b){
   return upSlotRank_(a.slot) > upSlotRank_(b.slot);
 }
 
+/* 同じクラス・同じ教科（専科は同じ枠）で、起点のあるほかの単元。
+   1コマ1単元の争いの相手 ── 採番・移動の両方で使う */
+function upOthers_(unit){
+  return UP.units.filter(u =>
+    u.id !== unit.id && u.subject === unit.subject
+    && u.target === unit.target
+    && u.layer === unit.layer
+    && (unit.layer !== "special" || u.sp === unit.sp)
+    && (u.start || {}).date);
+}
+
 /* そのコマがこの単元のものか。pin > 外す印 > ほかの単元のpin > 規定の所属 */
 function upIsMine_(w, unit, others, d, s, dt){
   const mark = upCellMark_(w, unit, d, s);
@@ -154,13 +165,7 @@ function upScan_(unit, endISO){
   const to = endISO < now ? endISO : now;           /* 画面に出すのは今の週まで */
   const mons = upMons_(st.date, to);
   out.partial = Backend.unread(mons, fy()) > 0;     /* まだ読んでいない週がある */
-  /* 同じクラス・同じ教科のほかの単元（1コマ1単元の争いの相手） */
-  const others = UP.units.filter(u =>
-    u.id !== unit.id && u.subject === unit.subject
-    && u.target === unit.target
-    && u.layer === unit.layer
-    && (unit.layer !== "special" || u.sp === unit.sp)
-    && (u.start || {}).date);
+  const others = upOthers_(unit);                   /* 争いの相手 */
   let seq = 0;
   const keep = monday;
   try{
@@ -209,12 +214,7 @@ function upScanTo_(unit, endISO){
   const out = {count:0};
   if(!st.date || !st.slot) return out;
   const mons = upMons_(st.date, endISO);
-  const others = UP.units.filter(u =>
-    u.id !== unit.id && u.subject === unit.subject
-    && u.target === unit.target
-    && u.layer === unit.layer
-    && (unit.layer !== "special" || u.sp === unit.sp)
-    && (u.start || {}).date);
+  const others = upOthers_(unit);
   let seq = 0;
   const keep = monday;
   try{
@@ -234,7 +234,9 @@ function upScanTo_(unit, endISO){
   return out;
 }
 
-/* 未読の週が混ざっていたら裏で読み、届いたら描き直す */
+/* 未読の週が混ざっていたら裏で読み、届いたら描き直す。
+   **読んでいるあいだは帯を出す** ── 番号が「仮」から確かな番号に
+   入れ替わるとき、何が起きたか分かるようにする */
 function upEnsureRange_(unit){
   const st = (unit.start || {});
   if(!st.date || UP.loading) return;
@@ -244,9 +246,12 @@ function upEnsureRange_(unit){
   if(!want.length) return;
   for(const m of want) UP.asked[m] = true;
   UP.loading = true;
+  const wid = Wait.begin("単元のコマを数えるため、"
+                         + "起点からの週を読んでいます");
   Backend.readWeeks(want, () => {
     UP.loading = false;
     UP.seq = {};                                    /* 数え直す */
+    Wait.end(wid);
     paintSheet();
   });
 }
@@ -278,8 +283,9 @@ function upBadgeFor_(d, s, c){
     if(seq > u.lessonCount && !test) continue;       /* 越えたぶんは出さない */
     /* 複数クラスのコマでは、どのクラスの番号かを先に添える */
     const pre = (view.kind === "special" && !(c && c.cls)) ? u.target + "・" : "";
-    const label = test ? (pre + u.name.slice(0, 3) + "テスト")
-                       : (pre + u.name.slice(0, 3) + " " + seq + "/" + u.lessonCount);
+    /* バッジの字は単元名の冒頭4文字（備考欄に出す小さな印） */
+    const label = test ? (pre + u.name.slice(0, 4) + "テスト")
+                       : (pre + u.name.slice(0, 4) + " " + seq + "/" + u.lessonCount);
     upEnsureRange_(u);
     return {t:label, uid:u.id, dim:r.partial, warn:!!UP.warns[u.id],
             start:u.start.date === dt && u.start.slot === s,
@@ -417,8 +423,8 @@ function upDropChip_(unit, d, s){
       upWarnOne_(unit);
       paintSheet();
       toast("「" + escText(unit.name) + "」を " + md(addDays(monday, d))
-            + " から始めた。このあとの" + escText(unit.name.slice(0, 3))
-            + "のコマに番号が付きます");
+            + " から始めた。この後の" + escText(unit.name.slice(0, 3))
+            + "のコマに番号が付決ます");
     }, why2 => toast(why2));
     return;
   }
@@ -428,8 +434,8 @@ function upDropChip_(unit, d, s){
   if(iso(smon) === wk && unit.start.date === dt && unit.start.slot === s){
     askOk({
       title:"「" + unit.name + "」を全部取り消しますか",
-      lines:["この単元の起点と、コマに付いている印をぜんぶ外します。",
-             "単元そのものは残ります。あとで別のコマに置き直せます。"],
+      lines:["この単元の起点と、コマに付いている印を全部外します。",
+             "単元そのものは残ります。後で別のコマに置き直せます。"],
       goLabel:"取り消す",
       onYes:() => upResetAll_(unit)
     });
@@ -458,7 +464,7 @@ function upDropChip_(unit, d, s){
     toast("このコマの印を外した");
   }else{
     upMark_(unit, d, s, "-", wk);                /* このコマだけ外す */
-    toast("このコマを「" + escText(unit.name) + "」から外した。あとの番号が繰り上がります");
+    toast("このコマを「" + escText(unit.name) + "」から外した。後の番号が繰り上がります");
   }
   UP.seq = {};
   paintSheet();
@@ -478,8 +484,28 @@ function upMoveStart_(data, d, s){
   const dstDt = iso(addDays(monday, d));
   if(srcDt === dstDt && srcS === s) return;
 
+  /* **落とす先が、すでにこの単元のコマ** → 単元の中での動き。
+     番号は場所で決まるので、印だけ動かしても並びは変わらない。
+     ここで出発コマを外す（"-"）と、単元のコマが1つ減ってしまい、
+     あとに取れるコマが無ければ最後の「テスト」が消える。
+     両方ともこの単元のコマのままにして、順番は変えない */
+  const mark2 = upCellMark_(w, unit, d, s);
+  if(mark2 === unit.id
+     || (!mark2 && upIsMine_(w, unit, upOthers_(unit), d, s, dstDt))){
+    upMark_(unit, d, s, unit.id, wk);            /* pin で置き直す（残るだけ） */
+    UP.seq = {};
+    paintSheet();
+    return toast("番号は場所で決まるので、「" + escText(unit.name)
+                 + "」の中では順番は変わりません。"
+                 + "このコマを外すときは、単元チップを落とします");
+  }
+
+  /* ほかの単元のコマに落とした → 交換。pin だけでなく、
+     印が無くても相手のコマとして数えられている場所も相手のもの */
   const other = upViewUnits_().find(u => u !== unit
-    && upCellMark_(w, u, d, s) === u.id);          /* 落とす先に pin のある単元 */
+    && (upCellMark_(w, u, d, s) === u.id
+        || (!upCellMark_(w, u, d, s)
+            && upIsMine_(w, u, upOthers_(u), d, s, dstDt))));
   if(other){
     /* 交換：着いたコマを unit のものに、出発したコマを other のものにする。
        どちらかが起点なら、起点どうしも入れ替える（交換は教科をまたいでよい：
@@ -506,7 +532,7 @@ function upMoveStart_(data, d, s){
   const wasStart = unit.start.date === srcDt && unit.start.slot === srcS;
   if(wasStart && !upSubjectHit_(w, unit, d, s)){
     const subName = (SUB_BY_CODE[unit.subject] || {}).name || unit.subject;
-    return toast("起点は<b>" + escText(subName) + "</b>のコマに置きます");
+    return toast("起点は<b>" + escText(subName) + "</b>のコマに置決ます");
   }
   if(wasStart){
     Backend.saveUnit(Object.assign({}, unit,
@@ -562,14 +588,18 @@ function upResetAll_(unit, done){
   });
 }
 
-/* 「単元リセット」チップをコマに落とす → そのコマの単元を全部外す */
+/* 「単元リセット」チップをコマに落とす → そのコマの単元を全部外す。
+   **起点のコマでなくてもよい** ── 印（pin）だけでなく、
+   その単元のコマとして数えられている場所（番号が出ているコマ）でも効く */
 function upResetChip_(d, s){
-  const w = week();
-  const unit = upViewUnits_().find(u => upCellMark_(w, u, d, s));
+  const w = week(), dt = iso(addDays(monday, d));
+  const unit = upViewUnits_().find(u =>
+    upCellMark_(w, u, d, s) === u.id
+    || (!upCellMark_(w, u, d, s) && upIsMine_(w, u, upOthers_(u), d, s, dt)));
   if(!unit) return toast("ここに単元の印はありません");
   askOk({
     title:"「" + unit.name + "」を全部取り消しますか",
-    lines:["この単元の起点と、コマに付いている印をぜんぶ外します。",
+    lines:["この単元の起点と、コマに付いている印を全部外します。",
            "単元そのものは残ります。"],
     goLabel:"取り消す",
     onYes:() => upResetAll_(unit)
@@ -591,7 +621,7 @@ function upWarnOne_(unit){
       const short = need - Math.min(placed, r.count);
       if(short > 0)
         UP.warns[unit.id] = "学期末までに " + short + "コマ足りません。"
-          + "空きコマに置き直すか、授業数を見直してください。";
+          + "空きコマに置き直すか、授業数をみ直してください。";
       else delete UP.warns[unit.id];
       paintSheet();
     }, () => {});
@@ -756,7 +786,7 @@ function renderUnitTerm_(){
   const box = $("unitTermInfo");
   if(!UP.terms.length){
     box.className = "unitterm warn";
-    box.innerHTML = "<span><b>学期の期間が未設定</b><small>単元登録はできます。自動配置と学期末警告には期間が必要です。</small></span>"
+    box.innerHTML = "<span><b>学期の期間が未設定</b><small>単元登録はで決ます。自動配置と学期末警告には期間が必要です。</small></span>"
       + "<button class='btn' id='unitTermOpen'>学期を設定</button>";
   }else{
     box.className = "unitterm";
@@ -770,7 +800,7 @@ function unitStatus_(u){
   if(!(u.start || {}).date) return "未配置";
   const seq = upSeqFor_(u);
   const cap = u.lessonCount + (u.hasTest ? 1 : 0);
-  if(seq.count > cap) return "配置 " + cap + "（はみ出し " + (seq.count - cap) + "）";
+  if(seq.count > cap) return "配置 " + cap + "（は見出し " + (seq.count - cap) + "）";
   return "配置 " + seq.count + "/" + cap;
 }
 function renderUnitList_(){
@@ -867,7 +897,7 @@ function resetUnit_(){
   askOk({
     title:"「" + u.name + "」の配置をリセットしますか",
     lines:["<b>単元そのものは残します。</b>",
-           "時間割に置いた進捗だけを全部外し、あとで起点から置き直せる状態に戻します。"],
+           "時間割に置いた進捗だけを全部外し、後で起点から置き直せる状態に戻します。"],
     goLabel:"配置をリセット",
     onYes:() => upResetAll_(u, () => {
       renderUnitList_(); editUnit_(u.id);
@@ -881,16 +911,16 @@ function resetAllUnits_(){
   if(!list.length) return toast("リセットする単元がありません");
   const sub = (SUB_BY_CODE[unitState.subject] || {}).name || unitState.subject;
   askOk({
-    title:unitState.cls + "・" + sub + " の配置をすべてリセットしますか",
-    lines:["<b>この画面に並んでいる単元すべて</b>の進捗配置を外します。",
-           "単元名・授業数・テスト設定は残ります。ほかの教科には影響しません。"],
+    title:unitState.cls + "・" + sub + " の配置を全てリセットしますか",
+    lines:["<b>この画面に並んで入る単元全て</b>の進捗配置を外します。",
+           "単元名・授業数・テスト設定は残ります。他の教科には影響しません。"],
     goLabel:"この教科の配置を全リセット",
     onYes:() => {
       let left = list.length;
       for(const u of list) upResetAll_(u, () => {
         if(--left <= 0){
           renderUnitList_();
-          $("unitStat").textContent = "この教科の単元配置をすべてリセットしました。";
+          $("unitStat").textContent = "この教科の単元配置を全てリセットしました。";
           UP.seq = {}; paintSheet();
         }
       });
@@ -968,7 +998,7 @@ function saveTermRows_(){
    単元は1画面4つだけで作る（教科 → 名前 → コマ数 → テスト）。
    チップの字は単元名の冒頭3文字。専科の面では「名前・クラス」。 */
 function upChipLabel_(u){
-  const t = (u.name || "").slice(0, 3) || u.name || "単元";
+  const t = (u.name || "").slice(0, 4) || u.name || "単元";
   return view.kind === "special" ? t + "・" + u.target : t;
 }
 function upPaletteUnits_(){

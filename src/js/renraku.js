@@ -30,9 +30,11 @@ const REN_FONT = '"Hiragino Kaku Gothic ProN","Yu Gothic",YuGothic,"Noto Sans JP
    （ふりがな以外の中身・漢字の直前が無い）は、そのまま字として出す。 */
 function renRuby(s){
   const segs = [], KANA = /^[ぁ-んァ-ヶー・]+$/;
-  /* ルビが掛かるのは「漢字で始まる語尾の並び」（下じき・筆箱・A1 など）。
-     漢字の無い語尾（数字・ローマ字だけ）も一応拾う */
-  const BASE = /([一-龠々〆ヵヶ][一-龠々〆ヵヶぁ-んァ-ヶー0-9０-９A-Za-z]*|[0-9０-９A-Za-z]+)$/;
+  /* ルビが掛かるのは「かっこの直前に続いている語」。
+     漢字（下じき・筆箱）だけでなく、カタカナ（ドリル・プリント）や
+     かな漢字まじり（3けた）、数字・ローマ字も拾う。
+     拾えないときは、字を消さずかっこ書きをそのまま出す */
+  const BASE = /([一-龠々〆ヵヶぁ-んァ-ヶー・0-9０-９A-Za-z]+)$/;
   let i = 0, buf = "";
   const flush = () => { if(buf){ segs.push({t:buf}); buf = ""; } };
   while(i < s.length){
@@ -42,7 +44,7 @@ function renRuby(s){
       const rt = j < 0 ? "" : s.slice(i + 1, j);
       if(j < 0 || !KANA.test(rt)){ buf += j < 0 ? c : s.slice(i, j + 1); i = j < 0 ? i + 1 : j + 1; continue; }
       const m = buf.match(BASE);
-      if(!m){ segs.push({t:rt}); }          /* 漢字が無いときは中身を字として出す */
+      if(!m){ segs.push({t:c + rt + (c === "（" ? "）" : ")")}); }
       else{
         const head = buf.slice(0, buf.length - m[1].length);
         if(head) segs.push({t:head});
@@ -126,7 +128,7 @@ const REN_YOMI = {
   "図書":"としょ","行事":"ぎょうじ","給食":"きゅうしょく","クラブ":"くらぶ",
   "委員会":"いいんかい","読書":"どくしょ","漢字":"かんじ","書写":"しょしゃ","情報":"じょうほう",
   "合同体育":"ごうどうたいいく","合同音楽":"ごうどうおんがく","学年集会":"がくねんしゅうかい",
-  "休み":"やすみ","始業式":"しぎょうしき","終業式":"しゅうぎょうしき","大掃除":"おおそうじ",
+  "休み":"休み","始業式":"しぎょうしき","終業式":"しゅうぎょうしき","大掃除":"おおそうじ",
   "運動会":"うんどうかい","遠足":"えんそく","修学旅行":"しゅうがくりょこう",
   "参観日":"さんかんび","保護者会":"ほごしゃかい","下校":"げこう","登校":"とうこう"
 };
@@ -239,6 +241,12 @@ function renrakuRender(){
   if(!cls || !dt){ box.innerHTML = ""; return; }
   const mon = mondayOf(dt), need = {};
   (need[fyOf(mon)] = {})[iso(mon)] = true;
+  /* **選んだクラスの層を読む。** いま開いている面の対象だけ読むと、
+     別クラスを選んだときにそのクラスの担任・学年の層が読めず、
+     基本時間割＋全校層だけの紙が静かに出てしまう */
+  const want = [{layer:"school", target:""},
+                {layer:"grade",  target:gradeOf(cls)},
+                {layer:"home",   target:cls}];
   const w = Wait.begin("その週を読んでいます");
   readByFy(need, () => {
     Wait.end(w);
@@ -246,7 +254,7 @@ function renrakuRender(){
     const m = renrakuModel(cls, dt, $("renHw").value, $("renItem").value);
     m.clsName = cls + "　れんらくちょう";
     box.innerHTML = ""; box.appendChild(renDraw(m));
-  });
+  }, want);
 }
 function renrakuCanvas(){ return ($("renView") || {}).querySelector ? $("renView").querySelector("canvas") : null; }
 function renrakuName(){

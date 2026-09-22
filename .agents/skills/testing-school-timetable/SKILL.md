@@ -42,6 +42,14 @@ Then run the feature and inspect `window.__cc`. arg[5] is the `where` object —
 - To re-trigger after ack: `week().acked.length = 0` then force a repaint (`warnOverwritten()` or `paintSheet()` via console).
 - Chrome 137 does **not** throw InvalidStateError for a second `showModal()` — modal dialogs stack in the top layer (observed owDlg over settingsDlg). So the sheet.js try/catch is defensive and may be unexercised; the `if(dlg.open) return` guard (repaint while already open) is the realistically-hit path.
 
+## renraku (連絡帳用 A4よこ) test path
+- Left rail 週案を出す → 「連絡帳用（A4よこ）」(`data-act="renraku"`, sits between 学年ごと and 時数をコピー) → `openRenrakuDlg()` → `#renDlg` (select `#renCls` default = current view's class, date `#renDate` default = tomorrow skipping Sunday, `#renHw`/`#renItem` textareas, `#renView` canvas preview, buttons やめる/印刷 `#renPrint`/画像 `#renImage`/Google Slide `#renSlide`, stat `#renStat`).
+- Preview = canvas rendered by `renrakuModel`+`renDraw` (renraku.js): right-edge vertical date+ruby, 「つぎの日の時間割」 box with 1-char letters via `compose()` per lesson slot (real paper content — events show as first char like テ, NO_LESSON → なし), 宿題/持ち物 boxes, class name bottom-left (`cls + "　れんらくちょう"`).
+- Re-render triggers: change on renCls/renDate, input on renHw/renItem (live). 漢字（かな）→ ruby via `renRuby` (REN_YOMI table covers fixed words only; custom titles get no ruby).
+- 画像 → `downloadBlob(連絡帳_<YYYY-MM-DD>_<cls>.png)` → ~/Downloads + stat「画像を保存しました」. Google Slide → file:// mode: stat「手元ではGoogle Slideを作れない」(Backend.exportSlide onGas guard). 印刷 → `window.open` A4-landscape img + `print()`; popup-blocked → stat「窓が開けませんでした」.
+- Sunday: `DOW` has only Mon–Sat; `dowCh` falls back to 日 for `getDay()===0`; day index 6 has no cells → empty timetable column, should not crash.
+- For event/no-lesson test data: write chips onto the target day's cells first （授業なし chip → hatched cell, 行事 chip → subject=行事 → letter 行+ぎょうじ ruby).
+
 ## Misc selectors
 - Cells: `.cell` with `data-d` (0=Mon..) and `data-s` (slot id `p1`..`p6`, `brk*`). Read back via `div[aria-label="9/23（水） 1校時 教科名・行事名"]`.
 - Persistence: localStorage `school-timetable/v3`; save() debounces ~400ms.

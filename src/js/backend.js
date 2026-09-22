@@ -375,6 +375,38 @@ const Backend = (function(){
     for(const id in inflight) n += inflight[id].length;
     return n;
   };
+
+  /* **「変更を破棄」。まだシートに入っていない自分のぶんを全部捨てて、
+     触った週を読み直す**（マージでシートの中身に戻る ── 未送信のある対象は
+     上書きしない決まりなので、捨てきったあと読むと必ずシート側になる）。
+     送っている途中のぶんだけは届くことがある ── 届いたぶんはシートに
+     入るので、読み直した紙には自分の中身が出る（捨てたと見えないが、
+     他人の書き込みを潰すことはない）。
+     手元（localStorage）では書いた時点で中身になっているので、
+     捨てるべき「未送信ぶん」は無く、控えの掃除だけする。 */
+  function discardChanges(after){
+    const list = [], seen = {};
+    const pushLoc = l => {
+      const k = l.year + "|" + l.monday;
+      if(!seen[k]){ seen[k] = 1; list.push({loc:l}); }
+    };
+    for(const k in dirty) pushLoc({year:dirty[k].year, monday:dirty[k].monday});
+    for(const h of held) pushLoc(h.loc);
+    for(const id in inflight)
+      for(const q of inflight[id]){ const l = locOf(q.date); if(l) pushLoc(l); }
+    const had = unsaved();
+    dirty = {}; dirtyN = 0;
+    held = [];
+    for(const id in inflight) delete inflight[id];
+    touched = false; lastErr = "";
+    clearTimeout(timer);              /* 3分の見回しに残らせない */
+    persistPending();                 /* 端末の控えも消える（PEND/HELD） */
+    onDirty(unsaved(), lastErr);
+    onConflict([]);
+    const done = () => { if(after) after(had); };
+    if(!onGas) return done();
+    reloadWeek(list, done);
+  }
   const setDirtyWatcher = fn => { onDirty = fn; fn(unsaved(), lastErr); };
   const setConflictWatcher = fn => { onConflict = fn; };
 
@@ -494,7 +526,7 @@ const Backend = (function(){
      すぐに読み直すのではなく間を置くのは、クラスを続けて見るときに
      1つずつ往復させないため。 */
   const FRESH_MS = 60000;          /* これより古い控えは、開くときに読み直す */
-  const WATCH_MS = 180000;         /* 開きっぱなしの画面を、これごとに見に行く */
+  const WATCH_MS = 180000;         /* 開きっぱなしの画面を、これごとにみに行く */
   const fresh_ = tag => (loadedWeek[tag] || 0) > Date.now() - FRESH_MS;
 
   function applyYear(y, r){
@@ -516,19 +548,22 @@ const Backend = (function(){
     if(r.warn && r.warn.length)
       notify("<b>基本時間割シートに読めない行がある</b>（" + r.warn.length + "行）：<br>"
            + r.warn.slice(0, 3).map(escText).join("<br>")
-           + (r.warn.length > 3 ? "<br>ほか " + (r.warn.length - 3) + "行" : ""));
+           + (r.warn.length > 3 ? "<br>他 " + (r.warn.length - 3) + "行" : ""));
     /* 生の形を入れたので、形そろえの印を落とす（store.js の yearStale）。
        入れた中身は端末の控えにも残す */
     yearStale(Yr);
     markYearDirty(y);
-    loadedYear[y] = true;
+    loadedYear[y] = Date.now();
   }
 
   function ensureYear(after){
     if(!onGas) return after();
     const y = String(fy());
     Y();                                   /* その年度の入れ物を用意しておく */
-    if(loadedYear[y]) return after();
+    /* **古い名簿は読み直す。** 入口の表（学級・専科のタイル）は年度の名簿で
+       組むので、立ち上げてから読み直さないと、直した専科がいつまでも
+       入口に出ないままになる（週の控えと同じ鮮度で見る） */
+    if(loadedYear[y] && loadedYear[y] > Date.now() - FRESH_MS) return after();
     let finished = false;
     const finish = () => {
       if(finished) return;
@@ -595,9 +630,11 @@ const Backend = (function(){
   /* **いくつかの週を、まとめて読む。** 月の面は4週ぶんを一度に出す。
      1週ずつ開いて読ませると、4回待つことになる。
      いま見ている画面に要る対象だけ読む（27枚は読まない）。 */
-  function readWeeks(mons, after){
+  function readWeeks(mons, after, wantOverride){
     if(!onGas) return after();
-    const want = targetsForView();
+    /* **画面と別の対象を読むときは渡す。** 連絡帳は開いている面とは別の
+       クラスの週を読むので、読む対象を外から渡せるようにする */
+    const want = wantOverride || targetsForView();
     const year = fy(), epoch = editEpoch;
     const todo = (mons || []).filter(m => want.some(t => !fresh_(weekTag(t, year, m))));
     if(!todo.length || !want.length) return after();
@@ -850,7 +887,7 @@ const Backend = (function(){
   }
 
   /* 年度の検査。**4月に開けたとき、何が足りないかを1画面で言う。**
-     手元では見られない（シートを読まなければ、足りないものが分からない）。 */
+     手元ではみられない（シートを読まなければ、足りないものが分からない）。 */
   function checkYear(ok, ng){
     if(!onGas) return ng("手元ではシートにつながっていないので、検査できない");
     google.script.run
@@ -988,7 +1025,7 @@ const Backend = (function(){
         return ng("別の画面でこの単元が変更されています。開き直してください");
       if(old && (old.layer !== x.layer || old.target !== x.target
                  || old.sp !== (x.sp || "") || old.subject !== x.subject))
-        return ng("単元のクラス・教科は作成後に変更できません");
+        return ng("単元のクラス・教科は作成後に変更で決ません");
       const nk = v => String(v || "").normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
       if(y.units.some(u => u.id !== x.id && unitSameOwner_(u, x)
           && u.subject === x.subject && nk(u.name) === nk(x.name)))
@@ -1132,7 +1169,7 @@ const Backend = (function(){
           /* 書いたのに、まだシートに入っていない。画面の地の色はこれで決める */
           touched: () => touched || !!lastErr, setNotifier, setDirtyWatcher, setConflictWatcher,
           unsaved, prefetchWeek, readWeeks, readWeeksAll, unread, saveTally,
-          watch, stale, heldCells, dropHeld, reloadWeek,
+          watch, stale, heldCells, dropHeld, reloadWeek, discardChanges,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveSubjects, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,
