@@ -163,6 +163,18 @@
   align-items:center;justify-content:center;text-align:center;
   font-weight:600;line-height:1.15;
   font-size:calc(var(--fs-t)*var(--k)*var(--fit,1))}
+/* 単元進捗は備考文字列と別レイヤー。印刷でも字と枠だけで読める。 */
+.unitmark{position:absolute;left:calc(1.1mm*var(--k));
+  top:calc(var(--h-title)*var(--k) + .7mm*var(--k));
+  z-index:2;max-width:calc(19mm*var(--k));overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;padding:0 calc(.8mm*var(--k));
+  border:1px solid var(--ink-sub);border-radius:calc(1.4mm*var(--k));
+  background:var(--sheet);color:var(--ink-sub);
+  font-size:calc(5.8pt*var(--k));font-weight:700;line-height:1.45;
+  pointer-events:none}
+.cell.has-unit .n{padding-left:calc(21mm*var(--k))}
+.cell.trip.has-unit .n{padding-left:calc(21mm*var(--k));padding-right:calc(9.2mm*var(--k))}
+
 /* ── 教科の色 ────────────────────────────────
    **題名の欄の地だけを変える。** 前は丸い枠のチップを紙に埋め込んでいたが、
    枠と地の2つで同じことを言うぶんコマの中が混み、長い教科名は枠に入らなかった。
