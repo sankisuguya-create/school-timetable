@@ -78,6 +78,9 @@ const Store = (function(){
           /* 時数名。**手で決めた1文字の控え。** 空なら画面側が教科の1文字か
              題名の頭文字を出す（→ src/js/compose.js shortOf）。 */
           short:   String(r["時数名"] || ""),
+          /* **単元進捗の印。** "u12"＝所属、"-"＝外す、空＝規定
+             （同じ教科で起点より後ろなら所属）。番号は画面が数える。 */
+          u:       String(r["単元"] || ""),
           at:      Sheets.isDate(r["更新時刻"]) ? r["更新時刻"].getTime() : 0,
           /* **競合を見るための物差し。** at とは別に持つ。
              at は層の重ね順（あとから書いたものが上に出る）にも使うので、
@@ -304,6 +307,432 @@ const Store = (function(){
     } finally {
       lock.releaseLock();
     }
+  }
+
+
+  /* ── 単元進捗 ────────────────────────────────
+     通常の週表示では呼ばない。単元管理を開いたとき・学期末の警告を
+     数えるときだけ使う。週ごとの保存経路（writeCells）とは別に持つ。
+
+     **番号は保存しない**（派生値）。コマの印は週案の「単元」列に入り、
+     ふつうのコマ保存（writeCells）に乗ってくる。ここが読み書きするのは
+     単元マスタ（「単元」シート）と学期設定だけ。 */
+
+  function isoDate_(v){
+    if(Sheets.isDate(v)) return ymd(v);
+    const t = String(v == null ? "" : v).trim();
+    if(/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+    if(!t) return "";
+    const d = new Date(t);
+    return isNaN(d.getTime()) ? "" : ymd(d);
+  }
+
+  function readTerms(year){
+    const out = [];
+    for(const r of Sheets.readAllSoft("学期設定").rows){
+      if(String(r["年度"]).trim() !== String(year)) continue;
+      const start = isoDate_(r["開始日"]), end = isoDate_(r["終了日"]);
+      if(!start || !end || end < start) continue;
+      out.push({
+        name: String(r["学期"] || "").trim() || "（名称なし）",
+        start: start, end: end, row: r.__row
+      });
+    }
+    out.sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);
+    return out;
+  }
+
+  function termForDate_(year, date){
+    const d = isoDate_(date);
+    return readTerms(year).filter(t => t.start <= d && d <= t.end)[0] || null;
+  }
+
+  function publicTerms_(list){
+    return (list || []).map(t => ({name:t.name, start:t.start, end:t.end}));
+  }
+  function termVersion_(list){
+    return JSON.stringify(publicTerms_(list));
+  }
+
+  function readUnits(year, layer, target, subject, sp){
+    const t = String(target || "").trim(), l = String(layer || "").trim(),
+          sub = String(subject || "").trim(), s2 = String(sp || "").trim(), out = [];
+    for(const r of Sheets.readAllSoft("単元").rows){
+      if(String(r["年度"]).trim() !== String(year)) continue;
+      const u = TimetableDomain.normalizeUnit({
+        id: String(r["単元ID"] || "").trim(),
+        year: +year,
+        layer: String(r["対象層"] || ""),
+        target: Sheets.asClass(r["対象"]),
+        sp: String(r["担当"] || ""),
+        subject: String(r["教科コード"] || ""),
+        name: String(r["単元名"] || ""),
+        lessonCount: +r["授業数"] || 0,
+        hasTest: r["テスト"],
+        start: {date: isoDate_(r["起点日付"]), slot: String(r["起点時程"] || "").trim()},
+        updatedBy: String(r["更新者"] || ""),
+        updatedAt: Sheets.isDate(r["更新時刻"])
+          ? r["更新時刻"].toISOString() : String(r["更新時刻"] || "")
+      });
+      if(!u.id) continue;
+      if(t && u.target !== t) continue;
+      if(l && u.layer !== l) continue;
+      if(sub && u.subject !== sub) continue;
+      if(s2 && u.sp !== s2) continue;
+      u.row = r.__row;
+      out.push(u);
+    }
+    return out;
+  }
+
+  const unitUpdatedAt_ = u => String((u && u.updatedAt) || "");
+
+  function validateUnitInput_(year, input){
+    const x = input || {};
+    const layer = String(x.layer || "") === "special" ? "special" : "home";
+    const target = Sheets.asClass(x.target), sub = String(x.subject || "").trim(),
+          sp = String(x.sp || "").trim();
+    const name = String(x.name || "").trim();
+    const n = Math.floor(+x.lessonCount || 0);
+    if(!target) throw new Error("対象クラスを選んでください");
+    if(!sub) throw new Error("教科を選んでください");
+    if(!name) throw new Error("単元名を入れてください");
+    if(name.length > 40) throw new Error("単元名は40文字以内にしてください");
+    if(n < 1 || n > 99) throw new Error("授業数は1〜99時間で入れてください");
+    if(layer === "special" && !sp)
+      throw new Error("専科の単元には担当の枠が要ります");
+
+    const roster = readRoster(year).classes || {};
+    let hasClass = false;
+    for(const g in roster) if((roster[g] || []).map(Sheets.asClass).indexOf(target) >= 0) hasClass = true;
+    if(!hasClass) throw new Error("クラス「" + target + "」が今年度の学級編成にありません");
+
+    const subject = readSubjects().filter(s => s.code === sub && s.count && !s.only)[0];
+    /* 専科の教科は「時数に数える」から外れていることがある。単元はその教科の
+       進み具合を数えるので、数えない教科には付けない ── 付けると全部が
+       「0/5」のまま進まない画面になる */
+    if(!subject && layer !== "special")
+      throw new Error("単元進捗に使えない教科です（" + sub + "）");
+
+    return {layer:layer, target:target, sp:sp, subject:sub,
+            name:name, lessonCount:n, hasTest:!!x.hasTest};
+  }
+
+  function unitRowObject_(u, me, when){
+    return {
+      "年度":+u.year, "単元ID":u.id, "対象層":u.layer, "対象":u.target,
+      "担当":u.sp || "", "教科コード":u.subject, "単元名":u.name,
+      "授業数":u.lessonCount, "テスト":!!u.hasTest,
+      "起点日付":(u.start || {}).date || "", "起点時程":(u.start || {}).slot || "",
+      "更新者":me, "更新時刻":when
+    };
+  }
+
+  /* 起点の日付・校時の形だけ確かめる（その日が実在するかは週案が決める）。
+     起点を動かせるのは「置く」操作だけで、ここでは値をそのまま通す。 */
+  function unitStartIn_(x){
+    const s = (x && x.start) || {};
+    return {date: isoDate_(s.date), slot: String(s.slot || "").trim()};
+  }
+
+  function writeUnit(year, input){
+    const y = +year, clean = validateUnitInput_(y, input);
+    const id = String((input && input.id) || "").trim();
+    const expected = String((input && input.expectedUpdatedAt) || "");
+    const startIn = unitStartIn_(input);
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try{
+      Sheets.setup();
+      const all = readUnits(y);
+      const before = id ? all.filter(u => u.id === id)[0] : null;
+      if(id && !before) throw new Error("この単元は、別の画面ですでに削除されています");
+      if(before && expected !== unitUpdatedAt_(before))
+        throw new Error("別の先生がこの単元を変更しました。開き直して確認してください");
+      if(before && (before.layer !== clean.layer || before.target !== clean.target
+                    || before.sp !== clean.sp || before.subject !== clean.subject))
+        throw new Error("単元のクラス・教科は作成後に変更できません");
+      const nameKey = s => String(s || "").normalize("NFKC")
+        .replace(/\s+/g, " ").trim().toLowerCase();
+      if(all.some(u => u.id !== id && u.layer === clean.layer && u.target === clean.target
+          && u.sp === clean.sp && u.subject === clean.subject
+          && nameKey(u.name) === nameKey(clean.name)))
+        throw new Error("同じクラス・教科に「" + clean.name + "」という単元がすでにあります");
+
+      /* 起点は「置く」ときだけ変わる。単元名や授業数の直しでは、
+         いまある起点を消さない（画面が input.start を省略したときは before を引き継ぐ） */
+      const keepStart = !(input && input.start !== undefined);
+      const planned = TimetableDomain.normalizeUnit(Object.assign({}, before || {}, {
+        id: id || ("u" + Utilities.getUuid().slice(0, 8)),
+        year: y,
+        layer: clean.layer, target: clean.target, sp: clean.sp, subject: clean.subject,
+        name: clean.name, lessonCount: clean.lessonCount, hasTest: clean.hasTest,
+        start: keepStart ? (before && before.start) : startIn
+      }));
+
+      const me = (function(){ try{ return Gate.activeEmail(); }catch(e){ return ""; } })();
+      const obj = unitRowObject_(planned, me, new Date());
+      if(before) Sheets.setRow("単元", before.row, obj);
+      else Sheets.appendRows("単元", [Sheets.toArray("単元", obj)]);
+      SpreadsheetApp.flush();
+      return readUnits(y, planned.layer, planned.target, planned.subject)
+        .filter(x => x.id === planned.id)[0];
+    }finally{ lock.releaseLock(); }
+  }
+
+  /* 配置を消すのはクライアント側 ── コマの印（週案の「単元」列）を
+     expectedAt つきの writeCells で1コマずつ外すので、ここでは
+     単元マスタの起点だけを消す。 */
+  function clearUnitStart(year, id, expectedUpdatedAt){
+    const y = +year, unitId = String(id || "").trim();
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try{
+      Sheets.setup();
+      const old = readUnits(y).filter(u => u.id === unitId)[0];
+      if(!old) throw new Error("この単元は、別の画面ですでに削除されています");
+      if(String(expectedUpdatedAt || "") !== unitUpdatedAt_(old))
+        throw new Error("別の先生がこの単元を変更しました。開き直して確認してください");
+      const u = TimetableDomain.normalizeUnit(Object.assign({}, old, {
+        start: {date:"", slot:""}
+      }));
+      const me = (function(){ try{ return Gate.activeEmail(); }catch(e){ return ""; } })();
+      Sheets.setRow("単元", old.row, unitRowObject_(u, me, new Date()));
+      SpreadsheetApp.flush();
+      return readUnits(y, u.layer, u.target, u.subject).filter(x => x.id === u.id)[0];
+    }finally{ lock.releaseLock(); }
+  }
+
+  function deleteUnit(year, id, expectedUpdatedAt){
+    const y = +year, unitId = String(id || "").trim();
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try{
+      const old = readUnits(y).filter(u => u.id === unitId)[0];
+      if(!old) return {deleted:unitId, already:true};
+      if(String(expectedUpdatedAt || "") !== unitUpdatedAt_(old))
+        throw new Error("別の先生がこの単元を変更しました。開き直して確認してください");
+      Sheets.blankRow("単元", old.row);
+      SpreadsheetApp.flush();
+      return {deleted:unitId};
+    }finally{ lock.releaseLock(); }
+  }
+
+  function writeTerms(year, list, expectedVersion){
+    const y = +year;
+    const normalized = [];
+    for(const x of (list || [])){
+      const name = String((x && x.name) || "").trim();
+      const start = isoDate_(x && x.start), end = isoDate_(x && x.end);
+      if(!name && !start && !end) continue;
+      if(!name) throw new Error("学期名が空です");
+      if(!start || !end) throw new Error("「" + name + "」の開始日・終了日を入れてください");
+      if(end < start) throw new Error("「" + name + "」の終了日が開始日より前です");
+      const fyStart = y + "-04-01", fyEnd = (y + 1) + "-03-31";
+      if(start < fyStart || end > fyEnd)
+        throw new Error("「" + name + "」は " + y + "年度（" + fyStart + "〜" + fyEnd + "）の範囲で設定してください");
+      normalized.push({name, start, end});
+    }
+    normalized.sort((a,b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);
+    for(let i = 1; i < normalized.length; i++)
+      if(normalized[i].start <= normalized[i - 1].end)
+        throw new Error("学期の期間が重なっています（" + normalized[i - 1].name
+                      + "／" + normalized[i].name + "）");
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(20000);
+    try{
+      Sheets.setup();
+      const before = readTerms(y);
+      if(expectedVersion !== undefined && expectedVersion !== null
+         && String(expectedVersion) !== termVersion_(before))
+        throw new Error("別の先生が学期設定を変更しました。開き直して確認してください");
+
+      for(const r of Sheets.readAllSoft("学期設定").rows)
+        if(String(r["年度"]).trim() === String(y)) Sheets.blankRow("学期設定", r.__row);
+
+      if(normalized.length)
+        Sheets.appendRows("学期設定", normalized.map(t => Sheets.toArray("学期設定", {
+          "年度":y, "学期":t.name, "開始日":t.start, "終了日":t.end
+        })));
+      SpreadsheetApp.flush();
+      const out = readTerms(y);
+      return {terms:publicTerms_(out), version:termVersion_(out)};
+    }finally{ lock.releaseLock(); }
+  }
+
+  function unitManager(year, layer, target, subject, sp){
+    const terms = readTerms(year);
+    return {
+      terms: publicTerms_(terms),
+      termVersion: termVersion_(terms),
+      units: readUnits(year, layer, target, subject, sp)
+    };
+  }
+
+  /* ── 学期末までに入るか（警告のための候補探索） ──────────
+     class × subject の候補を、開始日から学期末までまとめて返す。
+     週ごとに apiReadWeek を繰り返さず、
+       全校 / 学年 / 対象クラス の3枚を各1回
+       基本時間割を1回
+     だけ読む。返すのは "日付|時程" の小さい配列だけ。 */
+
+  function gradeOfClass_(year, cls){
+    const c = Sheets.asClass(cls), classes = readRoster(year).classes || {};
+    for(const g in classes)
+      if((classes[g] || []).map(Sheets.asClass).indexOf(c) >= 0) return String(g);
+    return "";
+  }
+
+  function mondayISO_(dateISO){
+    const p = String(dateISO).split("-");
+    const d = new Date(+p[0], +p[1] - 1, +p[2]);
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return ymd(d);
+  }
+
+  function variantForDate_(dateISO, anchor){
+    const a = isoDate_(anchor);
+    if(!a) return "A";
+    const m = mondayISO_(dateISO), am = mondayISO_(a);
+    const x = new Date(m + "T00:00:00"), y = new Date(am + "T00:00:00");
+    const n = Math.round((x.getTime() - y.getTime()) / (7 * 86400000));
+    return (((n % 2) + 2) % 2) === 0 ? "A" : "B";
+  }
+
+  function unitRowAt_(r){
+    return Sheets.isDate(r["更新時刻"]) ? r["更新時刻"].getTime() : 0;
+  }
+
+  function unitTitleText_(v){
+    /* 題名にはリンクHTMLを入れられる。教科コードの無い手入力コマも、
+       画面の countSub() と同じく「見えている字」で教科へ戻す。 */
+    return String(v == null ? "" : v)
+      .replace(/<br\s*\/?\s*>/gi, " ")
+      .replace(/<[^>]*>/g, "")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .trim();
+  }
+
+  function unitSubject_(cell, byName){
+    const code = String((cell && cell.subject) || "").trim();
+    if(code) return code;
+    return byName[unitTitleText_(cell && cell.title)] || "";
+  }
+
+  function unitCandidates(year, cls, subject, fromDate, fromSlot, termEnd){
+    const c = Sheets.asClass(cls), sub = String(subject || "").trim();
+    const from = isoDate_(fromDate), startSlot = String(fromSlot || "").trim();
+    if(!c) throw new Error("単元進捗の対象クラスが分かりません");
+    if(!sub) throw new Error("単元進捗の教科が分かりません");
+    if(!from) throw new Error("単元の開始日が分かりません");
+
+    const term = termForDate_(year, from);
+    const askedEnd = isoDate_(termEnd);
+    /* 学期設定があるときは、呼び出し側がそれより後の日を渡しても越境させない。
+       学期末警告の境界をクライアント任せにしない。 */
+    const to = term ? (!askedEnd || askedEnd > term.end ? term.end : askedEnd) : askedEnd;
+    if(!to) throw new Error("この日を含む学期の終了日がありません。「学期設定」を入れてください");
+    if(to < from) throw new Error("学期末が単元開始日より前になっています");
+
+    const grade = gradeOfClass_(year, c);
+    if(!grade) throw new Error("クラス「" + c + "」の学年が分かりません");
+
+    const slots = readSlots().filter(s => s.kind === "lesson");
+    const lessonIds = slots.map(s => s.id), rank = {};
+    lessonIds.forEach((id, i) => { rank[id] = i; });
+    if(startSlot && !(startSlot in rank))
+      throw new Error("単元の開始校時が分かりません（" + startSlot + "）");
+
+    const subjects = readSubjects(), byName = {};
+    subjects.forEach(s => { if(s.name) byName[String(s.name).trim()] = s.code; });
+
+    /* 基本時間割は1回だけ読む。対象クラス以外も含むが、1,200行程度で、
+       学期中の各週を30回読むより安い。 */
+    const base = (readBase(year)[c] || {});
+    const anchor = String(readConfig()["A週の起点の月曜"] || "").trim();
+
+    /* 必要な3枚だけ読む。同じクラスの専科行も「週案 c」に入っている。 */
+    const all = Sheets.planMap();
+    const names = [
+      Sheets.planName("school", ""),
+      Sheets.planName("grade", grade),
+      Sheets.planName("home", c)
+    ];
+    const rowsBy = {};
+    let readSheets = 0;
+    for(const name of names){
+      if(!all[name]) continue;
+      readSheets++;
+      for(const r of Sheets.readPlan(name, ymd, all)){
+        if(String(r["年度"]).trim() !== String(year)) continue;
+        const date = String(r["日付"] || "");
+        if(date < from || date > to) continue;
+        const slot = String(r["時程"] || "").trim();
+        if(slot !== DAY_SLOT_ && !(slot in rank)) continue;
+        const k = date + "|" + slot;
+        (rowsBy[k] || (rowsBy[k] = [])).push(r);
+      }
+    }
+
+    /* **層の重ね順は画面と同じ**（config.js の RANK: base < home < special < grade < school）。
+       同じ更新時刻なら上の層が勝つ。 */
+    const R = {base:0, home:1, special:2, grade:3, school:4};
+    function effective_(date, slot, dow){
+      let cur = null, curAt = -1, curRank = -1;
+      const variant = variantForDate_(date, anchor);
+      const b = ((base[variant] || {})[dow + "|" + slot]);
+      if(b){
+        cur = {title:String(b.title || ""), subject:String(b.subject || ""), layer:"base"};
+        curAt = 0; curRank = R.base;
+      }
+      for(const r of (rowsBy[date + "|" + slot] || [])){
+        const layer = String(r["層"] || "");
+        const at = unitRowAt_(r), rr = R[layer] == null ? 0 : R[layer];
+        if(!cur || at > curAt || (at === curAt && rr > curRank)){
+          cur = {
+            title: String(r["題名"] || ""),
+            subject: String(r["教科コード"] || ""),
+            layer: layer
+          };
+          curAt = at; curRank = rr;
+        }
+      }
+      return cur;
+    }
+
+    const out = [];
+    let d = new Date(from + "T00:00:00");
+    const end = new Date(to + "T00:00:00");
+    for(; d.getTime() <= end.getTime(); d.setDate(d.getDate() + 1)){
+      const date = ymd(d), jsDow = d.getDay();
+      if(jsDow === 0) continue;                    /* 日曜の列は無い */
+      const dow = (jsDow + 6) % 7;                 /* 月=0 … 土=5 */
+
+      /* 「休み」の日は全授業を候補から外す。日の形は学校全体で入る。 */
+      const day = effective_(date, DAY_SLOT_, dow);
+      if(day && String(day.title || "").trim() === DAY_OFF_) continue;
+
+      for(const slot of lessonIds){
+        /* 起点の日だけは、落としたコマより前へ戻らない。 */
+        if(date === from && startSlot && rank[slot] < rank[startSlot]) continue;
+        const cell = effective_(date, slot, dow);
+        if(cell && unitSubject_(cell, byName) === sub) out.push(date + "|" + slot);
+      }
+    }
+
+    return {
+      year: +year, className: c, subject: sub,
+      from: from, to: to,
+      term: term ? {name:term.name, start:term.start, end:term.end} : null,
+      slots: out, count: out.length, readSheets: readSheets
+    };
   }
 
   /* ── 年間行事計画表 ────────────────────────────
@@ -865,7 +1294,7 @@ const Store = (function(){
             "時程":p.slot, "題名":String(p.title || ""), "詳細":String(p.note || ""),
             "教科コード":String(p.subject || ""), "層":p.layer, "対象":target,
             "担当":String(p.sp || ""), "更新者":me, "更新時刻":now,
-            "時数名":String(p.short || "")
+            "時数名":String(p.short || ""), "単元":String(p.u || "")
           };
           if(i !== undefined){
             /* **新しい中身にも行番号を持たせる。** 持たせないと、同じコマが
@@ -2017,6 +2446,8 @@ const Store = (function(){
   }
 
   return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects, writeSubjects,
+          readTerms, readUnits, unitManager, writeTerms, writeUnit, clearUnitStart,
+          deleteUnit, unitCandidates,
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste, exportPlanSheet,
           writeTally, readTally, TALLY_NAME,
           exportWeek, weekSheetName, weekOrder, migratePlan, checkYear, readEvents,
@@ -2102,6 +2533,33 @@ function apiReadYear(year){
 function apiReadWeek(year, mondayISO, targets){
   Gate.check();
   return Store.readWeek(year, mondayISO, targets);
+}
+/* 単元進捗。通常の週表示からは呼ばず、単元管理を開いた時だけ使う。
+   コマへの印（週案の「単元」列）は apiWriteCells に乗るので、ここには無い。 */
+function apiUnitManager(year, layer, target, subject, sp){
+  Gate.check();
+  return Store.unitManager(year || new Date().getFullYear(), layer, target, subject, sp);
+}
+function apiWriteUnit(year, input){
+  Gate.check();
+  return Store.writeUnit(year || new Date().getFullYear(), input);
+}
+function apiClearUnitStart(year, id, expectedUpdatedAt){
+  Gate.check();
+  return Store.clearUnitStart(year || new Date().getFullYear(), id, expectedUpdatedAt);
+}
+function apiDeleteUnit(year, id, expectedUpdatedAt){
+  Gate.check();
+  return Store.deleteUnit(year || new Date().getFullYear(), id, expectedUpdatedAt);
+}
+function apiWriteTerms(year, list, expectedVersion){
+  Gate.check();
+  return Store.writeTerms(year || new Date().getFullYear(), list, expectedVersion);
+}
+function apiUnitCandidates(year, cls, subject, fromDate, fromSlot, termEnd){
+  Gate.check();
+  return Store.unitCandidates(year || new Date().getFullYear(), cls, subject,
+                              fromDate, fromSlot, termEnd);
 }
 function apiWriteCells(year, patches){
   Gate.check();

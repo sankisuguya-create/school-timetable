@@ -153,6 +153,7 @@ const Backend = (function(){
             subject: e ? (e.subject || "") : "",
             sp:      e ? (e.sp || "")      : "",
             short:   e ? (e.short || "")   : "",
+            u:       e ? (e.u || "")       : "",
             remove:  !e,
             /* **この編集を始めたとき、自分が知っていたサーバの更新時刻。**
                サーバは、いまシートに入っている時刻とこれを見比べる。
@@ -937,6 +938,122 @@ const Backend = (function(){
       .apiTestTpTarget(url);
   }
 
+  /* ── 単元進捗 ────────────────────────────────
+     管理画面を開いたときだけ読む。通常の週読み・打鍵保存には混ぜない。
+     コマへの印（u）は週案の「単元」列なので writeCells に乗る ──
+     ここにあるのは単元マスタと学期設定だけ。 */
+  function localUnits_(){
+    const y = Y();
+    if(!Array.isArray(y.units)) y.units = [];
+    if(!Array.isArray(y.unitTerms)) y.unitTerms = [];
+    return y;
+  }
+  const unitSameOwner_ = (u, owner) =>
+    u.layer === owner.layer && u.target === owner.target
+    && (owner.layer !== "special" || u.sp === owner.sp);
+  /* readUnits と同じく、空の引数は「絞らない」。学級の面は layer="" で
+     担任分と専科枠分の両方を取る（対象=クラス名で一致するため） */
+  const unitInOwner_ = (u, owner) =>
+    (!owner.layer  || u.layer  === owner.layer)
+    && (!owner.target || u.target === owner.target)
+    && (!owner.sp    || u.sp     === owner.sp);
+  function unitManager(owner, subject, ok, ng){
+    if(!onGas){
+      const y = localUnits_();
+      return ok({
+        terms: clone(y.unitTerms),
+        termVersion: JSON.stringify(y.unitTerms),
+        units: clone(y.units.filter(u =>
+          unitInOwner_(u, owner) && (!subject || u.subject === subject)))
+      });
+    }
+    google.script.run
+      .withSuccessHandler(r => ok(r || {terms:[], termVersion:"[]", units:[]}))
+      .withFailureHandler(e => ng(String((e && e.message) || "単元を読めなかった")))
+      .apiUnitManager(fy(), owner.layer, owner.target, subject || "", owner.sp || "");
+  }
+  function saveUnit(input, ok, ng){
+    if(!onGas){
+      const y = localUnits_(), now = new Date().toISOString(), x = clone(input || {});
+      let old = x.id && y.units.find(u => u.id === x.id);
+      if(old && x.expectedUpdatedAt !== old.updatedAt)
+        return ng("別の画面でこの単元が変更されています。開き直してください");
+      if(old && (old.layer !== x.layer || old.target !== x.target
+                 || old.sp !== (x.sp || "") || old.subject !== x.subject))
+        return ng("単元のクラス・教科は作成後に変更できません");
+      const nk = v => String(v || "").normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+      if(y.units.some(u => u.id !== x.id && unitSameOwner_(u, x)
+          && u.subject === x.subject && nk(u.name) === nk(x.name)))
+        return ng("同じクラス・教科に「" + x.name + "」という単元がすでにあります");
+      if(old){
+        old.name = x.name; old.lessonCount = +x.lessonCount || 1; old.hasTest = !!x.hasTest;
+        if("start" in x) old.start = clone(x.start || {date:"", slot:""});
+        old.updatedAt = now; old.updatedBy = "（手元）";
+      }else{
+        old = {id:"unit-local-" + Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+               year:fy(), layer:x.layer || "home", target:x.target, sp:x.sp || "",
+               subject:x.subject, name:x.name, lessonCount:+x.lessonCount || 1,
+               hasTest:!!x.hasTest, start:clone(x.start || {date:"", slot:""}),
+               updatedAt:now, updatedBy:"（手元）"};
+        y.units.push(old);
+      }
+      save();
+      return ok(clone(old));
+    }
+    google.script.run
+      .withSuccessHandler(r => ok(r))
+      .withFailureHandler(e => ng(String((e && e.message) || "単元を保存できなかった")))
+      .apiWriteUnit(fy(), input);
+  }
+  function clearUnitStart(id, expectedAt, ok, ng){
+    if(!onGas){
+      const y = localUnits_(), u = y.units.find(x => x.id === id);
+      if(!u) return ng("この単元は見つかりません");
+      if(expectedAt !== u.updatedAt) return ng("別の画面でこの単元が変更されています。開き直してください");
+      u.start = {date:"", slot:""};
+      u.updatedAt = new Date().toISOString(); u.updatedBy = "（手元）"; save();
+      return ok(clone(u));
+    }
+    google.script.run
+      .withSuccessHandler(ok)
+      .withFailureHandler(e => ng(String((e && e.message) || "配置をリセットできなかった")))
+      .apiClearUnitStart(fy(), id, expectedAt);
+  }
+  function deleteUnit(id, expectedAt, ok, ng){
+    if(!onGas){
+      const y = localUnits_(), i = y.units.findIndex(x => x.id === id);
+      if(i < 0) return ok({deleted:id, already:true});
+      if(expectedAt !== y.units[i].updatedAt)
+        return ng("別の画面でこの単元が変更されています。開き直してください");
+      y.units.splice(i, 1); save(); return ok({deleted:id});
+    }
+    google.script.run
+      .withSuccessHandler(ok)
+      .withFailureHandler(e => ng(String((e && e.message) || "単元を削除できなかった")))
+      .apiDeleteUnit(fy(), id, expectedAt);
+  }
+  function saveUnitTerms(list, expectedVersion, ok, ng){
+    if(!onGas){
+      const y = localUnits_();
+      if(expectedVersion !== JSON.stringify(y.unitTerms))
+        return ng("別の画面で学期設定が変更されています。開き直してください");
+      y.unitTerms = clone(list || []); save();
+      return ok({terms:clone(y.unitTerms), version:JSON.stringify(y.unitTerms)});
+    }
+    google.script.run
+      .withSuccessHandler(ok)
+      .withFailureHandler(e => ng(String((e && e.message) || "学期設定を保存できなかった")))
+      .apiWriteTerms(fy(), list || [], expectedVersion);
+  }
+  /* 学期末までの同教科コマ数（警告用）。押したときだけ数える。 */
+  function unitCapacity(cls, subject, fromDate, fromSlot, ok, ng){
+    if(!onGas) return ok(null);
+    google.script.run
+      .withSuccessHandler(ok)
+      .withFailureHandler(e => ng(String((e && e.message) || "学期末までのコマ数を数えられなかった")))
+      .apiUnitCandidates(fy(), cls, subject, fromDate, fromSlot, "");
+  }
+
   /* ── 新年度の設定 ────────────────────────────
      手順と、いまどこまで済んでいるか。**シートを見ないと分からない。** */
   function yearSetup(ok, ng){
@@ -1004,6 +1121,7 @@ const Backend = (function(){
           saveRoster, saveSubjects, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,
           tpTargets, saveTpTargets, testTpTarget, tpSubmit,
+          unitManager, saveUnit, clearUnitStart, deleteUnit, saveUnitTerms, unitCapacity,
           yearSetup, tickYearSetup, setupPlanSheets, saveVariantOrigin, saveEvents,
           exportPlanSheet};
 })();

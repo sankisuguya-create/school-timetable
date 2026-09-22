@@ -67,7 +67,8 @@ function dropLink(html, href, text){
       a.replaceWith(...a.childNodes);
   return d.innerHTML;
 }
-const isEmptyCell = e => !plain(e.title) && !plain(e.note)
+/* u（単元の印）だけのコマも「空ではない」─ 消すと単元の印が消える */
+const isEmptyCell = e => !plain(e.title) && !plain(e.note) && !e.u
                       && !/<a\b/i.test(String(e.title) + String(e.note));
 
 /* ── 日付 ─────────────────────────────────────── */

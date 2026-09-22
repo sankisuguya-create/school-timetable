@@ -156,7 +156,7 @@ function autoFit(){
   /* **紙は痩せない。** 左右の ‹ › が取る幅を、そのまま倍率の計算に入れる
      （入れないと、矢印のぶんだけ紙が枠からはみ出す）。隠れていれば 0 */
   const arrows = [...st.querySelectorAll(".wkarrow")]
-    .reduce((n, e) => n + e.offsetWidth + 6, 0);
+    .reduce((n, e) => n + (e.hidden ? 0 : e.offsetWidth + 6), 0);
   const k = Math.min((st.clientWidth - 24 - arrows) / w, (st.clientHeight - 20) / h);
   db.settings.vz = Math.max(30, Math.min(160, Math.round(k * 100)));
   applyZoom();
@@ -373,6 +373,9 @@ function wire(){
   on('guideOpen', 'click', () => openGuide(false));
   on('guideDlg', 'close', finishGuide);
 
+
+  /* 単元進捗の窓と学期設定の結線（→ unitprogress.js） */
+  if(typeof wireUnitProgress === "function") wireUnitProgress();
 
   on("prevWk","click", () => goWeek(-7));
   on("nextWk","click", () => goWeek(7));

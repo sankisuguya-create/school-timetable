@@ -136,6 +136,40 @@ var TimetableDomain = (function(){
     )).toISOString();
   }
 
+
+  /* ── 単元進捗 ──────────────────────────────────
+     **番号そのものは保存しない。** コマには「どの単元か」の印だけを持たせ、
+     1/5, 2/5 … は起点からの順を画面側が数える（派生値）。
+     印は週案の「単元」列: "u12"＝所属、"-"＝外す、空＝規定
+     （同じ教科で起点より後ろなら所属）。
+     これなら途中の1コマを外しても、後ろの全コマを書き直さずに済む。 */
+
+  /* 「単元」シートの1行を、画面と同じ形にそろえる。
+     owner ＝ {layer:"home"|"special", target:クラス, sp:専科枠（担任は空）}
+     start ＝ {date, slot}。起点が無い単元は、まだ置かれていない。 */
+  function normalizeUnit(raw){
+    var u = raw || {};
+    var layer = str(u.layer || u["対象層"]).trim() === "special" ? "special" : "home";
+    return {
+      id: str(u.id || u["単元ID"]).trim(),
+      year: +u.year || +u["年度"] || 0,
+      layer: layer,
+      target: str(u.target || u["対象"]).trim(),
+      sp: str(u.sp || u["担当"]).trim(),
+      subject: str(u.subject || u["教科コード"]).trim(),
+      name: str(u.name || u["単元名"]).trim(),
+      lessonCount: Math.max(0, Math.floor(+u.lessonCount || +u["授業数"] || 0)),
+      hasTest: u.hasTest === true || str(u.hasTest != null ? u.hasTest : u["テスト"]).toLowerCase() === "true"
+               || str(u.hasTest != null ? u.hasTest : u["テスト"]) === "1",
+      start: {
+        date: str((u.start || {}).date || u["起点日付"]).trim(),
+        slot: str((u.start || {}).slot || u["起点時程"]).trim()
+      },
+      updatedBy: str(u.updatedBy || u["更新者"]).trim(),
+      updatedAt: str(u.updatedAt || u["更新時刻"]).trim()
+    };
+  }
+
   return {
     cellKey: cellKey,
     resultKey: resultKey,
@@ -146,6 +180,7 @@ var TimetableDomain = (function(){
     affectsTanpopo: affectsTanpopo,
     submissionView: submissionView,
     submissionUnchanged: submissionUnchanged,
-    nextSubmissionTimestamp: nextSubmissionTimestamp
+    nextSubmissionTimestamp: nextSubmissionTimestamp,
+    normalizeUnit: normalizeUnit
   };
 })();
