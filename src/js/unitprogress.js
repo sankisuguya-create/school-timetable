@@ -71,8 +71,8 @@ function unitCellContext_(d, s, c){
   if(!sl || sl.kind !== "lesson") return null;
   c = c || cellFor(d, s);
   if(view.kind === "class"){
-    const counted = countSub(c);
-    const sub = rootSubject(c.subject || (counted && counted.code) || "");
+    const named = SUB_BY_NAME[plain(c.title || "").trim()];
+    const sub = rootSubject(c.subject || (named && named.code) || "");
     return sub ? {cls:view.cls, subject:sub} : null;
   }
   if(view.kind === "special"){
