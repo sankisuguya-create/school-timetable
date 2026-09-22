@@ -248,6 +248,8 @@ function cellEl(d, s){
   e.addEventListener("dragleave", () => e.classList.remove("drop"));
   e.addEventListener("drop", ev => {
     ev.preventDefault(); e.classList.remove("drop");
+    const uid = ev.dataTransfer.getData("text/x-unit-progress");
+    if(uid && typeof placeUnitAt === "function") return void placeUnitAt(uid, d, s.id);
     const v = ev.dataTransfer.getData("text/x-timetable");
     if(v) applyPalette(d, s.id, v, e);
   });
@@ -376,6 +378,7 @@ function paintCell(e, c, d, s, mine){
   const wantN = c.note || "";
   if(t && t !== typing && t.innerHTML !== wantT) t.innerHTML = wantT;
   if(n && n !== typing && n.innerHTML !== wantN) n.innerHTML = wantN;
+  if(typeof paintUnitMark === "function") paintUnitMark(e, c, d, s);
 
   /* **授業なしのコマは、題名の欄を斜め線で消す。** 備考は書ける。
      ここで付け外しするのは、**他の端末から降りてきたときにも効かせる**ため。
