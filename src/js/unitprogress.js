@@ -178,7 +178,11 @@ function unitScheduleSnapshot(d,s){
   if(!unitViewState.loadedAt) return null;
   const hit=unitAtCell(d,s);
   if(!hit) return null;
-  return {id:hit.unit.id,date:iso(addDays(monday,d)),slot:s,name:hit.unit.name};
+  const c=cellFor(d,s);
+  return {
+    id:hit.unit.id,date:iso(addDays(monday,d)),slot:s,name:hit.unit.name,
+    title:String(c.title || ""), subject:String(c.subject || ""), cls:String(c.cls || "")
+  };
 }
 const unitDetachTimers={};
 function unitScheduleChanged(d,s,before){
@@ -191,8 +195,11 @@ function unitScheduleChanged(d,s,before){
     if(!u) return;
     const key=before.date+"|"+before.slot;
     if((u.assignments || []).indexOf(key)<0 && u.testAssignment!==key) return;
-    const cx=unitCellContext_(d,s);
-    if(cx && cx.cls===u.className && cx.subject===u.subject) return;
+    const now=cellFor(d,s);
+    const unchanged=String(now.title || "")===String(before.title || "")
+      && String(now.subject || "")===String(before.subject || "")
+      && String(now.cls || "")===String(before.cls || "");
+    if(unchanged) return;
     unitViewState.placing=u.id; paintUnitQuick();
     Backend.detachUnitProgress(u.id,u.updatedAt,before.date,before.slot,r=>{
       unitViewState.placing="";
