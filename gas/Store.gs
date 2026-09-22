@@ -296,6 +296,217 @@ const Store = (function(){
     }
   }
 
+
+  /* ── 単元進捗（Phase 1: データ読取・候補探索） ─────────────
+     通常の週表示では呼ばない。単元を作る／時数を変えるときだけ、
+     学期ぶんを一度読んで「使えるコマのキー」だけを返す。 */
+
+  function isoDate_(v){
+    if(Sheets.isDate(v)) return ymd(v);
+    const t = String(v == null ? "" : v).trim();
+    if(/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+    if(!t) return "";
+    const d = new Date(t);
+    return isNaN(d.getTime()) ? "" : ymd(d);
+  }
+
+  function readTerms(year){
+    const out = [];
+    for(const r of Sheets.readAllSoft("学期設定").rows){
+      if(String(r["年度"]).trim() !== String(year)) continue;
+      const start = isoDate_(r["開始日"]), end = isoDate_(r["終了日"]);
+      if(!start || !end || end < start) continue;
+      out.push({
+        name: String(r["学期"] || "").trim() || "（名称なし）",
+        start: start, end: end, row: r.__row
+      });
+    }
+    out.sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0);
+    return out;
+  }
+
+  function termForDate_(year, date){
+    const d = isoDate_(date);
+    return readTerms(year).filter(t => t.start <= d && d <= t.end)[0] || null;
+  }
+
+  function jsonSlots_(v){
+    if(Array.isArray(v)) return v;
+    const t = String(v == null ? "" : v).trim();
+    if(!t) return [];
+    try{
+      const x = JSON.parse(t);
+      return Array.isArray(x) ? x : [];
+    }catch(_){ return []; }
+  }
+
+  function readUnits(year, cls, subject){
+    const c = Sheets.asClass(cls), sub = String(subject || "").trim(), out = [];
+    for(const r of Sheets.readAllSoft("単元進捗").rows){
+      if(String(r["年度"]).trim() !== String(year)) continue;
+      const rc = Sheets.asClass(r["対象クラス"]);
+      const rs = String(r["教科コード"] || "").trim();
+      if(c && rc !== c) continue;
+      if(sub && rs !== sub) continue;
+      const u = TimetableDomain.normalizeUnitPlan({
+        id: String(r["単元ID"] || "").trim(),
+        year: +year,
+        className: rc,
+        subject: rs,
+        name: String(r["単元名"] || ""),
+        lessonCount: +r["授業数"] || 0,
+        hasTest: truthy(r["テスト"]),
+        assignments: jsonSlots_(r["割当JSON"]),
+        testAssignment: String(r["テスト割当"] || "").trim(),
+        excludedSlots: jsonSlots_(r["除外JSON"]),
+        updatedBy: String(r["更新者"] || ""),
+        updatedAt: Sheets.isDate(r["更新時刻"])
+          ? r["更新時刻"].toISOString() : String(r["更新時刻"] || "")
+      });
+      u.row = r.__row;
+      out.push(u);
+    }
+    return out;
+  }
+
+  function gradeOfClass_(year, cls){
+    const c = Sheets.asClass(cls), classes = readRoster(year).classes || {};
+    for(const g in classes)
+      if((classes[g] || []).map(Sheets.asClass).indexOf(c) >= 0) return String(g);
+    return "";
+  }
+
+  function mondayISO_(dateISO){
+    const p = String(dateISO).split("-");
+    const d = new Date(+p[0], +p[1] - 1, +p[2]);
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return ymd(d);
+  }
+
+  function variantForDate_(dateISO, anchor){
+    const a = isoDate_(anchor);
+    if(!a) return "A";
+    const m = mondayISO_(dateISO), am = mondayISO_(a);
+    const x = new Date(m + "T00:00:00"), y = new Date(am + "T00:00:00");
+    const n = Math.round((x.getTime() - y.getTime()) / (7 * 86400000));
+    return (((n % 2) + 2) % 2) === 0 ? "A" : "B";
+  }
+
+  function unitRowAt_(r){
+    return Sheets.isDate(r["更新時刻"]) ? r["更新時刻"].getTime() : 0;
+  }
+
+  function unitSubject_(cell, byName){
+    const code = String((cell && cell.subject) || "").trim();
+    if(code) return code;
+    return byName[String((cell && cell.title) || "").trim()] || "";
+  }
+
+  /* class × subject の候補を、開始日から学期末までまとめて返す。
+     週ごとに apiReadWeek を繰り返さず、
+       全校 / 学年 / 対象クラス の3枚を各1回
+       基本時間割を1回
+     だけ読む。返すのは "日付|時程" の小さい配列だけ。 */
+  function unitCandidates(year, cls, subject, fromDate, termEnd){
+    const c = Sheets.asClass(cls), sub = String(subject || "").trim();
+    const from = isoDate_(fromDate);
+    if(!c) throw new Error("単元進捗の対象クラスが分かりません");
+    if(!sub) throw new Error("単元進捗の教科が分かりません");
+    if(!from) throw new Error("単元の開始日が分かりません");
+
+    const term = termForDate_(year, from);
+    const to = isoDate_(termEnd) || (term && term.end) || "";
+    if(!to) throw new Error("この日を含む学期の終了日がありません。「学期設定」を入れてください");
+    if(to < from) throw new Error("学期末が単元開始日より前になっています");
+
+    const grade = gradeOfClass_(year, c);
+    if(!grade) throw new Error("クラス「" + c + "」の学年が分かりません");
+
+    const slots = readSlots().filter(s => s.kind === "lesson");
+    const lessonIds = slots.map(s => s.id), rank = {};
+    lessonIds.forEach((id, i) => { rank[id] = i; });
+
+    const subjects = readSubjects(), byName = {};
+    subjects.forEach(s => { if(s.name) byName[String(s.name).trim()] = s.code; });
+
+    /* 基本時間割は1回だけ読む。対象クラス以外も含むが、1,200行程度で、
+       学期中の各週を30回読むより安い。 */
+    const base = (readBase(year)[c] || {});
+    const anchor = String(readConfig()["A週の起点の月曜"] || "").trim();
+
+    /* 必要な3枚だけ読む。同じクラスの専科行も「週案 c」に入っている。 */
+    const all = Sheets.planMap();
+    const names = [
+      Sheets.planName("school", ""),
+      Sheets.planName("grade", grade),
+      Sheets.planName("home", c)
+    ];
+    const rowsBy = {};
+    let readSheets = 0;
+    for(const name of names){
+      if(!all[name]) continue;
+      readSheets++;
+      for(const r of Sheets.readPlan(name, ymd, all)){
+        if(String(r["年度"]).trim() !== String(year)) continue;
+        const date = String(r["日付"] || "");
+        if(date < from || date > to) continue;
+        const slot = String(r["時程"] || "").trim();
+        if(slot !== DAY_SLOT_ && !(slot in rank)) continue;
+        const k = date + "|" + slot;
+        (rowsBy[k] || (rowsBy[k] = [])).push(r);
+      }
+    }
+
+    const R = {base:0, home:1, special:2, grade:3, school:4};
+    function effective_(date, slot, dow){
+      let cur = null, curAt = -1, curRank = -1;
+      const variant = variantForDate_(date, anchor);
+      const b = ((base[variant] || {})[dow + "|" + slot]);
+      if(b){
+        cur = {title:String(b.title || ""), subject:String(b.subject || ""), layer:"base"};
+        curAt = 0; curRank = R.base;
+      }
+      for(const r of (rowsBy[date + "|" + slot] || [])){
+        const layer = String(r["層"] || "");
+        const at = unitRowAt_(r), rr = R[layer] == null ? 0 : R[layer];
+        if(!cur || at > curAt || (at === curAt && rr > curRank)){
+          cur = {
+            title: String(r["題名"] || ""),
+            subject: String(r["教科コード"] || ""),
+            layer: layer
+          };
+          curAt = at; curRank = rr;
+        }
+      }
+      return cur;
+    }
+
+    const out = [];
+    let d = new Date(from + "T00:00:00");
+    const end = new Date(to + "T00:00:00");
+    for(; d.getTime() <= end.getTime(); d.setDate(d.getDate() + 1)){
+      const date = ymd(d), jsDow = d.getDay();
+      if(jsDow === 0) continue;                    /* 日曜の列は無い */
+      const dow = (jsDow + 6) % 7;                 /* 月=0 … 土=5 */
+
+      /* 「休み」の日は全授業を候補から外す。日の形は学校全体で入る。 */
+      const day = effective_(date, DAY_SLOT_, dow);
+      if(day && String(day.title || "").trim() === DAY_OFF_) continue;
+
+      for(const slot of lessonIds){
+        const cell = effective_(date, slot, dow);
+        if(cell && unitSubject_(cell, byName) === sub) out.push(date + "|" + slot);
+      }
+    }
+
+    return {
+      year: +year, className: c, subject: sub,
+      from: from, to: to,
+      term: term ? {name:term.name, start:term.start, end:term.end} : null,
+      slots: out, count: out.length, readSheets: readSheets
+    };
+  }
+
   /* ── 年間行事計画表 ────────────────────────────
      **1行1日の縦長の表を読む**（docs/spec.md 6節）。
      元の表は3か月が横に並んでいるが、そのままは読ませない。
@@ -1997,6 +2208,7 @@ const Store = (function(){
   }
 
   return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects, writeSubjects,
+          readTerms, readUnits, unitCandidates,
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste, exportPlanSheet,
           writeTally, readTally, TALLY_NAME,
           exportWeek, weekSheetName, weekOrder, migratePlan, checkYear, readEvents,
@@ -2082,6 +2294,19 @@ function apiReadYear(year){
 function apiReadWeek(year, mondayISO, targets){
   Gate.check();
   return Store.readWeek(year, mondayISO, targets);
+}
+/* 単元進捗 Phase 1。通常の週表示からは呼ばず、単元管理を開いた時だけ使う。 */
+function apiReadTerms(year){
+  Gate.check();
+  return Store.readTerms(year || new Date().getFullYear());
+}
+function apiReadUnits(year, cls, subject){
+  Gate.check();
+  return Store.readUnits(year || new Date().getFullYear(), cls, subject);
+}
+function apiUnitCandidates(year, cls, subject, fromDate, termEnd){
+  Gate.check();
+  return Store.unitCandidates(year || new Date().getFullYear(), cls, subject, fromDate, termEnd);
 }
 function apiWriteCells(year, patches){
   Gate.check();
