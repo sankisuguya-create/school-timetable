@@ -1860,6 +1860,95 @@ console.log("\n■ A週B週が、年間行事と合っているかを見る");
   ev('Store.writeVariantOrigin("2026-09-07")');
 })();
 
+
+console.log("\n■ 単元進捗 Phase 1");
+(function(){
+  /* 新機能は既存シートへ列追加せず、新しい2枚だけを足す */
+  ok("学期設定は独立した新規シート",
+     !!ev('Sheets.SPEC["学期設定"]') &&
+     ev('Sheets.SPEC["学期設定"].cols.join(",")') === "年度,学期,開始日,終了日");
+  ok("単元進捗は1単元1行",
+     !!ev('Sheets.SPEC["単元進捗"]') &&
+     ev('Sheets.SPEC["単元進捗"].cols').indexOf("割当JSON") >= 0 &&
+     ev('Sheets.SPEC["単元進捗"].cols').indexOf("テスト割当") >= 0);
+
+  /* setup は「無いシートだけ作る」ので、既存運用を触らず2枚が増える */
+  ev("Sheets.setup()");
+  ok("setupで学期設定を作れる", !!SHEETS["学期設定"]);
+  ok("setupで単元進捗を作れる", !!SHEETS["単元進捗"]);
+
+  /* 2030年度をこの検査専用に使う */
+  SHEETS["学期設定"].push([2030, "1学期", "2030-09-02", "2030-09-30"]);
+  const terms = ev("Store.readTerms(2030)");
+  ok("学期を開始日・終了日で読む",
+     terms.length === 1 && terms[0].start === "2030-09-02" && terms[0].end === "2030-09-30",
+     terms);
+
+  const cols = ev('Sheets.SPEC["単元進捗"].cols');
+  const row = new Array(cols.length).fill("");
+  const at = {}; cols.forEach((x, i) => at[x] = i);
+  row[at["年度"]] = 2030;
+  row[at["単元ID"]] = "unit-check";
+  row[at["対象クラス"]] = "3-1";
+  row[at["教科コード"]] = "sansuu";
+  row[at["単元名"]] = "暗算";
+  row[at["授業数"]] = 5;
+  row[at["テスト"]] = true;
+  row[at["割当JSON"]] = JSON.stringify(["2030-09-03|p2"]);
+  row[at["テスト割当"]] = "2030-09-18|p3";
+  row[at["除外JSON"]] = JSON.stringify(["2030-09-04|p3"]);
+  SHEETS["単元進捗"].push(row);
+
+  const units = ev('Store.readUnits(2030, "3-1", "sansuu")');
+  ok("単元をJSONからUnitPlanへ戻す",
+     units.length === 1 && units[0].name === "暗算" &&
+     units[0].assignments[0] === "2030-09-03|p2" &&
+     units[0].testAssignment === "2030-09-18|p3" &&
+     units[0].excludedSlots[0] === "2030-09-04|p3", units);
+
+  /* A/Bどちらも同じ基本時間割にし、月・火・水に算数を置く */
+  ev(`Store.writeBaseAll(2030, {
+    "3-1":{
+      A:{
+        "0|p1":{title:"算数",subject:"sansuu"},
+        "1|p2":{title:"算数",subject:"sansuu"},
+        "2|p3":{title:"算数",subject:"sansuu"}
+      },
+      B:{
+        "0|p1":{title:"算数",subject:"sansuu"},
+        "1|p2":{title:"算数",subject:"sansuu"},
+        "2|p3":{title:"算数",subject:"sansuu"}
+      }
+    }
+  })`);
+
+  /* 9/2(月)p1 は全校行事で上書き、9/9(月)は休み。
+     候補探索はこの2つを除外しなければならない。 */
+  ev(`Store.writeCells(2030, [
+    {date:"2030-09-02",slot:"p1",layer:"school",target:"",
+     title:"全校行事",note:"",subject:"gyoji"},
+    {date:"2030-09-09",slot:"day",layer:"school",target:"",
+     title:"休み",note:"",subject:""}
+  ])`);
+
+  const cand = ev('Store.unitCandidates(2030, "3-1", "sansuu", "2030-09-02", "")');
+  ok("開始日の学期末を自動で使う",
+     cand.to === "2030-09-30" && cand.term && cand.term.name === "1学期", cand);
+  ok("全校行事で上書きされた算数は候補にしない",
+     cand.slots.indexOf("2030-09-02|p1") < 0, cand.slots);
+  ok("休みの日は基本時間割に算数があっても候補にしない",
+     cand.slots.indexOf("2030-09-09|p1") < 0, cand.slots);
+  ok("通常日の算数は候補になる",
+     cand.slots.indexOf("2030-09-03|p2") >= 0 &&
+     cand.slots.indexOf("2030-09-04|p3") >= 0 &&
+     cand.slots.indexOf("2030-09-10|p2") >= 0, cand.slots);
+
+  /* 週ごとに読む実装へ戻っていないことを、返した読取枚数でも見る。
+     最大でも 全校・3年・3-1 の3枚。 */
+  ok("学期探索でも週ごとのシート読取をしない",
+     cand.readSheets <= 3, cand.readSheets);
+})();
+
 console.log("\n■ ロック");
 ok("書き込みのあとロックは残らない", locks.held === 0, locks.held);
 
