@@ -910,6 +910,12 @@ const Store = (function(){
     const other=beforeAll.filter(u => u.id!==before.id && u.className===before.className
       && u.subject===before.subject
       && ((u.assignments || []).indexOf(to)>=0 || u.testAssignment===to))[0] || null;
+    if(other){
+      const fromP=from.split("|");
+      const sourceCandidates=unitCandidates(y, before.className, before.subject, fromP[0], fromP[1], "");
+      if(sourceCandidates.slots.indexOf(from) < 0)
+        throw new Error("交換元は、現在この教科・クラスのコマではありません");
+    }
     const peerVersion=unitPeersVersion_(beforeAll, before.className, before.subject, before.id);
 
     let a=TimetableDomain.normalizeUnitPlan(before);
