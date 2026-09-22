@@ -248,6 +248,8 @@ function cellEl(d, s){
   e.addEventListener("dragleave", () => e.classList.remove("drop"));
   e.addEventListener("drop", ev => {
     ev.preventDefault(); e.classList.remove("drop");
+    const move = ev.dataTransfer.getData("text/x-unit-move");
+    if(move && typeof moveUnitAt === "function") return void moveUnitAt(move, d, s.id);
     const uid = ev.dataTransfer.getData("text/x-unit-progress");
     if(uid && typeof placeUnitAt === "function") return void placeUnitAt(uid, d, s.id);
     const v = ev.dataTransfer.getData("text/x-timetable");
