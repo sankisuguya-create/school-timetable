@@ -862,13 +862,18 @@ const Store = (function(){
     }
     const sp=start.split("|");
     const c=unitCandidates(y, before.className, before.subject, sp[0], sp[1], "");
-    const occupied=occupiedExcept_(beforeAll, before.className, before.subject,
-                                   b ? [a.id,b.id] : [a.id]);
-    const ar=TimetableDomain.reconcileUnit(a, c.slots, occupied, c.to);
+    /* Aから見れば、交換相手Bの「移動先to」だけが空く。Bのほかのコマは占有のまま。 */
+    let occupiedA=occupiedByOtherUnits_(beforeAll, before.className, before.subject, a.id);
+    if(b) occupiedA=occupiedA.filter(k => k!==to);
+    const ar=TimetableDomain.reconcileUnit(a, c.slots, occupiedA, c.to);
     a=ar.unit;
     let br=null;
-    if(b){ br=TimetableDomain.reconcileUnit(b, c.slots, occupied.concat(a.assignments || [])
-      .concat(a.testAssignment ? [a.testAssignment] : []), c.to); b=br.unit; }
+    if(b){
+      /* Bから見れば、Aは更新後の配置が占有。交換前のfromはもうAが使わない。 */
+      const occupiedB=occupiedExcept_(beforeAll, before.className, before.subject, [a.id,b.id])
+        .concat(a.assignments || []).concat(a.testAssignment ? [a.testAssignment] : []);
+      br=TimetableDomain.reconcileUnit(b, c.slots, occupiedB, c.to); b=br.unit;
+    }
 
     if(fromTest && a.testAssignment!==to)
       throw new Error("テストは通常授業の後ろに置いてください");
