@@ -5310,7 +5310,7 @@ function impEvWrite(rows){
       /* **どの週のコマかを渡す。** 渡さないと「いま開いている週」として
          送られ、別の週のコマを書き替えることになる */
       Backend.cellChanged(r.to.layer, r.to.target, d, r.slot, was,
-                          {year:fy(), week:wkKey()}, wasT);
+                          {year:fy(), monday:wkKey()}, wasT);
       n++;
     }
   } finally{ monday = keep; }
@@ -7079,7 +7079,9 @@ function warnOverwritten(){
       + "</b> に上書きされました<br><span class=\"who\">" + escText(x.by) + "が入れたもの</span></li>";
   }).join("");
   const dlg = $("owDlg");
-  dlg.showModal();
+  if(dlg.open) return;          /* 開いている最中の再描画で落ちない。閉じたあとの塗り直しで出直す */
+  try{ dlg.showModal(); }
+  catch(e){ return; }          /* ほかのモーダルが開いているあいだは出せない */
   dlg.onclose = () => { fresh.forEach(x => w.acked.push(sig(x))); save(); };
 }
 

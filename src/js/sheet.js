@@ -464,7 +464,9 @@ function warnOverwritten(){
       + "</b> に上書きされました<br><span class=\"who\">" + escText(x.by) + "が入れたもの</span></li>";
   }).join("");
   const dlg = $("owDlg");
-  dlg.showModal();
+  if(dlg.open) return;          /* 開いている最中の再描画で落ちない。閉じたあとの塗り直しで出直す */
+  try{ dlg.showModal(); }
+  catch(e){ return; }          /* ほかのモーダルが開いているあいだは出せない */
   dlg.onclose = () => { fresh.forEach(x => w.acked.push(sig(x))); save(); };
 }
 
