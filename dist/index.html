@@ -3227,7 +3227,8 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   <div class="row"><span>クラス</span><select id="renCls"></select>
     <span>日付</span><input type="date" id="renDate"></div>
   <div class="row"><span>宿題</span>
-    <textarea id="renHw" rows="2" placeholder="例：算数（さんすう）のカード"></textarea>
+    <textarea id="renHw" rows="2" placeholder="例：算数（さんすう）のカード">漢字（かんじ）ドリル
+計算（けいさん）ドリル</textarea>
     <span>持ち物</span>
     <textarea id="renItem" rows="2" placeholder="例：上履き（うわばき）"></textarea></div>
   <div id="renView" style="text-align:center"></div>
@@ -14282,8 +14283,9 @@ function renRuby(s){
 }
 
 /* 字の列（segs）を縦に1列書く。**ルビは字の右の細い筋へ。**
-   返すのは使った高さ。x は字の中心。 */
-function renVText(ctx, x, y, segs, fs, color){
+   返すのは使った高さ。x は字の中心。
+   upright を立てると数字・ローマ字も寝かせず正立で積む（日付用）。 */
+function renVText(ctx, x, y, segs, fs, color, upright){
   ctx.fillStyle = color || "#222";
   ctx.textBaseline = "middle"; ctx.textAlign = "center";
   ctx.font = fs + "px " + REN_FONT;
@@ -14294,7 +14296,7 @@ function renVText(ctx, x, y, segs, fs, color){
     const top = yy, t = sg.t || "";
     for(let i = 0; i < t.length; i++){
       const ch = t[i];
-      if(REN_DIGIT.test(ch)){                    /* 数字・ローマ字は縦中横 */
+      if(!upright && REN_DIGIT.test(ch)){          /* 数字・ローマ字は縦中横 */
         let run = ch;
         while(i + 1 < t.length && REN_DIGIT.test(t[i + 1])) run += t[++i];
         ctx.save(); ctx.translate(x, yy + fs * 0.5); ctx.rotate(Math.PI / 2);
@@ -14387,31 +14389,20 @@ function renrakuModel(cls, dt, hwText, itemText){
   } finally{ monday = keep; }
 }
 
-/* 見出し＋中身の列を「箱」1つに収めて書く。右から左へ積む。
-   返すのは箱が食った横幅（次の箱の右端を決める）。 */
-function renBox(ctx, xr, y, head, cols, headFs, bodyFs, color, minH){
-  const pad = 18, gap = 8;
-  const wOf = (segs, fs) => fs + (segs.some(s => s.rt) ? fs * 0.62 : 0);
-  /* 見出しの筋は箱の右はし。ルビはさらにその右 */
-  let x = xr - pad - wOf(head, headFs);
-  const hx = x + headFs / 2;
-  const hHead = renVText(ctx, hx, y + pad, head, headFs, color);
-  let hMax = Math.max(hHead, minH || 0);
+/* 見出し列＋中身の列を1まとまりとして書く。枠線は引かず、字だけ。
+   右から左へ積み、返すのは食った横幅（次のまとまりの右端を決める）。 */
+function renGroup(ctx, xr, y, head, cols, headFs, bodyFs, color){
+  const gap = 22;
+  /* 見出しの筋はまとまりの右はし。ルビはさらにその右 */
+  let x = xr - renColW(head, headFs);
+  renVText(ctx, x + headFs / 2, y, head, headFs, color);
   x -= gap;
   for(const col of cols){
-    x -= wOf(col, bodyFs);
-    if(col.length){
-      const h = renVText(ctx, x + bodyFs / 2, y + pad, col, bodyFs, color);
-      hMax = Math.max(hMax, h);
-    }
+    x -= renColW(col, bodyFs);
+    if(col.length) renVText(ctx, x + bodyFs / 2, y, col, bodyFs, color);
     x -= gap;
   }
-  const left = x - pad + gap, bottom = y + pad + hMax + pad;
-  ctx.save(); ctx.strokeStyle = "#7c93b8"; ctx.lineWidth = 3;
-  if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(left, y, xr - left, bottom - y, 14); ctx.stroke(); }
-  else ctx.strokeRect(left, y, xr - left, bottom - y);
-  ctx.restore();
-  return (xr - left) + 34;      /* 箱と箱のあいだ */
+  return (xr - x) + 64;         /* まとまりとまとまりのあいだ */
 }
 
 /* A4よこ（297:210）を2倍の精細さで焼く */
@@ -14422,19 +14413,15 @@ function renDraw(m){
   const ctx = cv.getContext("2d"); ctx.scale(2, 2);
   ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, W, H);
 
-  /* 上端の青い罫線（手元の画像の形。日付・時間割を書き写す帯） */
-  ctx.strokeStyle = "#8fb0f0"; ctx.lineWidth = 5; ctx.lineCap = "round";
-  ctx.beginPath(); ctx.moveTo(70, 118); ctx.lineTo(1270, 118); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(70, 168); ctx.lineTo(1270, 168); ctx.stroke();
+  /* 印刷して配る・モニターに大きく映す紙。字は大きく、装飾はなし */
+  let xr = W - 64, y = 84;
+  /* いちばん右は日付曜日（いちばん大きく。数字も寝かせず正立） */
+  renVText(ctx, xr - renColW(m.date, 86) + 43, y, m.date, 86, "#222", true);
+  xr -= renColW(m.date, 86) + 76;
 
-  let xr = W - 52, y = 210;
-  /* いちばん右は日付曜日（大きく・箱なし） */
-  renVText(ctx, xr - renColW(m.date, 52) + 26, y, m.date, 52, "#222");
-  xr -= renColW(m.date, 52) + 56;
-
-  xr -= renBox(ctx, xr, y, m.headTT, [m.letters], 32, 46, "#222");
-  xr -= renBox(ctx, xr, y, m.headHW, m.hw.length ? m.hw : [[]], 32, 34, "#222", 380);
-  xr -= renBox(ctx, xr, y, m.headIT, m.items.length ? m.items : [[]], 32, 34, "#222", 380);
+  xr -= renGroup(ctx, xr, y, m.headTT, [m.letters], 52, 76, "#222");
+  xr -= renGroup(ctx, xr, y, m.headHW, m.hw, 52, 56, "#222");
+  xr -= renGroup(ctx, xr, y, m.headIT, m.items, 52, 56, "#222");
 
   /* 左下に小さく名札（どのクラスの紙か） */
   ctx.fillStyle = "#888"; ctx.font = "26px " + REN_FONT;
