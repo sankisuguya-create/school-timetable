@@ -270,9 +270,10 @@ function applyLock(){
   for(const e of document.querySelectorAll("#sheet [contenteditable], .panel .fld"))
     e.setAttribute("contenteditable", String(!on));
   for(const e of document.querySelectorAll(".pal")) e.disabled = on;
-  for(const id of ["pClear", "pRevert", "pAll", "pAddLink"]){
+  for(const id of ["pClear", "pAll", "pAddLink"]){
     const e = $(id); if(e) e.disabled = on;
   }
+  if($("pShort")) $("pShort").disabled = on;
 }
 
 /* ── 待っているあいだの印 ────────────────────
@@ -437,14 +438,17 @@ function wire(){
       if(a === "admin")   return openAdminDlg();
       if(a === "newyear") return openNewYearDlg();
       if(a === "month")   return openMonth();
-      /* 学年・カレンダーも「週案を出す」から開ける。**中央の帯と同じもの。**
+      /* 学年・カレンダーも「週案を出す」から開ける。**この並びが現在地も言う。**
          刷るものを探している人は、左の「出す」の並びを見にいく */
       if(a === "grade")   return centerOk() ? setCenter("grade")
                                             : toast("クラスや学年を開いてから押す");
       if(a === "cal")     return openCal();
       if(a === "print")   return window.print();
       if(a === "settings")return openSettings();
-      if(a === "outweek") return openWeekOutput();
+      /* 「教務必携用（B5）」。**週の紙そのものへ戻る。**
+         印刷・画像・Google Sheet は紙のとなりの帯（#weekBar）から直に押す
+         ── 前は窓を1つ挟んでいたが、4週・学年・カレンダーと同じ形にそろえた */
+      if(a === "outweek") return openWeekView();
     });
   for(const b of document.querySelectorAll("[data-close]"))
     b.addEventListener("click", () => $(b.dataset.close).close());
@@ -516,10 +520,6 @@ function wire(){
   on("tpDelDlg","close", () => tpDelAnswer(false));
   on("tpSubBtn","click", toggleTpSub);
 
-  /* 中央のかたち（週案・4週・学年）。**行き先は1つ。**
-     左メニューの「4週まとめて（B4）」と同じ面へ行く */
-  for(const b of document.querySelectorAll("#centerTabs [data-center]"))
-    b.addEventListener("click", () => setCenter(b.dataset.center));
   /* 空き枠さがし */
   for(const b of document.querySelectorAll("#freeSeg [data-free]"))
     b.addEventListener("click", () => {
@@ -585,12 +585,13 @@ function wire(){
   on("setTanpopo","click", () => { $("settingsDlg").close(); openTpGroupDlg(); });
   on("setPaper","click", () => { $("settingsDlg").close(); applyPaper(); $("setDlg").showModal(); });
   on("setNewYear","click", () => { $("settingsDlg").close(); openNewYearDlg(); });
-  on("outPrint","click", () => { $("outDlg").close(); window.print(); });
-  on("outImage","click", async () => {
-    try{ await nodePng($("sheet"), outputName("B5")+".png"); $("outStat").textContent="画像を保存しました。Google Chatへ添付できます。"; }
-    catch(e){ $("outStat").textContent="画像を作れませんでした（"+(e.message||e)+"）"; }
+  on("weekPrint","click", () => { if(centerOk()) setCenter("week"); window.print(); });
+  on("weekImage","click", async () => {
+    $("weekBarStat").textContent = "";
+    try{ await nodePng($("sheet"), outputName("B5")+".png"); $("weekBarStat").textContent="画像を保存しました。Google Chatへ添付できます。"; }
+    catch(e){ $("weekBarStat").textContent="画像を作れませんでした（"+escText(e.message||e)+"）"; }
   });
-  on("outSheet","click", exportWeekSheet);
+  on("weekSheet","click", exportWeekSheet);
   /* 教科の色。**窓を開かせない。** 紙を見ているときに、そのとなりで切り替える */
   for(const b of document.querySelectorAll("#chipSeg [data-chip]"))
     b.addEventListener("click", () => {
@@ -735,20 +736,6 @@ function wire(){
     writeCell(selCell.d, selCell.s, {title:"", note:"", subject:null, cls:""});
     paintSheet(); fillPanel();
   });
-  on("pRevert","click", () => {
-    if(!selCell || view.kind !== "class") return;
-    if(isLocked()) return toast("この画面はロック中");
-    const key = ck(selCell.d, selCell.s);
-    /* **消す前に、サーバの時刻を控える。** 消してからでは読めない。
-       控えずに送ると expectedAt が 0 になり、サーバは
-       「まだ無い行を消そうとしている」と見て競合で止める（消えない） */
-    const was = ((week().home[view.cls] || {})[key] || {}).sat || 0;
-    delete (week().home[view.cls] || {})[key];
-    /* **シートにも伝える。** 前はここで手元から消すだけだったので、
-       戻したように見えて、次に開くと戻ってきた。行はシートに残っていた */
-    Backend.cellChanged("home", view.cls, selCell.d, selCell.s, was);
-    save(); paintSheet(); fillPanel();
-  });
   /* 5日ぶんを1日ずつ聞くと、窓が最大5回出る。**まとめて1回だけ聞く。** */
   on("pAll","click", () => {
     if(!selCell) return;
@@ -799,6 +786,14 @@ function wire(){
       paintSheet(); typing = null;
     });
   }
+  /* 時数名。**手で決めた1文字の控え。** 教科コードに無い行事名の頭文字が
+     紛らわしいときだけ直す。打つたびではなく、書き終えて欄を離れたときに送る
+     ── 1文字だけの入力に、打ち終わっていない字を送っても意味が無い */
+  on("pShort","change", () => {
+    if(!selCell) return;
+    writeCell(selCell.d, selCell.s, {short: $("pShort").value});
+    paintSheet(); fillPanel();
+  });
   /* 校外行事の名前。**紙に出す字**と**たんぽぽに出す字**を別に持つ。
      続けて置いた1本ぶんに同じ字が入る（→ compose.js setTripName）。 */
   for(const id of ["pTripName", "pTripTp"]){

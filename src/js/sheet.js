@@ -68,10 +68,12 @@ function buildSheet_(sh){
   const labs = put(el("div", "labcol"), 1, 2);
   labs.style.gridTemplateRows = SLOTS.map(rowH).join(" ");
   for(const s of SLOTS){
+    /* **時刻（8:45〜9:30）は出さない。** 教務必携そのものに時刻は刷ってあり、
+       ここでも出すと同じ情報が2か所に並ぶ。空いた高さは校時の数字へ回す
+       （.lab .no）── 紙を離れた位置から読むときに、まず目に入るのはここ */
     const lab = el("div", "lab" + (s.kind === "brk" ? " row-break" : ""),
-      (s.kind === "lesson" ? "<span class='no'>" + s.name + "</span>"
-                           : "<span>" + s.name + "</span>")
-      + (s.time ? "<span class='tm'>" + s.time + "</span>" : ""));
+      s.kind === "lesson" ? "<span class='no'>" + s.name + "</span>"
+                          : "<span>" + s.name + "</span>");
     labs.appendChild(lab);
   }
 
@@ -289,20 +291,11 @@ function fitTripMarks(root){
   }
 }
 
-function fitTitles(els, into){
+function fitTitles(els){
   if(!els.length) return;
-  /* **刷ったときの列の幅で測る。** 画面の時程の列は時刻を出すぶん広く、
-     刷るときは狭い（そのぶん曜日の列が広い）。画面の幅で決めると、
-     刷ったときに入るはずの字まで小さくなる。紙が正本。
-
-     **これができるのは週の紙だけ。** `--labw` は紙ごとに自分で宣言していて、
-     `--labw-print` を持つのも `.sheet` だけ。ほかの紙（学年の面）へ
-     #sheet のインラインを書いても届かず、書いて戻すだけの空振りになる。 */
-  const sh = (into && into !== $("sheet")) ? null : $("sheet");
-  const had = sh ? sh.style.getPropertyValue("--labw") : "";
-  if(sh) sh.style.setProperty("--labw",
-    getComputedStyle(sh).getPropertyValue("--labw-print"));
-
+  /* **時程の列（--labw）は、いまは画面でも刷るときでも同じ幅。**
+     前は画面のほうが広かった（時刻を出していたぶん）。時刻を消したので、
+     ここで幅を入れ替える理由が無くなった。 */
   for(let pass = 0; pass < 2; pass++){
     const want = [];
     for(const t of els){
@@ -329,8 +322,6 @@ function fitTitles(els, into){
     }
     if(!moved) break;      /* 落ち着いたら、2度目は測らない */
   }
-  if(!sh) return;
-  if(had) sh.style.setProperty("--labw", had); else sh.style.removeProperty("--labw");
 }
 
 /* 中身を流し込む。el を渡すとそのコマだけ塗り直す。 */
@@ -372,7 +363,7 @@ function paintCell(e, c, d, s, mine){
   /* **1文字で出す面**（学年・カレンダー）。時数表と同じ字を使うので、
      設定で直せばどちらも変わる。休み時間の行はそのまま（朝学習など） */
   const one = e.dataset.one === "1" && (SLOT_BY_ID[s] || {}).kind === "lesson";
-  const wantT = one ? escText(shortOf(c.subject, c.title)) : (c.title || "");
+  const wantT = one ? escText(shortOf(c.subject, c.title, c.short)) : (c.title || "");
   const wantN = c.note || "";
   if(t && t !== typing && t.innerHTML !== wantT) t.innerHTML = wantT;
   if(n && n !== typing && n.innerHTML !== wantN) n.innerHTML = wantN;
@@ -568,12 +559,13 @@ function applyCenter(kind){
   centerMode = kind;
   const wk = kind === "week";
   $("stage").hidden     = !wk;
+  $("weekBar").hidden   = !wk;
   $("monthView").hidden = kind !== "month";
   $("gradeView").hidden = kind !== "grade";
   $("calView").hidden   = kind !== "cal";
   document.querySelector(".panel").hidden = !wk;
   document.querySelector(".work").classList.toggle("no-panel", !wk);
-  paintCenterTabs();
+  paintNavLocation();
 }
 function setCenter(kind){
   if(view.kind === "tanpopo" || view.kind === "gate") return;
@@ -585,14 +577,13 @@ function setCenter(kind){
   refreshWeek();                  /* 中身は、いまのかたちに合わせて refreshWeek が描く */
   if(centerMode === "week") autoFit();
 }
-/* いまどれを見ているかを、押すものの側に出す */
-function paintCenterTabs(){
-  for(const b of document.querySelectorAll("#centerTabs [data-center]"))
-    b.setAttribute("aria-pressed", String(b.dataset.center === centerMode));
-  /* かたちの帯は左上へ、空き枠は右メニューへ移した。
-     紙のとなりの帯そのものが無くなっている */
-  const seg = $("centerTabs");
-  if(seg) seg.hidden = !centerOk();
+/* いまどれを見ているかを、押すものの側に出す。
+   **専用の帯は置かない。** 左メニューの「週案を出す」の並びが、
+   押す場所と現在地の両方を1つで言う（→ index.html の data-center）。
+   「ほかの週案を開く」の aria-current と同じ仕組み（gate.js paintHeader）。 */
+function paintNavLocation(){
+  for(const b of document.querySelectorAll(".nav[data-center]"))
+    b.setAttribute("aria-current", String(b.dataset.center === centerMode));
   paintFree();
 }
 
@@ -771,7 +762,7 @@ function buildGradeSheet(sh){
   });
   /* **1コマが 1/4 の幅しか無い。** 「全校朝会」のような長い名前は、
      そのコマの中で縮めないと折り返して枠から溢れる（週の紙と同じ手当て） */
-  fitTitles([...sh.querySelectorAll(".gcell .t")], sh);
+  fitTitles([...sh.querySelectorAll(".gcell .t")]);
 }
 
 /* 学年の面の1コマ。**題名だけ。書く仕掛けは付けない。**
@@ -1000,7 +991,7 @@ function calDay(dt){
       const c = cellFor(d, s.id);
       const t = plain(c.title).trim();
       out.subs.push(!t ? "" : t === NO_LESSON ? "／"
-                            : sp ? calCls(t) : shortOf(c.subject, c.title));
+                            : sp ? calCls(t) : shortOf(c.subject, c.title, c.short));
       out.sub.push(sp ? "" : (c.subject || ""));
       out.cg.push(sp ? gradeOf(normCls(t)) : "");
       out.note.push(plain(c.note || "").trim());

@@ -52,13 +52,26 @@ function drawPalette(){
        入れるのと同じ手数で取り消せないと、1コマずつ空にして回ることになる */
     /* **束に見出しは付けない。** チップの字（3-2）の頭がその学年で、
        束の位置も学年の順に固定してある。「3年」と書き足しても何も増えない */
+    /* 出すのは**担当学年のクラスだけ**（classesOfSpecial が絞っている）。
+       担当学年が決まっていない枠は、全クラスが出る ── 書いていない学校を
+       「どの学年も受け持たない専科」にしないための逃げ道。
+       **黙って全部出さない。** そうと分からないと、20クラスの中から
+       自分の行き先を毎回さがすことになる。直す場所まで1手で行けるようにする。 */
+    const unset = !spGradesOf(view.sp);
     $("pals").innerHTML =
-      "<div class='palg'>"
+      (unset
+        ? "<p class='hint spunset'>担当学年が決まっていないので、"
+          + "<b>全クラス</b>を出しています。"
+          + "<button type='button' class='sbtn' id='palSpFix'>学級編成で決める</button></p>"
+        : "")
+      + "<div class='palg'>"
       + groups.map(x => "<div class='palgg' data-g='" + escText(x.g) + "'>"
           + x.list.map(c => palHtml({v:c, t:c, g:x.g})).join("")
           + "</div>").join("")
       + "</div>"
       + palHtml({v:PAL_CLEAR, t:"リセット", clear:true});
+    const fix = $("palSpFix");
+    if(fix) fix.onclick = () => openRosterDlg();
     wirePalette();
     return;
   }
@@ -345,20 +358,12 @@ function fillPanel(){
   $("hasSel").hidden = !selCell;
   if(!selCell) return;
 
-  const slot = SLOT_BY_ID[selCell.s], dt = addDays(monday, selCell.d);
+  const slot = SLOT_BY_ID[selCell.s];
   const c = cellFor(selCell.d, selCell.s);
-
-  $("pWhere").textContent = md(dt) + "(" + DOW[selCell.d] + ") "
-    + slot.name + (slot.kind === "lesson" ? "校時" : "")
-    + (slot.time ? "　" + slot.time : "");
-  /* **いま書くとどこへ入るか（層）と、いま入っているものを誰が入れたか（人）。**
-     前は層の名前しか出していなかったので、他人の予定かどうかが分からなかった。 */
-  const who = whoName(c.by);
-  $("pWho").textContent = viewName()
-    + (c.layer === "base" ? "　いまは基本時間割のまま"
-      : "　いま入っているのは " + (LAYER_FULL[c.layer] || "")
-        + (who ? "・" + who : "") + " が入れたもの"
-        + (isMe(c.by) ? "（自分）" : ""));
+  /* **選んでいるコマの日付・校時・誰が入れたかは、ここでは文にしない。**
+     紙の上の選択枠（.cell.sel）が「どれを選んでいるか」を言い、
+     左端の色と右上の札（.tag）が「誰が・どの層から」を言う。
+     ここで同じことをもう一度書くと、コマを選び直すたびに読み直しが増える。 */
 
   const t = $("pTitle"), n = $("pNote");
   if(t !== typing && t.innerHTML !== (c.title || "")) t.innerHTML = c.title || "";
@@ -368,6 +373,15 @@ function fillPanel(){
   $("pTitleWrap").hidden  = slot.kind === "note";
   $("pTitleLabel").textContent =
     view.kind === "special" ? "行き先のクラス" : "教科名・行事名";
+  /* 時数名。**専科の面には無い**（コマの中身が行き先のクラスで、教科ではない）。
+     lesson 以外の行（朝学習・放課後）も、学年の面・カレンダーでは
+     1文字に詰めないので出さない。 */
+  const shortWrap = $("pShortWrap");
+  if(shortWrap){
+    shortWrap.hidden = view.kind === "special" || slot.kind !== "lesson";
+    const sh = $("pShort");
+    if(sh && sh !== document.activeElement) sh.value = c.short || "";
+  }
 
   /* 校外行事の名前。**覆っているコマを選んでいるときだけ出す。**
      続けて置いた1本ぶんに同じ字が入る。**打っている欄は書き替えない**
@@ -440,8 +454,7 @@ function fillPanel(){
   const isClass = view.kind === "class";
   if(isClass) scope = "self";
 
-  $("pAll").hidden    = slot.kind !== "brk";
-  $("pRevert").hidden = !(isClass && (week().home[view.cls] || {})[ck(selCell.d, selCell.s)]);
+  $("pAllWrap").hidden = slot.kind !== "brk";
 }
 
 /* ── リンクを付ける ─────────────────────────── */

@@ -72,7 +72,7 @@
            見出しの「週案」と、その右のグリッド（入口へ飛ぶ口）は外した。
            **字だけの見出しは何も決めない**し、入口へ行く口は少し下の
            「ほかの週案を開く」と同じもので、同じ場所に2つあった。
-           空いたところへ、中央のかたち（週案・4週・学年・カレンダー）を上げた ──
+           空いたところへ、中央のかたち（週案・4週・カレンダー・学年）を上げた ──
            いちばんよく押すのに、いちばん下の紙のとなりにあった。 -->
       <div class="wk">
         <div class="pill">
@@ -90,14 +90,6 @@
           <button class="abauto" id="abAuto" hidden title="日付から決まる週に戻す">自動に戻す</button>
         </div>
         <select class="target" id="target" aria-label="開いているもの"></select>
-        <!-- 中央に出すかたち。**紙の外**（刷られない）。
-             書けるのは週の紙1枚だけ。4週・学年・カレンダーは見るだけの面 -->
-        <div class="seg viewseg" id="centerTabs" role="group" aria-label="中央に出すもの">
-          <button data-center="week"  aria-pressed="true">週案</button
-          ><button data-center="month" aria-pressed="false">4週</button
-          ><button data-center="grade" aria-pressed="false">学年</button
-          ><button data-center="cal" aria-pressed="false">カレンダー</button>
-        </div>
       </div>
 
       <!-- 待っている印。**押した操作のすぐ下に出す。**
@@ -110,18 +102,26 @@
       <button class="nav" data-screen="gate" data-act="gate" data-help="gate">
         <svg width="17" height="17"><use href="#i-layers"/></svg><span>ほかの週案を開く</span></button>
 
+      <!-- 中央に出すかたちを切り替える口。**この並びが「現在地」も言う。**
+           前は左上に専用の帯（週案／4週／カレンダー／学年）を別に置いていたが、
+           この並びと中身が同じで、押す場所が2つに分かれていただけだった。
+           帯を消し、ここに aria-current で「いま開いているもの」を出す
+           （→ gate.js paintNavLocation。仕組みは「ほかの週案を開く」と共通）。
+           並びは**繰る幅の順**（1週 → 4週 → 2ヶ月）。学年だけは幅ではなく
+           「同じ週を横に並べる」面なので、末尾に置く。時数をコピーは
+           「面を切り替える」操作ではないので、いちばん下に離す。 -->
       <hr>
       <h3>週案を出す</h3>
-      <button class="nav" data-act="outweek" data-help="print" data-plan-output>
+      <button class="nav" data-act="outweek" data-center="week" data-help="print" data-plan-output>
         <svg width="17" height="17"><use href="#i-print"/></svg><span>教務必携用（B5）</span></button>
+      <button class="nav" data-act="month" data-center="month" data-help="month" data-plan-output>
+        <svg width="17" height="17"><use href="#i-grid"/></svg><span>4週まとめて（B4）</span></button>
+      <button class="nav" data-act="cal" data-center="cal" data-help="cal" data-plan-output>
+        <svg width="17" height="17"><use href="#i-cal"/></svg><span>カレンダー（2ヶ月・A4）</span></button>
+      <button class="nav" data-act="grade" data-center="grade" data-help="gradeview" data-plan-output>
+        <svg width="17" height="17"><use href="#i-users"/></svg><span>学年でならべる（A4よこ）</span></button>
       <button class="nav" data-act="tally" data-help="tally" data-plan-output>
         <svg width="17" height="17"><use href="#i-copy"/></svg><span>時数をコピー</span></button>
-      <button class="nav" data-act="month" data-help="month" data-plan-output>
-        <svg width="17" height="17"><use href="#i-grid"/></svg><span>4週まとめて（B4）</span></button>
-      <button class="nav" data-act="grade" data-help="gradeview" data-plan-output>
-        <svg width="17" height="17"><use href="#i-users"/></svg><span>学年でならべる</span></button>
-      <button class="nav" data-act="cal" data-help="cal" data-plan-output>
-        <svg width="17" height="17"><use href="#i-cal"/></svg><span>カレンダー</span></button>
 
       <!-- 新年度の設定が未了のあいだだけ出る。**ふだんは管理・システムの中だけ。**
            4/1 から、全部が済むまで出し続ける（消えると忘れる） -->
@@ -147,9 +147,18 @@
         <b id="arcTitle"></b><span id="arcNote"></span>
         <a id="arcLink" target="_blank" rel="noopener">保管庫をひらく</a>
       </div>
-      <!-- 中央に出すかたちを入れ替える帯。**紙の外**（刷られない）。
-           書けるのは週の紙1枚だけ。4週と学年は見るだけの面。
-           空き枠さがしも、見るための道具なのでここに置く（面をまたいで効く） -->
+      <!-- 週の紙を出す口。**右メニューと紙のあいだの、右上の隙間に置く。**
+           前はここに「かたちを入れ替える帯」があったが、押す場所は左メニューへ
+           移した（この隙間はもともと空いていた行）。4週・カレンダー・学年の面は
+           それぞれの面の中に同じ並びの口を持つ（.mbar／.gvview／.cvview）ので、
+           ここは週の紙のぶんだけ。**縦に並べる**── 右上の細い隙間なので、
+           横に並べると3つめが折り返す。刷るときは出さない（紙の外のもの） -->
+      <div class="weekbar" id="weekBar">
+        <button class="btn go" id="weekPrint">印刷（B5）</button>
+        <button class="btn" id="weekImage">画像</button>
+        <button class="btn" id="weekSheet">Google Sheet</button>
+        <p class="hint" id="weekBarStat"></p>
+      </div>
 
       <!-- ④ 紙の左右で週を繰る。**左メニューの ◀ ▶ と同じことをする。**
            紙を読んでいる目の高さに置く ── 読みながら週を繰るとき、
@@ -279,7 +288,7 @@
         <!-- **畳んでおく。** 空き枠を探すのは時間割を組み替えるときだけで、
              毎日見るものではない。畳んだままでも、いま何を出しているかは
              見出しに出る。説明は ？ の中（HELP.free） -->
-        <details id="freeFold">
+        <details class="fold" id="freeFold">
           <summary data-help="free"><span>空き枠あり/なし表示</span>
             <i id="freePeek"></i></summary>
           <div class="freein">
@@ -302,8 +311,13 @@
       <p class="lockmsg" id="lockMsg" hidden>
         <b>この画面はロック中。</b>直すには右上の「ロック中」を押す。</p>
 
-      <div>
-        <h3 data-help="pals">教科・行事</h3>
+      <!-- 教科・行事のチップ、色分け、字の大きさ。**1つに束ねて畳める。**
+           3つとも「コマの中身の見た目」を決めるものなので、一つ屋根の下に
+           置く。既定は開く ── コマへ引っぱって入れるのは毎回の操作なので、
+           畳んだままだと開く手が増える。畳めるようにはしておく（.fold）。 -->
+      <details class="fold" id="palFold" open>
+        <summary data-help="pals"><span>教科・行事</span></summary>
+        <div class="foldin">
         <div class="pals" id="pals"></div>
         <!-- 教科の色。**紙の上では、題名の欄の地だけを変える。**
              前は丸い枠のチップを紙に埋め込んでいたが、枠と地の2つで言うぶん
@@ -342,7 +356,8 @@
                     aria-label="備考の字を大きく">＋</button>
           </div>
         </div>
-      </div>
+        </div>
+      </details>
 
       <!-- 選んでいるコマ。**教科の並びのすぐ下に置く。**
            チップを押す → 名前を直す → 備考を書く → リンクを付ける、が
@@ -357,15 +372,23 @@
       <div class="empty" id="noSel">コマを選ぶと、ここで中身とリンクを直せる。</div>
 
       <div id="hasSel" hidden style="display:flex;flex-direction:column;gap:15px">
-        <div>
-          <h3>選んでいるコマ</h3>
-          <p class="where" id="pWhere"></p>
-          <p style="margin:3px 0 0;font-size:12px;color:var(--tx-sub)" id="pWho"></p>
-        </div>
-        <div id="pTitleWrap">
-          <label id="pTitleLabel" for="pTitle">教科名・行事名</label>
-          <div class="fld" id="pTitle" contenteditable role="textbox"
-               aria-labelledby="pTitleLabel"></div>
+        <!-- 選んでいるコマの日付・校時・誰が入れたかは、紙の上の選択枠が言う。
+             ここに文で重ねて出すと、コマを選び直すたびに同じ情報を2度読むことになる。
+             層と誰が入れたかは、コマの左端の色と右上の札（.tag）で見分ける。 -->
+        <div class="pnamerow">
+          <div id="pTitleWrap">
+            <label id="pTitleLabel" for="pTitle">教科名・行事名</label>
+            <div class="fld" id="pTitle" contenteditable role="textbox"
+                 aria-labelledby="pTitleLabel"></div>
+          </div>
+          <!-- 時数名。**手で決める1文字の控え。** 教科コードに無い自由記述の
+               行事名は、学年の面・カレンダーでは題名の頭文字がそのまま出る。
+               同じ頭文字の行事が並んで紛らわしいときだけ、ここで決め直す。
+               空欄なら、いままでどおり頭文字を使う（説明は「教科・行事」の？に含める） -->
+          <div id="pShortWrap">
+            <label for="pShort">時数名</label>
+            <input class="pinp" id="pShort" maxlength="2" placeholder="◯">
+          </div>
         </div>
         <div id="pNoteWrap">
           <label for="pNote">詳細・備考</label>
@@ -396,8 +419,12 @@
           <button class="btn wide" id="pAddLink">選んだ文字にリンクを付ける</button>
         </div>
         <div class="row-btn">
-          <button class="btn" id="pAll" hidden>5日とも同じにする</button>
-          <button class="btn" id="pRevert" hidden>上位に戻す</button>
+          <!-- 朝学習・業間・昼休みの行にだけ出る。5日ぶんを1日ずつ聞くと
+               窓が最大5回出るので、まとめて1回だけ聞く（？は隣の div に置く。
+               button の中に button は入れ子にできない） -->
+          <span class="pallwrap" id="pAllWrap" data-help="pall" hidden>
+            <button class="btn" id="pAll">5日とも同じにする</button>
+          </span>
           <button class="btn danger" id="pClear">空にする</button>
         </div>
       </div>
@@ -411,7 +438,7 @@
         <!-- **畳んでおく。** 時数は毎日見るものではなく、月末に確かめるもの。
              開いたままだと、その下の「コマの中身を直す欄」が画面の外へ出る
              （13教科ぶんの表が入るので縦に長い）。開き閉じは覚えておく。 -->
-        <details id="tallyFold">
+        <details class="fold" id="tallyFold">
           <!-- ？ は見出しに置く。**畳んでいても押せる**ところに要る
                （中に置くと、開かないと説明が読めない）。
                ？ を押しても開き閉じはしない（wireHelp が伝播を止める） -->
@@ -446,7 +473,7 @@
            開いたままだと、6日ぶんの押す口が右メニューの下に居座る。
            説明は ？ の中（HELP.dayform） -->
       <div id="dayWrap" hidden>
-        <details id="dayFold">
+        <details class="fold" id="dayFold">
           <summary data-help="dayform"><span>この週の日の形</span>
             <i id="dayPeek"></i></summary>
           <div class="dayin"><div class="dayrow" id="dayRow"></div></div>
@@ -543,17 +570,6 @@
      直すのは<b>年度の初めと、転入・転出のとき</b>。週ごとの操作ではありません。</p>
   <div class="tpsel" id="tpGrpBody"></div>
   <p class="hint" id="tpGrpCount"></p>
-</div></dialog>
-
-<dialog id="outDlg"><div class="dlg">
-  <h2>教務必携用（B5）</h2>
-  <p id="outWho"></p>
-  <div class="outchoices">
-    <button class="settingcard" id="outPrint"><b>印刷</b><span>B5の紙に印刷する</span></button>
-    <button class="settingcard" id="outImage"><b>画像</b><span>Google Chatで共有できるPNG</span></button>
-    <button class="settingcard" id="outSheet"><b>Google Sheet</b><span>編集・共有できる表を作る</span></button>
-  </div>
-  <p class="hint" id="outStat"></p>
 </div></dialog>
 
 <dialog id="impDlg"><div class="dlg">
