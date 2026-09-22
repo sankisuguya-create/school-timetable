@@ -303,10 +303,10 @@ const Sheets_asClass = v => ev("Sheets.asClass")(v);
 /* ── シートを作る ─────────────────────────────── */
 console.log("■ シートを作る");
 let made = ev("Sheets.setup()");
-ok("13枚＋取り込み用の2枚ができる", made.made.length === 15, made.made);
+ok("15枚＋取り込み用の2枚ができる", made.made.length === 17, made.made);
 made = ev("Sheets.setup()");
 ok("2回目は何も作らない（何度走らせても同じ）",
-   made.made.length === 0 && made.kept.length === 13, made);
+   made.made.length === 0 && made.kept.length === 15, made);
 ok("列は名前で引ける", Object.keys(ev('Sheets.head("週案").at')).length >= 11);
 
 console.log("\n■ 既定値の読み取り");
