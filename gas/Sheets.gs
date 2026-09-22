@@ -133,6 +133,20 @@ const Sheets = (function(){
       cols: ["年度", "第1週の月曜"],
       seed: []
     },
+    /* 単元進捗が「学期末までに入るか」を判断する正本。
+       3学期制を決め打ちしない。学期名は「前期／後期」でもよい。 */
+    "学期設定": {
+      cols: ["年度", "学期", "開始日", "終了日"],
+      seed: []
+    },
+    /* 1単元＝1行。番号そのものは保存せず、通常授業の割当とテスト割当を分ける。
+       テストを別にするのは、5→6時間へ増やしたとき旧テスト位置を6時間目へ
+       転用できるようにするため。 */
+    "単元進捗": {
+      cols: ["年度", "単元ID", "対象クラス", "教科コード", "単元名", "授業数",
+             "テスト", "割当JSON", "テスト割当", "除外JSON", "更新者", "更新時刻"],
+      seed: []
+    },
     /* 退避の記録。**この行がある年度＝退避ずみ。**
 
        「年設定」に列を足す形にしない。head() は列が1つ足りないだけで
@@ -361,7 +375,15 @@ const Sheets = (function(){
     "たんぽぽ提出": ["クラス"],
     "クラス":     ["クラス"],
     "基本時間割": ["クラス"],
-    "週案":       ["対象"]
+    "週案":       ["対象"],
+    "単元進捗":   ["対象クラス"]
+  };
+
+  /* 人が入れた =... を数式として走らせない。単元名などはウェブ画面から来るため、
+     週案の題名・詳細と同じく、最初からテキスト列にする。 */
+  const TEXT_COLS = {
+    "単元進捗": ["単元ID", "対象クラス", "教科コード", "単元名",
+                 "割当JSON", "テスト割当", "除外JSON", "更新者"]
   };
 
   /* 日付かどうかは **形で見る**。instanceof は、違う実行環境から来た値では
@@ -460,8 +482,10 @@ const Sheets = (function(){
       sh.getRange(1, 1, rows.length, spec.cols.length).setValues(rows);
       sh.getRange(1, 1, 1, spec.cols.length).setFontWeight("bold");
       sh.setFrozenRows(1);
-      /* クラス名の列は「書式なしテキスト」にして、日付に化けないようにする */
-      for(const col of (CLASS_COLS[name] || [])){
+      /* クラス名と、ウェブ画面から来る字の列は書式なしテキスト。
+         3-1 の日付化と、=IMPORTXML のような式の実行を同時に防ぐ。 */
+      const textCols = (CLASS_COLS[name] || []).concat(TEXT_COLS[name] || []);
+      for(const col of textCols){
         const i = spec.cols.indexOf(col);
         if(i >= 0) sh.getRange(1, i + 1, sh.getMaxRows(), 1).setNumberFormat("@");
       }
