@@ -2603,7 +2603,7 @@ function apiUnitManager(year, cls, subject){
   return Store.unitManager(year || new Date().getFullYear(), cls, subject);
 }
 function apiWriteTerms(year, list, expectedVersion){
-  Gate.checkAdmin();
+  Gate.check();
   return Store.writeTerms(year || new Date().getFullYear(), list, expectedVersion);
 }
 function apiWriteUnit(year, input){
