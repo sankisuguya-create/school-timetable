@@ -119,15 +119,104 @@ function paintUnitMark(e, c, d, s){
   }
   if(!box){
     box = el("span", "unitmark");
+    box.addEventListener("dragstart", ev => {
+      if(!box.draggable) return;
+      ev.dataTransfer.setData("text/x-unit-move", JSON.stringify({
+        id:box.dataset.unit, date:box.dataset.date, slot:box.dataset.slot
+      }));
+      ev.dataTransfer.effectAllowed="move";
+      box.classList.add("drag");
+    });
+    box.addEventListener("dragend", () => box.classList.remove("drag"));
     const n = e.querySelector(".n");
     if(n) e.insertBefore(box, n); else e.appendChild(box);
   }
   if(box.textContent !== mark.label) box.textContent = mark.label;
   box.title = mark.full;
   box.setAttribute("aria-label", mark.full);
+  box.dataset.unit=mark.unit.id;
+  box.dataset.date=iso(addDays(monday,d));
+  box.dataset.slot=s;
+  box.draggable=!sheetRO && (view.kind==="class" || view.kind==="special");
   e.dataset.unit = mark.unit.id;
   e.classList.add("has-unit");
 }
+function replaceUnitView_(saved){
+  if(!saved) return;
+  const i=unitViewState.units.findIndex(x=>x.id===saved.id);
+  if(i>=0) unitViewState.units[i]=saved; else unitViewState.units.push(saved);
+  unitViewState.loadedAt=Date.now();
+}
+function moveUnitAt(raw, d, s){
+  if(unitViewState.placing) return;
+  let from;
+  try{ from=typeof raw==="string" ? JSON.parse(raw) : raw; }catch(_){ return; }
+  if(!from || !from.id || !from.date || !from.slot) return;
+  const u=unitViewState.units.find(x=>x.id===from.id);
+  if(!u) return toast("移動元の単元情報を読み直してください");
+  const cx=unitCellContext_(d,s);
+  if(!cx || cx.cls!==u.className || cx.subject!==u.subject)
+    return toast("単元チップは<b>同じ教科・同じクラス</b>のコマへ移動します");
+  const toDate=iso(addDays(monday,d));
+  if(from.date===toDate && from.slot===s) return;
+  unitViewState.placing=u.id; paintUnitQuick();
+  Backend.moveUnitProgress(u.id,u.updatedAt,from.date,from.slot,toDate,s,r=>{
+    unitViewState.placing="";
+    replaceUnitView_(r && r.unit);
+    replaceUnitView_(r && r.swapped);
+    paintSheet(); paintUnitQuick();
+    const msg=(r && r.action)==="swapped" ? "別単元と配置を交換しました" : "配置を移動しました";
+    const warn=unitWarningText_(r && r.warning);
+    toast("<b>"+escText(u.name)+"</b>："+msg+(warn ? "<br>"+escText(warn) : ""));
+  },why=>{
+    unitViewState.placing="";
+    invalidateUnitView_(); ensureUnitView_(true);
+    toast("<b>単元チップを移動できませんでした。</b><br>"+escText(String(why || "")));
+  });
+}
+
+/* writeCell がタイトル/教科/専科の行き先を変える直前に控える。 */
+function unitScheduleSnapshot(d,s){
+  if(!unitViewState.loadedAt) return null;
+  const hit=unitAtCell(d,s);
+  if(!hit) return null;
+  return {
+    id:hit.unit.id, date:iso(addDays(monday,d)), slot:s,
+    name:hit.unit.name
+  };
+}
+const unitDetachTimers={};
+function unitScheduleChanged(d,s,before){
+  if(!before || !before.id) return;
+  const k=before.id+"|"+before.date+"|"+before.slot;
+  clearTimeout(unitDetachTimers[k]);
+  /* contenteditable の1打ごとには送らない。手が止まってから、まだ別教科なら1回だけ。 */
+  unitDetachTimers[k]=setTimeout(()=>{
+    delete unitDetachTimers[k];
+    const u=unitViewState.units.find(x=>x.id===before.id);
+    if(!u) return;
+    const key=before.date+"|"+before.slot;
+    if((u.assignments || []).indexOf(key)<0 && u.testAssignment!==key) return;
+    const cx=unitCellContext_(d,s);
+    if(cx && cx.cls===u.className && cx.subject===u.subject) return;
+    unitViewState.placing=u.id; paintUnitQuick();
+    Backend.detachUnitProgress(u.id,u.updatedAt,before.date,before.slot,r=>{
+      unitViewState.placing="";
+      replaceUnitView_(r && r.unit);
+      paintSheet(); paintUnitQuick();
+      if(r && r.action==="detached"){
+        const warn=unitWarningText_(r.warning);
+        toast("<b>"+escText(u.name)+"</b>：このコマを単元から外し、後ろを詰めました"
+          +(warn ? "<br>"+escText(warn) : ""));
+      }
+    },why=>{
+      unitViewState.placing="";
+      invalidateUnitView_(); ensureUnitView_(true);
+      toast("<b>単元進捗を更新できませんでした。</b><br>"+escText(String(why || "")));
+    });
+  },650);
+}
+
 function unitQuickStatus_(u){
   const n=(u.assignments || []).length;
   if(!n && !u.testAssignment) return "未配置";
@@ -186,11 +275,7 @@ function placeUnitAt(id, d, s){
   Backend.placeUnitProgress(u.id, u.updatedAt, date, s, r => {
     unitViewState.placing="";
     const saved=r && r.unit;
-    if(saved){
-      const i=unitViewState.units.findIndex(x=>x.id===saved.id);
-      if(i>=0) unitViewState.units[i]=saved;
-      unitViewState.loadedAt=Date.now();
-    }
+    if(saved) replaceUnitView_(saved);
     paintSheet(); paintUnitQuick();
     const warn=unitWarningText_(r && r.warning);
     const act=(r && r.action)==="reset" ? "配置をすべて外しました"
