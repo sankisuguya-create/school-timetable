@@ -136,6 +136,139 @@ var TimetableDomain = (function(){
     )).toISOString();
   }
 
+
+  /* ── 単元進捗 ──────────────────────────────────
+     単元の番号そのものは保存しない。保存するのは「どのコマがその単元か」だけ。
+     1/5, 2/5 ... は候補コマの順から画面側が作れる。これなら途中の1コマを
+     外しても、後ろの全コマをシートへ書き直さずに済む。 */
+
+  function unitSlotKey(v){
+    if(v == null) return "";
+    if(typeof v === "object"){
+      var date = str(v.date).trim(), slot = str(v.slot).trim();
+      return date && slot ? date + "|" + slot : "";
+    }
+    var t = str(v).trim();
+    return /^\d{4}-\d{2}-\d{2}\|[^|]+$/.test(t) ? t : "";
+  }
+
+  function uniqueUnitSlots(list){
+    var out = [], seen = {};
+    for(var i = 0; i < (list || []).length; i++){
+      var k = unitSlotKey(list[i]);
+      if(k && !seen[k]){ seen[k] = true; out.push(k); }
+    }
+    return out;
+  }
+
+  /* UnitPlan の境界で形をそろえる。テストのコマは通常授業とは別に持つ。
+     assignments の「最後がテスト」と推測すると、5→6時間へ増やした瞬間に
+     旧テストを6時間目へ転用できるか判定できなくなるため。 */
+  function normalizeUnitPlan(raw){
+    var u = raw || {};
+    return {
+      id: str(u.id || u.unitId).trim(),
+      year: +u.year || 0,
+      className: str(u.className || u["対象クラス"]).trim(),
+      subject: str(u.subject || u["教科コード"]).trim(),
+      name: str(u.name || u["単元名"]).trim(),
+      lessonCount: Math.max(0, Math.floor(+u.lessonCount || +u["授業数"] || 0)),
+      hasTest: u.hasTest === true || str(u.hasTest || u["テスト"]).toLowerCase() === "true"
+               || str(u.hasTest || u["テスト"]) === "1",
+      assignments: uniqueUnitSlots(u.assignments || []),
+      testAssignment: unitSlotKey(u.testAssignment),
+      excludedSlots: uniqueUnitSlots(u.excludedSlots || []),
+      updatedBy: str(u.updatedBy || "").trim(),
+      updatedAt: str(u.updatedAt || "").trim()
+    };
+  }
+
+  function unitDate_(key){
+    return str(key).split("|")[0];
+  }
+
+  /* 単元の既存配置をなるべく残し、足りないぶんだけ後ろへ足す。
+     candidateSlots は Store 側が「起点から学期末まで」を時系列順で返す。
+     occupiedSlots は **別単元** が使っているコマだけを渡す。 */
+  function reconcileUnit(unit, candidateSlots, occupiedSlots, termEnd){
+    var u = normalizeUnitPlan(unit);
+    var candidates = uniqueUnitSlots(candidateSlots);
+    var occupied = {}, excluded = {}, order = {}, candidate = {};
+    var i, k;
+    for(i = 0; i < (occupiedSlots || []).length; i++){
+      k = unitSlotKey(occupiedSlots[i]); if(k) occupied[k] = true;
+    }
+    for(i = 0; i < u.excludedSlots.length; i++) excluded[u.excludedSlots[i]] = true;
+
+    /* 学期末より後ろは候補から外す。候補の順そのものが校時順なので、
+       文字列の p1/p10 順では並べ替えない。 */
+    var inTerm = [];
+    for(i = 0; i < candidates.length; i++){
+      k = candidates[i];
+      if(termEnd && unitDate_(k) > str(termEnd)) continue;
+      order[k] = inTerm.length;
+      candidate[k] = true;
+      inTerm.push(k);
+    }
+
+    var lessons = [], used = {};
+    for(i = 0; i < u.assignments.length; i++){
+      k = u.assignments[i];
+      if(!candidate[k] || excluded[k] || occupied[k] || used[k]) continue;
+      used[k] = true; lessons.push(k);
+    }
+    lessons.sort(function(a, b){ return order[a] - order[b]; });
+
+    /* 減らした場合は末尾だけを外す。手で動かした前半を作り直さない。 */
+    if(lessons.length > u.lessonCount) lessons = lessons.slice(0, u.lessonCount);
+    used = {};
+    for(i = 0; i < lessons.length; i++) used[lessons[i]] = true;
+
+    /* 増やした場合は既存を保ったまま空きを足す。
+       旧テストのコマも通常授業へ転用できるため、ここでは予約しない。 */
+    for(i = 0; i < inTerm.length && lessons.length < u.lessonCount; i++){
+      k = inTerm[i];
+      if(used[k] || excluded[k] || occupied[k]) continue;
+      used[k] = true; lessons.push(k);
+    }
+    lessons.sort(function(a, b){ return order[a] - order[b]; });
+
+    var test = "";
+    if(u.hasTest && lessons.length === u.lessonCount){
+      var last = lessons.length ? order[lessons[lessons.length - 1]] : -1;
+      var oldTest = u.testAssignment;
+      if(oldTest && candidate[oldTest] && !excluded[oldTest] && !occupied[oldTest]
+         && !used[oldTest] && order[oldTest] > last){
+        test = oldTest;
+      }else{
+        for(i = last + 1; i < inTerm.length; i++){
+          k = inTerm[i];
+          if(used[k] || excluded[k] || occupied[k]) continue;
+          test = k; break;
+        }
+      }
+    }
+
+    var missingLessons = Math.max(0, u.lessonCount - lessons.length);
+    var missingTest = !!u.hasTest && !test;
+    var out = {};
+    for(var p in u) out[p] = u[p];
+    out.assignments = lessons;
+    out.testAssignment = u.hasTest ? test : "";
+
+    return {
+      unit: out,
+      warning: (missingLessons || missingTest) ? {
+        code: "term-capacity",
+        missingLessons: missingLessons,
+        missingTest: missingTest,
+        requestedLessons: u.lessonCount,
+        placedLessons: lessons.length,
+        termEnd: str(termEnd || "")
+      } : null
+    };
+  }
+
   return {
     cellKey: cellKey,
     resultKey: resultKey,
@@ -146,6 +279,9 @@ var TimetableDomain = (function(){
     affectsTanpopo: affectsTanpopo,
     submissionView: submissionView,
     submissionUnchanged: submissionUnchanged,
-    nextSubmissionTimestamp: nextSubmissionTimestamp
+    nextSubmissionTimestamp: nextSubmissionTimestamp,
+    unitSlotKey: unitSlotKey,
+    normalizeUnitPlan: normalizeUnitPlan,
+    reconcileUnit: reconcileUnit
   };
 })();
