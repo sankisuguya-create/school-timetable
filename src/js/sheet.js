@@ -567,6 +567,9 @@ function applyCenter(kind){
   const wk = kind === "week";
   $("stage").hidden     = !wk;
   $("weekBar").hidden   = !wk;
+  $("monthBar").hidden  = kind !== "month";
+  $("gradeBar").hidden  = kind !== "grade";
+  $("calBar").hidden    = kind !== "cal";
   $("monthView").hidden = kind !== "month";
   $("gradeView").hidden = kind !== "grade";
   $("calView").hidden   = kind !== "cal";
