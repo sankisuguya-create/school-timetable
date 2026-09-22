@@ -1945,6 +1945,14 @@ console.log("\n■ 単元進捗 Phase 1");
      cand.slots.indexOf("2030-09-03|p2") >= 0 &&
      cand.slots.indexOf("2030-09-04|p3") >= 0 &&
      cand.slots.indexOf("2030-09-10|p2") >= 0, cand.slots);
+  /* 教科コードの無い手入力コマでも、リンクHTMLの見えている字が算数なら拾う */
+  ev(`Store.writeCells(2030, [
+    {date:"2030-09-11",slot:"p3",layer:"home",target:"3-1",
+     title:"<a href=\\\"https://example.invalid\\\">算数</a>",note:"",subject:""}
+  ])`);
+  const linked = ev('Store.unitCandidates(2030, "3-1", "sansuu", "2030-09-11", "p3", "")');
+  ok("リンク付き手入力の教科名も見えている字で判定",
+     linked.slots.indexOf("2030-09-11|p3") >= 0, linked.slots);
   const sameDay = ev('Store.unitCandidates(2030, "3-1", "sansuu", "2030-09-03", "p3", "")');
   ok("起点より前の同日コマへ戻らない",
      sameDay.slots.every(x => x.slice(0,10) !== "2030-09-03" || x.endsWith("|p3")), sameDay.slots);
