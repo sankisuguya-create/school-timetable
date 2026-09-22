@@ -344,7 +344,10 @@ function clearSelection(){
 function fillPanel(){
   $("noSel").hidden  = !!selCell;
   $("hasSel").hidden = !selCell;
-  if(!selCell) return;
+  if(!selCell){
+    if(typeof paintUnitQuick === "function") paintUnitQuick();
+    return;
+  }
 
   const slot = SLOT_BY_ID[selCell.s], dt = addDays(monday, selCell.d);
   const c = cellFor(selCell.d, selCell.s);
@@ -443,6 +446,7 @@ function fillPanel(){
 
   $("pAll").hidden    = slot.kind !== "brk";
   $("pRevert").hidden = !(isClass && (week().home[view.cls] || {})[ck(selCell.d, selCell.s)]);
+  if(typeof paintUnitQuick === "function") paintUnitQuick();
 }
 
 /* ── リンクを付ける ─────────────────────────── */
