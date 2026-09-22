@@ -184,14 +184,16 @@
            学年で揃えるものを決めるとき、見たいのは1クラスの中身ではなく
            クラスどうしのずれ。**見るだけ** -->
       <div class="gvview" id="gradeView" hidden>
-        <div class="mbar">
+        <!-- 説明は ？ の中（HELP.gradeview）。帯に置くと、毎回読み飛ばす字が
+             紙のとなりに居座る -->
+        <div class="mbar" data-help="gradeview">
           <select class="target" id="gvGrade" aria-label="見る学年"></select>
           <b id="gvTitle"></b>
           <span class="grow"></span>
+          <button class="btn go" id="gvPrint">印刷</button>
           <button class="btn" id="gvImage">画像</button>
           <button class="btn" id="gvClose">週の紙へ戻る</button>
         </div>
-        <p class="hint" id="gvHint"></p>
         <div class="gvpaper" id="gvPaper"></div>
       </div>
 
@@ -274,17 +276,27 @@
            開いたものが、そのまま入る先（入れる先の欄も外してある）で、
            左上の行き先の欄が同じことを言っている。 -->
       <div class="freebox" id="freeBox" hidden>
-        <span class="flab">空き枠</span>
-        <div class="seg" id="freeSeg" role="group" aria-label="空き枠さがし">
-          <button data-free="0" aria-pressed="true">出さない</button
-          ><button data-free="1" aria-pressed="false">レベル1</button
-          ><button data-free="2" aria-pressed="false">レベル2</button>
-        </div>
-        <details class="favoid" id="freeAvoid">
-          <summary id="freeAvoidSum">避ける教科</summary>
-          <div class="fapop" id="freeAvoidBody"></div>
+        <!-- **畳んでおく。** 空き枠を探すのは時間割を組み替えるときだけで、
+             毎日見るものではない。畳んだままでも、いま何を出しているかは
+             見出しに出る。説明は ？ の中（HELP.free） -->
+        <details id="freeFold">
+          <summary data-help="free"><span>空き枠あり/なし表示</span>
+            <i id="freePeek"></i></summary>
+          <div class="freein">
+            <!-- **段の名前は、何をふさがりと見るかで書く。**
+                 「レベル1／2」では、押すまで何が変わるか分からなかった -->
+            <div class="seg" id="freeSeg" role="group" aria-label="空き枠あり/なし表示">
+              <button data-free="0" aria-pressed="true">表示オフ</button
+              ><button data-free="1" aria-pressed="false">全校・学年枠表示</button
+              ><button data-free="2" aria-pressed="false">全校・学年・他専科枠表示</button>
+            </div>
+            <details class="favoid" id="freeAvoid">
+              <summary id="freeAvoidSum">避ける教科</summary>
+              <div class="fapop" id="freeAvoidBody"></div>
+            </details>
+            <span class="ftally" id="freeTally" aria-live="polite"></span>
+          </div>
         </details>
-        <span class="ftally" id="freeTally" aria-live="polite"></span>
       </div>
       <p class="tpchanged" id="tpChanged" role="status" hidden>未提出の変更あり！　保存後に、たんぽぽへ再提出してください。</p>
       <p class="lockmsg" id="lockMsg" hidden>
@@ -365,7 +377,7 @@
              行事ごとに違う名前が要る（自然学校・社会見学・修学旅行）ので、
              学校ひとつの設定にはしない -->
         <div id="pTripWrap" hidden>
-          <h3>この校外行事の名前</h3>
+          <h3 data-help="trip">この校外行事の名前</h3>
           <label for="pTripName">紙に出す字</label>
           <input class="pinp" id="pTripName" maxlength="12" placeholder="校外学習">
           <label for="pTripTp" style="margin-top:8px">たんぽぽに出す字</label>
@@ -375,16 +387,12 @@
         <!-- 年間行事計画表。**日付にしか結びついていない**ので、
              どの校時に入れるかは押した人が決める（docs/spec.md 6節） -->
         <div id="pEvWrap" hidden>
-          <h3>この日の行事</h3>
+          <h3 data-help="events">この日の行事</h3>
           <div class="evs" id="pEvs"></div>
-          <p class="hint" style="margin:6px 0 0">年間行事計画表から読んだもの。
-            <b>押すと、選んでいるコマに入る。</b>何校時かは表に書いていないので、
-            決めるのは人。</p>
         </div>
         <div>
-          <h3>リンク</h3>
+          <h3 data-help="links">リンク</h3>
           <div class="links" id="pLinks"></div>
-          <p class="hint" id="pLinkHint" style="margin:6px 0"></p>
           <button class="btn wide" id="pAddLink">選んだ文字にリンクを付ける</button>
         </div>
         <div class="row-btn">
@@ -411,20 +419,20 @@
         <div class="tlyin">
         <div class="tly" id="tlyBox"></div>
         <p class="hint" id="tlyNote"></p>
-        <button class="mini" id="tlyRead">年度はじめから読み直す</button>
+        <button class="sbtn" id="tlyRead">年度はじめから読み直す</button>
         <!-- 時数集計シートへ置く。**押したときだけ動く。**
              全クラス × 4月からこの月まで を数えるので時間がかかる。
              そのことはボタンの下にも、？の説明にも書く。
              **？はこのボタンのすぐ右**（見出しではなく、押す口のとなりに置く。
              時間がかかると知りたいのは、押そうとしている人） -->
         <div class="tlybtn" data-help="tally2">
-          <button class="mini" id="tlySheet">時数を集計する</button>
+          <button class="sbtn" id="tlySheet">時数を集計する</button>
         </div>
         <!-- 時数表から取り込む。**時数のとなりに置く** ── 時数表を見ながら
              使うものなので、設定の窓の中にあると往復になる。
              入る先は「いま開いているクラスの、この週」 -->
         <div class="tlybtn" data-help="imptally">
-          <button class="mini" id="tlyImp">時数表からインポート</button>
+          <button class="sbtn" id="tlyImp">時数表からインポート</button>
         </div>
         </div>
         </details>
@@ -585,14 +593,16 @@
     <input type="text" id="rsNewG" placeholder="7 や 特支" style="width:9em">
     <button class="btn" id="rsAddG">足す</button></div>
   <hr>
-  <div class="row"><span>専科</span>
-    <input type="text" id="rsSp" style="flex:1;min-width:18em" placeholder="音楽, 図工, 理科"></div>
-  <!-- 担当学年。**基本時間割から専科の持ちコマを引くために要る。**
-       同じ教科に専科が2人いると、どちらのコマかが教科コードだけでは決まらない。
-       空欄は全学年（書いていない学校を、どの学年も持たない専科にしない） -->
+  <!-- 専科。**1行が1人ぶんの枠。** 同じ教科に2人いる形が実際にある
+       （図工1・2年／図工3〜6年、理科3・4年／理科5・6年）ので、
+       教科ごとに1行ではなく、枠ごとに1行にしてある。
+
+       担当学年は、**基本時間割のどのコマがその人のものか**を決める
+       （compose.js spBaseClasses）。空欄は全学年 ── 書いていない学校を、
+       どの学年も持たない専科にしない。 -->
+  <div class="row" data-help="specials"><span>専科の枠</span>
+    <button class="btn" id="rsSpAdd">枠を足す</button></div>
   <div id="rsSpRows"></div>
-  <p class="hint">専科の<b>担当学年</b>は、基本時間割のどのコマがその人のものかを決めます。
-     <b>空欄なら全学年</b>。<code>3,4</code> でも <code>3〜6</code> でも書けます。</p>
   <div class="row"><span>第1週の月曜</span>
     <input type="text" id="rsW1" size="12">
     <span style="color:var(--tx-sub);font-size:12px">時数集計表のシート名（週番号）の起点</span></div>
@@ -761,10 +771,16 @@
   <p id="ipLead"></p>
   <div class="row">
     <button class="btn" id="ipTpl">雛形を出す（コピー）</button>
-    <span class="hint">いまの中身が入った形で出ます。表に貼って、
+    <span class="hint">いまの中身が入った形で出ます。
       <b>変えるところだけ</b>直してください。</span></div>
-  <textarea id="ipText" rows="7"
-    placeholder="雛形を直したら、見出しの行ごとコピーして貼る（Ctrl+V）"></textarea>
+  <!-- 時数表はマス目の表。**貼る先をそのまま見せる**ので、
+       スプレッドシートを開かずに済む。塊ごと貼れる（左上のマスを選んで Ctrl+V） -->
+  <div id="ipTableWrap" hidden><div id="ipTable" class="iptblwrap"></div></div>
+  <!-- 年間行事は1行1件で、行を足し引きする。字の欄のほうが直しやすい -->
+  <div id="ipTextWrap">
+    <textarea id="ipText" rows="7"
+      placeholder="雛形を直したら、見出しの行ごとコピーして貼る（Ctrl+V）"></textarea>
+  </div>
   <div class="row"><button class="btn" id="ipRead">読む</button>
     <span class="hint" id="ipStat"></span></div>
   <div id="ipWarn" class="tpwarn"></div>

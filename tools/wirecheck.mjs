@@ -1812,7 +1812,7 @@ ok("週の紙は書ける",
    await p.evaluate(() =>
      document.querySelectorAll("#sheet .cell .t[contenteditable]").length > 0) === true);
 
-console.log("\n■ 空き枠さがし（3段。2値にしない）");
+console.log("\n■ 空き枠あり/なし表示（3段。2値にしない）");
 ok("学級の面には出さない", await p.evaluate(() => {
      openView({kind:"class", cls:"5-1"});
      return freeScope();
@@ -1820,6 +1820,17 @@ ok("学級の面には出さない", await p.evaluate(() => {
 await p.evaluate(() => openView({kind:"grade", grade:"5"}));
 await p.waitForTimeout(300); await closeDlgs();
 ok("学年の面では出す", await p.evaluate(() => $("freeBox").hidden) === false);
+/* **畳んである**（組み替えるときだけ使う道具）。押す前に開く */
+ok("畳んだままでも、いま何を出しているかは見出しに出る", await p.evaluate(() =>
+   $("freePeek").textContent) === "表示オフ",
+   await p.evaluate(() => $("freePeek").textContent));
+ok("段の名前は、何をふさがりと見るかで書く", await p.evaluate(() =>
+   [...document.querySelectorAll("#freeSeg [data-free]")].map(e => e.textContent).join("/"))
+   === "表示オフ/全校・学年枠表示/全校・学年・他専科枠表示",
+   await p.evaluate(() =>
+     [...document.querySelectorAll("#freeSeg [data-free]")].map(e => e.textContent)));
+await p.evaluate(() => { $("freeFold").open = true; });
+await p.waitForTimeout(200);
 ok("はじめは出さない（段が0）", await p.evaluate(() => freeOpt().level) === 0);
 ok("段が0のあいだは、印を付けない", await p.evaluate(() =>
    document.querySelectorAll("#sheet .cell[data-free]").length) === 0);
@@ -1845,13 +1856,13 @@ await p.waitForTimeout(400);
 const fst = (d, s) => p.evaluate(([d, s]) =>
   (document.querySelector(`#sheet .cell[data-d="${d}"][data-s="${s}"]`) || {dataset:{}})
     .dataset.free, [d, s]);
-ok("レベル1：全校の予定は使えない",  await fst(1, "p1") === "busy",  await fst(1, "p1"));
-ok("レベル1：学年の予定も使えない",  await fst(1, "p2") === "busy",  await fst(1, "p2"));
-ok("レベル1：場所を取る教科は、まだ自由", await fst(1, "p3") === "free", await fst(1, "p3"));
+ok("全校・学年枠：全校の予定は使えない",  await fst(1, "p1") === "busy",  await fst(1, "p1"));
+ok("全校・学年枠：学年の予定も使えない",  await fst(1, "p2") === "busy",  await fst(1, "p2"));
+ok("全校・学年枠：場所を取る教科は、まだ自由", await fst(1, "p3") === "free", await fst(1, "p3"));
 await closeDlgs();
 await p.locator('#freeSeg [data-free="2"]').click();
 await p.waitForTimeout(400);
-ok("レベル2：場所を取る教科は避けたい", await fst(1, "p3") === "avoid", await fst(1, "p3"));
+ok("全校・学年・他専科枠：場所を取る教科は避けたい", await fst(1, "p3") === "avoid", await fst(1, "p3"));
 ok("使えないコマには × が付く", await p.evaluate(() =>
    getComputedStyle(document.querySelector('#sheet .cell[data-d="1"][data-s="p1"]'),
                     "::after").content.indexOf("×") >= 0) === true);
@@ -1895,7 +1906,7 @@ await p.evaluate(() => {
                           at:Date.now(), by:"a@edu.nishi.or.jp"};
   save(); buildSheet();
 });
-ok("指定した教科は、レベル1でも避ける（学年の予定より前に見ない）",
+ok("指定した教科は、どの段でも避ける（学年の予定より前に見ない）",
    await fst(2, "p1") === "busy", await fst(2, "p1"));
 await p.evaluate(() => {
   const w = week();
@@ -2050,10 +2061,28 @@ ok("題名は1文字で出る", await p.evaluate(() =>
 ok("1文字の無い教科は、紙の字の1文字目に落ちる",
    await p.evaluate(() => shortOf("tosho", "図書")) === "図",
    await p.evaluate(() => shortOf("tosho", "図書")));
-ok("紙そのものが細い（画面いっぱいに伸ばさない）", await p.evaluate(() => {
+/* **幅と高さの両方を見て、当たるまで広げる。**
+   前は 26px/コマ を上限にしていたので、画面が広いほど右に余白が残り、
+   字はいつまでも小さいままだった。いまは、どちらかの向きが埋まる */
+ok("どちらかの向きが埋まるまで広げる", await p.evaluate(() => {
      const sh = document.querySelector("#gvPaper .gsheet");
-     return sh.getBoundingClientRect().width < $("gvPaper").clientWidth;
+     const box = $("gvPaper"), r = sh.getBoundingClientRect();
+     const fullW = r.width >= box.clientWidth - 2;
+     const fullH = r.height >= box.clientHeight - 2;
+     return fullW || fullH;
+   }) === true, await p.evaluate(() => {
+     const sh = document.querySelector("#gvPaper .gsheet");
+     const box = $("gvPaper"), r = sh.getBoundingClientRect();
+     return {w:[+r.width.toFixed(0), box.clientWidth],
+             h:[+r.height.toFixed(0), box.clientHeight]};
+   }));
+ok("どちらの向きにもはみ出さない", await p.evaluate(() => {
+     const sh = document.querySelector("#gvPaper .gsheet");
+     const box = $("gvPaper"), r = sh.getBoundingClientRect();
+     return r.width <= box.clientWidth + 2 && r.height <= box.clientHeight + 2;
    }) === true);
+/* 刷る口。**紙は横に長い**（5日 × クラス数）ので A4 よこ1枚 */
+ok("刷るボタンがある", await p.evaluate(() => !!$("gvPrint")) === true);
 
 console.log("\n■ 教科の表し方（設定の対応表）");
 await p.evaluate(() => openSubDlg());
@@ -2486,52 +2515,87 @@ console.log("\n■ 表から取り込む（時数表・年間行事計画表）"
 await p.evaluate(() => { openView({kind:"class", cls:"5-1"}); });
 await p.waitForTimeout(500); await closeDlgs();
 /* ── 時数表。**いま開いているクラスの、この週だけ** ── */
+/* 並びは「時数をコピー」と同じ矩形。手元の時数集計表からその週の塊を
+   そのまま貼れるようにするため（形が違うと、貼る前に並べ替える手間が入る） */
+await p.evaluate(() => {
+  const t = db.settings.tally;
+  t.classes = allClasses().slice(0, 4).join(", ");
+  t.block = 6;
+  t.cols = {};
+  SLOTS.filter(s => s.kind === "lesson").forEach((s, i) => { t.cols[s.id] = i + 1; });
+  save();
+  openView({kind:"class", cls:t.classes.split(",")[0].trim()});
+});
+await p.waitForTimeout(700); await closeDlgs();
 await p.evaluate(() => openImpPlan("tally"));
-await p.waitForTimeout(250);
-await p.locator("#ipTpl").click(); await p.waitForTimeout(300);
-ok("雛形は 見出し＋月〜金 の5行", await p.evaluate(() => {
-     const r = $("ipText").value.split("\n");
-     return r.length === 6 && r[0].split("\t")[0] === "曜日" && r[1].split("\t")[0] === "月";
-   }) === true, await p.evaluate(() => $("ipText").value.split("\n")[0]));
-ok("雛形にいまの中身が入っている", await p.evaluate(() => {
-     const r = $("ipText").value.split("\n").map(x => x.split("\t"));
+await p.waitForTimeout(350);
+ok("時数表は、窓の中のマス目の表で受ける", await p.evaluate(() =>
+   !$("ipTableWrap").hidden && $("ipTextWrap").hidden) === true);
+ok("行は 5日 × 1日の行数", await p.evaluate(() =>
+   document.querySelectorAll("#ipTable tr").length
+   === 1 + WEEKDAYS * impTallyCols().block) === true,
+   await p.evaluate(() => document.querySelectorAll("#ipTable tr").length));
+ok("列は「列のずれ」の設定どおり", await p.evaluate(() =>
+   document.querySelectorAll("#ipTable tr:nth-child(2) input").length
+   === impTallyCols().width) === true);
+/* **自分の行に印。** 貼るのは塊ごとだが、入るのは自分の行だけ */
+ok("いま開いているクラスの行に印が付く", await p.evaluate(() =>
+   document.querySelectorAll("#ipTable tr.mine").length === WEEKDAYS) === true,
+   await p.evaluate(() => document.querySelectorAll("#ipTable tr.mine").length));
+ok("表にはいまの週案が入っている", await p.evaluate(() => {
+     const at = impTallyRow();
+     const box = document.querySelector("#ipTable input[data-n='" + at + "'][data-c='1']");
      const les = SLOTS.filter(s => s.kind === "lesson");
-     const c = cellFor(0, les[0].id), t = plain(c.title).trim();
-     return r[1][1] === (!t ? "" : t === NO_LESSON ? "／" : shortOf(c.subject, c.title));
+     const c = cellFor(0, les[0].id), sub = countSub(c);
+     return box.value === (sub ? sub.short : "");
    }) === true);
 /* **変えていない欄は入れない。** 貼り戻しただけで全欄を書くと、
    学年・全校から降りてきたコマが担任の層に化ける（紙の見た目は同じ） */
 await p.locator("#ipRead").click(); await p.waitForTimeout(300);
-ok("そのまま貼り戻しても、1件も入れない", await p.evaluate(() =>
+ok("そのままなら、1件も入れない", await p.evaluate(() =>
    /同じでした/.test($("ipWarn").textContent) && $("ipGo").disabled) === true,
    await p.evaluate(() => $("ipStat").textContent + " / " + $("ipWarn").textContent));
+/* 塊ごと貼れる（時数集計表からコピーしてくるのが、この口の目的） */
+ok("塊ごと貼れる", await p.evaluate(() => {
+     const at = impTallyRow();
+     impTallyPaste(at, 1, [["国", "算"]]);
+     const a = document.querySelector("#ipTable input[data-n='" + at + "'][data-c='1']").value;
+     const b = document.querySelector("#ipTable input[data-n='" + at + "'][data-c='2']").value;
+     return a === "国" && b === "算";
+   }) === true);
 await p.evaluate(() => {
-  const r = $("ipText").value.split("\n").map(x => x.split("\t"));
-  r[1][1] = "国"; r[1][2] = "算"; r[1][3] = "むにゃ";
-  $("ipText").value = r.map(x => x.join("\t")).join("\n");
+  const at = impTallyRow();
+  document.querySelector("#ipTable input[data-n='" + at + "'][data-c='3']").value = "むにゃ";
 });
 await p.locator("#ipRead").click(); await p.waitForTimeout(300);
 ok("読めない字は、入れずに名指しする", await p.evaluate(() =>
    /むにゃ/.test($("ipWarn").textContent)) === true);
 ok("入れる前に「どの曜日の何校時に何が入るか」を出す", await p.evaluate(() =>
-   /国語/.test($("ipGrid").innerText) && /月/.test($("ipGrid").innerText)) === true,
+   /月/.test($("ipGrid").innerText)) === true,
    await p.evaluate(() => $("ipGrid").innerText.slice(0, 60)));
-const impBefore = await p.evaluate(() => {
-  const les = SLOTS.filter(s => s.kind === "lesson");
-  return JSON.stringify([0,1].map(i => plain(cellFor(0, les[i].id).title).trim()));
-});
 await p.locator("#ipGo").click(); await p.waitForTimeout(700); await closeDlgs();
 ok("開いているクラスの、担任の層に入る", await p.evaluate(() => {
      const les = SLOTS.filter(s => s.kind === "lesson");
-     const a = cellFor(0, les[0].id), b = cellFor(0, les[1].id);
-     return plain(a.title).trim() === "国語" && a.layer === "home"
-         && plain(b.title).trim() === "算数" && b.layer === "home";
-   }) === true, impBefore);
+     const a = cellFor(0, les[0].id);
+     return plain(a.title).trim() === "国語" && a.layer === "home";
+   }) === true, await p.evaluate(() => {
+     const les = SLOTS.filter(s => s.kind === "lesson");
+     return cellFor(0, les[0].id);
+   }));
 ok("ほかの週には入らない", await p.evaluate(() => {
      const other = Y().weeks[iso(addDays(monday, 7))];
-     return !other || !other.home || !other.home["5-1"]
-         || Object.keys(other.home["5-1"]).length === 0;
+     return !other || !other.home || !other.home[view.cls]
+         || Object.keys(other.home[view.cls]).length === 0;
    }) === true);
+/* **クラスの並びに入っていなければ、行が決められないので取り込まない** */
+ok("並びに無いクラスでは、理由を言って止める", await p.evaluate(() => {
+     const keep = db.settings.tally.classes;
+     db.settings.tally.classes = "9-9";
+     const r = impTallyRead([]);
+     db.settings.tally.classes = keep;
+     return /クラスの並び/.test(r.warn || "");
+   }) === true);
+
 /* ── 年間行事。**全校・学年へ。日付は週をまたぐ** ── */
 await p.evaluate(() => {
   const y = Y();
@@ -2678,6 +2742,102 @@ await p.waitForTimeout(400); await closeDlgs();
    （gas/Gate.gs の checkAdmin を呼ぶ口は無くなった）。
    学校で3人しか直せないと、基本時間割や学級編成を直したい人が
    その3人の手が空くのを待つことになっていた。 */
+console.log("\n■ 専科の枠（同じ教科を学年で分けて持てる）");
+/* **身元（code）と教科（subject）は別もの。** 同じ教科に2人いる形が
+   実際にある（図工1・2年／図工3〜6年、理科3・4年／理科5・6年）ので、
+   教科コードそのものを身元にはできない */
+await p.evaluate(() => {
+  Y().specials = [
+    {code:"rika",   subject:"rika", grades:["3","4"]},
+    {code:"rika_2", subject:"rika", grades:["5","6"]}
+  ];
+  save(); drawGate();
+});
+await p.waitForTimeout(400); await closeDlgs();
+ok("同じ教科の枠が2つ持てる", await p.evaluate(() =>
+   specials().filter(s => spSubjectOf(s.code) === "rika").length) === 2);
+ok("名前に担当学年が付く（入口で見分けられる）", await p.evaluate(() =>
+   specials().map(s => spLabel(s)).join("/")) === "理科3・4年/理科5・6年",
+   await p.evaluate(() => specials().map(s => spLabel(s))));
+ok("身元が違えば、受け持つクラスも違う", await p.evaluate(() => {
+     const a = classesOfSpecial("rika"), b = classesOfSpecial("rika_2");
+     return a.join(",") !== b.join(",") && !a.some(c => b.indexOf(c) >= 0);
+   }) === true,
+   await p.evaluate(() => [classesOfSpecial("rika"), classesOfSpecial("rika_2")]));
+ok("担当学年のクラスだけを受け持つ", await p.evaluate(() =>
+   classesOfSpecial("rika").every(c => ["3","4"].indexOf(gradeOf(c)) >= 0)
+   && classesOfSpecial("rika_2").every(c => ["5","6"].indexOf(gradeOf(c)) >= 0)) === true,
+   await p.evaluate(() => [classesOfSpecial("rika"), classesOfSpecial("rika_2")]));
+/* **紙に出す字と時数は教科のほう。** 身元は枠を指すだけ */
+ok("どちらの枠でも、教科は理科", await p.evaluate(() =>
+   spSubjectOf("rika") === "rika" && spSubjectOf("rika_2") === "rika") === true);
+/* 古い控え（subject が無い）は、身元をそのまま教科として読む */
+ok("古い控えは、身元を教科として読む", await p.evaluate(() => {
+     const keep = Y().specials;
+     Y().specials = [{code:"ongaku", label:"音楽", grades:[]}];
+     const got = spSubjectOf("ongaku");
+     Y().specials = keep;
+     return got;
+   }) === "ongaku");
+await p.evaluate(() => { Y().specials = clone(DEFAULT_SPECIALS); save(); drawGate(); });
+await p.waitForTimeout(400); await closeDlgs();
+
+console.log("\n■ 専科の面のクラスチップ（学年ごとに束ねる）");
+await p.evaluate(() => openView({kind:"special", sp:"ongaku"}));
+await p.waitForTimeout(800); await closeDlgs();
+/* **20クラスを1列に流すと「4-2 はどこか」を毎回端から探す。**
+   2列×3段に固め、学年の位置をいつも同じにする */
+/* 束の数＝その専科が受け持つ学年の数（見本の音楽は5年だけ） */
+ok("受け持つ学年のぶんだけ束ができる", await p.evaluate(() =>
+   document.querySelectorAll("#pals .palgg").length
+   === gradesAll().filter(g =>
+        classesOfSpecial(view.sp).some(c => gradeOf(c) === g)).length) === true,
+   await p.evaluate(() => [document.querySelectorAll("#pals .palgg").length,
+     classesOfSpecial(view.sp)]));
+ok("2列に並ぶ", await p.evaluate(() =>
+   getComputedStyle(document.querySelector("#pals .palg"))
+     .gridTemplateColumns.split(" ").length) === 2);
+/* **束に見出しは置かない。** チップの字の頭がその学年で、束の位置も
+   学年の順に固定してある。「3年」と書き足しても何も増えない */
+ok("束に見出しを置かない", await p.evaluate(() =>
+   document.querySelectorAll("#pals .palgh").length) === 0);
+ok("束の順は学年の順（左上から小さいほうへ）", await p.evaluate(() => {
+     const got = [...document.querySelectorAll("#pals .palgg")]
+       .map(e => parseInt(e.dataset.g, 10));
+     return got.every((n, i) => i === 0 || n > got[i - 1]);
+   }) === true,
+   await p.evaluate(() => [...document.querySelectorAll("#pals .palgg")].map(e => e.dataset.g)));
+ok("チップの字はクラス名のまま", await p.evaluate(() =>
+   [...document.querySelectorAll("#pals .pal[data-g]")]
+     .every(e => /^[1-9]-[1-9]$/.test(e.textContent))) === true);
+/* **色は学年を運ばない。** 運ぶのは字と並び。色は三重目 ──
+   実測でこの6色は色だけでは見分けられない（2色覚で13組が閾値割れ）。
+   だから字（3-2）も並び（学年の位置）も外さない */
+ok("学年ごとに地の色が付く（束の中は同じ色）", await p.evaluate(() =>
+   [...document.querySelectorAll("#pals .palgg")].every(gg => {
+     const cs = [...gg.querySelectorAll(".pal")]
+       .map(e => getComputedStyle(e).backgroundColor);
+     return cs.length && new Set(cs).size === 1
+         && cs[0] !== "rgba(0, 0, 0, 0)" && cs[0] !== "rgb(255, 255, 255)";
+   })) === true,
+   await p.evaluate(() => [...document.querySelectorAll("#pals .pal[data-g]")]
+     .slice(0,3).map(e => getComputedStyle(e).backgroundColor)));
+ok("色を外しても、字と並びで学年が分かる", await p.evaluate(() => {
+     const e = document.querySelector('#pals .pal[data-g]');
+     return e.textContent.charAt(0) === e.closest(".palgg").dataset.g;
+   }) === true);
+/* **リセットは専科にも出す。** 専科が入れたコマも全クラスの紙に降りるので、
+   入れるのと同じ手数で取り消せないと、1コマずつ空にして回ることになる */
+ok("専科にもリセットのチップが出る", await p.evaluate(() =>
+   !!document.querySelector("#pals > .pal.clear")) === true);
+ok("リセットは束の外に置く（入れるものではない）", await p.evaluate(() =>
+   !document.querySelector("#pals .palgg .pal.clear")) === true);
+await p.evaluate(() => openView({kind:"class", cls:"5-1"}));
+await p.waitForTimeout(700); await closeDlgs();
+ok("学級の面は、いままでどおり教科の並び", await p.evaluate(() =>
+   !document.querySelector("#pals .palg")
+   && document.querySelectorAll("#pals .pal").length > 5) === true);
+
 console.log("\n■ 設定は教職員なら誰でも触れる");
 ok("管理者でなくても、設定を出す", await p.evaluate(() => {
      window.__isAdmin = false;

@@ -18,6 +18,9 @@ function app(storage=new Map()){
     setTimeout:()=>1,clearTimeout(){},addEventListener(){},escText:x=>x,
     /* 取り込みのたびに上がる版。カレンダーの取り置きがここを見る */
     dataTick:0,
+    /* 控えは**タブごと**に分けて持つ（backend.js の tabId）。
+       検査では id を固定して、鍵を test/conflicts/tab1 に決める */
+    sessionStorage:{setItem:()=>{},getItem:()=>'tab1',removeItem:()=>{}},
     localStorage:{setItem:(k,v)=>storage.set(k,v),getItem:k=>storage.get(k),removeItem:k=>storage.delete(k)}};
   vm.createContext(c);vm.runInContext(source+'\nglobalThis.B=Backend;',c);
   c.B.setDirtyWatcher(n=>states.push(n));
@@ -40,10 +43,10 @@ for(const finishFirst of [false,true]){
 {
   const a=app();a.edit();let result;a.b.flush(ok=>result=ok);
   a.calls[0].ok({at:{},conflicts:[{date:a.mon,slot:'p1',layer:'home',target:'1-1',currentAt:1,currentTitle:'他者の入力'}]});
-  assert.equal(result,false);assert.equal(a.b.unsaved(),1);assert.ok(a.storage.has('test/conflicts'));
+  assert.equal(result,false);assert.equal(a.b.unsaved(),1);assert.ok(a.storage.has('test/conflicts/tab1'));
   const reopened=app(a.storage);reopened.b.boot(()=>{});
   assert.equal(reopened.b.heldCells()[0].q.title,'私の入力');assert.equal(reopened.b.unsaved(),1);
-  reopened.b.dropHeld(reopened.b.heldCells());assert.equal(reopened.b.unsaved(),0);assert.equal(a.storage.has('test/conflicts'),false);
+  reopened.b.dropHeld(reopened.b.heldCells());assert.equal(reopened.b.unsaved(),0);assert.equal(a.storage.has('test/conflicts/tab1'),false);
 }
 {
   const a=app();a.edit();let result;a.b.flush(ok=>result=ok);a.calls[0].ng(new Error('offline'));

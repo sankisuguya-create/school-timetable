@@ -28,15 +28,47 @@ function chipHere_(sub){
   return only === "学年" ? (view.kind === "grade" || view.kind === "school") : true;
 }
 
+/* チップ1つぶんの HTML。**どの面でも同じ作り**（引っぱれる・押せる） */
+function palHtml(o){
+  return "<button class='pal" + (o.off ? " off" : "") + (o.clear ? " clear" : "")
+    + (o.trip ? " trip" : "") + (o.none ? " none" : "") + "' draggable='true'"
+    + (o.g ? " data-g='" + escText(o.g) + "'" : "")
+    + " data-v='" + escText(o.v) + "'>" + escText(o.t) + "</button>";
+}
+
 function drawPalette(){
-  const items = (view.kind === "special")
-    ? allClasses().map(c => ({v:c, t:c, off:false}))
-    : SUBJECTS.filter(chipHere_).map(s => ({v:s.code, t:s.name, off:!s.count}));
+  const sp = view.kind === "special";
+
+  /* **専科の面は、クラスを学年ごとに束ねて並べる。**
+     20クラスを1列に流すと「4-2 はどこか」を毎回端から探すことになる。
+     2列×3段（左上1年・右上2年・左下3年…）に固めると、
+     **学年の位置がいつも同じ**なので、目的の組まで一手で届く。
+     区切りの線は引かない ── 束が6つ見えていれば、線は何も足さない。 */
+  if(sp){
+    const groups = gradesAll().map(g => ({
+      g, list: classesOfSpecial(view.sp).filter(c => gradeOf(c) === g)
+    })).filter(x => x.list.length);
+    /* **リセットは専科にも出す。** 専科が入れたコマも全クラスの紙に降りるので、
+       入れるのと同じ手数で取り消せないと、1コマずつ空にして回ることになる */
+    /* **束に見出しは付けない。** チップの字（3-2）の頭がその学年で、
+       束の位置も学年の順に固定してある。「3年」と書き足しても何も増えない */
+    $("pals").innerHTML =
+      "<div class='palg'>"
+      + groups.map(x => "<div class='palgg' data-g='" + escText(x.g) + "'>"
+          + x.list.map(c => palHtml({v:c, t:c, g:x.g})).join("")
+          + "</div>").join("")
+      + "</div>"
+      + palHtml({v:PAL_CLEAR, t:"リセット", clear:true});
+    wirePalette();
+    return;
+  }
+
+  const items = SUBJECTS.filter(chipHere_).map(s => ({v:s.code, t:s.name, off:!s.count}));
 
   /* **校外行事はどの面にも出す。** 学級だけの校外学習も、学年の自然学校もある */
-  if(view.kind !== "special") items.push({v:PAL_TRIP, t:"校外行事", trip:true});
+  items.push({v:PAL_TRIP, t:"校外行事", trip:true});
   /* **授業なしもどの面にも出す。** 1学級だけ潰れる日も、学年で潰れる日もある */
-  if(view.kind !== "special") items.push({v:PAL_NONE, t:"授業なし", none:true});
+  items.push({v:PAL_NONE, t:"授業なし", none:true});
 
   /* **学年・全学年には「リセット」を出す。**
      ここで入れたコマは全クラスに降りる。入れるのと同じ手数で取り消せないと、
@@ -45,10 +77,12 @@ function drawPalette(){
   const canClear = (view.kind === "grade" || view.kind === "school");
   if(canClear) items.push({v:PAL_CLEAR, t:"リセット", clear:true});
 
-  $("pals").innerHTML = items.map(o =>
-    "<button class='pal" + (o.off ? " off" : "") + (o.clear ? " clear" : "")
-    + (o.trip ? " trip" : "") + (o.none ? " none" : "") + "' draggable='true'"
-    + " data-v='" + escText(o.v) + "'>" + escText(o.t) + "</button>").join("");
+  $("pals").innerHTML = items.map(palHtml).join("");
+  wirePalette();
+}
+
+/* 押す・引っぱるの結線。**チップを組み直すたびに呼ぶ** */
+function wirePalette(){
 
   if(typeof applyLock === "function") setTimeout(applyLock, 0);
   /* 使い方は ？ の中（HELP.pals）。押す口のとなりに5行の説明を置くと、
@@ -75,6 +109,25 @@ function drawPalette(){
    灰色の濃淡になる。選んだ人の紙にだけ出す。 */
 function chipMode(){
   return view.kind === "class" ? ((Y().chipModes || {})[view.cls] || "off") : "off";
+}
+/* その面で色を出すか。**クラスの面だけが本人の設定で、ほかは既定で出す。**
+
+   *クラスの面*：担任の紙。既定は出さない ── 毎週の紙に13色が乗ると、
+   その週に何が起きるかより色のほうが目に立つ。出したい人が出す。
+
+   *専科の面*：コマの中身が「行き先のクラス」なので、色は**学年の目印**。
+   1・2年をまとめて回した日が、紙の上でひと塊に見える。
+
+   *学年・全学年の面*：入れたものが全クラスに降りる面で、見るのは
+   「同じ教科がどの曜日に並んでいるか」。色があると塊が先に見える。
+
+   **どちらも「紙にも」で出す。** これらの面を刷るのは、担任の紙ではなく
+   組み替えのための下敷きで、色が飛ぶと見るために出した意味が無くなる。
+   （クラスの面の「画面だけ／紙にも」は、そのままそのクラスの設定） */
+function faceChipMode(){
+  if(typeof view === "undefined" || !view) return "off";
+  if(view.kind === "class") return (Y().chipModes || {})[view.cls] || "off";
+  return "output";
 }
 function paintChipSeg(){
   const w = $("chipWrap");
@@ -328,11 +381,12 @@ function fillPanel(){
     if(nm !== document.activeElement) nm.value = tripName(selCell.d, selCell.s);
     if(tp !== document.activeElement) tp.value = tripTp(selCell.d, selCell.s);
     nm.disabled = tp.disabled = !!who;
+    /* **残すのは「いまの状態」だけ。** 決まりごと（1本ぶんに同じ字が入る・
+       たんぽぽは2文字まで）は ？ の中（HELP.trip）へ移した */
     $("pTripHint").innerHTML = who
       ? "この行事は<b>" + escText(who) + "</b>が入れたもの。名前もその面から直す。"
-      : "続けて置いた<b>1本ぶんに同じ字</b>が入る。"
-        + "紙の字は、長ければ小さくして収める。"
-        + "<b>たんぽぽに出す字は2文字まで</b>にする（児童の列は 50px しかない）。";
+      : "";
+    $("pTripHint").hidden = !who;
   }
 
   /* **この日の行事。** 年間行事計画表から読んだもの。
@@ -365,9 +419,8 @@ function fillPanel(){
     "<div class='lrow'><b>" + escText(x.text) + "</b>"
     + "<span>" + escText(x.href) + "</span>"
     + "<button data-i='" + i + "' title='リンクを外す'>外す</button></div>").join("");
-  $("pLinkHint").innerHTML = ls.length
-    ? "紙の上でも<b>その文字を押すと開く</b>。刷ると下線だけが残る。"
-    : "欄の中で<b>文字を選んでから</b>下のボタンを押す。1つのコマにいくつでも付く。";
+  /* 使い方は ？ の中（HELP.links）。押す口のとなりに置くと、
+     リンクが1つも無いコマでも毎回2行の説明を越えて押すことになる */
   for(const b of $("pLinks").querySelectorAll("button")){
     b.onclick = () => {
       const x = ls[+b.dataset.i];

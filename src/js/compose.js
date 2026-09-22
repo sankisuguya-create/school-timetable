@@ -20,8 +20,8 @@ function viewName(){
   if(view.kind === "grade")   return view.grade + "年";
   if(view.kind === "school")  return "全学年";
   if(view.kind === "special"){
-    const x = specials().find(s => s.code === view.sp);
-    return x ? x.label : "専科";
+    const x = spOf(view.sp);
+    return x ? spLabel(x) : "専科";
   }
   if(view.kind === "tanpopo") return "たんぽぽ";
   return "";
@@ -194,10 +194,38 @@ function countSub(c){
   return (sub && sub.count && sub.short) ? sub : null;
 }
 
+/* 専科の枠1つ。無ければ null */
+const spOf = code => specials().find(x => x.code === code) || null;
+
+/* その枠の**教科コード**。身元（code）とは別もの ──
+   同じ教科に専科が2人いる形（理科3・4年／理科5・6年）があるので、
+   身元は「rika」「rika_2」と分かれ、教科はどちらも「rika」。
+   古い控えには subject が無い（身元＝教科コードだった）ので、code に落とす。 */
+function spSubjectOf(code){
+  const me = spOf(code);
+  return (me && me.subject) || code;
+}
+
+/* 画面に出す名前。**担当学年まで入れる。** 同じ教科が2人並ぶと、
+   「理科」「理科」では入口でどちらか分からない。 */
+function spLabel(sp){
+  if(!sp) return "";
+  const sub = SUB_BY_CODE[sp.subject || sp.code];
+  const name = sp.label || (sub ? sub.name : (sp.subject || sp.code));
+  const gs = sp.grades || [];
+  if(!gs.length) return name;                 /* 空欄＝全学年 */
+  /* **学年の数ではなく、中身で比べる。** 数で見ると、いまある学年が
+     2つの学校で「3・4年」を持つ枠が「全学年」に化ける（実測）。
+     いまある学年をぜんぶ持っているときだけ、学年を並べない */
+  const all = gradesAll();
+  if(all.length && all.every(g => gs.indexOf(g) >= 0)) return name;
+  return name + gs.join("・") + "年";
+}
+
 /* その専科が受け持つ学年。**空なら null＝全学年。**
    書いていない学校を、どの学年も受け持たない専科にしない。 */
 function spGradesOf(code){
-  const me = specials().find(x => x.code === code);
+  const me = spOf(code);
   return (me && me.grades && me.grades.length) ? me.grades : null;
 }
 /* その専科が受け持つクラス */
@@ -219,12 +247,15 @@ function classesOfSpecial(code){
    別の予定を入れていれば、その時間に専科は行かない。基本の字だけを見ると、
    もう無くなった授業が専科の週に残る。 */
 function spBaseClasses(d, s, sp){
-  const out = [];
+  /* **身元ではなく教科で比べる。** 基本時間割には「rika」としか
+     書いていない。どの理科の先生が行くかは、担当学年（classesOfSpecial）
+     のほうが決める ── 理科3・4年の先生には3年と4年のコマだけが出る。 */
+  const sub = spSubjectOf(sp), out = [];
   for(const c of classesOfSpecial(sp)){
     const b = baseCell(c, d, s);
-    if(!b || b.subject !== sp) continue;
+    if(!b || b.subject !== sub) continue;
     const cur = compose(c, d, s);
-    if(rootSubject(cur.subject) !== sp) continue;
+    if(rootSubject(cur.subject) !== sub) continue;
     out.push(c);
   }
   return out;
@@ -385,7 +416,11 @@ function freeOne(d, sid, c, opt){
   if(opt.level < FREE_L2) return {st:"free", why:""};
   if(PLACE_SUBJECTS.indexOf(root) >= 0) return {st:"avoid", why:name + "（場所）"};
   if((SUB_BY_CODE[code] || {}).only)    return {st:"avoid", why:name};
-  if(specials().some(x => x.code === root) && root !== opt.sp)
+  /* ほかの専科が入っているコマ。**教科で見る**（身元ではない）。
+     自分の教科なら「ほかの専科」ではない ── 理科3・4年の先生にとって
+     3年の理科は自分のコマで、避けるものではない */
+  if(specials().some(x => spSubjectOf(x.code) === root)
+     && root !== spSubjectOf(opt.sp))
     return {st:"avoid", why:name + "（専科）"};
   return {st:"free", why:""};
 }
@@ -1034,10 +1069,12 @@ function writeCell(d, s, patch){
       }
     }
     if(target && allClasses().indexOf(target) >= 0){
-      const sub = SUB_BY_CODE[view.sp];
+      /* **紙に出す字と教科は教科コードのほう。** 身元（sp）は枠を指すだけで、
+         紙には「理科」と出し、時数も理科として数える */
+      const sub = SUB_BY_CODE[spSubjectOf(view.sp)];
       (w.special[target] || (w.special[target] = {}))[key] = {
         title: escText(sub ? sub.name : viewName()),
-        subject: view.sp, sp: view.sp,
+        subject: spSubjectOf(view.sp), sp: view.sp,
         note: ("note" in patch) ? clean(patch.note) : (cur.note || ""),
         /* **物差しも控えに持たせる。** 持たせないと、サーバの返事が
            戻るまでのあいだに続けて直したぶんが、また 0 を送ることになる */

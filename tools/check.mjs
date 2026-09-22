@@ -40,9 +40,11 @@ ok("6年に 6-4 がある", await p.locator(".tile[data-c='6-4']").count() === 1
 ok("4年に 4-4 は無い", await p.locator(".tile[data-c='4-4']").count() === 0);
 ok("学年マスターが6つ＋全学年", await p.locator(".master:not(.tp)").count() === 7,
    await p.locator(".master:not(.tp)").count());
-ok("専科が4つ（音楽・図工・理科・外国語）",
-   await p.locator(".tile.sp").count() === 4,
-   await p.locator(".tile.sp").count());
+/* **枠は6つ。** 同じ教科を学年で分けて持つ形がある
+   （図工1・2年／図工3〜6年、理科3・4年／理科5・6年） */
+ok("専科の枠が6つ（同じ教科が2枠あってよい）",
+   await p.locator(".tile.sp").count() === 6,
+   await p.evaluate(() => specials().map(s => spLabel(s))));
 ok("古い形の端末キャッシュでも、初回から入口を描ける", await p.evaluate(() => {
   const yr = Y(), keep = {classes:clone(yr.classes), specials:clone(yr.specials),
                           tanpopo:clone(yr.tanpopo)};
@@ -2380,6 +2382,125 @@ ok("本番につないでいないときは間引かない", await p.evaluate(()
      delete db.years[y].weeks["2000-01-03"];
      return n === 0 && kept;
    }) === true);
+
+console.log("\n■ 見るだけの面は、枠いっぱいに広げて色を出す");
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
+await p.locator(".tile[data-c='1-1']").click(); await p.waitForTimeout(400);
+/* 教科が1つも無いと色の検査ができないので、1コマだけ入れておく */
+await p.evaluate(() => {
+  writeCell(0, "p3", {title:"算数", subject:"sansu"});
+  writeCell(0, "p4", {title:"国語", subject:"kokugo", note:"漢字の練習"});
+  save(); buildSheet(); paintSheet();
+});
+await p.evaluate(() => setCenter("grade"));
+await p.waitForTimeout(700);
+/* **幅も高さも枠に当たるまで広げる。** 前は「1コマ 26px × 倍率」で
+   紙の縦横比を固定していたので、横に広い枠では下が2割余っていた */
+ok("学年の面は枠いっぱいに広がる", await p.evaluate(() => {
+     const box = $("gvPaper"), sh = box.querySelector(".gsheet");
+     return Math.abs(sh.offsetWidth - box.clientWidth) < 2
+         && sh.offsetHeight > box.clientHeight * .92;
+   }) === true,
+   await p.evaluate(() => {
+     const box = $("gvPaper"), sh = box.querySelector(".gsheet");
+     return [sh.offsetWidth, box.clientWidth, sh.offsetHeight, box.clientHeight];
+   }));
+/* **色はクラスの設定と関わりなく出す。** 1-1 は「なし」のままで開いている */
+ok("学年の面は、クラスの設定が「なし」でも色が出る", await p.evaluate(() => {
+     const t = [...document.querySelectorAll(".gsheet .cell[data-subject=sansu] .t")][0];
+     if(!t) return "コマが無い";
+     const bg = getComputedStyle(t).backgroundColor;
+     return bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent";
+   }) === true,
+   await p.evaluate(() => {
+     const t = [...document.querySelectorAll(".gsheet .cell[data-subject=sansu] .t")][0];
+     return t ? getComputedStyle(t).backgroundColor : "コマが無い";
+   }));
+/* 刷るときも紙いっぱい（A4 よこ 297×210、余白 8mm ＝ 281×194mm） */
+ok("学年の面は、刷るときも紙いっぱい", await p.evaluate(() => {
+     document.body.classList.add("printing-grade");
+     fitGradePrint();
+     const sh = $("gvPaper").querySelector(".gsheet"), mm = 96 / 25.4;
+     const w = sh.offsetWidth / mm, h = sh.offsetHeight / mm;
+     document.body.classList.remove("printing-grade"); fitGrade();
+     return Math.abs(w - 281) < 2 && h > 194 * .92 && h <= 194 + 1;
+   }) === true,
+   await p.evaluate(() => {
+     document.body.classList.add("printing-grade");
+     fitGradePrint();
+     const sh = $("gvPaper").querySelector(".gsheet"), mm = 96 / 25.4;
+     const r = [+(sh.offsetWidth / mm).toFixed(1), +(sh.offsetHeight / mm).toFixed(1)];
+     document.body.classList.remove("printing-grade"); fitGrade();
+     return r;
+   }));
+/* カレンダーも同じ決まり（教科の1文字の欄に地を敷く） */
+await p.evaluate(() => setCenter("cal"));
+await p.waitForTimeout(900);
+ok("カレンダーも、クラスの設定が「なし」でも色が出る", await p.evaluate(() => {
+     const b = document.querySelector(".cper > i[data-subject=sansu] b");
+     if(!b) return "コマが無い";
+     const bg = getComputedStyle(b).backgroundColor;
+     return bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent";
+   }) === true);
+/* 4週のコマ。**題名が左・備考が右**（土だけは縦のまま） */
+await p.evaluate(() => setCenter("month"));
+await p.waitForTimeout(900);
+ok("4週のコマは、題名が左・備考が右", await p.evaluate(() => {
+     const c = document.querySelector("#mS0 .daycol:not(.lastcol) .cell.lesson");
+     const t = c.querySelector(".t"), n = c.querySelector(".n");
+     const tr = t.getBoundingClientRect(), nr = n.getBoundingClientRect();
+     return tr.right <= nr.left + 1 && Math.abs(tr.height - nr.height) < 2;
+   }) === true);
+ok("土だけは縦のまま（20mm を割ると題名が1文字ぶんになる）", await p.evaluate(() => {
+     const c = document.querySelector("#mS0 .daycol.lastcol .cell.lesson");
+     const t = c.querySelector(".t"), n = c.querySelector(".n");
+     return t.getBoundingClientRect().bottom <= n.getBoundingClientRect().top + 1;
+   }) === true);
+/* 4週の紙に、右メニューの小さいボタンの形が当たっていないこと。
+   **同じ .mini という名前を2つの物に使っていた**ので、紙に padding と
+   white-space:nowrap が乗り、版面が痩せてコマの中の字が折り返さなくなっていた */
+ok("4週の紙に、ボタンの形が当たっていない", await p.evaluate(() => {
+     const cs = getComputedStyle($("mS0"));
+     return cs.padding === "0px" && cs.whiteSpace === "normal";
+   }) === true,
+   await p.evaluate(() => {
+     const cs = getComputedStyle($("mS0"));
+     return [cs.padding, cs.whiteSpace];
+   }));
+/* 専科の面は、コマの中身が「行き先のクラス」。色は教科ではなく学年で付ける */
+await p.evaluate(() => setCenter("week"));
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
+await p.locator(".tile.sp").first().click(); await p.waitForTimeout(500);
+await p.evaluate(() => {
+  const c = classesOfSpecial(view.sp)[0];
+  writeCell(0, "p1", {title:c});
+  save(); buildSheet(); paintSheet();
+});
+await p.waitForTimeout(250);
+ok("専科の面は、行き先のクラスの学年で色が付く", await p.evaluate(() => {
+     const e = document.querySelector("#sheet .cell[data-cg]");
+     if(!e) return "印が付いていない";
+     const bg = getComputedStyle(e.querySelector(".t")).backgroundColor;
+     return bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent";
+   }) === true,
+   await p.evaluate(() => {
+     const e = document.querySelector("#sheet .cell[data-cg]");
+     return e ? [e.dataset.cg, getComputedStyle(e.querySelector(".t")).backgroundColor]
+              : "印が付いていない";
+   }));
+/* 書いたぶんで上書きの知らせが開くことがある。**次の節の邪魔をしない。**
+   開いた窓は押すものを覆う（::backdrop）ので、**移る前と移ったあとの両方**で
+   閉じる ── 面を開き直すと、その面ぶんの知らせがもう一度出る */
+const shut = async () => {
+  await p.evaluate(() => document.querySelectorAll("dialog[open]")
+                           .forEach(d => d.close()));
+  await p.waitForTimeout(150);
+};
+await shut();
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(250);
+await shut();
+await p.locator(".tile[data-c='1-1']").click(); await p.waitForTimeout(400);
+await shut();
 
 console.log("\n■ 初回案内は閉じて再表示でき、画面を勝手に移動しない");
 await p.evaluate(() => {localStorage.removeItem('school-timetable/guide-v2');openGuide(true);});

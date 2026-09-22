@@ -269,10 +269,14 @@ body.is-unsaved[data-scope="school"] .stage{
   --night-1:#464B52; --night-2:#2C3036;
 }
 
-/* 月の面。**4週ぶんを 2×2 に並べる。** 紙と入れ替えて出す。
-   転がさずに1画面へ収める（収まらなければ紙にもならない）。 */
+/* 見るための面（4週・学年・カレンダー）。紙と入れ替えて出す。
+   転がさずに1画面へ収める（収まらなければ紙にもならない）。
+
+   **帯 ＋ 紙 の2行。** 説明はどれも ？ の中へ移したので、あいだの1行は無い。
+   行を3つ書いたままにすると、紙が `1fr` の行に入らず中身の高さで止まる
+   ── 学年の面が画面の 28% で止まっていた（実測 280px / 1000px）。 */
 .mview,.gvview,.cvview{grid-area:3/1/4/2;display:grid;
-  grid-template-rows:auto auto minmax(0,1fr);
+  grid-template-rows:auto minmax(0,1fr);
   gap:8px;padding:12px 16px 16px;min-height:0;min-width:0}
 /* 帯。**同じ並べ方を3つの名前で書かない**（月の面・中央のかたち・空き枠） */
 .mbar,.cbar,.freebox{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -494,25 +498,28 @@ span.tpin{cursor:default}
 /* 空き枠さがし。**紙のとなりの帯から右メニューへ移した。**
    帯には空き枠しか残っておらず、面を開くたび紙の上に1行が出たり消えたりして、
    紙の位置が上下に動いていた。ここでは縦に積む（右メニューは細長い）。 */
-.panel .freebox{flex-direction:column;align-items:stretch;gap:7px;
-  padding:9px 10px;border:1px solid var(--line);border-radius:var(--r-sm);
-  background:var(--card);margin:0}
-.panel .freebox .flab{font-size:12px;color:var(--tx-sub);font-weight:600}
-.panel .freebox .seg{width:100%}
-.panel .freebox .seg button{flex:1;padding:6px 4px;font-size:12px}
-/* 畳める見出し（時数・日の形で同じ形） */
-#dayFold>summary,#tallyFold>summary{list-style:none;cursor:pointer;
+.panel .freebox{display:block;margin:0}
+/* 畳める見出し（時数・日の形・空き枠で同じ形） */
+#dayFold>summary,#tallyFold>summary,#freeFold>summary{list-style:none;cursor:pointer;
   display:flex;align-items:center;gap:8px;padding:7px 9px;
   border:1px solid var(--line);border-radius:var(--r-sm);
   background:var(--card);font-size:13px;font-weight:700;color:var(--tx)}
-#dayFold>summary::-webkit-details-marker{display:none}
-#dayFold>summary::before{content:"▸";font-size:11px;color:var(--tx-sub);
-  transition:transform .12s}
-#dayFold[open]>summary::before{transform:rotate(90deg)}
-#dayFold>summary:hover{border-color:var(--ink-link)}
-#dayFold>summary i{font-style:normal;font-weight:400;font-size:12px;
-  color:var(--tx-sub);margin-left:auto}
+#dayFold>summary::-webkit-details-marker,
+#freeFold>summary::-webkit-details-marker{display:none}
+#dayFold>summary::before,#freeFold>summary::before{content:"▸";font-size:11px;
+  color:var(--tx-sub);transition:transform .12s}
+#dayFold[open]>summary::before,
+#freeFold[open]>summary::before{transform:rotate(90deg)}
+#dayFold>summary:hover,#freeFold>summary:hover{border-color:var(--ink-link)}
+#dayFold>summary i,#freeFold>summary i{font-style:normal;font-weight:400;
+  font-size:12px;color:var(--tx-sub);margin-left:auto}
 .dayin{padding-top:9px}
+/* 空き枠の中身。**段の名前が長い**ので、縦に積んで折り返させない */
+.freein{padding-top:9px;display:flex;flex-direction:column;gap:7px}
+.freein .seg{flex-direction:column;width:100%}
+.freein .seg button{padding:7px 10px;font-size:12px;text-align:left;
+  border-top:1px solid var(--line)}
+.freein .seg button:first-child{border-top:0}
 /* たんぽぽへの提出。**保存の右隣。** たんぽぽの児童がいるクラスだけに出る。
    色は既にある専科の茶（--cat-special）。保存の青とも、ロックの赤とも
    混ざらない。**押す前は塗って、押したあとは淡くする**——
@@ -541,6 +548,26 @@ span.tpin{cursor:default}
 .panel .where{font-size:14px;font-weight:600;margin:0;line-height:1.45}
 
 .pals{display:flex;flex-wrap:wrap;gap:5px}
+/* 専科の面。**クラスを学年ごとに束ね、2列×3段に固める。**
+   20クラスを1列に流すと「4-2 はどこか」を毎回端から探すことになる。
+   左上1年・右上2年・左下3年…と**学年の位置がいつも同じ**なら、一手で届く。
+   区切りの線も、束の見出し（「3年」）も置かない ── チップの字の頭が
+   その学年で、束の位置も学年の順に固定してある。書き足しても何も増えない。 */
+.palg{display:grid;grid-template-columns:1fr 1fr;gap:9px 12px;width:100%}
+.palgg{display:flex;flex-wrap:wrap;align-items:center;gap:5px;min-width:0}
+/* 学年ごとの地。**色は学年を運ばない。** 運ぶのはチップの字（3-2）と、
+   上の並び（学年の位置が固定）。色はその三重目。
+   実測では、この6色は色だけでは見分けられない（2色覚で13組が閾値割れ。
+   色分けスキルの check-palette.mjs）。**だから字も並びも外さない。**
+   地としては6色とも読める（文字とのコントラスト 13.4〜14.4）。 */
+.pal[data-g="1"]{background:var(--grade-1)}
+.pal[data-g="2"]{background:var(--grade-2)}
+.pal[data-g="3"]{background:var(--grade-3)}
+.pal[data-g="4"]{background:var(--grade-4)}
+.pal[data-g="5"]{background:var(--grade-5)}
+.pal[data-g="6"]{background:var(--grade-6)}
+/* リセットは束の外。**入れるものではない**ので、束から離して1つ置く */
+.pals>.pal.clear{margin-top:9px}
 .pal{padding:6px 11px;font-size:12.5px;border:1px solid var(--line);border-radius:15px;
   background:var(--card);cursor:grab;user-select:none;line-height:1.3;
   font-family:inherit;color:var(--ink)}
@@ -608,6 +635,31 @@ span.tpin{cursor:default}
    紙のとなりで切り替えられるようにする */
 .chipset{margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .chipset[hidden]{display:none!important}
+/* 時数表を貼るマス目の表。**貼る先をそのまま見せる。**
+   1マスが1校時ぶん。塊ごと貼れるので、スプレッドシートを開かずに済む。 */
+.iptblwrap{max-height:46vh;max-width:100%;overflow:auto;
+  width:max-content;border:1px solid var(--line);
+  border-radius:var(--r-sm);background:var(--card)}
+.iptbl{border-collapse:collapse;font-size:12px}
+.iptbl th{position:sticky;top:0;z-index:1;background:var(--bg);color:var(--tx-sub);
+  font-weight:600;font-size:11px;padding:4px 6px;white-space:nowrap;
+  border:1px solid var(--line-soft)}
+.iptbl th.dow,.iptbl th.cls{position:static;text-align:right;
+  background:var(--card);color:var(--tx-sub)}
+.iptbl th.dow{font-weight:700;color:var(--tx)}
+.iptbl td{padding:0;border:1px solid var(--line-soft)}
+.iptbl input{width:2.6em;border:0;background:transparent;padding:4px 2px;
+  font:inherit;color:var(--ink);text-align:center;outline:none}
+.iptbl input:focus{background:#FFFBEA;box-shadow:inset 0 0 0 1.6px var(--ink-link)}
+/* **自分の行に印。** 貼るのは塊ごとだが、入るのは自分の行だけ */
+.iptbl tr.mine th.cls{color:var(--ink-link);font-weight:700}
+.iptbl tr.mine td{background:var(--fill-a)}
+/* 授業ではない列（列のずれを当てていない列）。触らせない */
+.iptbl td.off{background:var(--bg)}
+.iptbl td.off input{color:var(--tx-sub)}
+/* 1日の切れ目。**どこからが次の曜日か**を線で見せる */
+.iptbl tr[data-top] th,.iptbl tr[data-top] td{border-top:1.5px solid var(--line)}
+
 /* 紙の字の大きさ（＋−）。**数は真ん中に出す。**
    押したものと変わったものが並んでいないと、効いたかどうか分からない。
    端まで来たら押せなくする（無反応にすると、壊れたのか端なのか読めない） */
@@ -1105,7 +1157,10 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   align-items:center;min-width:0;overflow:hidden;
   border-top:.6px solid var(--rule-soft)}
 .cper>i:first-child{border-top:0}
+/* 題名の欄。**行の高さいっぱいに伸ばす。** 教科の色（--tint）を地に敷くので、
+   字の高さだけ塗ると、行の中に色の帯が浮いて、どの校時のことか読みにくい */
 .cper b{font-weight:600;font-size:calc(7.5pt*var(--k));line-height:1;
+  align-self:stretch;display:flex;align-items:center;justify-content:center;
   text-align:center;overflow:hidden;white-space:nowrap}
 /* 専科の面はクラス名（4-3）。**枠に収める**ため、そこだけ字を落とす */
 .cvpaper[data-face=special] .cper b{font-size:calc(6pt*var(--k));letter-spacing:-.02em}
@@ -1192,15 +1247,20 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
    .helpq は既定で margin-left:auto（並びの右端へ寄せる作り）なので、
    ここでは 0 に戻して、ボタンとの間は gap で取る */
 /* 時数のまわりの小さいボタン。**.btn と同じ形で、ひとまわり小さく。**
-   ここまで .mini には1行も当たっておらず、ブラウザ既定のボタンのまま出ていた
-   ── 右メニューのほかの押す口と形も字も違い、そこだけ浮いて見えていた。 */
-.mini{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
+   ここまでこの形には1行も当たっておらず、ブラウザ既定のボタンのまま出ていた
+   ── 右メニューのほかの押す口と形も字も違い、そこだけ浮いて見えていた。
+
+   **class 名は .sbtn。** はじめ .mini と名づけたが、4週の面の紙も
+   `.sheet.mini` で、`.mini` の1枚が紙にも当たっていた ── 紙に
+   `padding:6px 11px` と `white-space:nowrap` が乗り、版面が痩せて
+   コマの中の字が折り返さなくなっていた（同じ名前を2つの物に使わない）。 */
+.sbtn{background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);
   padding:6px 11px;font-size:12.5px;font-family:inherit;color:var(--tx);
   cursor:pointer;white-space:nowrap;line-height:1.35;
   transition:background .12s,border-color .12s}
-.mini:hover{background:var(--hover);border-color:var(--tx-sub)}
-.mini:focus-visible{outline:2px solid var(--ink-link);outline-offset:1px}
-.mini:disabled{opacity:.45;cursor:default}
+.sbtn:hover{background:var(--hover);border-color:var(--tx-sub)}
+.sbtn:focus-visible{outline:2px solid var(--ink-link);outline-offset:1px}
+.sbtn:disabled{opacity:.45;cursor:default}
 .tlybtn{display:flex;align-items:center;gap:6px;margin-top:7px}
 .tlybtn>.helpq{margin-left:0}
-.tlyin>.mini{margin-top:7px}
+.tlyin>.sbtn{margin-top:7px}

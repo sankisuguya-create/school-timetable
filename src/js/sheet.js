@@ -48,7 +48,7 @@ function buildSheet(into, mon, ro){
 function buildSheet_(sh){
   sh.textContent = "";
   sh.classList.toggle("ro", sheetRO);
-  const cm = view.kind === "class" ? ((Y().chipModes || {})[view.cls] || "off") : "off";
+  const cm = faceChipMode();
   sh.classList.toggle("chips-screen", cm !== "off");
   sh.classList.toggle("chips-output", cm === "output");
   sh.style.gridTemplateRows = "auto 1fr auto";      /* 見出し／本体／週メモ */
@@ -391,6 +391,13 @@ function paintCell(e, c, d, s, mine){
 
   e.dataset.layer = c.layer;
   e.dataset.subject = c.subject || "";
+  /* **専科の面は、コマの中身が「行き先のクラス」。** 教科ではないので、
+     色は学年で付ける（→ sheet.css の [data-cg]）。教科で塗ると、
+     音楽専科の紙はぜんぶ音楽の色になり、何も言わない印になる。
+     色そのものは右メニューのクラスチップと同じもの。 */
+  const cg = (view.kind === "special" && (SLOT_BY_ID[s] || {}).kind === "lesson")
+    ? gradeOf(normCls(plain(c.title || ""))) : "";
+  if(cg) e.dataset.cg = cg; else delete e.dataset.cg;
   e.classList.toggle("has-sub", !!c.subject);
   e.classList.toggle("from-base", c.layer === "base");
   if(mine) e.classList.toggle("upper", RANK[c.layer] > RANK[mine] && !c.clash);
@@ -599,6 +606,14 @@ function paintFree(){
   const sum = $("freeAvoidSum");
   if(sum) sum.textContent = o.avoid.length ? "避ける教科（" + o.avoid.length + "）"
                                            : "避ける教科";
+  /* 畳んだままでも、いま何を出しているかは見出しに出す。
+     **開き閉じは覚えておく**（既定は畳む。組み替えるときだけ使う道具） */
+  const fold = $("freeFold");
+  if(fold){
+    if(fold.open !== !!db.settings.freeOpen) fold.open = !!db.settings.freeOpen;
+    const now = document.querySelector("#freeSeg [data-free='" + o.level + "']");
+    $("freePeek").textContent = now ? now.textContent : "";
+  }
   paintFreeTally();
 }
 /* 数えたものを出す。**一覧を目で数え直させない**（それがこの道具の役目そのもの） */
@@ -640,6 +655,14 @@ function drawAvoidList(){
 
    `rebuild` は組み直し（週を繰った・面が変わった）。省くと塗り直しだけ
    （空き枠の段を変えた、避ける教科を選んだ）。 */
+/* 枠の大きさが変わったら、いま出ている面を測り直す。**紙の大きさは枠で決まる。**
+   組み直しはしない（中身は変わっていない）ので、測って倍率を入れるだけ。
+   前はここが無く、窓を広げても学年の面は開いたときの倍率のままだった。 */
+function refitCenter(){
+  if(centerMode === "grade") fitGrade();
+  else if(centerMode === "month") fitMonth();
+  else if(centerMode === "cal") fitCal();
+}
 function redrawCenter(rebuild){
   if(centerMode === "month"){
     if(rebuild) mMonday = new Date(monday);
@@ -661,10 +684,7 @@ function drawGradeView(){
   const cs = gClasses();
   $("gvTitle").textContent = (gGrade || "") + "年　"
     + md(monday) + " → " + md(addDays(monday, 5));
-  $("gvHint").innerHTML = "1日を<b>" + cs.length + "クラスぶん</b>に割って、"
-    + "同じコマを<b>となりどうし</b>で並べています。"
-    + "<b>備考と放課後は置いていません</b>（ずれを読むための面なので）。"
-    + "直すのは週の紙のほうで。ここは見るだけです。";
+  /* 説明は ？ の中（HELP.gradeview） */
   const sel = $("gvGrade");
   sel.innerHTML = grades().map(g =>
     "<option value='" + escText(g) + "'" + (g === gGrade ? " selected" : "") + ">"
@@ -785,19 +805,62 @@ function fitK(nodes, probe, want, setVars){
   return k;
 }
 
-/* 1枚を画面に収める。幅は枠が持つので、合わせるのは高さだけ。 */
-/* 1コマの幅（px）。**1文字が読める最小**。これ×列数が紙の幅になる */
-const G_CELL = 26;
+/* 1mm ぶんの px。**mm で書いた版面を px で測るため**（CSS の 1mm は 96dpi 換算） */
+const MMPX = 96 / 25.4;
+/* 学年の面の紙。**幅はいつも枠いっぱい。高さで倍率を決める。**
+
+   前は「幅 ＝ 26px × 列数 × 倍率」として、幅と高さを同じ倍率で動かしていた。
+   紙の縦横比が固定されるので、**横に広い枠では下が余り、余ったぶんは
+   字に回らなかった**（実測：1240×874 の枠で、紙は 1240×704 まで。
+   高さの 2割が空いたまま、1文字は 12pt×2.5 で止まっていた）。
+
+   いまは幅を枠いっぱいに置いてから、**高さが枠に当たるまで倍率を上げる。**
+   列の幅は fr で分けるので倍率について動かず、倍率は行の高さと字だけを動かす。
+   上の例なら 2.5 → 3.2 まで上がり、1文字が 50px 近くになる。
+
+   *上限*：時程の列だけは mm 固定（--labw × 倍率）なので、上げ続けると
+   クラスの列から幅を取る。紙の 1/4 を越えないところで止める。
+   縦に長い枠でも字が親指ほどにならないよう、素の上限も置く。 */
+const G_LABW = 12.5;          /* .gsheet の --labw と同じ（mm） */
+const G_MAX_K = 6;
+function fitGradeK(sh, availH, availW){
+  const capW = availW * .25 / (G_LABW * MMPX);
+  let k = 1;
+  for(let pass = 0; pass < 5; pass++){
+    sh.style.setProperty("--k", String(k));
+    const have = sh.offsetHeight;
+    if(have < 2) break;
+    const next = Math.max(.3, Math.min(G_MAX_K, capW, k * availH / have));
+    const done = Math.abs(next - k) < .01;
+    k = next;
+    if(done) break;
+  }
+  sh.style.setProperty("--k", String(k));
+  return k;
+}
 function fitGrade(){
   const box = $("gvPaper"), sh = box && box.querySelector(".gsheet");
   if(!box || !sh) return;
-  const avail = box.clientWidth, h = box.clientHeight;
-  if(avail < 2 || h < 2) return;
-  /* 月〜金は n 列ずつ、土は約半分 */
-  const n = Math.max(1, gClasses().length);
-  const want = 50 + G_CELL * n * (DAYS - 1 + .6);
-  const w = Math.min(avail, want);
-  fitK([sh], sh, h, x => x.style.setProperty("--pw", w + "px"));
+  const availW = box.clientWidth, availH = box.clientHeight;
+  if(availW < 2 || availH < 2) return;
+  sh.style.setProperty("--pw", availW + "px");
+  return fitGradeK(sh, availH, availW);
+}
+
+/* 学年の面を刷る。**A4 よこ1枚。** 月の面・カレンダーと同じ運び方
+   （紙の大きさで組み直してから刷り、刷り終わりで画面の大きさへ戻す）。
+   紙は横に長い ── 5日 × クラス数の列が並ぶので、よこ向きでないと入らない。
+
+   **紙でも下を余らせない。** 倍率1で刷っていたころは、A4 よこ（194mm）に
+   70mm ぶんしか組まれず、紙の 2/3 が白かった。画面と同じ決め方で、
+   紙の高さに当たるまで倍率を上げる。 */
+const GV_PAGE = {w:297, h:210, mg:8};
+function fitGradePrint(){
+  const sh = $("gvPaper") && $("gvPaper").querySelector(".gsheet");
+  if(!sh) return;
+  const w = GV_PAGE.w - GV_PAGE.mg * 2, h = GV_PAGE.h - GV_PAGE.mg * 2;
+  sh.style.setProperty("--pw", w + "mm");
+  return fitGradeK(sh, h * MMPX, w * MMPX);
 }
 
 /* 1枠に入るところまで --k を下げる。**測って決める。**
@@ -922,14 +985,22 @@ function calDay(dt){
        **出どころも持つ。** 週案の紙と同じ線をここでも引くため
        （学年・全校から降りてきたコマを、カレンダーの上でも見つけられる） */
     const sp = view.kind === "special";
+    /* **色のもとも持つ。** 週案の紙と同じ淡い色をここでも敷くため
+       （sub ＝ 教科・cg ＝ 行き先のクラスの学年）。専科の面は教科がぜんぶ
+       同じなので、色は学年で付ける（→ sheet.css の [data-cg]）。 */
     const out = {d, form:dayForm(d), ev:hasEvents(d),
-                 subs:[], note:[], from:[], count:{}};
+                 subs:[], note:[], from:[], sub:[], cg:[], count:{}};
     for(const s of calCols()){
-      if(!slotShown(d, s)){ out.subs.push(""); out.note.push(""); out.from.push(""); continue; }
+      if(!slotShown(d, s)){
+        out.subs.push(""); out.note.push(""); out.from.push("");
+        out.sub.push(""); out.cg.push(""); continue;
+      }
       const c = cellFor(d, s.id);
       const t = plain(c.title).trim();
       out.subs.push(!t ? "" : t === NO_LESSON ? "／"
                             : sp ? calCls(t) : shortOf(c.subject, c.title));
+      out.sub.push(sp ? "" : (c.subject || ""));
+      out.cg.push(sp ? gradeOf(normCls(t)) : "");
       out.note.push(plain(c.note || "").trim());
       /* 線を引くのは**自分の面より上から降りてきたコマ**だけ。
          全学年の面では全部が「全校」になり、何も区別しない印になる
@@ -1166,10 +1237,14 @@ function calMonthEl(m){
        *出どころの線*：降りてきたコマの左端に、週案の紙と同じ色の線を引く。 */
     const subs = info ? info.subs : [], from = (info && info.from) || [];
     const notes = (info && info.note) || [], showN = calShowNote();
+    /* 教科（または行き先のクラスの学年）。**色を敷くためだけの印** */
+    const sub = (info && info.sub) || [], cg = (info && info.cg) || [];
     const cell = el("div", "cday" + (info && info.form ? " form-" + info.form : ""),
       "<span class='cnum'>" + dt.getDate() + "</span>"
       + "<span class='cper'>"
       + subs.map((x, i) => "<i" + (from[i] ? " data-from='" + escText(from[i]) + "'" : "")
+          + (sub[i] ? " data-subject='" + escText(sub[i]) + "'" : "")
+          + (cg[i]  ? " data-cg='"      + escText(cg[i])  + "'" : "")
           + "><b>" + escText(x) + "</b><u>"
           + (showN ? escText(notes[i] || "") : "") + "</u></i>").join("")
       + "</span>");
