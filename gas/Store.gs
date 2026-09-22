@@ -407,9 +407,9 @@ const Store = (function(){
        全校 / 学年 / 対象クラス の3枚を各1回
        基本時間割を1回
      だけ読む。返すのは "日付|時程" の小さい配列だけ。 */
-  function unitCandidates(year, cls, subject, fromDate, termEnd){
+  function unitCandidates(year, cls, subject, fromDate, fromSlot, termEnd){
     const c = Sheets.asClass(cls), sub = String(subject || "").trim();
-    const from = isoDate_(fromDate);
+    const from = isoDate_(fromDate), startSlot = String(fromSlot || "").trim();
     if(!c) throw new Error("単元進捗の対象クラスが分かりません");
     if(!sub) throw new Error("単元進捗の教科が分かりません");
     if(!from) throw new Error("単元の開始日が分かりません");
@@ -428,6 +428,8 @@ const Store = (function(){
     const slots = readSlots().filter(s => s.kind === "lesson");
     const lessonIds = slots.map(s => s.id), rank = {};
     lessonIds.forEach((id, i) => { rank[id] = i; });
+    if(startSlot && !(startSlot in rank))
+      throw new Error("単元の開始校時が分かりません（" + startSlot + "）");
 
     const subjects = readSubjects(), byName = {};
     subjects.forEach(s => { if(s.name) byName[String(s.name).trim()] = s.code; });
@@ -497,6 +499,8 @@ const Store = (function(){
       if(day && String(day.title || "").trim() === DAY_OFF_) continue;
 
       for(const slot of lessonIds){
+        /* 起点の日だけは、落としたコマより前へ戻らない。 */
+        if(date === from && startSlot && rank[slot] < rank[startSlot]) continue;
         const cell = effective_(date, slot, dow);
         if(cell && unitSubject_(cell, byName) === sub) out.push(date + "|" + slot);
       }
@@ -2307,9 +2311,10 @@ function apiReadUnits(year, cls, subject){
   Gate.check();
   return Store.readUnits(year || new Date().getFullYear(), cls, subject);
 }
-function apiUnitCandidates(year, cls, subject, fromDate, termEnd){
+function apiUnitCandidates(year, cls, subject, fromDate, fromSlot, termEnd){
   Gate.check();
-  return Store.unitCandidates(year || new Date().getFullYear(), cls, subject, fromDate, termEnd);
+  return Store.unitCandidates(year || new Date().getFullYear(), cls, subject,
+                              fromDate, fromSlot, termEnd);
 }
 function apiWriteCells(year, patches){
   Gate.check();
