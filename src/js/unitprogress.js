@@ -9,6 +9,202 @@ const unitState = {
   cls:"", subject:"", terms:[], termVersion:"[]", units:[], editing:"", loading:false
 };
 
+/* 時間割に出す単元は、通常の週読込と分離して後から読む。
+   同じ学級/専科を見ているあいだは2分キャッシュし、週送りのたびに読まない。 */
+const unitViewState = {
+  key:"", units:[], terms:[], loading:false, loadedAt:0, placing:"", error:""
+};
+const UNIT_VIEW_CACHE_MS = 120000;
+
+function unitViewScope_(){
+  if(typeof view === "undefined") return null;
+  if(view.kind === "class")
+    return {key:fy()+"|class|"+view.cls, cls:view.cls, subject:""};
+  if(view.kind === "special")
+    return {key:fy()+"|special|"+view.sp, cls:"", subject:spSubjectOf(view.sp)};
+  return null;
+}
+function invalidateUnitView_(){
+  unitViewState.loadedAt = 0;
+}
+function ensureUnitView_(force){
+  const sc = unitViewScope_();
+  if(!sc){
+    unitViewState.key=""; unitViewState.units=[]; unitViewState.terms=[];
+    unitViewState.loading=false; unitViewState.loadedAt=0; unitViewState.error="";
+    return;
+  }
+  if(unitViewState.key !== sc.key){
+    unitViewState.key=sc.key; unitViewState.units=[]; unitViewState.terms=[];
+    unitViewState.loading=false; unitViewState.loadedAt=0; unitViewState.error="";
+  }
+  if(unitViewState.loading) return;
+  if(!force && unitViewState.loadedAt
+     && Date.now() - unitViewState.loadedAt < UNIT_VIEW_CACHE_MS) return;
+  unitViewState.loading = true;
+  unitViewState.error = "";
+  paintUnitQuick();
+  Backend.unitManager(sc.cls, sc.subject, r => {
+    /* 返事が来る間に別の面へ移ったら、その面へ混ぜない */
+    const now = unitViewScope_();
+    if(!now || now.key !== sc.key) return;
+    unitViewState.loading=false;
+    unitViewState.loadedAt=Date.now();
+    unitViewState.units=(r && r.units) || [];
+    unitViewState.terms=(r && r.terms) || [];
+    paintUnitQuick();
+    if(document.getElementById("sheet")) paintSheet();
+  }, why => {
+    const now = unitViewScope_();
+    if(!now || now.key !== sc.key) return;
+    unitViewState.loading=false;
+    unitViewState.error=String(why || "単元を読めませんでした");
+    paintUnitQuick();
+  });
+}
+function refreshUnitView_(){
+  invalidateUnitView_();
+  ensureUnitView_(true);
+}
+function unitCellContext_(d, s, c){
+  const sl = SLOT_BY_ID[s];
+  if(!sl || sl.kind !== "lesson") return null;
+  c = c || cellFor(d, s);
+  if(view.kind === "class"){
+    const counted = countSub(c);
+    const sub = rootSubject(c.subject || (counted && counted.code) || "");
+    return sub ? {cls:view.cls, subject:sub} : null;
+  }
+  if(view.kind === "special"){
+    const cls = c.cls || normCls(plain(c.title || ""));
+    return cls ? {cls:cls, subject:spSubjectOf(view.sp)} : null;
+  }
+  return null;
+}
+function unitShortName_(name){
+  return Array.from(String(name || "")).slice(0,3).join("");
+}
+function unitAtCell(d, s, c){
+  const cx = unitCellContext_(d, s, c);
+  if(!cx || !unitViewState.loadedAt) return null;
+  const key = iso(addDays(monday, d)) + "|" + s;
+  for(const u of unitViewState.units){
+    if(u.className !== cx.cls || u.subject !== cx.subject) continue;
+    const n = (u.assignments || []).indexOf(key);
+    if(n >= 0) return {unit:u, index:n, test:false, key:key};
+    if(u.testAssignment === key) return {unit:u, index:-1, test:true, key:key};
+  }
+  return null;
+}
+function unitMarkForCell(d, s, c){
+  const hit = unitAtCell(d, s, c);
+  if(!hit) return null;
+  const u = hit.unit, head = unitShortName_(u.name);
+  return {
+    unit:u,
+    label: hit.test ? head + "テスト" : head + (hit.index + 1) + "/" + u.lessonCount,
+    full: hit.test ? u.name + " テスト"
+                   : u.name + " " + (hit.index + 1) + "/" + u.lessonCount,
+    test:hit.test
+  };
+}
+function paintUnitMark(e, c, d, s){
+  const mark = unitMarkForCell(d, s, c);
+  let box = e.querySelector(".unitmark");
+  if(!mark){
+    if(box) box.remove();
+    e.classList.remove("has-unit");
+    delete e.dataset.unit;
+    return;
+  }
+  if(!box){
+    box = el("span", "unitmark");
+    const n = e.querySelector(".n");
+    if(n) e.insertBefore(box, n); else e.appendChild(box);
+  }
+  if(box.textContent !== mark.label) box.textContent = mark.label;
+  box.title = mark.full;
+  box.setAttribute("aria-label", mark.full);
+  e.dataset.unit = mark.unit.id;
+  e.classList.add("has-unit");
+}
+function unitQuickStatus_(u){
+  const n=(u.assignments || []).length;
+  if(!n && !u.testAssignment) return "未配置";
+  return n + "/" + u.lessonCount + (u.hasTest ? (u.testAssignment ? "＋テスト" : "＋テスト未") : "");
+}
+function paintUnitQuick(){
+  const wrap=$("unitQuick"), box=$("unitPals"), hint=$("unitQuickHint");
+  if(!wrap || !box || !hint) return;
+  const sc=unitViewScope_();
+  if(!sc){ wrap.hidden=true; return; }
+  wrap.hidden=false;
+  if(unitViewState.key !== sc.key || unitViewState.loading){
+    hint.hidden=false; hint.textContent="単元を読み込んでいます…"; box.innerHTML=""; return;
+  }
+  if(unitViewState.error){
+    hint.hidden=false; hint.textContent=unitViewState.error; box.innerHTML=""; return;
+  }
+  if(!unitViewState.loadedAt){
+    hint.hidden=false; hint.textContent="単元を読み込んでいます…"; box.innerHTML="";
+    ensureUnitView_(); return;
+  }
+  if(!selCell){
+    hint.hidden=false; hint.textContent="コマを選ぶと、その教科の単元が出ます。"; box.innerHTML=""; return;
+  }
+  const cx=unitCellContext_(selCell.d, selCell.s);
+  if(!cx){
+    hint.hidden=false; hint.textContent="授業のコマを選ぶと単元チップが出ます。"; box.innerHTML=""; return;
+  }
+  const list=unitViewState.units.filter(u => u.className===cx.cls && u.subject===cx.subject);
+  if(!list.length){
+    hint.hidden=false; hint.textContent="この教科の単元はまだ登録されていません。"; box.innerHTML=""; return;
+  }
+  hint.hidden=true;
+  box.innerHTML=list.map(u =>
+    "<button class='unitpal' type='button' draggable='true' data-unit='"+escText(u.id)
+    +"' data-subject='"+escText(u.subject)+"'"+(unitViewState.placing ? " disabled" : "")+">"
+    +"<b>"+escText(u.name)+"</b><small>"+escText(unitQuickStatus_(u))+"</small></button>"
+  ).join("");
+  for(const b of box.querySelectorAll(".unitpal")){
+    b.onclick=()=>placeUnitAt(b.dataset.unit, selCell.d, selCell.s);
+    b.addEventListener("dragstart", ev => {
+      ev.dataTransfer.setData("text/x-unit-progress", b.dataset.unit);
+      ev.dataTransfer.effectAllowed="copy";
+    });
+  }
+}
+function placeUnitAt(id, d, s){
+  if(unitViewState.placing) return;
+  const u=unitViewState.units.find(x => x.id===id);
+  if(!u) return toast("単元情報を読み直してください");
+  const c=cellFor(d,s), cx=unitCellContext_(d,s,c);
+  if(!cx || cx.cls!==u.className || cx.subject!==u.subject)
+    return toast("この単元は、このコマの教科・クラスには置けません");
+  const date=iso(addDays(monday,d));
+  unitViewState.placing=id; paintUnitQuick();
+  Backend.placeUnitProgress(u.id, u.updatedAt, date, s, r => {
+    unitViewState.placing="";
+    const saved=r && r.unit;
+    if(saved){
+      const i=unitViewState.units.findIndex(x=>x.id===saved.id);
+      if(i>=0) unitViewState.units[i]=saved;
+      unitViewState.loadedAt=Date.now();
+    }
+    paintSheet(); paintUnitQuick();
+    const warn=unitWarningText_(r && r.warning);
+    const act=(r && r.action)==="reset" ? "配置をすべて外しました"
+             :(r && r.action)==="excluded" ? "このコマを外し、後ろを詰めました"
+             :"起点から自動配置しました";
+    toast("<b>"+escText(u.name)+"</b>："+act+(warn ? "<br>"+escText(warn) : ""));
+  }, why => {
+    unitViewState.placing="";
+    invalidateUnitView_(); ensureUnitView_(true);
+    toast("<b>単元を配置できませんでした。</b><br>"+escText(String(why || "")));
+  });
+}
+
+
 function unitSubjects_(){
   return SUBJECTS.filter(s => s.count && !s.only);
 }
@@ -35,6 +231,8 @@ function paintUnitManagerButton(){
   $("unitOpenSub").textContent = ctx.kind === "special"
     ? ((sub || "専科") + "・クラスごと")
     : "教科ごとの単元と授業数";
+  ensureUnitView_();
+  paintUnitQuick();
 }
 
 function unitSelectHtml_(list, value, valueOf, labelOf){
@@ -215,6 +413,7 @@ function saveUnitForm_(){
     $("unitWarn").hidden = !msg;
     $("unitWarn").textContent = msg;
     $("unitStat").textContent = msg ? "保存しました。学期末の不足があります。" : "保存しました。";
+    refreshUnitView_();
   }, why => {
     $("unitSave").disabled = false;
     $("unitStat").textContent = why;
@@ -239,6 +438,7 @@ function resetAllUnits_(){
         renderUnitList_();
         if(id && unitState.units.some(x => x.id === id)) editUnit_(id);
         $("unitStat").textContent = "この教科の単元配置をすべてリセットしました。";
+        refreshUnitView_();
       },
       why => $("unitStat").textContent = why)
   });
@@ -256,6 +456,7 @@ function resetUnit_(){
       const i = unitState.units.findIndex(x => x.id === saved.id);
       if(i >= 0) unitState.units[i] = saved;
       renderUnitList_(); editUnit_(saved.id); $("unitStat").textContent = "配置をリセットしました。";
+      refreshUnitView_();
     }, why => $("unitStat").textContent = why)
   });
 }
@@ -271,6 +472,7 @@ function deleteUnit_(){
       unitState.units = unitState.units.filter(x => x.id !== u.id);
       unitState.editing = ""; $("unitForm").hidden = true; renderUnitList_();
       $("unitStat").textContent = "単元を削除しました。";
+      refreshUnitView_();
     }, why => $("unitStat").textContent = why)
   });
 }
@@ -311,6 +513,7 @@ function saveTermRows_(){
     renderUnitTerm_();
     $("termDlg").close();
     $("unitStat").textContent = "学期の期間を保存しました。";
+    refreshUnitView_();
   }, why => {
     $("termSave").disabled = false;
     $("termStat").textContent = why;
