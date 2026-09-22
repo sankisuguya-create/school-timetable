@@ -316,14 +316,14 @@ button,select,input,textarea{font:inherit;color:inherit}
   justify-content:center;
   align-items:flex-start;min-height:0;min-width:0;gap:6px}
 
-/* 週の紙を出す口。**左メニュー「教務必携用」のすぐ下の小さな帯。**
+/* 週案を出す口。**左メニュー「週案を出す」の各項目のすぐ下の小さな帯。**
    紙の上の帯にあったころ、帯が紙を下に押して狭い画面で紙が縮んでいた。
    入力の右メニューへは置かない（右メニューは入力だけの決まり）。
-   週案の面のときだけ出る ── 刷るものを出す口は、出す面のそばに置く。
-   4週・学年・カレンダーはそれぞれの面の中に同じ並びの口を持つ（.mbar）ので、
-   ここは週の紙のぶんだけ。刷るときは出さない（紙の外のものだから）。 */
+   その面を開いているときだけ出る ── 刷るものを出す口は、出す面のそばに
+   置く。4週・2ヶ月・学年の面も同じ帯を持つ（押すと面の中の同じ口と
+   同じ動き）。刷るときは出さない（紙の外のものだから）。 */
 .weekbar{display:flex;flex-direction:row;align-items:center;gap:5px;
-  margin:2px 4px 8px}
+  justify-content:flex-end;margin:2px 4px 8px}
 .weekbar .btn{min-width:0;justify-content:center;white-space:nowrap;
   padding:6px 8px;font-size:12.5px}
 .weekbar .hint{margin:0;font-size:11.5px;color:var(--tx-sub)}
@@ -1749,9 +1749,12 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
    専科・学年・全学年の面は既定で出す（sheet.js の faceChipMode）。
    *学年の面とカレンダー*：いつも出す。どちらも**見るだけの面**で、
    並べたコマの塊を読むために出しているので、消す道は作っていない。 */
-.chips-screen .cell .t{background:var(--tint)}
-.gsheet .cell .t{background:var(--tint)}
-.cper b{background:var(--tint)}
+/* 紙の上では、題名欄の地は**教科色よりうすい階調**（60% 残し）。
+   丸ごと教科色だと、紙の上で色のほうが字より先に立って目立つ。
+   字は #1A1A1A なので、薄くする向きは読みやすさに逆らわない。 */
+.chips-screen .cell .t{background:color-mix(in srgb,var(--tint) 60%,#fff)}
+.gsheet .cell .t{background:color-mix(in srgb,var(--tint) 60%,#fff)}
+.cper b{background:color-mix(in srgb,var(--tint) 60%,#fff)}
 .cell.brk .t{height:100%;font-weight:400;
   font-size:calc(var(--fs-b)*var(--k)*var(--fit,1))}
 .cell .n{flex:1;font-size:calc(var(--fs-n)*var(--k));color:var(--ink-sub);
@@ -2141,10 +2144,11 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
       <h3>週案を出す</h3>
       <button class="nav" data-act="outweek" data-center="week" data-help="print" data-plan-output>
         <svg width="17" height="17"><use href="#i-print"/></svg><span>教務必携用（B5）</span></button>
-      <!-- 週の紙を出す口。**教務必携用のすぐ下、1行に短く並べる。**
-           週案の面のときだけ出る（出し入れは sheet.js が hidden で切り替える）。
-           4週・カレンダー・学年の面はそれぞれの面の中に同じ並びの口を持つ
-           （.mbar／.gvview／.cvview）ので、ここは週の紙のぶんだけ。 -->
+      <!-- 週案を出す口。**それぞれの項目のすぐ下、1行に短く並べる。**
+           その面を開いているときだけ出る（出し入れは sheet.js が hidden で
+           切り替える）。押すと、その面の中にある同じ口（.mbar／.gvview／
+           .cvview の印刷・画像・Sheet）と同じことをする ── 口を2つに
+           増やしても動きは1つ（二重に聞かれないよう、sb* は既存の口を押す） -->
       <div class="weekbar" id="weekBar" hidden>
         <button class="btn go" id="weekPrint">印刷</button>
         <button class="btn" id="weekImage">画像</button>
@@ -2153,10 +2157,25 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
       </div>
       <button class="nav" data-act="month" data-center="month" data-help="month" data-plan-output>
         <svg width="17" height="17"><use href="#i-grid"/></svg><span>4週まとめて（B4）</span></button>
+      <div class="weekbar" id="monthBar" hidden>
+        <button class="btn go" id="sbMPrint">印刷</button>
+        <button class="btn" id="sbMImage">画像</button>
+        <button class="btn" id="sbMSheet">Sheet</button>
+      </div>
       <button class="nav" data-act="cal" data-center="cal" data-help="cal" data-plan-output>
         <svg width="17" height="17"><use href="#i-cal"/></svg><span>2ヶ月（A4）</span></button>
+      <div class="weekbar" id="calBar" hidden>
+        <button class="btn go" id="sbCPrint">印刷</button>
+        <button class="btn" id="sbCImage">画像</button>
+        <button class="btn" id="sbCSheet">Sheet</button>
+      </div>
       <button class="nav" data-act="grade" data-center="grade" data-help="gradeview" data-plan-output>
         <svg width="17" height="17"><use href="#i-users"/></svg><span>学年ごと（A4よこ）</span></button>
+      <div class="weekbar" id="gradeBar" hidden>
+        <button class="btn go" id="sbGPrint">印刷</button>
+        <button class="btn" id="sbGImage">画像</button>
+        <button class="btn" id="sbGSheet">Sheet</button>
+      </div>
       <button class="nav" data-act="tally" data-help="tally" data-plan-output>
         <svg width="17" height="17"><use href="#i-copy"/></svg><span>時数をコピー</span></button>
 
@@ -2335,19 +2354,11 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
       <p class="lockmsg" id="lockMsg" hidden>
         <b>この画面はロック中。</b>直すには右上の「ロック中」を押す。</p>
 
-      <!-- 単元進捗。学級・専科の面だけに出す。
-           単元は「クラス×教科」の持ちものなので、学年・全校の面には置かない。
-           窓で開いて作る・直す・消す。できた単元は教科チップの下に並ぶ --> 
-      <div class="unitentry" id="unitEntry" hidden>
-        <button class="unitopen" id="unitOpen" type="button">
-          <span><b>単元進捗管理</b><small id="unitOpenSub"></small></span><i>›</i>
-        </button>
-      </div>
-
-      <!-- 教科・行事のチップ、色分け、字の大きさ。**1つに束ねて畳める。**
-           3つとも「コマの中身の見た目」を決めるものなので、一つ屋根の下に
-           置く。既定は開く ── コマへ引っぱって入れるのは毎回の操作なので、
-           畳んだままだと開く手が増える。畳めるようにはしておく（.fold）。 -->
+      <!-- 教科・行事のチップ、色分け、字の大きさ、選んだコマの中身。
+           **1つに束ねて畳める。** どれも「コマの中身」を決める・直すものなので、
+           一つ屋根の下に置く。既定は開く ── コマへ引っぱって入れるのは
+           毎回の操作なので、畳んだままだと開く手が増える。畳めるようには
+           しておく（.fold）。 -->
       <details class="fold" id="palFold" open>
         <summary data-help="pals"><span>教科・行事</span></summary>
         <div class="foldin">
@@ -2389,10 +2400,9 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
                     aria-label="備考の字を大きく">＋</button>
           </div>
         </div>
-        </div>
-      </details>
 
-      <!-- 選んでいるコマ。**教科の並びのすぐ下に置く。**
+        <!-- 選んでいるコマ。**教科・行事の畳み口の中に置く**（題名欄まわりは
+             ここにまとめる）。**教科の並びのすぐ下。**
            チップを押す → 名前を直す → 備考を書く → リンクを付ける、が
            上から下へ1本に並ぶ。前は時数と日の形をまたいだ先にあったので、
            チップを押すたびに画面を送っていた。
@@ -2461,6 +2471,22 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
           <button class="btn danger" id="pClear">空にする</button>
         </div>
       </div>
+        </div>
+      </details>
+
+      <!-- 単元進捗。**教科・行事の下・時数の上に置く畳み口。**
+           学級・専科の面だけに出す（単元は「クラス×教科」の持ちものなので、
+           学年・全校の面には置かない）。チップはこの中 ── 作る・直す・消すは
+           「単元進捗管理」の窓。既定は開く（引っぱって落とす毎回の操作）。 -->
+      <details class="fold" id="unitEntry" open hidden>
+        <summary><span>単元管理</span></summary>
+        <div class="foldin">
+          <div class="pals" id="unitPals"></div>
+          <button class="unitopen" id="unitOpen" type="button">
+            <span><b>単元進捗管理</b><small id="unitOpenSub"></small></span><i>›</i>
+          </button>
+        </div>
+      </details>
 
       <!-- 時数。**カレンダーの面と同じ数**（compose.js countSub で数える）。
            カレンダーを開かなくても、書きながら横目で見られるところに置く。
@@ -7541,6 +7567,9 @@ function applyCenter(kind){
   const wk = kind === "week";
   $("stage").hidden     = !wk;
   $("weekBar").hidden   = !wk;
+  $("monthBar").hidden  = kind !== "month";
+  $("gradeBar").hidden  = kind !== "grade";
+  $("calBar").hidden    = kind !== "cal";
   $("monthView").hidden = kind !== "month";
   $("gradeView").hidden = kind !== "grade";
   $("calView").hidden   = kind !== "cal";
@@ -8320,7 +8349,7 @@ function palHtml(o){
     + " data-v='" + escText(o.v) + "'>" + escText(o.t) + "</button>";
 }
 
-/* 単元のチップ。**教科チップの下に並べる。**
+/* 単元のチップ。**「単元管理」の畳み口（#unitPals）に並べる。**
    作る・直す・消すは「単元進捗管理」の窓 ── ここには落とすもの（チップ）と
    起点が付いているときの「単元リセット」だけ出す。
    学級・専科の面にだけ出る（単元は「クラス×教科」の持ちもの） */
@@ -8330,10 +8359,8 @@ function upalsHtml_(){
   const chips = upPaletteUnits_();
   if(!chips.length) return "";
   const anyStarted = chips.some(x => (x.unit.start || {}).date);
-  return "<div class='upals'><div class='upalh'>単元</div>"
-    + chips.map(u => palHtml({v:u.v, t:u.t, unit:true})).join("")
-    + (anyStarted ? palHtml({v:PAL_URESET, t:"単元リセット", ureset:true}) : "")
-    + "</div>";
+  return chips.map(u => palHtml({v:u.v, t:u.t, unit:true})).join("")
+    + (anyStarted ? palHtml({v:PAL_URESET, t:"単元リセット", ureset:true}) : "");
 }
 
 function drawPalette(){
@@ -8369,8 +8396,9 @@ function drawPalette(){
           + x.list.map(c => palHtml({v:c, t:c, g:x.g})).join("")
           + "</div>").join("")
       + "</div>"
-      + palHtml({v:PAL_CLEAR, t:"リセット", clear:true})
-      + upalsHtml_();
+      + palHtml({v:PAL_CLEAR, t:"リセット", clear:true});
+    const up = $("unitPals");
+    if(up) up.innerHTML = upalsHtml_();
     const fix = $("palSpFix");
     if(fix) fix.onclick = () => openRosterDlg();
     wirePalette();
@@ -8391,7 +8419,9 @@ function drawPalette(){
   const canClear = (view.kind === "grade" || view.kind === "school");
   if(canClear) items.push({v:PAL_CLEAR, t:"リセット", clear:true});
 
-  $("pals").innerHTML = items.map(palHtml).join("") + upalsHtml_();
+  $("pals").innerHTML = items.map(palHtml).join("");
+  const up = $("unitPals");
+  if(up) up.innerHTML = upalsHtml_();
   wirePalette();
 }
 
@@ -8406,7 +8436,7 @@ function wirePalette(){
   /* 単元進捗の入口は、学級・専科の面にだけ出す（学年・全校には単元が無い） */
   if(typeof paintUnitManagerButton === "function") paintUnitManagerButton();
 
-  for(const b of $("pals").querySelectorAll(".pal")){
+  for(const b of document.querySelectorAll("#pals .pal, #unitPals .pal")){
     b.addEventListener("dragstart", ev => {
       ev.dataTransfer.setData("text/x-timetable", b.dataset.v);
       ev.dataTransfer.effectAllowed = "copy";
@@ -9358,7 +9388,10 @@ function upPaintBadge_(e, c, d, s){
       const w = UP.warns[e.dataset.unit];
       if(w) toast(w); else toast(box.title);
     });
-    e.insertBefore(box, e.querySelector(".n"));
+    /* **備考欄に出す。** 題名欄（.t）ではなく、コマのいちばん下 ──
+       備考（.n）のあと。備考の字は n.innerHTML で上書きされるので
+       バッジは n の中には入れず、なか下にぶら下げる */
+    e.appendChild(box);
   }
   e.dataset.unit = b.uid;
   box.textContent = b.t + (b.warn ? "　！" : "");
@@ -10772,6 +10805,9 @@ function openView(v){
     if(tp){
       $("stage").hidden = true;
       $("weekBar").hidden = true;
+      $("monthBar").hidden = true;
+      $("gradeBar").hidden = true;
+      $("calBar").hidden = true;
       $("monthView").hidden = true;
       $("gradeView").hidden = true;
       document.querySelector(".panel").hidden = true;
@@ -10973,6 +11009,37 @@ function exportWeekSheet(){
 function exportMonthSheet(){
   Backend.exportPlanSheet(outputName("4週"), planParts(mMonday,4), r => {
     toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>4週のGoogle Sheetを開く</a>");
+  }, why => toast(escText(why)));
+}
+/* カレンダーの面。**見えている2ヶ月を、週ごとの週案で出す。**
+   カレンダー形の表は Sheet では潰れる（1コマ数行を2ヶ月分並べられない）ので、
+   範囲内の週案を1週1シートで出す ── 中身は週案と同じ、枚数だけ違う */
+function exportCalSheet(){
+  if(!calFrom) return toast("先に2ヶ月の面を開いてください");
+  const start = mondayOf(calFrom);
+  const lastM = new Date(calFrom.getFullYear(), calFrom.getMonth() + CAL_MONTHS, 0);
+  const count = Math.ceil((addDays(lastM, 1) - start) / (7 * 864e5));
+  Backend.exportPlanSheet(outputName("2ヶ月"), planParts(start, count), r => {
+    toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>2ヶ月のGoogle Sheetを開く</a>");
+  }, why => toast(escText(why)));
+}
+/* 学年の面。**開いている学年のクラスぶんを、クラスごとに1シートずつ。**
+   planValues が読む「いまの面」をクラスに差し替えて組み立て、終わったら戻す */
+function exportGradeSheet(){
+  const list = gClasses();
+  if(!list.length) return toast("この学年にクラスがありません");
+  const keep = view, sheets = [];
+  try{
+    for(const c of list){
+      view = {kind:"class", cls:c};
+      sheets.push({name:c, values:planValues(monday)});
+    }
+  }finally{ view = keep; }
+  /* 名づけに outputName は使わない ── 先頭に「いま開いている面の名前」が
+     入るので、学年のまとめが「1-1 の学年ごと」になってしまう */
+  Backend.exportPlanSheet(escText(gGrade) + "年_学年ごと_" + iso(monday), sheets, r => {
+    toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>"
+          + escText(gGrade) + "年のGoogle Sheetを開く</a>");
   }, why => toast(escText(why)));
 }
 
@@ -13023,6 +13090,19 @@ function wire(){
     catch(e){ $("weekBarStat").textContent="画像を作れませんでした（"+escText(e.message||e)+"）"; }
   });
   on("weekSheet","click", exportWeekSheet);
+  /* 左メニューの三つ組み。**その面の中にある口と同じ動き**にする ──
+     ここで別の動きを書くと、帯と面の中で結果がずれる。
+     sb* は対応する面のボタンを押すだけ（sbCSheet/sbGSheet は
+     カレンダー・学年の面の中に口が無いので、ここが唯一の入口） */
+  on("sbMPrint","click", () => $("mPrint").click());
+  on("sbMImage","click", () => $("mImage").click());
+  on("sbMSheet","click", exportMonthSheet);
+  on("sbCPrint","click", () => $("cvPrint").click());
+  on("sbCImage","click", () => $("cvImage").click());
+  on("sbCSheet","click", exportCalSheet);
+  on("sbGPrint","click", () => $("gvPrint").click());
+  on("sbGImage","click", () => $("gvImage").click());
+  on("sbGSheet","click", exportGradeSheet);
   /* 教科の色。**窓を開かせない。** 紙を見ているときに、そのとなりで切り替える */
   for(const b of document.querySelectorAll("#chipSeg [data-chip]"))
     b.addEventListener("click", () => {

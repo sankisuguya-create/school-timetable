@@ -229,9 +229,12 @@
    専科・学年・全学年の面は既定で出す（sheet.js の faceChipMode）。
    *学年の面とカレンダー*：いつも出す。どちらも**見るだけの面**で、
    並べたコマの塊を読むために出しているので、消す道は作っていない。 */
-.chips-screen .cell .t{background:var(--tint)}
-.gsheet .cell .t{background:var(--tint)}
-.cper b{background:var(--tint)}
+/* 紙の上では、題名欄の地は**教科色よりうすい階調**（60% 残し）。
+   丸ごと教科色だと、紙の上で色のほうが字より先に立って目立つ。
+   字は #1A1A1A なので、薄くする向きは読みやすさに逆らわない。 */
+.chips-screen .cell .t{background:color-mix(in srgb,var(--tint) 60%,#fff)}
+.gsheet .cell .t{background:color-mix(in srgb,var(--tint) 60%,#fff)}
+.cper b{background:color-mix(in srgb,var(--tint) 60%,#fff)}
 .cell.brk .t{height:100%;font-weight:400;
   font-size:calc(var(--fs-b)*var(--k)*var(--fit,1))}
 .cell .n{flex:1;font-size:calc(var(--fs-n)*var(--k));color:var(--ink-sub);

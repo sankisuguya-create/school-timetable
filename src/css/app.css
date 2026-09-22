@@ -185,14 +185,14 @@ button,select,input,textarea{font:inherit;color:inherit}
   justify-content:center;
   align-items:flex-start;min-height:0;min-width:0;gap:6px}
 
-/* 週の紙を出す口。**左メニュー「教務必携用」のすぐ下の小さな帯。**
+/* 週案を出す口。**左メニュー「週案を出す」の各項目のすぐ下の小さな帯。**
    紙の上の帯にあったころ、帯が紙を下に押して狭い画面で紙が縮んでいた。
    入力の右メニューへは置かない（右メニューは入力だけの決まり）。
-   週案の面のときだけ出る ── 刷るものを出す口は、出す面のそばに置く。
-   4週・学年・カレンダーはそれぞれの面の中に同じ並びの口を持つ（.mbar）ので、
-   ここは週の紙のぶんだけ。刷るときは出さない（紙の外のものだから）。 */
+   その面を開いているときだけ出る ── 刷るものを出す口は、出す面のそばに
+   置く。4週・2ヶ月・学年の面も同じ帯を持つ（押すと面の中の同じ口と
+   同じ動き）。刷るときは出さない（紙の外のものだから）。 */
 .weekbar{display:flex;flex-direction:row;align-items:center;gap:5px;
-  margin:2px 4px 8px}
+  justify-content:flex-end;margin:2px 4px 8px}
 .weekbar .btn{min-width:0;justify-content:center;white-space:nowrap;
   padding:6px 8px;font-size:12.5px}
 .weekbar .hint{margin:0;font-size:11.5px;color:var(--tx-sub)}

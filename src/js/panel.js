@@ -37,7 +37,7 @@ function palHtml(o){
     + " data-v='" + escText(o.v) + "'>" + escText(o.t) + "</button>";
 }
 
-/* 単元のチップ。**教科チップの下に並べる。**
+/* 単元のチップ。**「単元管理」の畳み口（#unitPals）に並べる。**
    作る・直す・消すは「単元進捗管理」の窓 ── ここには落とすもの（チップ）と
    起点が付いているときの「単元リセット」だけ出す。
    学級・専科の面にだけ出る（単元は「クラス×教科」の持ちもの） */
@@ -47,10 +47,8 @@ function upalsHtml_(){
   const chips = upPaletteUnits_();
   if(!chips.length) return "";
   const anyStarted = chips.some(x => (x.unit.start || {}).date);
-  return "<div class='upals'><div class='upalh'>単元</div>"
-    + chips.map(u => palHtml({v:u.v, t:u.t, unit:true})).join("")
-    + (anyStarted ? palHtml({v:PAL_URESET, t:"単元リセット", ureset:true}) : "")
-    + "</div>";
+  return chips.map(u => palHtml({v:u.v, t:u.t, unit:true})).join("")
+    + (anyStarted ? palHtml({v:PAL_URESET, t:"単元リセット", ureset:true}) : "");
 }
 
 function drawPalette(){
@@ -86,8 +84,9 @@ function drawPalette(){
           + x.list.map(c => palHtml({v:c, t:c, g:x.g})).join("")
           + "</div>").join("")
       + "</div>"
-      + palHtml({v:PAL_CLEAR, t:"リセット", clear:true})
-      + upalsHtml_();
+      + palHtml({v:PAL_CLEAR, t:"リセット", clear:true});
+    const up = $("unitPals");
+    if(up) up.innerHTML = upalsHtml_();
     const fix = $("palSpFix");
     if(fix) fix.onclick = () => openRosterDlg();
     wirePalette();
@@ -108,7 +107,9 @@ function drawPalette(){
   const canClear = (view.kind === "grade" || view.kind === "school");
   if(canClear) items.push({v:PAL_CLEAR, t:"リセット", clear:true});
 
-  $("pals").innerHTML = items.map(palHtml).join("") + upalsHtml_();
+  $("pals").innerHTML = items.map(palHtml).join("");
+  const up = $("unitPals");
+  if(up) up.innerHTML = upalsHtml_();
   wirePalette();
 }
 
@@ -123,7 +124,7 @@ function wirePalette(){
   /* 単元進捗の入口は、学級・専科の面にだけ出す（学年・全校には単元が無い） */
   if(typeof paintUnitManagerButton === "function") paintUnitManagerButton();
 
-  for(const b of $("pals").querySelectorAll(".pal")){
+  for(const b of document.querySelectorAll("#pals .pal, #unitPals .pal")){
     b.addEventListener("dragstart", ev => {
       ev.dataTransfer.setData("text/x-timetable", b.dataset.v);
       ev.dataTransfer.effectAllowed = "copy";

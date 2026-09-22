@@ -110,6 +110,9 @@ function openView(v){
     if(tp){
       $("stage").hidden = true;
       $("weekBar").hidden = true;
+      $("monthBar").hidden = true;
+      $("gradeBar").hidden = true;
+      $("calBar").hidden = true;
       $("monthView").hidden = true;
       $("gradeView").hidden = true;
       document.querySelector(".panel").hidden = true;

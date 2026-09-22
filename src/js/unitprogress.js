@@ -315,7 +315,10 @@ function upPaintBadge_(e, c, d, s){
       const w = UP.warns[e.dataset.unit];
       if(w) toast(w); else toast(box.title);
     });
-    e.insertBefore(box, e.querySelector(".n"));
+    /* **備考欄に出す。** 題名欄（.t）ではなく、コマのいちばん下 ──
+       備考（.n）のあと。備考の字は n.innerHTML で上書きされるので
+       バッジは n の中には入れず、なか下にぶら下げる */
+    e.appendChild(box);
   }
   e.dataset.unit = b.uid;
   box.textContent = b.t + (b.warn ? "　！" : "");
