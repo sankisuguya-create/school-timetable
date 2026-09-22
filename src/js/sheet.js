@@ -657,7 +657,7 @@ function drawAvoidList(){
     "<label><input type='checkbox' value='" + escText(s.code) + "'"
     + (o.avoid.indexOf(s.code) >= 0 ? " checked" : "") + "><span>"
     + escText(s.name) + "</span></label>").join("")
-    + "<button class='btn' id='freeAvoidClear'>ぜんぶ外す</button>";
+    + "<button class='btn' id='freeAvoidClear'>全部外す</button>";
   for(const c of box.querySelectorAll("input[type=checkbox]"))
     c.onchange = () => {
       const o2 = freeOpt(), i = o2.avoid.indexOf(c.value);
@@ -964,7 +964,7 @@ function fitMonth(cell){
    *月の下の時数集計*：教科ごとに **その月のコマ数（年度はじめからの累計）**。
    数え方は時数集計表へのコピーと同じ（compose.js countSub）。
    **まだ書いていない日は基本時間割で数える** ── cellFor が固定時間割まで
-   面倒を見るので、先の月は見通しの数として出る。
+   面倒を見るので、先の月はみ通しの数として出る。
 
    **見るだけの面。** 直すのは週の紙のほうで。 */
 /* **A4 よこ1枚に2ヶ月。** 前は4ヶ月を 2×2 で並べ、1日は 12.8mm 角だった。
@@ -1139,7 +1139,7 @@ function fyWeeks(months){
 
 /* 年度ごとに分けた週を読む。**その年度に入っている月曜へ差し替えてから呼ぶ。**
    読み終えたら after（ぜんぶの年度ぶんが終わってから1回）。 */
-function readByFy(byFy, after){
+function readByFy(byFy, after, want){
   const ys = Object.keys(byFy);
   let left = ys.length;
   if(!left) return after();
@@ -1148,7 +1148,7 @@ function readByFy(byFy, after){
   for(const y of ys){
     const list = Object.keys(byFy[y]).sort();
     monday = parseISO(list[0]);      /* この年度の月曜（fy() をそろえる） */
-    Backend.readWeeks(list, done);
+    Backend.readWeeks(list, done, want);
   }
   monday = keep;
 }
@@ -1225,7 +1225,7 @@ function drawCalView(){
     for(let i = 0; i <= upto; i++) need[y + "/" + (3 + i)] = new Date(y, 3 + i, 1);
   }
   let sync = true;
-  const w = Wait.begin("年度はじめからの週を読んでいます");
+  const w = Wait.begin("年度始めからの週を読んでいます");
   readByFy(fyWeeks(Object.keys(need).map(k => need[k])), () => {
     Wait.end(w);
     if(sync || $("calView").hidden) return;
@@ -1283,7 +1283,7 @@ function calMonthEl(m){
 
 /* 月の下の時数集計。**その月のコマ数（年度はじめからの累計）**。
    数えるのは時数表に出す教科だけ（compose.js countSub）。
-   まだ書いていない日は基本時間割で数えるので、先の月も見通しとして出る。 */
+   まだ書いていない日は基本時間割で数えるので、先の月もみ通しとして出る。 */
 function calFootEl(m){
   const now = calCount(m), sum = calSum(m);
   const subs = calSubs([now, sum]);

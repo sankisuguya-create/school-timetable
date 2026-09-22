@@ -217,7 +217,7 @@ function goWeek(n){
     if(view.kind === "gate") drawGate(); else refreshWeek();
     if(fresh) saveNow();          /* 新しい年度をその場で1回だけ書き出す */
   };
-  loadAndDraw(draw, "週をひらいています");
+  loadAndDraw(draw, "週を開いています");
 }
 
 /* ── 入力ロック ──────────────────────────────
@@ -341,6 +341,18 @@ document.addEventListener("click", ev => {
   const w = window.open(a.getAttribute("href"), "_blank");
   if(w) w.opener = null;          /* 開いた先から元の画面を触らせない */
 });
+/* **窓の外を押したら閉じる。** ×を探さなくても、窓の外を押せば消える。
+   外を押したかは、クリックが窓（.dlg の四角）の外に出たかで見る。
+   「読み込み中」(#wait) は閉じない ── 消すと待ちが終わったか分からない */
+document.addEventListener("click", ev => {
+  const d = ev.target;
+  if(!(d instanceof HTMLDialogElement) || !d.open || d.id === "wait") return;
+  const box = d.querySelector(".dlg");
+  if(!box) return;
+  const r = box.getBoundingClientRect();
+  if(ev.clientX < r.left || ev.clientX > r.right ||
+     ev.clientY < r.top  || ev.clientY > r.bottom) d.close();
+});
 /* 貼り付けは書式を捨てて文字だけ入れる */
 document.addEventListener("paste", ev => {
   const ed = ev.target.closest && ev.target.closest("[contenteditable]");
@@ -443,7 +455,7 @@ function wire(){
       if(a === "month")   return openMonth();
       if(a === "spmonth") return openSpMonth();
       /* 学年・カレンダーも「週案を出す」から開ける。**この並びが現在地も言う。**
-         刷るものを探している人は、左の「出す」の並びを見にいく */
+         刷るものを探している人は、左の「出す」の並びをみにいく */
       if(a === "grade")   return centerOk() ? setCenter("grade")
                                             : toast("クラスや学年を開いてから押す");
       if(a === "cal")     return openCal();
@@ -518,6 +530,21 @@ function wire(){
   /* 押した瞬間から2回目を受けない。窓が出る 200ms のあいだも、ここが受ける。
      doSave 自体は弾かない（重なりの入れ直しがコードから呼ぶ。弾くと黙って送られない） */
   on("saveBtn","click", () => { if(Wait.guard()) requestSave(); });
+  /* 変更を破棄。**まだシートに入っていない自分のぶんを捨てて読み直す。**
+     競合の窓が開いていたら先に閉じる（残しておくと、捨てたぶんを
+     その窓から入れ直せてしまう） */
+  on("discardBtn","click", () => {
+    if(!Wait.guard()) return;
+    if(cfAsk && $("cfDlg").open) $("cfDlg").close();
+    setBusy(true, "シートの状態に戻しています");
+    Backend.discardChanges(had => {
+      setBusy(false);
+      if(view.kind === "tanpopo") drawTanpopoView();
+      else paintSheet();
+      toast(had ? "<b>破棄しました</b>　シートの状態に戻しました"
+                : "破棄する変更はありません");
+    });
+  });
   on("lockBtn","click", () => setLock(!isLocked()));
   on("tpLockBtn","click", () => { setLock(!isLocked()); drawTanpopoView(); });
   on("tpDelNo","click",  () => tpDelAnswer(false));
@@ -691,7 +718,7 @@ function wire(){
                   : "<b>1〜3分かかります。</b>年度の後半ほど長くかかります"
                     + "（読む週が増えるため）。",
               "置いたものは、押すたびに<b>そのぶんの行だけ</b>作り直します。"
-              + "ほかのクラスや、ほかの年度のぶんは残ります。"],
+              + "他のクラスや、他の年度のぶんは残ります。"],
       goLabel: "数える",
       onYes: tallySheetAll
     });
@@ -911,7 +938,7 @@ function start(){
     if(pruneWeeks(KEEP_WEEKS)) saveNow();
     if(view.kind === "gate") drawGate();
     /* 新年度の設定が未了なら、左メニューに出す。**4/1 から、済むまで。**
-       立ち上がりの1回だけ見に行く（週を繰るたびに見に行かない） */
+       立ち上がりの1回だけみに行く（週を繰るたびにみに行かない） */
     if(!Backend.isGas() || Backend.info().isAdmin) pollNewYear();
   });
   // 案内の有無でデータ初期化の成否を変えない。

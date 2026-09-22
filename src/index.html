@@ -100,7 +100,7 @@
 
       <hr>
       <button class="nav" data-screen="gate" data-act="gate" data-help="gate">
-        <svg width="17" height="17"><use href="#i-layers"/></svg><span>ほかの週案を開く</span></button>
+        <svg width="17" height="17"><use href="#i-layers"/></svg><span>他の週案を開く</span></button>
 
       <!-- 中央に出すかたちを切り替える口。**この並びが「現在地」も言う。**
            前は左上に専用の帯（週案／4週／カレンダー／学年）を別に置いていたが、
@@ -140,14 +140,14 @@
         <button class="btn" id="sbCSheet">Sheet</button>
       </div>
       <button class="nav" data-act="grade" data-center="grade" data-help="gradeview" data-plan-output>
-        <svg width="17" height="17"><use href="#i-users"/></svg><span>学年ごと（A4よこ）</span></button>
+        <svg width="17" height="17"><use href="#i-users"/></svg><span>学年ごと（A4横）</span></button>
       <div class="weekbar" id="gradeBar" hidden>
         <button class="btn go" id="sbGPrint">印刷</button>
         <button class="btn" id="sbGImage">画像</button>
         <button class="btn" id="sbGSheet">Sheet</button>
       </div>
       <button class="nav" data-act="renraku" data-help="renraku" data-plan-output>
-        <svg width="17" height="17"><use href="#i-print"/></svg><span>連絡帳用（A4よこ）</span></button>
+        <svg width="17" height="17"><use href="#i-print"/></svg><span>連絡帳用（A4横）</span></button>
       <button class="nav" data-act="tally" data-help="tally" data-plan-output>
         <svg width="17" height="17"><use href="#i-copy"/></svg><span>時数をコピー</span></button>
 
@@ -157,7 +157,7 @@
            1ヶ月ぶんの枠を決める作業のほう -->
       <button class="nav" data-act="spmonth" id="navSpMonth" data-help="spmonth" hidden>
         <svg width="17" height="17"><use href="#i-users"/></svg>
-        <span>専科の月予定をくむ</span></button>
+        <span>専科の月予定を組む</span></button>
 
       <!-- 新年度の設定が未了のあいだだけ出る。**ふだんは管理・システムの中だけ。**
            4/1 から、全部が済むまで出し続ける（消えると忘れる） -->
@@ -181,7 +181,7 @@
            これを出さないと、基本時間割だけの紙を見て「週案が全部消えた」と言われる -->
       <div class="arc" id="arcBar" hidden>
         <b id="arcTitle"></b><span id="arcNote"></span>
-        <a id="arcLink" target="_blank" rel="noopener">保管庫をひらく</a>
+        <a id="arcLink" target="_blank" rel="noopener">保管庫を開く</a>
       </div>
       <!-- ④ 紙の左右で週を繰る。**左メニューの ◀ ▶ と同じことをする。**
            紙を読んでいる目の高さに置く ── 読みながら週を繰るとき、
@@ -315,6 +315,10 @@
             <svg width="15" height="15"><use href="#i-lock"/></svg><span id="lockTxt">ロック</span></button>
           <button class="save" id="saveBtn" aria-live="polite">
             <svg width="16" height="16"><use href="#i-save"/></svg><span id="saveTxt">保存</span></button>
+          <!-- 変更を破棄。**まだシートに入っていない自分のぶんを捨てて、
+               シートの状態へ戻す。** いらなくなった直し・迷い直しを帳消しにする -->
+          <button class="save" id="discardBtn"
+                  title="まだシートに入っていない変更を捨てる">破棄</button>
           <!-- たんぽぽへの提出。**たんぽぽの児童がいるクラスだけに出る。**
                担任が「今週ぶんは書き終えた」と言う印。週ごとに立て直す -->
           <button class="tpsub" id="tpSubBtn" aria-pressed="false" hidden>
@@ -394,7 +398,7 @@
                     aria-label="題名の字を小さく">−</button>
             <b id="fsTitleV" aria-live="polite">16</b>
             <button class="fsb" data-fs="titlePt" data-step="0.5"
-                    aria-label="題名の字を大きく">＋</button>
+                    aria-label="題名の字を大聞く">＋</button>
           </div>
           <div class="fsz" role="group" aria-label="詳細・備考の字の大きさ">
             <span>備考</span>
@@ -402,7 +406,7 @@
                     aria-label="備考の字を小さく">−</button>
             <b id="fsNoteV" aria-live="polite">12</b>
             <button class="fsb" data-fs="notePt" data-step="0.5"
-                    aria-label="備考の字を大きく">＋</button>
+                    aria-label="備考の字を大聞く">＋</button>
           </div>
         </div>
 
@@ -494,7 +498,7 @@
       </details>
 
       <!-- 時数。**カレンダーの面と同じ数**（compose.js countSub で数える）。
-           カレンダーを開かなくても、書きながら横目で見られるところに置く。
+           カレンダーを開かなくても、書きながら横目でみられるところに置く。
            年度はじめからの累計は、4月からの週をぜんぶ読まないと確かにならないので、
            **まだ読んでいない週の数を字で言い、読み直す口を添える**。
            読めていない週は「基本時間割どおり」として数えている -->
@@ -510,7 +514,7 @@
         <div class="tlyin">
         <div class="tly" id="tlyBox"></div>
         <p class="hint" id="tlyNote"></p>
-        <button class="sbtn" id="tlyRead">年度はじめから読み直す</button>
+        <button class="sbtn" id="tlyRead">年度始めから読み直す</button>
         <!-- 時数集計シートへ置く。**押したときだけ動く。**
              全クラス × 4月からこの月まで を数えるので時間がかかる。
              そのことはボタンの下にも、？の説明にも書く。
@@ -627,7 +631,7 @@
   <div class="waitbox">
     <span class="waitspin" aria-hidden="true"></span>
     <span class="waitwd"><b id="waitTxt">処理しています</b>
-      <small>終わるまで、ほかの操作はできません</small></span>
+      <small>終わるまで、他の操作はできません</small></span>
   </div>
 </dialog>
 
@@ -682,7 +686,7 @@
   <h2>たんぽぽ組分け <span class="subttl" id="tpGrpFy"></span></h2>
   <p>たんぽぽの組へ、交流級を入れます。<b>1回入れると児童1人＝たんぽぽ時間割の1列。</b>
      同じ組へ2回入れれば2人です。引っぱっても、押しても入ります。<br>
-     直すのは<b>年度の初めと、転入・転出のとき</b>。週ごとの操作ではありません。</p>
+     直すのは<b>年度の初めと、転入・転出の時</b>。週ごとの操作ではありません。</p>
   <div class="tpsel" id="tpGrpBody"></div>
   <p class="hint" id="tpGrpCount"></p>
 </div></dialog>
@@ -835,7 +839,7 @@
      選んだ範囲は窓が閉じるまで控える ── 窓を開くと選択が外れる -->
 <dialog id="linkDlg"><div class="dlg">
   <h2>選んだ文字を、リンクにする</h2>
-  <p>選んでいるのは「<b id="linkText"></b>」です。
+  <p>選んで入るのは「<b id="linkText"></b>」です。
      <b>紙の上でも、その文字を押すと開きます。</b>刷ると下線だけが残ります。</p>
   <div class="row"><span>リンク先のURL</span>
     <input type="url" id="linkUrl" placeholder="https://"
@@ -855,7 +859,7 @@
   <p><b>上から順に、1つずつやれば終わります。</b>初めての人でも大丈夫なように作ってあります。<br>
      できたかどうかは、ほとんど<b>この画面が自分で見て判定します</b>（あなたが押す必要はありません）。
      画面から確かめようのない2つだけ、やり終えたら押してください。</p>
-  <p class="hint"><b>元に戻せない操作は、ぜんぶで1つだけです。</b>
+  <p class="hint"><b>元に戻せない操作は、全部で1つだけです。</b>
      その1つには ⚠ が付いていて、押す前に必ず突き合わせが入ります。
      ⚠ の付いていない操作は、間違えてもやり直せます。</p>
   <div id="nyStat" class="hint"></div>
@@ -866,7 +870,7 @@
      シートのURLを誰にも渡さないまま、年度初めの手順が閉じる -->
 <dialog id="abDlg"><div class="dlg">
   <h2>A週の起点の月曜</h2>
-  <p><b>この週がA週。</b>あとは1週ごとに入れ替わります。
+  <p><b>この週がA週。</b>後は1週ごとに入れ替わります。
      年に1度直すものではなく、<b>年間行事計画表の「週」欄と1週ずれていたときだけ</b>
      1週動かします。</p>
   <div class="row"><span>起点の月曜</span>
@@ -902,7 +906,7 @@
   <p id="ipLead"></p>
   <div class="row">
     <button class="btn" id="ipTpl">雛形を出す（コピー）</button>
-    <span class="hint">いまの中身が入った形で出ます。
+    <span class="hint">今の中身が入った形で出ます。
       <b>変えるところだけ</b>直してください。</span></div>
   <!-- 時数表はマス目の表。**貼る先をそのまま見せる**ので、
        スプレッドシートを開かずに済む。塊ごと貼れる（左上のマスを選んで Ctrl+V） -->
@@ -928,8 +932,8 @@
   <p class="hint" id="sysLine"></p>
   <hr>
   <h3 style="margin:12px 0 4px;font-size:14px">新年度の設定</h3>
-  <p>年度初めにやることを、順に並べたもの。<b>未了のあいだは左メニューにも出ます。</b></p>
-  <div class="row"><button class="btn" id="nyOpen">新年度の設定をひらく</button>
+  <p>年度初めにやることを、順に並べたもの。<b>未了の間は左メニューにも出ます。</b></p>
+  <div class="row"><button class="btn" id="nyOpen">新年度の設定を開く</button>
     <span class="hint" id="nyHint"></span></div>
   <hr>
   <h3 style="margin:12px 0 4px;font-size:14px">新年度の検査</h3>
@@ -955,7 +959,7 @@
       <li>ドライブで <b id="arFile"></b> を右クリック →「<b>コピーを作成</b>」</li>
       <li>名前を <b id="arName"></b> にする</li>
       <li>共有を<b>管理者だけ</b>にする（教員には配らない）</li>
-      <li>コピーの Apps Script は<b>デプロイしない</b>（デプロイは複製されないので、放っておけば動きません）</li>
+      <li>コピーの Apps Script は<b>デプロイしない</b>（デプロイは複製されないので、放って置けば動きません）</li>
       <li>コピーのURLを下に貼る</li>
     </ol>
     <div class="row"><span>退避先のURL</span>
@@ -968,7 +972,7 @@
   <div id="arStep4" hidden>
     <h4 style="margin:14px 0 4px;font-size:13px">④ 本体から消す</h4>
     <p><b>消すのは、その年度の週案の行だけ。</b>シートも見出しも残ります。
-       押した直後にもう一度照合し、そのあいだに増えた行があれば1行も消しません。</p>
+       押した直後にもう一度照合し、その間に増えた行があれば1行も消しません。</p>
     <div class="row"><span>年度を打ち込む</span>
       <input type="text" id="arTyped" style="width:7em" placeholder="2026">
       <button class="btn danger" id="arGo" disabled>本体から消す</button></div>
@@ -999,7 +1003,7 @@
 <!-- 学年・全学年からの保存。**効くのは押した人の学級ではない。**
      既定は「反映しない」。Esc も、窓枠の ✕ も同じ -->
 <dialog id="apDlg"><div class="dlg">
-  <h2>この保存で、ほかの学級の週案にも出ます</h2>
+  <h2>この保存で、他の学級の週案にも出ます</h2>
   <p id="apWhere"></p>
   <p class="hint"><b id="apWeek"></b>のぶんです。<br>
      入れたコマは、その学級の紙に「学年」「全体」の印つきで出ます。
@@ -1010,9 +1014,9 @@
 </div></dialog>
 
 <dialog id="swDlg"><div class="dlg">
-  <h2>ほかの人が入れた予定です</h2>
+  <h2>他の人が入れた予定です</h2>
   <p><b id="swWhen"></b> を「<b id="swTo"></b>」に変えます。<br>
-     いま入っているのは次のものです。<b>消したくなければ「変更しない」。</b></p>
+     今入っているのは次のものです。<b>消したくなければ「変更しない」。</b></p>
   <ul id="swList" class="owlist"></ul>
   <div class="end">
     <button class="btn go" id="swNo">変更しない</button>
@@ -1020,7 +1024,7 @@
 </div></dialog>
 
 <dialog id="cfDlg"><div class="dlg">
-  <h2>ほかの人が先に直していました</h2>
+  <h2>他の人が先に直していました</h2>
   <p>あなたが開いたあとに、<b>別の人が同じコマを書き替えています。</b>
      このまま入れると、その人が書いたものが消えます。<br>
      <b>まず最新の内容を見てください。</b></p>
@@ -1032,9 +1036,9 @@
 
 <dialog id="owDlg"><div class="dlg">
   <h2>あなたの予定が上書きされています</h2>
-  <p>あなたが入れたコマに、<b>あとから別の予定が入りました。</b>
-     いま紙に出ているのはあとから入ったほうです。<br>
-     戻したいときは、そのコマをもう一度入れ直す（あとから書いたほうが出ます）。<br>
+  <p>あなたが入れたコマに、<b>後から別の予定が入りました。</b>
+     今紙に出ているのは後から入ったほうです。<br>
+     戻したいときは、そのコマをもう一度入れ直す（後から書いたほうが出ます）。<br>
      この窓は<b>同じ上書きについては1回だけ</b>出ます。</p>
   <ul id="owList" class="owlist"></ul>
   <div class="end"><button class="btn go" data-close="owDlg">確かめた</button></div>
@@ -1042,7 +1046,7 @@
 
 <dialog id="warnDlg"><div class="dlg">
   <h2>重なっているコマがあります</h2>
-  <p>同じコマに2つ以上の予定が入っている。<b>あとから書かれたほうが出ている。</b><br>
+  <p>同じコマに2つ以上の予定が入っている。<b>後から書かれたほうが出ている。</b><br>
      閉じるとこの重なりについては二度出ない（中身が変わったら出し直す）。</p>
   <ul id="warnList"></ul>
   <div class="end"><button class="btn go" data-close="warnDlg">確かめた</button></div>
@@ -1053,12 +1057,12 @@
      （空き枠さがし・年間行事の印と同じ扱い）。
      「くむ」を押すまで、そして「入れる」を押すまで、週案には1文字も書かない -->
 <dialog id="spmDlg"><div class="dlg wide">
-  <h2>専科の月予定をくむ（仮）</h2>
+  <h2>専科の月予定を組む（仮）</h2>
   <p><b>1ヶ月ぶんの専科の巡りを、干渉が起きないように計算して出す。</b>
      全校の予定・学年の予定・休み・校外行事の入っているコマには置かない。
      同じ時刻に、同じクラスへ2人の専科が行くことも、1人が2クラスへ行くこともない。<br>
      <b>チェックを入れた希望は破らない。</b>
-     破るのは「そうしないと、そのコマをどこにも置けない」ときだけで、
+     破るのは「そうしないと、そのコマをどこにも置けない」時だけで、
      破ったら<b>その数を下に出す</b>。ぶつかったときに先に通る順は
      避ける日 ＞ 別の週へ動かさない ＞ 午前のみ ＞ 2コマくっつける
      ＞ 基本に近づける ＞ クラス分散。</p>
@@ -1073,10 +1077,10 @@
   <div class="row">
     <label class="spmopt"><input type="checkbox" id="spmMove" checked><span>行事でつぶれたコマを、別の枠へ移す</span></label>
     <span class="grow"></span>
-    <button class="btn go" id="spmRun">くむ</button>
+    <button class="btn go" id="spmRun">組む</button>
   </div>
   <table class="grid2 spmwish" id="spmWish"></table>
-  <p class="spmlead"><b>「くむ」を押すと、案を紙で出す。</b>
+  <p class="spmlead"><b>「組む」を押すと、案を紙で出す。</b>
      4週の面と同じ紙で、1コマに「音楽 2-2 ／ 理科 4-1」と並ぶ。
      採用するかどうかは、その紙を見てから決める。</p>
 </div></dialog>
@@ -1095,7 +1099,7 @@
      宿題・持ち物はここで書く（週案の紙には載らない児童向けの帯なので、
      コマの備考とは別に持つ） -->
 <dialog id="renDlg"><div class="dlg wide">
-  <h2>連絡帳用（A4よこ）</h2>
+  <h2>連絡帳用（A4横）</h2>
   <p>選んだ<b>日付のぶん</b>を、右詰めの縦書き・ルビつきで1枚に出します。
      児童が連絡帳へ写す・掲示に貼る形です。<br>
      宿題・持ち物は下に書きます。<b>漢字（かな）</b>と書くと「かな」がルビになります。

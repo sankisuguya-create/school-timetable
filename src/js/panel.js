@@ -232,7 +232,7 @@ function drawDayPanel(){
       const f = dayForm(d);
       if(f) odd.push(DOW[d] + DAY_FORM[f].label);
     }
-    $("dayPeek").textContent = odd.length ? odd.join("・") : "ぜんぶふつう";
+    $("dayPeek").textContent = odd.length ? odd.join("・") : "全部ふつう";
   }
 }
 
@@ -617,7 +617,7 @@ function drawTallyPanel(){
   $("tlyNote").innerHTML = !Backend.isGas() ? ""
     : left ? "<b>" + left + "週ぶんをまだ読んでいません。</b>"
            + "そのぶんは基本時間割どおりとして数えています。"
-           : "4月からの週は読みこみ済みです。";
+           : "4月からの週は読み込み済みです。";
   $("tlyNote").hidden = !$("tlyNote").innerHTML;
   $("tlyRead").hidden = !left;
 
@@ -636,7 +636,7 @@ function drawTallyPanel(){
    sheet.js の readByFy（カレンダーの面と同じもの）。 */
 function tallyReadAll(){
   const m = new Date(monday.getFullYear(), monday.getMonth(), 1);
-  const w = Wait.begin("年度はじめからの週を読んでいます");
+  const w = Wait.begin("年度始めからの週を読んでいます");
   readByFy(tallyWeeks(m), () => {
     Wait.end(w);
     drawTallyPanel();

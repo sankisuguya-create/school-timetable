@@ -322,24 +322,51 @@ function spGrades_(v){
 
    **身元は重ならないようにする。** 重なると、週案の棚（e.sp）で
    どちらの枠のコマか決まらなくなる。 */
+/* 「34理科」「理科3・4年」「理科34年」のような名前を、教科＋学年に読み替える。
+   古い控えや人の手の欄で、教科の欄が空のまま残った枠を拾うため。 */
+function spParseLabel_(label){
+  const s = String(label || "").trim();
+  if(!s) return null;
+  const name = s.replace(/[\d・,、\s年\-–—〜]/g, "");
+  const sub = SUB_BY_NAME[name];
+  if(!sub) return null;
+  const seen = {}, grades = [];
+  for(const ch of s)
+    if(ch >= "0" && ch <= "9" && !seen[ch]){ seen[ch] = 1; grades.push(ch); }
+  return {subject: sub.code, grades};
+}
+/* `sp_数字` は「教科が読めなかった」ときに振る仮の身元。教科としては使えない */
+const isSpDummy_ = s => /^sp_\d+$/.test(String(s || "").trim());
+
 function normSpecials_(v){
   if(!Array.isArray(v)) return clone(DEFAULT_SPECIALS);
   /* **すでに形がそろっていれば、そのまま返す。** 作り直すと、
-     直していないのに参照が変わり、上の階が「変わった」と見て描き直す */
+     直していないのに参照が変わり、上の階が「変わった」と見て描き直す。
+     教科が仮の身元（sp_数字）の行は形がそろっていても通さない ──
+     ラベルから読み替えて直す（一度保存されると、そのまま残るため） */
   if(v.every(x => x && typeof x.code === "string" && x.code
-       && typeof x.subject === "string" && x.subject && Array.isArray(x.grades)))
+       && typeof x.subject === "string" && x.subject && !isSpDummy_(x.subject)
+       && Array.isArray(x.grades)))
     return v;
   const out = [], seen = {};
   for(let i = 0; i < v.length; i++){
     const raw = v[i];
     const obj = (raw && typeof raw === "object") ? raw : {label:String(raw || "")};
     const label = String(obj.label || "").trim();
-    /* 教科コード。書いてあればそれ、無ければ身元か、名前から引く */
+    /* 名前から教科を引く。「理科」そのままか、「34理科」「理科3・4年」の
+       ような数字つきの書き方まで通す */
     const known = SUB_BY_NAME[label];
+    const parsed = spParseLabel_(label) || spParseLabel_(obj.subject)
+                || spParseLabel_(obj.code);
     let subject = String(obj.subject || "").trim();
-    if(!subject) subject = String(obj.code || "").trim() || (known ? known.code : "");
-    if(!subject && !label) continue;
-    /* 身元。**1人目は教科コードのまま**（前の年度の控えがそのまま読める） */
+    if(isSpDummy_(subject)) subject = "";
+    if(!subject) subject = String(obj.code || "").trim();
+    if(isSpDummy_(subject)) subject = "";
+    if(!subject) subject = (known ? known.code : "") || (parsed ? parsed.subject : "");
+    const labelOrCode = label || String(obj.code || "").trim();
+    if(!subject && !labelOrCode) continue;
+    /* 身元。**1人目は教科コードのまま**（前の年度の控えがそのまま読める）。
+       棚（e.sp）に入っている字なので、仮の身元でもそのまま残す */
     let code = String(obj.code || "").trim() || subject || ("sp_" + i);
     if(seen[code]){
       let n = 2;
@@ -347,7 +374,9 @@ function normSpecials_(v){
       code = (subject || code) + "_" + n;
     }
     seen[code] = 1;
-    out.push({code, subject: subject || code, grades: spGrades_(obj.grades)});
+    const gs = spGrades_(obj.grades);
+    out.push({code, subject: subject || code, label: label || undefined,
+              grades: gs.length ? gs : (parsed ? parsed.grades : [])});
   }
   return out.length ? out : clone(DEFAULT_SPECIALS);
 }

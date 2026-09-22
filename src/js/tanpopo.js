@@ -64,7 +64,7 @@ function tpTitle(cls, d, s){
    分からなくなる。**必ず両方を直す**（gas/domaincheck.js が同じ表で見る）。
 
    *層の重なりは見ない*：学年のコマを直しても、その上に担任のコマが載っていれば
-   渡る文字は変わらない。そこまでは見ずに覆す側へ倒す。見るにはクラスごとに
+   渡る文字は変わらない。そこまではみずに覆す側へ倒す。見るにはクラスごとに
    層を重ね直すことになり、サーバ側では同じ判定が書けない（画面とずれる）。 */
 function tpAffected(d, slot, wasTitle, nowTitle){
   if(d >= WEEKDAYS) return false;                /* 土曜はたんぽぽへ出さない */
@@ -178,7 +178,7 @@ function drawTargets(){
               毎回ドライブから探し直すことになっていた */
            + (now ? "<a class='tptopen' href='" + escText(now.url) + "'"
                   + " target='_blank' rel='noopener noreferrer'>"
-                  + "たんぽぽ時間割をひらく</a>" : "")
+                  + "たんぽぽ時間割を開く</a>" : "")
          : "<span class='hint bad'>1つもありません。足さないと出せません</span>")
       + "<button class='btn' id='tpTgtEdit'>出す先を直す</button></div>";
     const sel = $("tpTgtSel");
@@ -273,8 +273,8 @@ function askTpDel(i){
   $("tpDelTbl").innerHTML =
       "<tr><th>名前</th><td><b>" + escText(x.name) + "</b></td></tr>"
     + "<tr><th>URL</th><td>" + escText(String(x.url).slice(0, 70)) + "</td></tr>"
-    + (x.def ? "<tr><th>いまの既定</th><td>これが既定の出す先です。"
-             + "外すと、いちばん上のものが既定になります</td></tr>" : "");
+    + (x.def ? "<tr><th>今の既定</th><td>これが既定の出す先です。"
+             + "外すと、一番上のものが既定になります</td></tr>" : "");
   $("tpDelDlg").showModal();
   $("tpDelNo").focus();               /* **既定は「外さない」。** */
 }
@@ -398,7 +398,7 @@ function drawTpGroupDlg(){
   const add = $("tpAddG");
   if(add) add.onclick = () => { tpAddGroup(); save(); drawTpGroupDlg(); };
   $("tpGrpCount").innerHTML = tpTotal()
-    ? "いま <b>" + tpTotal() + " 人</b>（" + tpTotal() + " 列）・<b>"
+    ? "今 <b>" + tpTotal() + " 人</b>（" + tpTotal() + " 列）・<b>"
       + tpChosenHere().length + " クラス</b>を入れている"
     : "まだ1人も入れていない";
 }
@@ -443,13 +443,13 @@ function drawTanpopoView(){
   $("tpGo").textContent = allIn ? "✓ たんぽぽ時間割に書き入れる"
                                 : "たんぽぽ時間割に書き入れる";
   $("tpGo").title = why || (!chosen.length ? "先に「組分けを直す」から交流級を入れる"
-    : allIn ? "入れている " + chosen.length + " クラスは、ぜんぶ提出ずみ"
+    : allIn ? "入れている " + chosen.length + " クラスは、全部提出ずみ"
             : "まだ " + yet.length + " クラスが提出していない（" + yet.join("・") + "）");
   /* **出す週を、ボタンのとなりにもう一度出す。** 左メニューの週とは離れていて、
      組を並べているうちに「どの週を出すのか」が目から外れる */
   $("tpWeek").innerHTML = "<b>" + md(monday) + " → " + md(addDays(monday, 4)) + "</b>"
     + "<span>の週を書き入れる</span>"
-    + (chosen.length ? (allIn ? "<i class='ok'>ぜんぶ提出ずみ</i>"
+    + (chosen.length ? (allIn ? "<i class='ok'>全部提出ずみ</i>"
                               : "<i class='yet'>未提出 " + yet.length + " クラス</i>") : "");
   $("tpCount").innerHTML = tpTotal()
     ? "出すのは <b>" + tpTotal() + " 人</b>（" + tpTotal() + " 列）・"
@@ -477,7 +477,7 @@ function tpWarnBoxes(){
      分からない）。ここに残すのは、組から外さないと直らないものだけ。 */
   if(gone.length)
     boxes.push("<div class='box'><b>" + gone.map(escText).join("・")
-      + "</b> は<b>いまの学級編成にありません</b>。"
+      + "</b> は<b>今の学級編成にありません</b>。"
       + "「組分けを直す」から組の外へ出してください。</div>");
   if(!chosen.length)
     boxes.push("<div class='box ok'>まだ誰も入れていません。"
@@ -566,7 +566,7 @@ function doExportTanpopo(){
   const tgt = tpTargetNow();
   if(!Backend.isGas()){
     $("tpWarn").innerHTML =
-      "<div class='box'><b>いまは書き込まない。</b>実物のたんぽぽ時間割に"
+      "<div class='box'><b>今は書き込まない。</b>実物のたんぽぽ時間割に"
       + "つないでいない（手元で開いている）。<br>本番では「" + escText(name)
       + "」というシートが1枚できて、" + cols.length + " 列ぶんが入る。</div>"
       + $("tpWarn").innerHTML;
@@ -601,7 +601,7 @@ function doExportTanpopo(){
   });
 }
 
-/* 出したあとに、何がどうなったかを出す。**数と、退けた前のシートを必ず見せる。**
+/* 出したあとに、何がどうなったかを出す。**数と、退けた前のシートを必ずみせる。**
    「出しました」だけだと、前のシートがどこへ行ったのか分からない。 */
 function showTanpopoResult(r){
   const box = [];

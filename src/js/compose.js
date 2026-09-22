@@ -32,7 +32,7 @@ function viewWhere(){
   if(view.kind === "school")  return "書いたものは全クラスに入る。"
                                    + "右の「この週の日の形」から、休みや特別校時にできる";
   if(view.kind === "special") return "コマにクラスを入れると、そのクラスに「"
-                                   + viewName() + "」として入る";
+                                   + viewName() + "」としている";
   if(view.kind === "tanpopo") return "交流級を選んで、たんぽぽ時間割に書き入れる";
   return "";
 }
@@ -228,7 +228,12 @@ const spOf = code => specials().find(x => x.code === code) || null;
    古い控えには subject が無い（身元＝教科コードだった）ので、code に落とす。 */
 function spSubjectOf(code){
   const me = spOf(code);
-  return (me && me.subject) || code;
+  const sub = me && me.subject;
+  /* **仮の身元（sp_数字）を教科にしない。** 基本時間割の持ちコマ照合が
+     教科で比べるので、sp_33 のままだと1コマも当たらない。ラベルからもう一度引く */
+  if(sub && !/^sp_\d+$/.test(sub)) return sub;
+  const parsed = me && (spParseLabel_(me.label) || spParseLabel_(me.code));
+  return (parsed && parsed.subject) || sub || code;
 }
 
 /* 画面に出す名前。**担当学年まで入れる。** 同じ教科が2人並ぶと、
@@ -238,7 +243,10 @@ function spLabel(sp){
   const sub = SUB_BY_CODE[sp.subject || sp.code];
   /* **教科が分かるなら、その名前。** 表示名（シートの人の手の欄）を先に見ていたころは、
      枠の教科を「図工 → 理科」に変えても、名前が「図工」のまま残っていた */
-  const name = sub ? sub.name : (sp.label || sp.subject || sp.code);
+  let name = sub ? sub.name : (sp.label || sp.subject || sp.code);
+  /* **仮の身元（sp_数字）は画面に出さない。** 教科が読めない枠でも、
+     先生に見せるのは内部の字ではなく「専科」である */
+  if(/^sp_\d+$/.test(name)) name = "専科";
   const gs = sp.grades || [];
   if(!gs.length) return name;                 /* 空欄＝全学年 */
   /* **学年の数ではなく、中身で比べる。** 数で見ると、いまある学年が
@@ -262,7 +270,8 @@ function spLabel(sp){
 function spGridLabel(sp){
   if(!sp) return "";
   const sub = SUB_BY_CODE[sp.subject || sp.code];
-  const name = sub ? sub.name : (sp.label || sp.subject || sp.code);
+  let name = sub ? sub.name : (sp.label || sp.subject || sp.code);
+  if(/^sp_\d+$/.test(name)) name = "専科";   /* 仮の身元は画面に出さない（spLabel 同じ） */
   const subject = sp.subject || sp.code;
   const siblings = specials().filter(x => (x.subject || x.code) === subject);
   if(siblings.length <= 1) return name;
@@ -335,7 +344,7 @@ function ownCell(d, s, sp){
        担当学年を書いていないときに起きる。黙って片方だけ出すと、
        出なかったほうのクラスに誰も行かない週ができる。
        **全部は並べない** ── 1コマの欄に入らず、字が潰れて読めなくなる */
-    return {title:escText(hit.length > 2 ? hit[0] + " ほか" + (hit.length - 1)
+    return {title:escText(hit.length > 2 ? hit[0] + " 他" + (hit.length - 1)
                                          : hit.join("・")),
             note:"", layer:"base",
             cls:hit.length === 1 ? hit[0] : "",
@@ -1000,7 +1009,7 @@ function overwrittenHere(){
    引っぱって入れたぶんも、パレットを押したぶんも、まとめて戻せる。
 
    控えるのは「書き込み先の棚に入っている、そのままの中身」。
-   紙に出ている見かけ（上位から降りてきたもの）を控えると、
+   紙に出ているみかけ（上位から降りてきたもの）を控えると、
    戻したときに、自分の層へ降りてきたものを写して固めてしまう。
 
    戻すのは **いま見ている週・いま見ている画面のぶんだけ**。

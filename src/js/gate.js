@@ -122,17 +122,17 @@ function openView(v){
     showPlanOutputs(!tp);
     paintHeader();
     if(!tp) drawPalette();
-    /* **開いた面を、いま見ているかたち（週／4週／学年）のまま出す。**
-       クラスを変えるたびに週の紙へ戻されると、学年の面で組を見比べている
-       途中で、毎回そこへ戻る手が要る */
-    if(!tp) applyCenter(centerOk() ? centerMode : "week");
+    /* **行き先を変えたら、週の紙（教務必携用）に戻す。** 4週や学年の面の
+       まま別のところへ飛ぶと、どこを見ているか分からなくなる ──
+       入口からもセレクトからも、開いたものはまず週で出す */
+    if(!tp) applyCenter("week");
     refreshWeek();
     if(!tp) fillPanel();
     applyLock();                  /* 画面ごとにロックを持つ */
     paintArchive();               /* 退避ずみの年度なら、そう言う */
   };
 
-  loadAndDraw(draw, viewName() + " をひらいています", () => {
+  loadAndDraw(draw, viewName() + " を開いています", () => {
     markOpening(null);
     Backend.prefetchWeek();       /* 次のクラスは待たせない */
   });
@@ -147,6 +147,14 @@ function showGate(){
   drawGate();
   paintHeader();
   paintArchive();
+  /* **届いた名簿で描き直す。** 控えで先に出しておき、年度の設定が
+     古ければ届き次第タイルを組み直す（直した専科が入口に映る） */
+  Backend.readyYear(() => {
+    if(view.kind !== "gate") return;
+    drawGate();
+    paintHeader();
+    paintArchive();
+  });
 }
 
 /* 上の帯・左の並び・中央のセレクトの「いま」を合わせる。

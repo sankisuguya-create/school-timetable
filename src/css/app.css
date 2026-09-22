@@ -1058,6 +1058,10 @@ table.tp td.f-none{background:repeating-linear-gradient(135deg,transparent 0 4px
 #tpSum .k.f-none{background:repeating-linear-gradient(135deg,transparent 0 3px,
   var(--line) 3px 4px)}
 table.tp tr.staff{opacity:.55}
+/* 取り込む行のチェック（行事計画の確認表）。外した行は薄くする */
+table.tp td.ck{text-align:center;padding:2px 4px}
+table.tp td.ck input{margin:0}
+table.tp tr.skip{opacity:.45}
 /* 固定時間割の取り込みプレビュー。**A週とB週で違うコマだけ目に入るようにする。**
    全部に色を付けると、違うところが埋もれる（塗りは2色まで：docs/spec.md 9節） */
 table.tp.imp td{text-align:center;min-width:3.4em}
@@ -1465,11 +1469,13 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .pal.ureset{border-style:dashed;color:var(--cat-clash);border-color:var(--cat-clash)}
 
 /* コマの上の単元バッジ。**番号はここでだけ見える。**
-   備考本文（持ち物・連絡）を押し出さないよう、題名と備考のあいだの細い帯 */
+   備考欄の右下に置く ── 備考本文（持ち物・連絡）を押し出さないよう、
+   コマのいちばん下の細い帯で、右に寄せる */
 .ub{display:block;font-size:9.5px;line-height:1.25;color:var(--ink-link);
   font-weight:600;letter-spacing:.01em;cursor:grab;pointer-events:auto;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ub.start{border-left:2px solid var(--ink-link);padding-left:3px}
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right;
+  padding:0 calc(1.4mm*var(--k)) 1px}
+.ub.start{border-right:2px solid var(--ink-link);padding-right:3px}
 .ub.warn{color:var(--cat-clash)}
 .ub.dim{opacity:.55}
 

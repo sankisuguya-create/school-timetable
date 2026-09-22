@@ -14,7 +14,7 @@ const clone = x => JSON.parse(JSON.stringify(x));
    持ち方は <a> だけを許した HTML。**文字を打ち直してもリンクが文字に付いて動く。**
    （文字数の位置でリンクを持つと、前を1字消しただけで全部ずれる） */
 
-/* 属性は ' で囲んでいるので ' も逃がす。逃がさないと属性が途中で閉じる */
+/* 属性は ' で囲んで入るので ' も逃がす。逃がさないと属性が途中で閉じる */
 const escText = s => String(s == null ? "" : s)
   .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
   .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
@@ -51,7 +51,7 @@ function clean(html){
         walk(c); c.replaceWith(...c.childNodes);         /* 通さない href は外す */
         continue;
       }
-      walk(c); c.replaceWith(...c.childNodes);           /* ほかのタグは中身だけ残す */
+      walk(c); c.replaceWith(...c.childNodes);           /* 他のタグは中身だけ残す */
     }
   })(d);
   return d.innerHTML;

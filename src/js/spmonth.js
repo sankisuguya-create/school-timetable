@@ -558,7 +558,7 @@ function spSolve(cx){
         out.unplaced.push({sp:u.sp, cls:u.cls, wi:u.wi, d:u.d, si:u.si,
                            why: cx.hard[kc(u.home, u.cls)]
                              || (cx.taken[kc(u.home, u.cls)]
-                                 ? "ほかの専科が入っている" : "空いているコマが無い")});
+                                 ? "他の専科が入っている" : "空いているコマが無い")});
         continue;
       }
       out.placed.push(u);
@@ -808,7 +808,7 @@ function spmDrawWish(){
      いるはずの人がいない画面になる */
   const skip = rs.cand.filter(s => rs.alone[s.code]);
   const foot = skip.length
-    ? "<tr><td></td><td colspan='6' class='spmskip'>受け持ちがほかの専科と"
+    ? "<tr><td></td><td colspan='6' class='spmskip'>受け持ちが他の専科と"
       + "重ならないので計算に入れない："
       + skip.map(s => escText(spLabel(s))).join("・") + "</td></tr>"
     : "";
@@ -871,8 +871,8 @@ function spmDrawDays(){
 function spmRun(){
   const rs = spmRunSet(spmWish);
   if(!rs.run.length) return toast(rs.cand.length
-    ? "<b>受け持ちの重なる専科がいません</b>。干渉しようがないので、くむものがありません"
-    : "<b>組む専科を1人以上えらぶ</b>");
+    ? "<b>受け持ちの重なる専科がいません</b>。干渉しようがないので、組むものがありません"
+    : "<b>組む専科を1人以上選ぶ</b>");
   const w = Wait.begin("専科の月予定をくんでいます");
   /* 待ちの表示を1回出させてから解く。**解いているあいだは画面が止まる**ので、
      止まる前に「いま計算している」と出しておく（そうしないと、押したのに
@@ -941,7 +941,7 @@ function spmDrawOut(){
   /* **外した人は名指しで断る**（窓の表と同じ） */
   const rs = spmRunSet(spmWish);
   const skip = rs.cand.filter(s => rs.alone[s.code]);
-  if(skip.length) html += "<p class='spmlead'>受け持ちがほかの専科と重ならないので"
+  if(skip.length) html += "<p class='spmlead'>受け持ちが他の専科と重ならないので"
     + "<b>計算に入れていない</b>："
     + skip.map(s => escText(spLabel(s))).join("・") + "</p>";
   if(r.cut) html += "<p class='spmlead'>計算に時間がかかったので、"
@@ -981,7 +981,7 @@ function spmDrawOut(){
       + "この一覧を文字でコピー</button></div>";
   }
   if(r.over.length){
-    html += "<h3>ほかの人の予定を潰すコマ（" + r.over.length + "）</h3><ul class='spmlist'>";
+    html += "<h3>他の人の予定を潰すコマ（" + r.over.length + "）</h3><ul class='spmlist'>";
     for(const o of r.over)
       html += "<li><b>" + escText(o.cls) + "</b>　"
         + escText(spmWhen(cx, o.wi, o.d, o.si)) + "　"
@@ -1035,7 +1035,7 @@ function spmMovedRows(r){
    **ここまで週案には1文字も書いていない。** 押したときだけ書く。
    既定は「やめる」（askOk の決まり）。
 
-   採用   … ふつうの専科のコマとして入る。紙では専科の層の字
+   採用   … ふつうの専科のコマとしている。紙では専科の層の字
    仮採用 … **基本時間割と同じ薄さ・同じ低さ**で入る。誰かがその校時へ
             本物の予定を書いた瞬間に負ける（→ config.js の TENT_SLOT） */
 function spmAdopt(tent){
@@ -1053,7 +1053,7 @@ function spmAdopt(tent){
     + "誰かがその校時へ予定を書いたら、そちらが出る"
     + "（仮のほうは黙って引っ込む）。紙に出ているあいだは、"
     + "時数にもたんぽぽにも基本時間割と同じように数える。");
-  else if(r.over.length) lines.push("<b>ほかの人の予定を " + r.over.length
+  else if(r.over.length) lines.push("<b>他の人の予定を " + r.over.length
     + "コマ潰す。</b>潰された人には、次にその週を開いたときに知らせが出る。");
   if(r.moved.length) lines.push("基本時間割から動かした <b>" + r.moved.length
     + "コマ</b>は、<b>元の場所に基本時間割の字が残る。</b>"

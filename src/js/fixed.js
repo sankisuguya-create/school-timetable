@@ -140,7 +140,7 @@ function parseFixed(grid){
     }
     cols.push({a, b, d, slot:slots[n - 1].id});
   }
-  if(!cols.length) return {error:"曜日と校時のわかる列が1つも無い"};
+  if(!cols.length) return {error:"曜日と校時の分かる列が1つも無い"};
 
   /* 1行1クラス */
   const classes = {}, order = [];

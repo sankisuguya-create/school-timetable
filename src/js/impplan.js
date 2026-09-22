@@ -90,11 +90,11 @@ function impTallyRead(grid){
     return {warn:"<b>" + escText(view.cls) + " が、時数の「クラスの並び」に入っていません。</b>"
           + "どの行がこのクラスかを決められないので、取り込めません。<br>"
           + "左メニューの「時数をコピー」の窓で、並びを実物に合わせてください"
-          + (g.list.length ? "（いまは " + escText(g.list.join("・")) + "）" : "") + "。"};
+          + (g.list.length ? "（今は " + escText(g.list.join("・")) + "）" : "") + "。"};
   if(grid.length < WEEKDAYS * g.block)
     return {warn:"<b>行が足りません。</b>"
           + (WEEKDAYS * g.block) + " 行（" + WEEKDAYS + "日 × 1日 " + g.block + "行）が要ります。"
-          + "いま " + grid.length + " 行です。"};
+          + "今 " + grid.length + " 行です。"};
 
   const out = [], unknown = {};
   for(let d = 0; d < WEEKDAYS; d++){
@@ -128,11 +128,11 @@ function impTallyRead(grid){
   /* **変わっていなければ、何も入れないと言う。** 0件のまま黙って閉じると、
      「入ったのか、入らなかったのか」が分からない */
   if(!out.length && !un.length)
-    return {rows:out, warn:"<b>いまの週案と同じでした。</b>変わった欄がありません。"};
+    return {rows:out, warn:"<b>今の週案と同じでした。</b>変わった欄がありません。"};
   return {rows:out,
     warn: un.length ? "<b>読めない字がありました：</b>" + escText(un.join("・"))
                     + "<br>その欄は入れません。教科の1文字か教科名で書いてください"
-                    + "（設定の「教科の表し方」で、どの1文字を使うか見られます）。" : ""};
+                    + "（設定の「教科の表し方」で、どの1文字を使うかみられます）。" : ""};
 }
 
 /* 入れる。**いま開いているクラスの、担任の層**。
@@ -256,7 +256,7 @@ function impEvRead(text){
     const why = !dt ? "日付が読めない"
               : !slot ? "校時が読めない"
               : !to ? (/^[1-9]年?$/.test(impNorm(toRaw))
-                       ? "その学年のクラスが無い（いまある学年は "
+                       ? "その学年のクラスが無い（今ある学年は "
                          + gradesAll().join("・") + "）"
                        : "対象が読めない（全校／◯年）")
               : !title ? "行事名が空" : "";
@@ -271,7 +271,7 @@ function impEvRead(text){
   return {rows:out,
     warn: bad.length ? "<b>入れない行が " + bad.length + " ありました。</b><br>"
                      + bad.slice(0, 8).map(escText).join("<br>")
-                     + (bad.length > 8 ? "<br>ほか " + (bad.length - 8) + " 行" : "") : ""};
+                     + (bad.length > 8 ? "<br>他 " + (bad.length - 8) + " 行" : "") : ""};
 }
 
 /* ══ 行事計画の字を、そのまま貼って読む ══════════════════
@@ -639,7 +639,7 @@ function openImpPlan(kind){
     return toast("時数表は<b>クラスを開いてから</b>取り込む");
   $("ipTtl").textContent = tally ? "時数表から取り込む" : "年間行事計画表からコマを作る";
   $("ipLead").innerHTML = tally
-    ? "<b>いま開いている「" + escText(viewName()) + "」の、この週に入ります。</b>"
+    ? "<b>今開いている「" + escText(viewName()) + "」の、この週に入ります。</b>"
       + "下の表は<b>「時数をコピー」と同じ並び</b>です。"
       + "手元の時数集計表からその週の塊をコピーして、"
       + "<b>左上のマスを選んでそのまま貼る</b>と、1回で入ります。"
@@ -656,7 +656,7 @@ function openImpPlan(kind){
      年間行事は1行1件で、行を足し引きするので、字の欄のほうが直しやすい */
   $("ipTableWrap").hidden = !tally;
   $("ipTextWrap").hidden  = tally;
-  $("ipTpl").textContent  = tally ? "いまの週案を表に入れる" : "雛形を出す（コピー）";
+  $("ipTpl").textContent  = tally ? "今の週案を表に入れる" : "雛形を出す（コピー）";
   $("ipText").value = "";
   $("ipStat").textContent = "";
   $("ipWarn").innerHTML = "";
@@ -734,7 +734,7 @@ function impTallyGrid(){
 function impPlanTemplate(){
   if(impPlanKind === "tally"){
     impTallyTable(impTallyTemplate());
-    $("ipStat").textContent = "いまの週案を表に入れた";
+    $("ipStat").textContent = "今の週案を表に入れた";
     return;
   }
   const rows = impEvTemplate();
@@ -745,6 +745,18 @@ function impPlanTemplate(){
      （校務のブラウザで止めてあることがある）ので、字としても見せる */
   $("ipText").value = impTsv(rows);
   $("ipStat").textContent = (rows.length - 1) + " 行の雛形を出した";
+}
+
+/* 取り込まない行。**確認表の先頭のチェックを外した行は入れない。**
+   読み直すたびに空に戻す（同じ表を読み直しても、外した覚えは残さない） */
+let impSkip = new Set();
+
+/* 確認表の数字とボタンを、チェックの状態に合わせる */
+function impPlanCount_(){
+  const total = (impPlanRows || []).length, n = total - impSkip.size;
+  $("ipStat").textContent = n + " 件を入れます"
+    + (impSkip.size ? "（" + impSkip.size + " 件は入れません）" : "");
+  $("ipGo").disabled = !n;
 }
 
 function impPlanRead(){
@@ -761,49 +773,65 @@ function impPlanRead(){
         + (alt.warn ? "<br>" + alt.warn : "")};
     }
   }
-  impPlanRows = null;
+  impPlanRows = null; impSkip = new Set();
   $("ipGrid").innerHTML = "";
   $("ipGo").disabled = true;
   $("ipWarn").innerHTML = r.warn ? "<div class='box'>" + r.warn + "</div>" : "";
   if(!r.rows) return void ($("ipStat").textContent = "");
   impPlanRows = r.rows;
-  $("ipStat").textContent = r.rows.length + " 件を入れます";
-  $("ipGo").disabled = !r.rows.length;
-  /* **入れる前に、入るものを見せる。** 貼った表そのままではなく、
-     「どの日の何校時に、何が入るか」に直して出す ── 読み違えはここで分かる */
+  impPlanCount_();
+  /* **入れる前に、入るものをぜんぶ見せる。** 貼った表そのままではなく、
+     「どの日の何校時に、何が入るか」に直して出す ── 読み違えはここで分かる。
+     件数が多くても表ごとスクロールして全部見える。
+     先頭のチェックを外すと、その行は入れない（迷う行をあとから残せる） */
   const head = impPlanKind === "tally" ? ["曜日", "校時", "入るもの"]
                                        : ["日付", "校時", "対象", "行事名"];
   const line = x => impPlanKind === "tally"
     ? [DOW[x.d], (SLOT_BY_ID[x.slot] || {}).name || x.slot, x.mark]
     : [iso(x.dt), (SLOT_BY_ID[x.slot] || {}).name || x.slot,
        x.to.layer === "school" ? "全校" : x.to.target + "年", x.title];
-  $("ipGrid").innerHTML = "<table class='tp'><tr>"
+  $("ipGrid").innerHTML = "<table class='tp'><tr><th title='入れるかどうか'>入</th>"
     + head.map(h => "<th>" + escText(h) + "</th>").join("") + "</tr>"
-    + r.rows.slice(0, 14).map(x => "<tr>"
+    + r.rows.map((x, i) => "<tr>"
+        + "<td class='ck'><input type='checkbox' data-i='" + i + "' checked"
+        + " aria-label='この行を入れる'></td>"
         + line(x).map(c => "<td>" + escText(c) + "</td>").join("") + "</tr>").join("")
-    + "</table>"
-    + (r.rows.length > 14 ? "<p class='hint'>ほか " + (r.rows.length - 14) + " 件</p>" : "");
+    + "</table>";
+  /* チェックの付け外しを1か所で受ける（行ごとに付けない） */
+  $("ipGrid").onchange = ev => {
+    const cb = ev.target.closest("input[data-i]");
+    if(!cb) return;
+    const i = +cb.dataset.i;
+    if(cb.checked) impSkip.delete(i); else impSkip.add(i);
+    cb.closest("tr").classList.toggle("skip", !cb.checked);
+    impPlanCount_();
+  };
 }
 
 function impPlanGo(){
-  if(!impPlanRows || !impPlanRows.length) return;
+  /* チェックを外した行を除いたぶんだけ入れる */
+  const rows = (impPlanRows || []).filter((x, i) => !impSkip.has(i));
+  if(!rows.length) return;
   if(typeof isLocked === "function" && isLocked())
     return toast("この面はロックしてある。<b>直すには、上のロックを押す</b>");
   const done = r => {
     $("impPlanDlg").close();
     toast("<b>" + r.n + "件</b>を入れた"
-        + (r.skip ? "（" + r.skip + "件は入れられなかった）" : ""));
+        + (r.skip ? "（" + r.skip + "件は入れられなかった）" : "")
+        + (impSkip.size ? "（" + impSkip.size + "件は除いた）" : ""));
     if(typeof redrawCenter === "function") redrawCenter(true);
   };
-  if(impPlanKind === "tally") return done(impTallyApply(impPlanRows));
+  if(impPlanKind === "tally") return done(impTallyApply(rows));
   /* 全校・学年は、ほかの先生の紙にも出る。**押す前に、範囲を言う** */
   askOk({
-    title: impPlanRows.length + "件を全校・学年に入れますか",
-    lines: ["<b>ここで入れたものは、当たるクラスぜんぶの紙に出ます。</b>",
+    title: rows.length + "件を全校・学年に入れますか",
+    lines: ["<b>ここで入れたものは、当たるクラス全部の紙に出ます。</b>",
             "同じ日・同じ校時に予定が入っているコマは、<b>これで上書きされます</b>"
             + "（前のものは、書いた人の画面に「上書きされました」と出ます）。",
-            "入る先は、雛形の「対象」列のとおりです。"],
+            "入る先は、雛形の「対象」列のとおりです。"
+            + (impSkip.size ? "<br>チェックを外した " + impSkip.size
+                            + " 件は入りません。" : "")],
     goLabel: "入れる",
-    onYes: () => impEvApply(impPlanRows, done)
+    onYes: () => impEvApply(rows, done)
   });
 }
