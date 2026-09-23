@@ -87,7 +87,15 @@ function downloadBlob(blob, name){
 }
 /* 紙面をそのままPNGへする。外部サービスへ週案を送らない。 */
 async function nodePngBlob(node){
+  /* **縮めて見せている紙は、元の大きさで測る。** 画面に合わせる zoom は
+     .paper に掛かっていて、getBoundingClientRect は縮んだ大きさを返す。
+     一方、画像の中の紙は zoom を引き継がず元の大きさで組まれる ──
+     幅が足りず右が見切れる（実測：教務必携用を狭い窓で画像に出すと、
+     右の列が途中で切れた）。測るあいだだけ zoom を 1 に戻す。 */
+  const pa = node.closest(".paper"), z = pa && pa.style.zoom;
+  if(pa && z) pa.style.zoom = 1;
   const r = node.getBoundingClientRect();
+  if(pa && z) pa.style.zoom = z;
   /* **見えていない面は画像にできない。** 隠れた要素は幅も高さも 0 になり、
      0×0 の canvas は toBlob が null を返す ── これをそのまま downloadBlob へ
      渡すと "createObjectURL: Overload resolution failed" という、原因の
@@ -127,18 +135,26 @@ function openOutWindow(kind){
   return w;
 }
 const outputName = suffix => viewName().replace(/[^\w\-ぁ-んァ-ヶ一-龠]/g,"_") + "_" + iso(monday) + "_" + suffix;
+/* 別窓が開けなかったときの退避（ポップアップをブロックされたとき）。
+   帯に字を書くと版面がずれるので、いつもの確認窓にリンクだけを出す ──
+   自分で閉じるまで残る。トーストは数秒で消えるのでリンクには向かない */
+function showOutLink(title, url, label){
+  askOk({title:title,
+    lines:["<a target='_blank' rel='noopener' href='" + escText(url) + "'>" + escText(label) + "</a>"],
+    noLabel:"閉じる", goLabel:"開く", onYes(){ window.open(url, "_blank"); }});
+}
 function exportWeekSheet(){
   const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(outputName("週案"), planParts(monday,1), r => {
     if(w){ w.location.href = r.url; return; }
-    $("weekBarStat").innerHTML="<b>Sheetを作りました。</b> <a target='_blank' rel='noopener' href='"+escText(r.url)+"'>Google Sheetを開く</a>";
+    showOutLink("Sheetを作りました", r.url, "Google Sheetを開く");
   }, why => { if(w) w.close(); toast(escText(why)); });
 }
 function exportMonthSheet(){
   const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(outputName("4週"), planParts(mMonday,4), r => {
     if(w){ w.location.href = r.url; return; }
-    toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>4週のGoogle Sheetを開く</a>");
+    showOutLink("Sheetを作りました", r.url, "4週のGoogle Sheetを開く");
   }, why => { if(w) w.close(); toast(escText(why)); });
 }
 /* カレンダーの面。**見えている2ヶ月を、週ごとの週案で出す。**
@@ -152,7 +168,7 @@ function exportCalSheet(){
   const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(outputName("2ヶ月"), planParts(start, count), r => {
     if(w){ w.location.href = r.url; return; }
-    toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>2ヶ月のGoogle Sheetを開く</a>");
+    showOutLink("Sheetを作りました", r.url, "2ヶ月のGoogle Sheetを開く");
   }, why => { if(w) w.close(); toast(escText(why)); });
 }
 /* 学年の面。**開いている学年のクラスぶんを、クラスごとに1シートずつ。**
@@ -172,8 +188,7 @@ function exportGradeSheet(){
   const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(escText(gGrade) + "年_学年ごと_" + iso(monday), sheets, r => {
     if(w){ w.location.href = r.url; return; }
-    toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>"
-          + escText(gGrade) + "年のGoogle Sheetを開く</a>");
+    showOutLink("Sheetを作りました", r.url, gGrade + "年のGoogle Sheetを開く");
   }, why => { if(w) w.close(); toast(escText(why)); });
 }
 

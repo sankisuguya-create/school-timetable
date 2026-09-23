@@ -88,6 +88,20 @@ function mondayOf(d){
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const md = d => (d.getMonth()+1) + "/" + d.getDate();
 
+/* 左上の日付欄。「10/12 → 10/16」のように2桁の月日が並ぶ週は、
+   18px のままでは欄に入りきらず、右の 〉 を枠の外へ押し出す。
+   **入る大きさまで縮める**（ふだんは18pxのまま。はみ出す週だけ縮む）。 */
+function paintWeekLabel(){
+  const e = $("weekLabel"); if(!e) return;
+  e.textContent = md(monday) + " → " + md(addDays(monday, 4));
+  e.style.fontSize = "";
+  const fit = e.clientWidth;             /* flex:1 + min-width:0 の実際の幅 */
+  if(fit && e.scrollWidth > fit){
+    const px = parseFloat(getComputedStyle(e).fontSize);
+    e.style.fontSize = Math.max(Math.floor(px * fit / e.scrollWidth * 10) / 10, 13) + "px";
+  }
+}
+
 /* 年度は 4/1 起点 */
 const fyOf = d => (d.getMonth() >= 3) ? d.getFullYear() : d.getFullYear() - 1;
 /* 4/1 以後の最初の月曜。時数集計表のシート名（週番号）の起点にする */

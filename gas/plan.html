@@ -193,7 +193,7 @@ button,select,input,textarea{font:inherit;color:inherit}
    字の始まりが3つに散らばり、視線が左右に振れる。 */
 .side .pill{justify-content:space-between}
 .side .pill .date{font-size:18px;font-weight:700;padding:5px 4px;
-  flex:1;text-align:center;letter-spacing:.01em}
+  flex:1;min-width:0;text-align:center;letter-spacing:.01em}
 .side .wkrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .side .seg button{padding:5px 10px;font-size:12.5px}
 .side .target{width:100%;font-size:16px;font-weight:700;text-align:center;
@@ -2263,7 +2263,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
            .cvview の印刷・画像・Sheet）と同じことをする ── 口を2つに
            増やしても動きは1つ（二重に聞かれないよう、sb* は既存の口を押す） -->
       <div class="weekbar" id="weekBar" hidden>
-        <button class="btn go" id="weekPrint">印刷</button>
+        <button class="btn" id="weekPrint">印刷</button>
         <button class="btn" id="weekImage">画像</button>
         <button class="btn" id="weekSheet">Sheet</button>
         <p class="hint" id="weekBarStat"></p>
@@ -2271,21 +2271,21 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
       <button class="nav" data-act="month" data-center="month" data-help="month" data-plan-output>
         <svg width="17" height="17"><use href="#i-grid"/></svg><span>4週まとめて（B4）</span></button>
       <div class="weekbar" id="monthBar" hidden>
-        <button class="btn go" id="sbMPrint">印刷</button>
+        <button class="btn" id="sbMPrint">印刷</button>
         <button class="btn" id="sbMImage">画像</button>
         <button class="btn" id="sbMSheet">Sheet</button>
       </div>
       <button class="nav" data-act="cal" data-center="cal" data-help="cal" data-plan-output>
         <svg width="17" height="17"><use href="#i-cal"/></svg><span>2ヶ月（A4）</span></button>
       <div class="weekbar" id="calBar" hidden>
-        <button class="btn go" id="sbCPrint">印刷</button>
+        <button class="btn" id="sbCPrint">印刷</button>
         <button class="btn" id="sbCImage">画像</button>
         <button class="btn" id="sbCSheet">Sheet</button>
       </div>
       <button class="nav" data-act="grade" data-center="grade" data-help="gradeview" data-plan-output>
         <svg width="17" height="17"><use href="#i-users"/></svg><span>学年ごと（A4横）</span></button>
       <div class="weekbar" id="gradeBar" hidden>
-        <button class="btn go" id="sbGPrint">印刷</button>
+        <button class="btn" id="sbGPrint">印刷</button>
         <button class="btn" id="sbGImage">画像</button>
         <button class="btn" id="sbGSheet">Sheet</button>
       </div>
@@ -2343,7 +2343,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
           <b id="mTitle"></b>
           <button class="btn" id="mNext">次の4週 ▶</button>
           <span class="grow"></span>
-          <button class="btn go" id="mPrint">印刷</button>
+          <button class="btn" id="mPrint">印刷</button>
           <button class="btn" id="mImage">画像</button>
           <button class="btn" id="mSheet">Google Sheet</button>
           <button class="btn" id="mClose">週の紙へ戻る</button>
@@ -2365,7 +2365,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
           <select class="target" id="gvGrade" aria-label="見る学年"></select>
           <b id="gvTitle"></b>
           <span class="grow"></span>
-          <button class="btn go" id="gvPrint">印刷</button>
+          <button class="btn" id="gvPrint">印刷</button>
           <button class="btn" id="gvImage">画像</button>
           <button class="btn" id="gvClose">週の紙へ戻る</button>
         </div>
@@ -2385,7 +2385,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
           <!-- 備考を出すか。**既定は空欄**（手で書き込む欄として刷る形）。
                週案に書いた備考をそのまま出したい週もあるので、ここで切り替える -->
           <button class="btn tgl" id="cvNote" aria-pressed="false">備考：空欄</button>
-          <button class="btn go" id="cvPrint">印刷</button>
+          <button class="btn" id="cvPrint">印刷</button>
           <button class="btn" id="cvImage">画像</button>
           <button class="btn" id="cvClose">週の紙へ戻る</button>
         </div>
@@ -3610,6 +3610,20 @@ function mondayOf(d){
 }
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const md = d => (d.getMonth()+1) + "/" + d.getDate();
+
+/* 左上の日付欄。「10/12 → 10/16」のように2桁の月日が並ぶ週は、
+   18px のままでは欄に入りきらず、右の 〉 を枠の外へ押し出す。
+   **入る大きさまで縮める**（ふだんは18pxのまま。はみ出す週だけ縮む）。 */
+function paintWeekLabel(){
+  const e = $("weekLabel"); if(!e) return;
+  e.textContent = md(monday) + " → " + md(addDays(monday, 4));
+  e.style.fontSize = "";
+  const fit = e.clientWidth;             /* flex:1 + min-width:0 の実際の幅 */
+  if(fit && e.scrollWidth > fit){
+    const px = parseFloat(getComputedStyle(e).fontSize);
+    e.style.fontSize = Math.max(Math.floor(px * fit / e.scrollWidth * 10) / 10, 13) + "px";
+  }
+}
 
 /* 年度は 4/1 起点 */
 const fyOf = d => (d.getMonth() >= 3) ? d.getFullYear() : d.getFullYear() - 1;
@@ -13230,7 +13244,7 @@ function loadAndDraw(draw, message, after){
 function drawGate(){
   /* 途中で例外が起きても「閉じる」だけが中央に残らないよう、先に初期状態を作る。 */
   $("gClose").hidden = !lastTarget;
-  $("weekLabel").textContent = md(monday) + " → " + md(addDays(monday, 4));
+  paintWeekLabel();
   const n = weekNo();
   $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   const cols = Math.max.apply(null,
@@ -13488,7 +13502,15 @@ function downloadBlob(blob, name){
 }
 /* 紙面をそのままPNGへする。外部サービスへ週案を送らない。 */
 async function nodePngBlob(node){
+  /* **縮めて見せている紙は、元の大きさで測る。** 画面に合わせる zoom は
+     .paper に掛かっていて、getBoundingClientRect は縮んだ大きさを返す。
+     一方、画像の中の紙は zoom を引き継がず元の大きさで組まれる ──
+     幅が足りず右が見切れる（実測：教務必携用を狭い窓で画像に出すと、
+     右の列が途中で切れた）。測るあいだだけ zoom を 1 に戻す。 */
+  const pa = node.closest(".paper"), z = pa && pa.style.zoom;
+  if(pa && z) pa.style.zoom = 1;
   const r = node.getBoundingClientRect();
+  if(pa && z) pa.style.zoom = z;
   /* **見えていない面は画像にできない。** 隠れた要素は幅も高さも 0 になり、
      0×0 の canvas は toBlob が null を返す ── これをそのまま downloadBlob へ
      渡すと "createObjectURL: Overload resolution failed" という、原因の
@@ -13528,18 +13550,26 @@ function openOutWindow(kind){
   return w;
 }
 const outputName = suffix => viewName().replace(/[^\w\-ぁ-んァ-ヶ一-龠]/g,"_") + "_" + iso(monday) + "_" + suffix;
+/* 別窓が開けなかったときの退避（ポップアップをブロックされたとき）。
+   帯に字を書くと版面がずれるので、いつもの確認窓にリンクだけを出す ──
+   自分で閉じるまで残る。トーストは数秒で消えるのでリンクには向かない */
+function showOutLink(title, url, label){
+  askOk({title:title,
+    lines:["<a target='_blank' rel='noopener' href='" + escText(url) + "'>" + escText(label) + "</a>"],
+    noLabel:"閉じる", goLabel:"開く", onYes(){ window.open(url, "_blank"); }});
+}
 function exportWeekSheet(){
   const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(outputName("週案"), planParts(monday,1), r => {
     if(w){ w.location.href = r.url; return; }
-    $("weekBarStat").innerHTML="<b>Sheetを作りました。</b> <a target='_blank' rel='noopener' href='"+escText(r.url)+"'>Google Sheetを開く</a>";
+    showOutLink("Sheetを作りました", r.url, "Google Sheetを開く");
   }, why => { if(w) w.close(); toast(escText(why)); });
 }
 function exportMonthSheet(){
   const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(outputName("4週"), planParts(mMonday,4), r => {
     if(w){ w.location.href = r.url; return; }
-    toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>4週のGoogle Sheetを開く</a>");
+    showOutLink("Sheetを作りました", r.url, "4週のGoogle Sheetを開く");
   }, why => { if(w) w.close(); toast(escText(why)); });
 }
 /* カレンダーの面。**見えている2ヶ月を、週ごとの週案で出す。**
@@ -13553,7 +13583,7 @@ function exportCalSheet(){
   const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(outputName("2ヶ月"), planParts(start, count), r => {
     if(w){ w.location.href = r.url; return; }
-    toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>2ヶ月のGoogle Sheetを開く</a>");
+    showOutLink("Sheetを作りました", r.url, "2ヶ月のGoogle Sheetを開く");
   }, why => { if(w) w.close(); toast(escText(why)); });
 }
 /* 学年の面。**開いている学年のクラスぶんを、クラスごとに1シートずつ。**
@@ -13573,8 +13603,7 @@ function exportGradeSheet(){
   const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(escText(gGrade) + "年_学年ごと_" + iso(monday), sheets, r => {
     if(w){ w.location.href = r.url; return; }
-    toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>"
-          + escText(gGrade) + "年のGoogle Sheetを開く</a>");
+    showOutLink("Sheetを作りました", r.url, gGrade + "年のGoogle Sheetを開く");
   }, why => { if(w) w.close(); toast(escText(why)); });
 }
 
@@ -15575,7 +15604,7 @@ function syncVariant(){
   }
 }
 function refreshWeek(){
-  $("weekLabel").textContent = md(monday) + " → " + md(addDays(monday, 4));
+  paintWeekLabel();
   const n = weekNo();
   $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
@@ -16077,7 +16106,7 @@ function wire(){
     const w = openOutWindow("Google Slideを作っています");
     Backend.exportSlide(renrakuName(), cv.toDataURL("image/png"), r => {
       if(w){ w.location.href = r.url; return; }
-      $("renStat").innerHTML = "作りました → <a href='" + escText(r.url) + "' target='_blank' rel='noopener'>" + escText(r.name) + "</a>";
+      showOutLink("Google Slideを作りました", r.url, r.name);
     }, e => { if(w) w.close(); toast(escText(e)); });
   });
   /* 左メニューの三つ組み。**その面の中にある口と同じ動き**にする ──

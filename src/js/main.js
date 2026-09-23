@@ -192,7 +192,7 @@ function syncVariant(){
   }
 }
 function refreshWeek(){
-  $("weekLabel").textContent = md(monday) + " → " + md(addDays(monday, 4));
+  paintWeekLabel();
   const n = weekNo();
   $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
@@ -694,7 +694,7 @@ function wire(){
     const w = openOutWindow("Google Slideを作っています");
     Backend.exportSlide(renrakuName(), cv.toDataURL("image/png"), r => {
       if(w){ w.location.href = r.url; return; }
-      $("renStat").innerHTML = "作りました → <a href='" + escText(r.url) + "' target='_blank' rel='noopener'>" + escText(r.name) + "</a>";
+      showOutLink("Google Slideを作りました", r.url, r.name);
     }, e => { if(w) w.close(); toast(escText(e)); });
   });
   /* 左メニューの三つ組み。**その面の中にある口と同じ動き**にする ──
