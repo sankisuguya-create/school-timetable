@@ -314,7 +314,8 @@
                   title="この画面からの書き込みを止める">
             <svg width="15" height="15"><use href="#i-lock"/></svg><span id="lockTxt">ロック</span></button>
           <button class="save" id="saveBtn" aria-live="polite">
-            <svg width="16" height="16"><use href="#i-save"/></svg><span id="saveTxt">保存</span></button>
+            <svg width="16" height="16"><use href="#i-save"/></svg>
+            <span class="savew"><b id="saveTxt">保存</b><small id="saveSub"></small></span></button>
           <!-- 変更を破棄。**まだシートに入っていない自分のぶんを捨てて、
                シートの状態へ戻す。** いらなくなった直し・迷い直しを帳消しにする -->
           <button class="save" id="discardBtn"
@@ -631,7 +632,7 @@
   <div class="waitbox">
     <span class="waitspin" aria-hidden="true"></span>
     <span class="waitwd"><b id="waitTxt">処理しています</b>
-      <small>終わるまで、他の操作はできません</small></span>
+      <small id="waitSub">終わるまで、他の操作はできません</small></span>
   </div>
 </dialog>
 

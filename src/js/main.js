@@ -34,13 +34,19 @@ function paintSave(){
   b.classList.toggle("dirty", !!n && !err);
   b.classList.toggle("bad", !!err);
   b.disabled = busy;
+  /* **送っているあいだは「途中で閉じると送信されません」を付ける。**
+     閉じても控えに残るので起き直しで再送は効くが、いまの表示が
+     止まっている間に消えると、本人は届いたと思い込んだままになる */
   t.textContent = busy ? "保存中…"
                 : err  ? "保存できていない"
                 : n    ? (wide ? "保存・反映（" + n + "）" : "保存（" + n + "）")
                 : wide ? "保存・反映"
                        : "保存ずみ";
-  b.title = err ? "もう一度押す。閉じると消える"
-          : n   ? n + " コマぶんがまだシートに入っていない"
+  const sub = $("saveSub");
+  if(sub) sub.textContent = busy ? "途中で閉じると送信されません" : "";
+  b.title = busy ? "送っています。途中で閉じると送信されません"
+          : err  ? "もう一度押す。閉じると消える"
+          : n    ? n + " コマぶんがまだシートに入っていない"
                 : "シートに入っている";
 }
 
@@ -82,7 +88,7 @@ function toggleTpSub(){
   const cls = view.kind === "class" ? view.cls : "";
   if(!cls || !Wait.guard()) return;
   const on = !tpSubmitted(cls) || !!(week().tpEdited || {})[cls];
-  const w = Wait.begin(on ? "たんぽぽへ提出しています" : "提出を取り消しています");
+  const w = Wait.begin(on ? "たんぽぽへ提出しています" : "提出を取り消しています", true);
   Backend.flush(saved => {
     if(!saved){ Wait.end(w); return toast("保存・競合の解決を終えてから提出してください"); }
     Backend.tpSubmit(cls, on, () => {
@@ -130,7 +136,7 @@ function doSave(loud){
   if(!Backend.isGas()){ saveNow(); Backend.flush(() => paintSave()); if(loud) toast("この端末に保存した（本番ではシートへ）"); return; }
   saveNow();                      /* 送る前に、この端末の控えを書き切る */
   saveState.busy = true; paintSave();
-  const w = Wait.begin("シートに保存しています");
+  const w = Wait.begin("シートに保存しています", true);
   Backend.flush(okAll => {
     saveState.busy = false; paintSave(); Wait.end(w);
     if(loud && okAll) toast("シートに保存した");

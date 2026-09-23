@@ -19,8 +19,15 @@
 const Wait = (() => {
   let DELAY = 200;            /* これより短い処理では出さない */
   let DOG   = 20000;          /* 返らない処理を、いつまでも掴ませない */
-  const live  = new Map();    /* id -> {text, shown, show, dog} */
+  const live  = new Map();    /* id -> {text, shown, show, dog, sending} */
   let seq = 0, wired = false;
+
+  /* 送っている最中か。**1つでもシートへ送っているなら小見出しに警告を出す。**
+     週を開く読み込み（閉じても何も失わない）と区別するための印 */
+  const sending = () => {
+    for(const w of live.values()) if(w.sending) return true;
+    return false;
+  };
 
   /* Esc で閉じられると、書いている途中に画面が開いてしまう。
      閉じ方をこちらだけが持つ */
@@ -40,18 +47,26 @@ const Wait = (() => {
     wire(d);
     const w = first();
     if(w){
-      const t = $("waitTxt");
+      const t = $("waitTxt"), s = $("waitSub");
       if(t) t.textContent = w.text;
+      /* **シートへ送っているあいだは、閉じると届かない。** 送る系の表示にだけ
+         この1行を足す。読み込み中に出ても意味が無いので出さない */
+      if(s) s.textContent = sending()
+        ? "終わるまで、他の操作はできません　途中で閉じると送信されません"
+        : "終わるまで、他の操作はできません";
       if(!d.open) d.showModal();
     } else if(d.open){
       d.close();
     }
   }
 
-  /* 始める。**返ってきた札を必ず end() に渡す。** */
-  function begin(text){
+  /* 始める。**返ってきた札を必ず end() に渡す。**
+     シートへ送る処理は sending=true を渡す ── 小見出しに
+     「途中で閉じると送信されません」が出る（読むだけの処理は出さない） */
+  function begin(text, send){
     const id = ++seq;
-    const w = {text:text || "処理しています", shown:false, show:0, dog:0};
+    const w = {text:text || "処理しています", shown:false, show:0, dog:0,
+               sending:!!send};
     w.show = setTimeout(() => { w.shown = true; paint(); }, DELAY);
     w.dog  = setTimeout(() => {
       live.delete(id); clearTimeout(w.show); paint();

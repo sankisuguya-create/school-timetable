@@ -629,6 +629,11 @@ span.tpin{cursor:default}
 .save{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:13px;
   font-weight:700;border-radius:var(--r-sm);cursor:pointer;
   border:1px solid var(--line);background:var(--card);color:var(--tx-sub)}
+/* **送っているあいだは「途中で閉じると送信されません」を小さく付ける。**
+   字が長いので、ボタンの中で2段にして潰れないようにする */
+.save .savew{display:flex;flex-direction:column;align-items:flex-start;line-height:1.15}
+.save .savew small{font-size:9.5px;font-weight:400;opacity:.9}
+.save .savew small:empty{display:none}
 .save:hover{background:var(--hover)}
 .save[disabled]{opacity:.6;cursor:default}
 /* まだ入っていない：**塗る。** 入っている：ふつうの淡いボタン */
@@ -2452,7 +2457,8 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
                   title="この画面からの書き込みを止める">
             <svg width="15" height="15"><use href="#i-lock"/></svg><span id="lockTxt">ロック</span></button>
           <button class="save" id="saveBtn" aria-live="polite">
-            <svg width="16" height="16"><use href="#i-save"/></svg><span id="saveTxt">保存</span></button>
+            <svg width="16" height="16"><use href="#i-save"/></svg>
+            <span class="savew"><b id="saveTxt">保存</b><small id="saveSub"></small></span></button>
           <!-- 変更を破棄。**まだシートに入っていない自分のぶんを捨てて、
                シートの状態へ戻す。** いらなくなった直し・迷い直しを帳消しにする -->
           <button class="save" id="discardBtn"
@@ -2769,7 +2775,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
   <div class="waitbox">
     <span class="waitspin" aria-hidden="true"></span>
     <span class="waitwd"><b id="waitTxt">処理しています</b>
-      <small>終わるまで、他の操作はできません</small></span>
+      <small id="waitSub">終わるまで、他の操作はできません</small></span>
   </div>
 </dialog>
 
@@ -3644,8 +3650,15 @@ function normCls(raw){
 const Wait = (() => {
   let DELAY = 200;            /* これより短い処理では出さない */
   let DOG   = 20000;          /* 返らない処理を、いつまでも掴ませない */
-  const live  = new Map();    /* id -> {text, shown, show, dog} */
+  const live  = new Map();    /* id -> {text, shown, show, dog, sending} */
   let seq = 0, wired = false;
+
+  /* 送っている最中か。**1つでもシートへ送っているなら小見出しに警告を出す。**
+     週を開く読み込み（閉じても何も失わない）と区別するための印 */
+  const sending = () => {
+    for(const w of live.values()) if(w.sending) return true;
+    return false;
+  };
 
   /* Esc で閉じられると、書いている途中に画面が開いてしまう。
      閉じ方をこちらだけが持つ */
@@ -3665,18 +3678,26 @@ const Wait = (() => {
     wire(d);
     const w = first();
     if(w){
-      const t = $("waitTxt");
+      const t = $("waitTxt"), s = $("waitSub");
       if(t) t.textContent = w.text;
+      /* **シートへ送っているあいだは、閉じると届かない。** 送る系の表示にだけ
+         この1行を足す。読み込み中に出ても意味が無いので出さない */
+      if(s) s.textContent = sending()
+        ? "終わるまで、他の操作はできません　途中で閉じると送信されません"
+        : "終わるまで、他の操作はできません";
       if(!d.open) d.showModal();
     } else if(d.open){
       d.close();
     }
   }
 
-  /* 始める。**返ってきた札を必ず end() に渡す。** */
-  function begin(text){
+  /* 始める。**返ってきた札を必ず end() に渡す。**
+     シートへ送る処理は sending=true を渡す ── 小見出しに
+     「途中で閉じると送信されません」が出る（読むだけの処理は出さない） */
+  function begin(text, send){
     const id = ++seq;
-    const w = {text:text || "処理しています", shown:false, show:0, dog:0};
+    const w = {text:text || "処理しています", shown:false, show:0, dog:0,
+               sending:!!send};
     w.show = setTimeout(() => { w.shown = true; paint(); }, DELAY);
     w.dog  = setTimeout(() => {
       live.delete(id); clearTimeout(w.show); paint();
@@ -3933,6 +3954,12 @@ function save(){
 let monday = mondayOf(new Date());          /* いま開いている週の月曜 */
 const wkKey = () => iso(monday);
 const fy    = () => fyOf(monday);
+
+/* **退避ずみの年度には書かない。** 保管庫へ移したはずの行が本体へ戻ると、
+   中身の違う正本が2つできる。シート側も同じ理由で止めるので、
+   ここで止まるのは手順の話で、本番の壁は gas/Store.gs の writeCells */
+const archivedYearNow = () => !!(Backend.archivedYear && Backend.archivedYear(fy()));
+const ARCHIVED_WHY = "この年度は<b>退避ずみ</b>です。保管庫に移してあるので、本体には書き込めません";
 
 function newYear(y){
   const prev = db.years[String(y - 1)];
@@ -4479,6 +4506,12 @@ const Backend = (function(){
           noteTime(res, Date.now() - t0);
           applyServerTimes(res && res.at);
           takeConflicts(res && res.conflicts, sent);
+          /* **シートが書き込めないと判断したコマは、黙って置かない。**
+             時程表から外れた時程など、どの面にも出ないものは捨てられるが、
+             何が起きたかは本人に知らせる（次に読み直したときに消える） */
+          if(res && res.invalid && res.invalid.length)
+            notify("<b>書き込めなかったコマが " + res.invalid.length
+                 + " 個ある</b>（" + escText(String(res.invalid[0].why)) + "）");
           if(!--left){ sending = false; lastErr = bad ? lastErr : ""; }
           onDirty(unsaved(), lastErr);
           persistPending();
@@ -5084,23 +5117,33 @@ const Backend = (function(){
 
   /* ── 設定の書き込み ─────────────────────────── */
 
+  /* **構造の書き込みは、ほかの保存と同じ表示にする。**
+     名簿・基本時間割・教科の表し方は、週をまたいだ学校全体の形で、
+     送っているあいだに閉じられると「端末にはある・シートには無い」が
+     誰にも分からないまま残る。だから同じ全面表示と警告を出す */
   function saveRoster(){
     if(!onGas) return save();
     const Yr = Y();
+    const w = Wait.begin("学級編成を保存しています", true);
     google.script.run
-      .withFailureHandler(e => notify("学級編成を保存できなかった（" + escText(String(e && e.message)) + "）"))
+      .withSuccessHandler(() => Wait.end(w))
+      .withFailureHandler(e => { Wait.end(w);
+        notify("学級編成を保存できなかった（" + escText(String(e && e.message)) + "）"); })
       .apiWriteRoster(fy(), Yr.classes, Yr.specials, Yr.week1, Yr.tanpopo || {});
   }
   /* 教科の表し方。**クラスや年度に紐づかない**（学校で1つ）ので年度を送らない。
      手元では送る先が無いので、控えだけ書いて済にする */
   function saveSubjects(rows, then){
     if(!onGas){ save(); if(then) then(true); return; }
+    const w = Wait.begin("教科の表し方を保存しています", true);
     google.script.run
       .withSuccessHandler(r => {
+        Wait.end(w);
         if(r && r.subjects && r.subjects.length) setSubjects(r.subjects);
         if(then) then(true);
       })
       .withFailureHandler(e => {
+        Wait.end(w);
         notify("教科の表し方を保存できなかった（" + escText(String(e && e.message)) + "）");
         if(then) then(false);
       })
@@ -5108,8 +5151,11 @@ const Backend = (function(){
   }
   function saveBase(cls, variant){
     if(!onGas) return save();
+    const w = Wait.begin("基本時間割を保存しています", true);
     google.script.run
-      .withFailureHandler(e => notify("基本時間割を保存できなかった（" + escText(String(e && e.message)) + "）"))
+      .withSuccessHandler(() => Wait.end(w))
+      .withFailureHandler(e => { Wait.end(w);
+        notify("基本時間割を保存できなかった（" + escText(String(e && e.message)) + "）"); })
       .apiWriteBase(fy(), cls, variant, ((Y().base[cls] || {})[variant]) || {});
   }
 
@@ -5119,9 +5165,11 @@ const Backend = (function(){
     if(!onGas){ save(); return after && after(); }
     const table = {}, B = Y().base;
     for(const c of list) if(B[c]) table[c] = {A:B[c].A || {}, B:B[c].B || {}};
+    const w = Wait.begin("基本時間割を保存しています", true);
     google.script.run
-      .withSuccessHandler(r => after && after(r))
-      .withFailureHandler(e => notify("基本時間割を保存できなかった（" + (e && e.message) + "）"))
+      .withSuccessHandler(r => { Wait.end(w); after && after(r); })
+      .withFailureHandler(e => { Wait.end(w);
+        notify("基本時間割を保存できなかった（" + (e && e.message) + "）"); })
       .apiWriteBaseAll(fy(), table);
   }
 
@@ -7213,6 +7261,7 @@ function memoOf(){
 function setMemo(html){
   const a = memoAt();
   if(!a) return false;
+  if(archivedYearNow()){ toast(ARCHIVED_WHY); return false; }
   const bank = memoBank(a), key = ck(0, a.slot), t = clean(html);
   /* 書き替える前に、サーバの時刻を控える（競合の物差し） */
   const was = (bank[key] || {}).sat || 0;
@@ -7242,6 +7291,7 @@ const slotShown = (d, s) => !(isDaySpecial(d) && s.id === "am2");
 
 function setDayForm(d, form){
   if(typeof isLocked === "function" && isLocked()) return false;
+  if(archivedYearNow()){ toast(ARCHIVED_WHY); return false; }
   const w = week(), key = ck(d, DAY_SLOT);
   const was = (w.school[key] || {}).sat || 0;   /* 消す前に物差しを控える */
   const wasT = plain((w.school[key] || {}).title);
@@ -7349,6 +7399,7 @@ function tripRun(d, slot){
 function setTripName(d, slot, name, tp){
   const locked = whyLocked();
   if(locked) return locked;
+  if(archivedYearNow()) return ARCHIVED_WHY;
   const who = tripLockedBy(d, slot);
   if(who) return "この校外行事は<b>" + escText(who) + "</b>が入れたもの。名前もその面から";
   const st = targetStore();
@@ -7372,6 +7423,7 @@ function setTrip(d, slot, on){
      だから whyCantWrite は通さず、ロックだけを見る */
   const locked = whyLocked();
   if(locked) return locked;
+  if(archivedYearNow()) return ARCHIVED_WHY;
   const st = targetStore(), key = ck(d, TRIP_SLOT + slot);
   if(!on && !st[key]){
     const who = tripLockedBy(d, slot);
@@ -7615,12 +7667,14 @@ function doUndo(){
   if(!canUndo()) return toast("この面では戻せません");
   if(typeof isLocked === "function" && isLocked())
     return toast("この画面はロックしてある。<b>直すには、ロックを押す</b>");
+  if(archivedYearNow()) return toast(ARCHIVED_WHY);
   if(!stepUndo(undoStack, redoStack)) return toast("戻せるものがありません");
   refreshWeek();
   toast("1手戻した　<b>やり直しは Ctrl+Shift+Z</b>");
 }
 function doRedo(){
   if(!canUndo() || (typeof isLocked === "function" && isLocked())) return;
+  if(archivedYearNow()) return toast(ARCHIVED_WHY);
   if(!stepUndo(redoStack, undoStack)) return toast("やり直せるものがありません");
   refreshWeek();
   toast("やり直した");
@@ -7643,6 +7697,7 @@ function whyLocked(){
 function whyCantWrite(d, s){
   const locked = whyLocked();
   if(locked) return locked;
+  if(archivedYearNow()) return ARCHIVED_WHY;
   /* **休みの日の授業には書かない。** 斜め線を引いた欄に字が入ると、
      刷った紙で「休みなのか、授業があるのか」が読めなくなる。
      朝学習と放課後は書ける（休業日でも出勤・部活・行事の準備が入る） */
@@ -7725,6 +7780,7 @@ function writeCell(d, s, patch){
     title:   cur.title || "",
     note:    cur.note  || "",
     subject: cur.subject || null,
+    short:   cur.short || "",
     u:       cur.u || ""
   };
   if("title"   in patch) e.title   = clean(patch.title);
@@ -11206,7 +11262,7 @@ function tallyWriteRows(months, classes){
       rows.push(line);
     }
   } finally{ monday = keep; Wait.end(w); }
-  const w2 = Wait.begin("時数集計シートへ書いています");
+  const w2 = Wait.begin("時数集計シートへ書いています", true);
   Backend.saveTally(fy(), head, rows, r => {
     Wait.end(w2);
     drawTallyPanel();
@@ -12747,7 +12803,7 @@ function drawTargets(){
     const empty = tpTargets.filter(x => !String(x.url).trim());
     if(empty.length) return void ($("tpTgtWhy").innerHTML =
       "<div class='box'><b>URLが空の行があります。</b>入れるか、その行を消してください。</div>");
-    const w = Wait.begin("出す先を入れています");
+    const w = Wait.begin("出す先を入れています", true);
     Backend.saveTpTargets(tpTargets, () => {
       Wait.end(w); tpTgtEdit = false; loadTargets();
       toast("出す先を入れた");
@@ -12783,7 +12839,7 @@ function tpDelAnswer(yes){
 }
 
 function putTargets(after){
-  const w = Wait.begin("出す先を入れています");
+  const w = Wait.begin("出す先を入れています", true);
   Backend.saveTpTargets(tpTargets, () => { Wait.end(w); if(after) after(); drawTanpopoView(); },
                         why => { Wait.end(w); toast(why); loadTargets(); });
 }
@@ -13069,7 +13125,7 @@ function doExportTanpopo(){
   /* 先に、書いたぶんをシートへ送る。送る前に出すと、出した紙と週案が食い違う */
   $("tpGo").disabled = true;
   $("tpCount").innerHTML = "たんぽぽ時間割へ書いている…";
-  const w = Wait.begin("たんぽぽ時間割へ出しています");
+  const w = Wait.begin("たんぽぽ時間割へ出しています", true);
   Backend.flush(saved => {
     if(!saved){
       Wait.end(w); $("tpGo").disabled = false;
@@ -14601,7 +14657,7 @@ function nyUndo(s){
        + escText(String(s).replace(/\*\*/g, ""));
 }
 function nyTick(key, on, el){
-  const w = Wait.begin("記録しています");
+  const w = Wait.begin("記録しています", true);
   if(el) el.disabled = true;
   Backend.tickYearSetup(key, on,
     r2 => { Wait.end(w); nySt = r2; drawNewYear(); paintNewYear(); },
@@ -14612,7 +14668,7 @@ function nyTick(key, on, el){
    手順の最後がエディタ頼みだと、そこで止まる。 */
 function makePlanSheets(){
   if(!Wait.guard()) return;
-  const w = Wait.begin("週案シートを作っています");
+  const w = Wait.begin("週案シートを作っています", true);
   Backend.setupPlanSheets(r => {
     Wait.end(w);
     toast("週案シートを " + ((r && r.made && r.made.length) || 0) + " 枚作った");
@@ -14638,7 +14694,7 @@ function saveAb(){
     "<div class='box'><b>月曜を入れてください。</b>月曜でない日を入れると、"
     + "以後の週が全て半週ずれます。</div>");
   if(!Wait.guard()) return;
-  const w = Wait.begin("起点を入れています");
+  const w = Wait.begin("起点を入れています", true);
   Backend.saveVariantOrigin(v, () => {
     Wait.end(w); $("abDlg").close();
     refreshWeek();
@@ -14696,7 +14752,7 @@ function evRead(){
 function evGo(){
   if(!evRows) return;
   if(!Wait.guard()) return;
-  const w = Wait.begin("年間行事計画表を貼り替えています");
+  const w = Wait.begin("年間行事計画表を貼り替えています", true);
   Backend.saveEvents(evRows, r => {
     Wait.end(w);
     $("evDlg").close();
@@ -14866,7 +14922,7 @@ function arRunPurge(){
   const typed = $("arTyped").value.trim();
   $("arGo").disabled = true;
   $("arWhy").textContent = "消しています…";
-  const w = Wait.begin("本体から消しています");
+  const w = Wait.begin("本体から消しています", true);
   Backend.archivePurge(arChecked.year, arChecked.url, typed, r => {
     Wait.end(w);
     $("arWhy").innerHTML = "<b>" + r.year + "年度を退避した。</b>"
@@ -15005,6 +15061,7 @@ function restoreConflicted(h){
   const key = ck(h.loc.d, c.slot), sat = +c.currentAt || 0;
   if(q.remove) delete bank[key];
   else bank[key] = {title:q.title, note:q.note, subject:q.subject || null,
+                    short:q.short || "", u:q.u || "",
                     sp:q.sp || "", at:Date.now(), by:myEmail(), sat};
   Backend.cellChanged(c.layer, c.target, h.loc.d, c.slot, sat,
                       {year:h.loc.year, monday:h.loc.monday});
@@ -15312,13 +15369,19 @@ function paintSave(){
   b.classList.toggle("dirty", !!n && !err);
   b.classList.toggle("bad", !!err);
   b.disabled = busy;
+  /* **送っているあいだは「途中で閉じると送信されません」を付ける。**
+     閉じても控えに残るので起き直しで再送は効くが、いまの表示が
+     止まっている間に消えると、本人は届いたと思い込んだままになる */
   t.textContent = busy ? "保存中…"
                 : err  ? "保存できていない"
                 : n    ? (wide ? "保存・反映（" + n + "）" : "保存（" + n + "）")
                 : wide ? "保存・反映"
                        : "保存ずみ";
-  b.title = err ? "もう一度押す。閉じると消える"
-          : n   ? n + " コマぶんがまだシートに入っていない"
+  const sub = $("saveSub");
+  if(sub) sub.textContent = busy ? "途中で閉じると送信されません" : "";
+  b.title = busy ? "送っています。途中で閉じると送信されません"
+          : err  ? "もう一度押す。閉じると消える"
+          : n    ? n + " コマぶんがまだシートに入っていない"
                 : "シートに入っている";
 }
 
@@ -15360,7 +15423,7 @@ function toggleTpSub(){
   const cls = view.kind === "class" ? view.cls : "";
   if(!cls || !Wait.guard()) return;
   const on = !tpSubmitted(cls) || !!(week().tpEdited || {})[cls];
-  const w = Wait.begin(on ? "たんぽぽへ提出しています" : "提出を取り消しています");
+  const w = Wait.begin(on ? "たんぽぽへ提出しています" : "提出を取り消しています", true);
   Backend.flush(saved => {
     if(!saved){ Wait.end(w); return toast("保存・競合の解決を終えてから提出してください"); }
     Backend.tpSubmit(cls, on, () => {
@@ -15408,7 +15471,7 @@ function doSave(loud){
   if(!Backend.isGas()){ saveNow(); Backend.flush(() => paintSave()); if(loud) toast("この端末に保存した（本番ではシートへ）"); return; }
   saveNow();                      /* 送る前に、この端末の控えを書き切る */
   saveState.busy = true; paintSave();
-  const w = Wait.begin("シートに保存しています");
+  const w = Wait.begin("シートに保存しています", true);
   Backend.flush(okAll => {
     saveState.busy = false; paintSave(); Wait.end(w);
     if(loud && okAll) toast("シートに保存した");

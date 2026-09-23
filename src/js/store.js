@@ -216,6 +216,12 @@ let monday = mondayOf(new Date());          /* いま開いている週の月曜
 const wkKey = () => iso(monday);
 const fy    = () => fyOf(monday);
 
+/* **退避ずみの年度には書かない。** 保管庫へ移したはずの行が本体へ戻ると、
+   中身の違う正本が2つできる。シート側も同じ理由で止めるので、
+   ここで止まるのは手順の話で、本番の壁は gas/Store.gs の writeCells */
+const archivedYearNow = () => !!(Backend.archivedYear && Backend.archivedYear(fy()));
+const ARCHIVED_WHY = "この年度は<b>退避ずみ</b>です。保管庫に移してあるので、本体には書き込めません";
+
 function newYear(y){
   const prev = db.years[String(y - 1)];
   return {

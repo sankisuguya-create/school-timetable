@@ -211,6 +211,12 @@ const Backend = (function(){
           noteTime(res, Date.now() - t0);
           applyServerTimes(res && res.at);
           takeConflicts(res && res.conflicts, sent);
+          /* **シートが書き込めないと判断したコマは、黙って置かない。**
+             時程表から外れた時程など、どの面にも出ないものは捨てられるが、
+             何が起きたかは本人に知らせる（次に読み直したときに消える） */
+          if(res && res.invalid && res.invalid.length)
+            notify("<b>書き込めなかったコマが " + res.invalid.length
+                 + " 個ある</b>（" + escText(String(res.invalid[0].why)) + "）");
           if(!--left){ sending = false; lastErr = bad ? lastErr : ""; }
           onDirty(unsaved(), lastErr);
           persistPending();
@@ -816,23 +822,33 @@ const Backend = (function(){
 
   /* ── 設定の書き込み ─────────────────────────── */
 
+  /* **構造の書き込みは、ほかの保存と同じ表示にする。**
+     名簿・基本時間割・教科の表し方は、週をまたいだ学校全体の形で、
+     送っているあいだに閉じられると「端末にはある・シートには無い」が
+     誰にも分からないまま残る。だから同じ全面表示と警告を出す */
   function saveRoster(){
     if(!onGas) return save();
     const Yr = Y();
+    const w = Wait.begin("学級編成を保存しています", true);
     google.script.run
-      .withFailureHandler(e => notify("学級編成を保存できなかった（" + escText(String(e && e.message)) + "）"))
+      .withSuccessHandler(() => Wait.end(w))
+      .withFailureHandler(e => { Wait.end(w);
+        notify("学級編成を保存できなかった（" + escText(String(e && e.message)) + "）"); })
       .apiWriteRoster(fy(), Yr.classes, Yr.specials, Yr.week1, Yr.tanpopo || {});
   }
   /* 教科の表し方。**クラスや年度に紐づかない**（学校で1つ）ので年度を送らない。
      手元では送る先が無いので、控えだけ書いて済にする */
   function saveSubjects(rows, then){
     if(!onGas){ save(); if(then) then(true); return; }
+    const w = Wait.begin("教科の表し方を保存しています", true);
     google.script.run
       .withSuccessHandler(r => {
+        Wait.end(w);
         if(r && r.subjects && r.subjects.length) setSubjects(r.subjects);
         if(then) then(true);
       })
       .withFailureHandler(e => {
+        Wait.end(w);
         notify("教科の表し方を保存できなかった（" + escText(String(e && e.message)) + "）");
         if(then) then(false);
       })
@@ -840,8 +856,11 @@ const Backend = (function(){
   }
   function saveBase(cls, variant){
     if(!onGas) return save();
+    const w = Wait.begin("基本時間割を保存しています", true);
     google.script.run
-      .withFailureHandler(e => notify("基本時間割を保存できなかった（" + escText(String(e && e.message)) + "）"))
+      .withSuccessHandler(() => Wait.end(w))
+      .withFailureHandler(e => { Wait.end(w);
+        notify("基本時間割を保存できなかった（" + escText(String(e && e.message)) + "）"); })
       .apiWriteBase(fy(), cls, variant, ((Y().base[cls] || {})[variant]) || {});
   }
 
@@ -851,9 +870,11 @@ const Backend = (function(){
     if(!onGas){ save(); return after && after(); }
     const table = {}, B = Y().base;
     for(const c of list) if(B[c]) table[c] = {A:B[c].A || {}, B:B[c].B || {}};
+    const w = Wait.begin("基本時間割を保存しています", true);
     google.script.run
-      .withSuccessHandler(r => after && after(r))
-      .withFailureHandler(e => notify("基本時間割を保存できなかった（" + (e && e.message) + "）"))
+      .withSuccessHandler(r => { Wait.end(w); after && after(r); })
+      .withFailureHandler(e => { Wait.end(w);
+        notify("基本時間割を保存できなかった（" + (e && e.message) + "）"); })
       .apiWriteBaseAll(fy(), table);
   }
 

@@ -661,6 +661,7 @@ function memoOf(){
 function setMemo(html){
   const a = memoAt();
   if(!a) return false;
+  if(archivedYearNow()){ toast(ARCHIVED_WHY); return false; }
   const bank = memoBank(a), key = ck(0, a.slot), t = clean(html);
   /* 書き替える前に、サーバの時刻を控える（競合の物差し） */
   const was = (bank[key] || {}).sat || 0;
@@ -690,6 +691,7 @@ const slotShown = (d, s) => !(isDaySpecial(d) && s.id === "am2");
 
 function setDayForm(d, form){
   if(typeof isLocked === "function" && isLocked()) return false;
+  if(archivedYearNow()){ toast(ARCHIVED_WHY); return false; }
   const w = week(), key = ck(d, DAY_SLOT);
   const was = (w.school[key] || {}).sat || 0;   /* 消す前に物差しを控える */
   const wasT = plain((w.school[key] || {}).title);
@@ -797,6 +799,7 @@ function tripRun(d, slot){
 function setTripName(d, slot, name, tp){
   const locked = whyLocked();
   if(locked) return locked;
+  if(archivedYearNow()) return ARCHIVED_WHY;
   const who = tripLockedBy(d, slot);
   if(who) return "この校外行事は<b>" + escText(who) + "</b>が入れたもの。名前もその面から";
   const st = targetStore();
@@ -820,6 +823,7 @@ function setTrip(d, slot, on){
      だから whyCantWrite は通さず、ロックだけを見る */
   const locked = whyLocked();
   if(locked) return locked;
+  if(archivedYearNow()) return ARCHIVED_WHY;
   const st = targetStore(), key = ck(d, TRIP_SLOT + slot);
   if(!on && !st[key]){
     const who = tripLockedBy(d, slot);
@@ -1063,12 +1067,14 @@ function doUndo(){
   if(!canUndo()) return toast("この面では戻せません");
   if(typeof isLocked === "function" && isLocked())
     return toast("この画面はロックしてある。<b>直すには、ロックを押す</b>");
+  if(archivedYearNow()) return toast(ARCHIVED_WHY);
   if(!stepUndo(undoStack, redoStack)) return toast("戻せるものがありません");
   refreshWeek();
   toast("1手戻した　<b>やり直しは Ctrl+Shift+Z</b>");
 }
 function doRedo(){
   if(!canUndo() || (typeof isLocked === "function" && isLocked())) return;
+  if(archivedYearNow()) return toast(ARCHIVED_WHY);
   if(!stepUndo(redoStack, undoStack)) return toast("やり直せるものがありません");
   refreshWeek();
   toast("やり直した");
@@ -1091,6 +1097,7 @@ function whyLocked(){
 function whyCantWrite(d, s){
   const locked = whyLocked();
   if(locked) return locked;
+  if(archivedYearNow()) return ARCHIVED_WHY;
   /* **休みの日の授業には書かない。** 斜め線を引いた欄に字が入ると、
      刷った紙で「休みなのか、授業があるのか」が読めなくなる。
      朝学習と放課後は書ける（休業日でも出勤・部活・行事の準備が入る） */
@@ -1173,6 +1180,7 @@ function writeCell(d, s, patch){
     title:   cur.title || "",
     note:    cur.note  || "",
     subject: cur.subject || null,
+    short:   cur.short || "",
     u:       cur.u || ""
   };
   if("title"   in patch) e.title   = clean(patch.title);

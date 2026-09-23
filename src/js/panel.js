@@ -799,7 +799,7 @@ function tallyWriteRows(months, classes){
       rows.push(line);
     }
   } finally{ monday = keep; Wait.end(w); }
-  const w2 = Wait.begin("時数集計シートへ書いています");
+  const w2 = Wait.begin("時数集計シートへ書いています", true);
   Backend.saveTally(fy(), head, rows, r => {
     Wait.end(w2);
     drawTallyPanel();
