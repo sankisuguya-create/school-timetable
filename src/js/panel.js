@@ -28,6 +28,32 @@ function chipHere_(sub){
   return only === "学年" ? (view.kind === "grade" || view.kind === "school") : true;
 }
 
+/* **持っている教科チップ。** 教科チップを押すと持ち上がる（=選択）。
+   持っているあいだ：
+     ・紙の中でその教科のコマだけが目立つ（ほかは薄く）
+     ・単元チップはその教科のものだけに絞られる
+     ・コマを押すとその教科が入る（つづけて入れられる）
+   もう一度チップを押すか、Esc・別の面へ行くと手放す。 */
+let pickSub = "";
+
+/* 持っている教科をチップに出す */
+function paintPickState_(){
+  for(const b of document.querySelectorAll("#pals .pal"))
+    b.setAttribute("aria-pressed", String(!!pickSub && b.dataset.v === pickSub));
+}
+
+/* 持ち替え・手放しのあとの塗り直し一式 */
+function pickRepaint_(){
+  paintPickState_();
+  if(typeof drawPalette === "function") drawPalette();  /* 単元チップの絞り込みが変わる */
+  paintSheet();
+}
+function pickRelease_(){
+  if(!pickSub) return;
+  pickSub = "";
+  pickRepaint_();
+}
+
 /* チップ1つぶんの HTML。**どの面でも同じ作り**（引っぱれる・押せる） */
 function palHtml(o){
   return "<button class='pal" + (o.off ? " off" : "") + (o.clear ? " clear" : "")
@@ -46,7 +72,12 @@ function upalsHtml_(){
   if(view.kind !== "class" && view.kind !== "special") return "";
   const chips = upPaletteUnits_();
   if(!chips.length) return "";
-  const anyStarted = chips.some(x => (x.unit.start || {}).date);
+  /* 専科の面のチップは学年に1つだけ（各クラスぶんの代表）。
+     リセットを出すかは、束ねた中身まで見ないと分からない */
+  const anyStarted = (view.kind === "special"
+      ? (typeof upViewUnits_ === "function" ? upViewUnits_() : chips.map(x => x.unit))
+      : chips.map(x => x.unit))
+    .some(u => (u.start || {}).date);
   return chips.map(u => palHtml({v:u.v, t:u.t, unit:true})).join("")
     + (anyStarted ? palHtml({v:PAL_URESET, t:"単元リセット", ureset:true}) : "");
 }
@@ -132,10 +163,25 @@ function wirePalette(){
     });
     b.addEventListener("dragend", () => b.classList.remove("drag"));
     b.addEventListener("click", () => {
+      const v = b.dataset.v;
+      /* 教科チップは「持つ／手放す」でもある。持つと、紙の中でその教科の
+         コマだけが目立ち、単元チップがその教科に絞られる。
+         コマが選んであるなら、いままでどおりそのコマに入る */
+      if(SUB_BY_CODE[v]){
+        if(pickSub === v){ pickRelease_(); return; }
+        pickSub = v;
+        pickRepaint_();
+        if(!selCell)
+          return toast("<b>" + escText(SUB_BY_CODE[v].name) + "</b>を強調しています。"
+                     + "コマを押すと入ります（もう一度チップを押すと解除）");
+        applyPalette(selCell.d, selCell.s, v);
+        return;
+      }
       if(!selCell) return toast("先にコマを選ぶ");
-      applyPalette(selCell.d, selCell.s, b.dataset.v);
+      applyPalette(selCell.d, selCell.s, v);
     });
   }
+  paintPickState_();
 }
 
 /* 教科の色。**クラスごとに持つ**（学級によって使いたい人と使わない人がいる）。

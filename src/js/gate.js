@@ -98,6 +98,7 @@ function openView(v){
   view = v;
   lastTarget = v;
   selCell = null;
+  pickSub = "";          /* 持っていた教科チップは、面を出ると手放す */
   /* 単元は「どの面の単元か」で読むものが変わる。面が決まった時点で読みに行く */
   if(typeof upViewChanged_ === "function") upViewChanged_();
 

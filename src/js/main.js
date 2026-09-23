@@ -319,6 +319,11 @@ const inField = e => !!(e && (e.isContentEditable
   || /^(INPUT|TEXTAREA|SELECT)$/.test(e.tagName || "")));
 
 document.addEventListener("keydown", ev => {
+  /* 持っている教科チップを手放す。窓が開いているときは、窓を閉じるほうに使う */
+  if(ev.key === "Escape" && pickSub && !document.querySelector("dialog[open]")){
+    pickRelease_();
+    return;
+  }
   const mod = ev.ctrlKey || ev.metaKey;
   if(!mod) return;
   const k = (ev.key || "").toLowerCase();
