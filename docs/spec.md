@@ -2575,8 +2575,8 @@ src/
 python3 build.py          生成する
 python3 build.py --check  生成物が src と一致するか調べる
 npm install               検査に playwright が要る（1回だけ）
-node tools/check.mjs      画面を動かして確かめる（283件）
-node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（191件）
+node tools/check.mjs      画面を動かして確かめる（538件）
+node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（431件）
 node gas/storecheck.js    シートの読み書きを確かめる（385件）
 node gas/gatecheck.js     関門を確かめる（27件）
 node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明を見る（52件）
