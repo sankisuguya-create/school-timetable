@@ -61,8 +61,8 @@ await step("  雛形を出す", async () => {
 });
 await step("窓 年間行事→コマ", async () => {
   await p.evaluate(() => { $("impPlanDlg").close(); openImpPlan("events"); });
-  await p.locator("#ipTpl").click();
-  await p.locator("#ipRead").click();
+  await p.evaluate(() => { window.__evSheetRows = [["８月"],["1","月","大掃除4h"]]; });
+  await p.locator("#ipSheetRead").click();
 });
 /* ？ をぜんぶ開く */
 const keys = await p.evaluate(() => Object.keys(HELP));

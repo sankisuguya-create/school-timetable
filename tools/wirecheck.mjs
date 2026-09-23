@@ -2635,7 +2635,7 @@ await p.waitForTimeout(700); await closeDlgs();
 await p.evaluate(() => openImpPlan("tally"));
 await p.waitForTimeout(350);
 ok("時数表は、窓の中のマス目の表で受ける", await p.evaluate(() =>
-   !$("ipTableWrap").hidden && $("ipTextWrap").hidden) === true);
+   !$("ipTableWrap").hidden && !$("ipTextWrap") && !$("ipRead").hidden) === true);
 ok("行は 5日 × 1日の行数", await p.evaluate(() =>
    document.querySelectorAll("#ipTable tr").length
    === 1 + WEEKDAYS * impTallyCols().block) === true,
@@ -2712,26 +2712,32 @@ await p.evaluate(() => {
 await p.waitForTimeout(600); await closeDlgs();
 await p.evaluate(() => openImpPlan("events"));
 await p.waitForTimeout(250);
-await p.locator("#ipTpl").click(); await p.waitForTimeout(300);
-ok("雛形の見出しは 日付／校時／対象／行事名／備考", await p.evaluate(() =>
-   $("ipText").value.split("\n")[0]) === "日付\t校時\t対象\t行事名\t備考");
-ok("雛形に、年間行事の行が並ぶ", await p.evaluate(() =>
-   /避難訓練/.test($("ipText").value) && /社会見学/.test($("ipText").value)) === true);
-/* **校時と対象が空の行は入れない。** 雛形には行事のある日がぜんぶ並ぶので、
+/* 行事の窓は連携シートだけの口（雛形・直接貼り付け・「読む」は無い） */
+ok("行事の窓は連携シートだけの口", await p.evaluate(() =>
+   $("ipTplRow").hidden && $("ipRead").hidden && !$("ipSheetRow").hidden
+   && !$("ipTextWrap")) === true);
+/* **校時と対象が空の行は入れない。** 連携シートに貼るのは行事の並んだ表なので、
    コマにしないものが残っているのがふつう */
-await p.locator("#ipRead").click(); await p.waitForTimeout(300);
+await p.evaluate(() => {
+  window.__evSheetRows = [
+    ["日付","校時","対象","行事名","備考"],
+    [iso(addDays(monday, 2)),  "","","避難訓練",""],
+    [iso(addDays(monday, 16)), "","","社会見学",""]
+  ];
+});
+await p.locator("#ipSheetRead").click(); await p.waitForTimeout(300);
 ok("校時と対象が空なら、1件も入れない", await p.evaluate(() =>
    $("ipGo").disabled) === true, await p.evaluate(() => $("ipStat").textContent));
 await p.evaluate(() => {
-  const r = $("ipText").value.split("\n").map(x => x.split("\t"));
-  const hit = t => r.findIndex(x => x[3] === t);
-  r[hit("避難訓練")][1] = "2"; r[hit("避難訓練")][2] = "全校";
   /* **学級編成にある学年を使う。** 無い学年は「誰の紙にも出ない」ので入らない */
   window.__g = gradesAll()[0];
-  r[hit("社会見学")][1] = "3"; r[hit("社会見学")][2] = window.__g + "年";
-  $("ipText").value = r.map(x => x.join("\t")).join("\n");
+  window.__evSheetRows = [
+    ["日付","校時","対象","行事名","備考"],
+    [iso(addDays(monday, 2)),  "2","全校","避難訓練",""],
+    [iso(addDays(monday, 16)), "3", window.__g + "年","社会見学",""]
+  ];
 });
-await p.locator("#ipRead").click(); await p.waitForTimeout(300);
+await p.locator("#ipSheetRead").click(); await p.waitForTimeout(300);
 ok("対象を 全校／◯年 で読む", await p.evaluate(() =>
    /全校/.test($("ipGrid").innerText)
    && new RegExp(window.__g + "年").test($("ipGrid").innerText)) === true,

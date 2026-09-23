@@ -30,8 +30,6 @@ function impSplit(text){
   return String(text || "").replace(/\r/g, "").split("\n")
     .filter(ln => ln.trim() !== "").map(ln => ln.split("\t"));
 }
-const impTsv = rows => rows.map(r => r.join("\t")).join("\n");
-
 /* 1文字（または教科名）から教科を引く。**時数表に入っている字を正本にする。**
    時数表は1文字で書く決まりなので、まず1文字で引き、見つからなければ名前で引く
    （先生が雛形の上で「算数」と書き直すことがある）。 */
@@ -165,23 +163,6 @@ function impTallyApply(rows){
    埋める行を探すだけで終わってしまう。 */
 
 const IMP_EV_HEAD = ["日付", "校時", "対象", "行事名", "備考"];
-
-/* 雛形。年間行事計画表から読んだ行事を、1行1件で並べる */
-function impEvTemplate(){
-  const rows = [IMP_EV_HEAD.slice()];
-  const ev = Y().events || {};
-  for(const key of Object.keys(ev).sort()){
-    const e = ev[key] || {};
-    for(const who of ["c", "s"]){
-      const t = String(e[who] || "").trim();
-      if(!t) continue;
-      /* 校時と対象は空のまま出す。**ここを埋めた行だけが入る。**
-         埋めなかった行は、いままでどおり日付の印として残るだけ */
-      rows.push([key, "", "", t, who === "s" ? "職員" : ""]);
-    }
-  }
-  return rows;
-}
 
 /* 「3年」「3」「全校」「全学年」を、層と対象に直す */
 function impTarget(v){
@@ -652,20 +633,19 @@ function openImpPlan(kind){
       + "<b>左上のマスを選んでそのまま貼る</b>と、1回で入ります。"
       + "マスを直に打ち直しても構いません。"
     : "<b>全校・学年の層に入ります。</b>"
-      + "行事計画は<b>連携シートに貼ってから読む</b>のがいちばんかんたんです"
+      + "行事計画は<b>連携シートに貼ってから読みます</b>"
       + "（「連携シートを開く」で出てくるシートに表を貼って、"
-      + "「連携シートから読む」を押す）。<br>"
-      + "下の欄に直接貼っても読みます（雛形や、行事計画の字そのまま）。"
+      + "「連携シートから読む」を押す）。"
       + "「3h」「34h」「AM」「特4h」「12時台／13:40下校」「2-6年」の字を拾って、"
       + "校時と対象に直します。";
   /* 時数表はマス目の表、年間行事は字の欄。**運び方は同じでも、形が違う。**
      時数表は矩形なので、表のほうが貼りやすい（列のずれを目で合わせられる）。
      年間行事は1行1件で、行を足し引きするので、字の欄のほうが直しやすい */
   $("ipTableWrap").hidden = !tally;
-  $("ipTextWrap").hidden  = tally;
   $("ipSheetRow").hidden  = tally;   /* 連携シートは行事計画だけの口 */
+  $("ipTplRow").hidden    = !tally;   /* 雛形の出し方は連携シートに統合 */
+  $("ipRead").hidden      = !tally;   /* 「読む」は時数表（マス目）だけの口 */
   $("ipTpl").textContent  = tally ? "今の週案を表に入れる" : "雛形を出す（コピー）";
-  $("ipText").value = "";
   $("ipStat").textContent = "";
   $("ipWarn").innerHTML = "";
   $("ipGrid").innerHTML = "";
@@ -701,10 +681,7 @@ function impSheetRead(){
         "連携シートに字がありません。行事計画を貼ってから押します";
       return;
     }
-    /* 読んだ字は貼り付け欄へ写す ── 担当者が何を読ませたか見えるし、
-       直して読み直すときに、もう片方とずれて分からなくならない */
-    $("ipText").value = text;
-    impPlanRead();
+    impPlanRead(text);
     const st = $("ipStat").textContent;
     if(impPlanRows) $("ipStat").textContent = "連携シートから読みました" + (st ? "（" + st + "）" : "");
   }, e => { Wait.end(w); toast("<b>連携シートを読めません</b>　" + escText(String(e))); });
@@ -775,19 +752,10 @@ function impTallyGrid(){
 }
 
 function impPlanTemplate(){
-  if(impPlanKind === "tally"){
-    impTallyTable(impTallyTemplate());
-    $("ipStat").textContent = "今の週案を表に入れた";
-    return;
-  }
-  const rows = impEvTemplate();
-  if(rows.length < 2) return toast("年間行事計画表に行事がありません");
-  copyText(impTsv(rows),
-    "雛形をコピーした。スプレッドシートへ <b>貼り付け</b> してください");
-  /* **貼る先の窓にも出しておく。** クリップボードが使えない環境がある
-     （校務のブラウザで止めてあることがある）ので、字としても見せる */
-  $("ipText").value = impTsv(rows);
-  $("ipStat").textContent = (rows.length - 1) + " 行の雛形を出した";
+  /* 「今の週案を表に入れる」は時数表だけの口
+     （行事の雛形の出し方は連携シートに統合した） */
+  impTallyTable(impTallyTemplate());
+  $("ipStat").textContent = "今の週案を表に入れた";
 }
 
 /* 取り込まない行。**確認表の先頭のチェックを外した行は入れない。**
@@ -802,15 +770,15 @@ function impPlanCount_(){
   $("ipGo").disabled = !n;
 }
 
-function impPlanRead(){
+function impPlanRead(text){
   let r;
   if(impPlanKind === "tally") r = impTallyRead(impTallyGrid());
   else{
-    r = impEvRead($("ipText").value);
+    r = impEvRead(text);
     /* **雛形の形で貼っていなければ、行事計画の書き方として読む。**
        貼る手間は、雛形に直させるより、そのまま読むほうが軽い */
     if(!r.rows || !r.rows.length){
-      const alt = impDocRead($("ipText").value);
+      const alt = impDocRead(text);
       if(alt.rows && alt.rows.length) r = alt;
       else if(!r.rows) r = {rows:[], warn:(r.warn || "")
         + (alt.warn ? "<br>" + alt.warn : "")};
