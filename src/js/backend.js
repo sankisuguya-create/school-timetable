@@ -1188,6 +1188,21 @@ const Backend = (function(){
       .apiExportSlide(name, png);
   }
 
+  /* 行事計画を貼る連携シート。**無ければ作って url と名前が返る** */
+  function eventSheetEnsure(ok, ng){
+    if(!onGas) return ng("手元では連携シートを作れない");
+    google.script.run.withSuccessHandler(ok)
+      .withFailureHandler(e => ng(String((e && e.message) || "連携シートを作れなかった")))
+      .apiEnsureEventImportSheet();
+  }
+  /* 連携シートに貼られた字を返す。{name,url,rows} ── rows は行ごとのセルの字 */
+  function eventSheetRead(ok, ng){
+    if(!onGas) return ng("手元では連携シートを読めない");
+    google.script.run.withSuccessHandler(ok)
+      .withFailureHandler(e => ng(String((e && e.message) || "連携シートを読めなかった")))
+      .apiReadEventImportSheet();
+  }
+
   /* 画面を閉じる前に、貯めたぶんを出し切る。
      出し切れないうちに閉じられそうなときは、引き止める。 */
   addEventListener("beforeunload", ev => {
@@ -1210,5 +1225,5 @@ const Backend = (function(){
           tpTargets, saveTpTargets, testTpTarget, tpSubmit,
           unitManager, saveUnit, clearUnitStart, deleteUnit, saveUnitTerms, unitCapacity,
           yearSetup, tickYearSetup, setupPlanSheets, saveVariantOrigin, saveEvents,
-          exportPlanSheet, exportSlide};
+          exportPlanSheet, exportSlide, eventSheetEnsure, eventSheetRead};
 })();

@@ -352,6 +352,18 @@ await p.addInitScript(() => {
         call("apiExportSlide", [name, png]);
         setTimeout(() => okFn({url:"https://docs.google.com/presentation/d/EXPORT/edit"}), 0);
       },
+      apiEnsureEventImportSheet(){
+        call("apiEnsureEventImportSheet", []);
+        setTimeout(() => okFn({name:"週案取り込み（行事計画）",
+          url:"https://docs.google.com/spreadsheets/d/EVIMP/edit", fresh:false}), 0);
+      },
+      /* __evSheetRows に行を置くと、貼られた連携シートの代わりになる */
+      apiReadEventImportSheet(){
+        call("apiReadEventImportSheet", []);
+        setTimeout(() => okFn({name:"週案取り込み（行事計画）",
+          url:"https://docs.google.com/spreadsheets/d/EVIMP/edit",
+          rows: window.__evSheetRows || []}), 0);
+      },
       apiYearSetup(y){
         call("apiYearSetup", [y]);
         setTimeout(() => okFn(window.__nySetup(y)), 0);

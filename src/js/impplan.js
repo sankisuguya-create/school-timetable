@@ -390,6 +390,13 @@ function impDocLines(text){
     /* 「◯月行事計画」は、その先の紙が全部その月の印（月ごとの計画表） */
     const ml = t.match(/(\d{1,2})\s*月\s*行事計画/);
     if(ml){ pages.push({months:[{m:+ml[1], pos:0}]}); curPage = pages.length - 1; }
+    /* 「◯月」だけの行も月の印 ── 連携シートに貼ると、月の見出しが
+       ひとつのセルに入って1列ぶんの行になる（「3月の予定」など
+       文末につく形はここには来ない） */
+    const solo = t.match(/^\s*(\d{1,2})\s*月\s*$/);
+    if(solo && +solo[1] >= 1 && +solo[1] <= 12 && !ml){
+      pages.push({months:[{m:+solo[1], pos:0}]}); curPage = pages.length - 1;
+    }
     markRe.lastIndex = 0;
     const hp = []; let mm;
     while((mm = markRe.exec(t))) if(mm[1] === "児童") hp.push(mm.index);
@@ -644,11 +651,11 @@ function openImpPlan(kind){
       + "手元の時数集計表からその週の塊をコピーして、"
       + "<b>左上のマスを選んでそのまま貼る</b>と、1回で入ります。"
       + "マスを直に打ち直しても構いません。"
-    : "<b>全校・学年の層に入ります。</b>雛形には、年間行事計画表に入っている行事が"
-      + "並びます。<b>コマにしたい行だけ「校時」と「対象」を埋めて</b>、"
-      + "丸ごと貼り戻してください。埋めなかった行は入りません。<br>"
-      + "<b>行事計画の字をそのまま貼っても読みます</b>"
-      + "（月ごとの「日 曜 行事計画（児童）」や年間行事計画表）。"
+    : "<b>全校・学年の層に入ります。</b>"
+      + "行事計画は<b>連携シートに貼ってから読む</b>のがいちばんかんたんです"
+      + "（「連携シートを開く」で出てくるシートに表を貼って、"
+      + "「連携シートから読む」を押す）。<br>"
+      + "下の欄に直接貼っても読みます（雛形や、行事計画の字そのまま）。"
       + "「3h」「34h」「AM」「特4h」「12時台／13:40下校」「2-6年」の字を拾って、"
       + "校時と対象に直します。";
   /* 時数表はマス目の表、年間行事は字の欄。**運び方は同じでも、形が違う。**
@@ -656,6 +663,7 @@ function openImpPlan(kind){
      年間行事は1行1件で、行を足し引きするので、字の欄のほうが直しやすい */
   $("ipTableWrap").hidden = !tally;
   $("ipTextWrap").hidden  = tally;
+  $("ipSheetRow").hidden  = tally;   /* 連携シートは行事計画だけの口 */
   $("ipTpl").textContent  = tally ? "今の週案を表に入れる" : "雛形を出す（コピー）";
   $("ipText").value = "";
   $("ipStat").textContent = "";
@@ -665,6 +673,41 @@ function openImpPlan(kind){
   $("ipGo").textContent = tally ? "この週に入れる" : "全校・学年に入れる";
   if(tally) impTallyTable(impTallyTemplate());
   $("impPlanDlg").showModal();
+}
+
+/* ── 連携シート ──────────────────────────────
+   行事計画を貼るスプレッドシートを、**サイトが作って紐づける**。
+   担当者はそこへ表をセルごと貼り付け、こちらはセルの字を読む。
+   貼った形は学校ごとに違うので、セルを区切りでつないで
+   **いつもの貼り付け読みと同じ経路**に乗せる（雛形→行事計画の字の順で試す）。 */
+function impSheetOpen(){
+  const w = Wait.begin("連携シートを開いています");
+  Backend.eventSheetEnsure(r => {
+    Wait.end(w);
+    if(r && r.url) window.open(r.url, "_blank");
+    if(r && r.fresh)
+      $("ipStat").textContent =
+        "連携シートを作りました。行事計画を貼ってから「連携シートから読む」を押します";
+  }, e => { Wait.end(w); toast("<b>連携シートを開けません</b>　" + escText(String(e))); });
+}
+function impSheetRead(){
+  const w = Wait.begin("連携シートを読んでいます");
+  Backend.eventSheetRead(r => {
+    Wait.end(w);
+    const rows = (r && r.rows) || [];
+    const text = rows.map(line => line.join("\t")).join("\n");
+    if(!text.trim()){
+      $("ipStat").textContent =
+        "連携シートに字がありません。行事計画を貼ってから押します";
+      return;
+    }
+    /* 読んだ字は貼り付け欄へ写す ── 担当者が何を読ませたか見えるし、
+       直して読み直すときに、もう片方とずれて分からなくならない */
+    $("ipText").value = text;
+    impPlanRead();
+    const st = $("ipStat").textContent;
+    if(impPlanRows) $("ipStat").textContent = "連携シートから読みました" + (st ? "（" + st + "）" : "");
+  }, e => { Wait.end(w); toast("<b>連携シートを読めません</b>　" + escText(String(e))); });
 }
 
 /* ── 窓の中のマス目の表（時数表のほう）────────────────

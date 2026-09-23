@@ -819,6 +819,62 @@ const Store = (function(){
     const b = eventBook_();
     return b.outside ? b.ss.getSheetByName(Sheets.EVENTS) : Sheets.sheet(Sheets.EVENTS);
   }
+
+  /* 「設定」シートの1欄を書き替える。**無いキーは行を足す** ──
+     古いファイルにあとから足したキーでも、ここを通せば置き場所ができる。 */
+  function writeConfig_(key, value){
+    const rows = Sheets.readAll("設定").rows;
+    const hit = rows.find(function(r){ return String(r["キー"] || "").trim() === key; });
+    if(hit) Sheets.patchRow("設定", hit.__row, {"値": value});
+    else Sheets.appendRows("設定", [[key, value, ""]]);
+  }
+
+  /* 行事計画を貼り付ける連携シート。**サイトが作って「設定」に紐づける。**
+     担当者はそのシートに行事計画の表をセルごと貼り付ける。
+     紐づく先は「設定」の 行事取込シートID ── 人が URL を入れてもよい
+     （行事ファイルID と同じ決まり）。シートが消えていたら作り直す。 */
+  function ensureEventImportSheet(){
+    const have = String(readConfig()["行事取込シートID"] || "").trim();
+    if(have){
+      try{
+        const ss0 = SpreadsheetApp.openById(fileId(have, "行事取込シートID"));
+        return {name:ss0.getName(), url:ss0.getUrl(), fresh:false};
+      }catch(e){ /* 消えた・共有が外れた → 作り直す */ }
+    }
+    const book = SpreadsheetApp.create("週案取り込み（行事計画）");
+    const sh = book.getSheets()[0];
+    sh.setName("貼り付け");
+    /* **貼る側の1行の説明だけ書く。** たくさん書くと、貼る場所を
+       探す手間になる ── 貼る先は先頭から開けておく */
+    const how = book.insertSheet("使い方");
+    how.getRange("A1").setValue(
+      "学校の行事計画表（月ごとの「日 曜 行事計画（児童）」や年間行事計画表）をコピーして、"
+      + "「貼り付け」シートへそのまま貼ってください（左上 A1 から）。"
+      + "貼り終えたら、週案の「年間行事からコマを作る」で「連携シートから読む」を押します。"
+      + "このシートは担当者の人と共有して使います（右上の「共有」から）。");
+    how.setColumnWidth(1, 700);
+    writeConfig_("行事取込シートID", book.getId());
+    return {name:book.getName(), url:book.getUrl(), fresh:true};
+  }
+
+  /* 連携シートの中身を、**セルの字のまま**返す。行ごとに配列で返し、
+     行の連結は画面側がする（貼った形が学校ごとに違うので、
+     区切りの決めは読む側＝行事計画パーサに合わせる） */
+  function readEventImportSheet(){
+    const id = String(readConfig()["行事取込シートID"] || "").trim();
+    if(!id) throw new Error("まだ連携シートがありません。「連携シートを開く」を押すと作ります");
+    let ss;
+    try{ ss = SpreadsheetApp.openById(fileId(id, "行事取込シートID")); }
+    catch(e){
+      throw new Error("連携シートを開けません（" + String(e && e.message)
+        + "）。「連携シートを開く」で作り直せます");
+    }
+    const sh = ss.getSheetByName("貼り付け") || ss.getSheets()[0];
+    /* **表示どおりの字**を取る（日付が 9/1 のまま読めるように） */
+    const v = sh.getDataRange().getDisplayValues();
+    return {name:ss.getName(), url:ss.getUrl(),
+            rows: v.map(function(r){ return r.map(function(x){ return String(x); }); })};
+  }
   /* 日付。**Date でも「2026-11-16」でも「11/18」でも読む。**
      年の無い書き方は、その年度の中の日として当てる（4月〜12月はその年、
      1月〜3月は翌年）。 */
@@ -2590,6 +2646,7 @@ const Store = (function(){
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste, exportPlanSheet, exportSlide,
           writeTally, readTally, TALLY_NAME,
           exportWeek, weekSheetName, weekOrder, migratePlan, checkYear, readEvents,
+          ensureEventImportSheet, readEventImportSheet,
           archiveCount, archiveVerify, archivePurge, archivedAll, ymd,
           tpTargets, writeTargets, testTarget, tpSubmits, tpSubmit,
           yearSetup, tickYearSetup, writeVariantOrigin, writeEvents,
@@ -2757,6 +2814,16 @@ function apiWriteBaseAll(year, table){
 function apiReadPaste(){
   Gate.check();
   return Store.readPaste();
+}
+/* 行事計画を貼る連携シート。**無ければここで作って「設定」に紐づく。** */
+function apiEnsureEventImportSheet(){
+  Gate.check();
+  return Store.ensureEventImportSheet();
+}
+/* 連携シートに貼られた行事計画を、セルの字のまま返す */
+function apiReadEventImportSheet(){
+  Gate.check();
+  return Store.readEventImportSheet();
 }
 /* たんぽぽ時間割へ、**1週ぶんを1枚のシートとして出す**。シート名は「9月1週」。
    同じ名前のシートがあれば、消さずに名前を変えて残す。

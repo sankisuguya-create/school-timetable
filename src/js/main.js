@@ -791,6 +791,8 @@ function wire(){
   on("setImpTally","click", () => { $("settingsDlg").close(); openImpPlan("tally"); });
   on("setImpEv",   "click", () => { $("settingsDlg").close(); openImpPlan("events"); });
   on("ipTpl",  "click", impPlanTemplate);
+  on("ipSheetOpen", "click", impSheetOpen);
+  on("ipSheetRead", "click", impSheetRead);
   on("ipRead", "click", impPlanRead);
   on("ipGo",   "click", impPlanGo);
 
