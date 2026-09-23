@@ -304,10 +304,18 @@ const Sheets_asClass = v => ev("Sheets.asClass")(v);
 /* ── シートを作る ─────────────────────────────── */
 console.log("■ シートを作る");
 let made = ev("Sheets.setup()");
-ok("13枚＋取り込み用の2枚ができる", made.made.length === 15, made.made);
+/* **枚数は決め打ちしない。** シートを足すたびに数字だけ古くなり、
+   検査が落ちたまま放置される（退避・たんぽぽ状態・新年度設定で3回起きた）。
+   見出しの決まったシートは SPEC が正本なので、そこから数える */
+const specNames = ev("Sheets.NAMES").slice();
+ok("見出しの決まったシート全部＋取り込み用の2枚ができる",
+   made.made.length === specNames.length + 2 &&
+   specNames.every(n => made.made.indexOf(n) >= 0) &&
+   made.made.indexOf(ev("Sheets.PASTE")) >= 0 && made.made.indexOf(ev("Sheets.EVENTS")) >= 0,
+   made.made);
 made = ev("Sheets.setup()");
 ok("2回目は何も作らない（何度走らせても同じ）",
-   made.made.length === 0 && made.kept.length === 13, made);
+   made.made.length === 0 && made.kept.length === specNames.length, made);
 ok("列は名前で引ける", Object.keys(ev('Sheets.head("週案").at')).length >= 11);
 
 console.log("\n■ 既定値の読み取り");
@@ -476,7 +484,19 @@ ok("頼んでいないクラスは読まない", !only.special["2-1"], only.spec
 
 console.log("\n■ 週と年度でしぼる");
 ev(`Store.writeCells(2026, [{date:"2026-11-24", slot:"p1", layer:"home", target:"3-3", title:"来週"}])`);
-ev(`Store.writeCells(2027, [{date:"2026-11-16", slot:"p1", layer:"home", target:"3-3", title:"別年度"}])`);
+/* **別の年度の行は、画面からは書けない**（日付と年度が食い違うパッチは
+   writeCells が弾く）。ただ、シートには人が手で書いた行も、古い版が
+   書いた行も入りうる。読みが年度でしぼることは、行を直接置いて確かめる */
+const wrongYear = ev(`Store.writeCells(2027, [{date:"2026-11-16", slot:"p1", layer:"home", target:"3-3", title:"別年度"}])`);
+ok("日付と食い違う年度の保存は弾く（理由つきで返す）",
+   wrongYear.count === 0 && wrongYear.invalid.length === 1 && /年度の週ではありません/.test(wrongYear.invalid[0].why),
+   wrongYear);
+(function(){
+  const cols = ev("Sheets.PLAN_COLS").slice();
+  const row = cols.map(c => ({"年度":2027, "日付":"2026-11-16", "曜日":"月", "時程":"p1",
+    "題名":"別年度", "層":"home", "対象":"3-3"})[c] ?? "");
+  SHEETS["週案 3-3"].push(row);
+})();
 w = ev('Store.readWeek(2026, "2026-11-16")');
 ok("次の週のコマは混ざらない", !w.home["3-3"]["1|p1"], Object.keys(w.home["3-3"]));
 ok("別の年度のコマは混ざらない", !w.home["3-3"]["0|p1"]);

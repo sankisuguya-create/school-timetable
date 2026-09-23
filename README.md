@@ -28,7 +28,7 @@ python3 build.py --check  生成物が src と一致するか調べる
 
 node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（253件）
 node gas/domaincheck.js   副作用のない業務ルールを確かめる
-node gas/storecheck.js    シートの読み書きを確かめる（363件）
+node gas/storecheck.js    シートの読み書きを確かめる（385件）
 node gas/gatecheck.js     関門を確かめる（27件）
 node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明を見る（79件）
 ```
