@@ -127,18 +127,26 @@ function openOutWindow(kind){
   return w;
 }
 const outputName = suffix => viewName().replace(/[^\w\-ぁ-んァ-ヶ一-龠]/g,"_") + "_" + iso(monday) + "_" + suffix;
+/* 別窓が開けなかったときの退避（ポップアップをブロックされたとき）。
+   帯に字を書くと版面がずれるので、いつもの確認窓にリンクだけを出す ──
+   自分で閉じるまで残る。トーストは数秒で消えるのでリンクには向かない */
+function showOutLink(title, url, label){
+  askOk({title:title,
+    lines:["<a target='_blank' rel='noopener' href='" + escText(url) + "'>" + escText(label) + "</a>"],
+    noLabel:"閉じる", goLabel:"開く", onYes(){ window.open(url, "_blank"); }});
+}
 function exportWeekSheet(){
   const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(outputName("週案"), planParts(monday,1), r => {
     if(w){ w.location.href = r.url; return; }
-    $("weekBarStat").innerHTML="<b>Sheetを作りました。</b> <a target='_blank' rel='noopener' href='"+escText(r.url)+"'>Google Sheetを開く</a>";
+    showOutLink("Sheetを作りました", r.url, "Google Sheetを開く");
   }, why => { if(w) w.close(); toast(escText(why)); });
 }
 function exportMonthSheet(){
   const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(outputName("4週"), planParts(mMonday,4), r => {
     if(w){ w.location.href = r.url; return; }
-    toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>4週のGoogle Sheetを開く</a>");
+    showOutLink("Sheetを作りました", r.url, "4週のGoogle Sheetを開く");
   }, why => { if(w) w.close(); toast(escText(why)); });
 }
 /* カレンダーの面。**見えている2ヶ月を、週ごとの週案で出す。**
@@ -152,7 +160,7 @@ function exportCalSheet(){
   const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(outputName("2ヶ月"), planParts(start, count), r => {
     if(w){ w.location.href = r.url; return; }
-    toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>2ヶ月のGoogle Sheetを開く</a>");
+    showOutLink("Sheetを作りました", r.url, "2ヶ月のGoogle Sheetを開く");
   }, why => { if(w) w.close(); toast(escText(why)); });
 }
 /* 学年の面。**開いている学年のクラスぶんを、クラスごとに1シートずつ。**
@@ -172,8 +180,7 @@ function exportGradeSheet(){
   const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(escText(gGrade) + "年_学年ごと_" + iso(monday), sheets, r => {
     if(w){ w.location.href = r.url; return; }
-    toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>"
-          + escText(gGrade) + "年のGoogle Sheetを開く</a>");
+    showOutLink("Sheetを作りました", r.url, gGrade + "年のGoogle Sheetを開く");
   }, why => { if(w) w.close(); toast(escText(why)); });
 }
 
