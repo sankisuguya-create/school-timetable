@@ -29,7 +29,7 @@ const context = vm.createContext({
     /* 管理の関門が start() から見る。**管理者として通す** ──
        ここで見たいのは起動順序で、関門そのものは gatecheck が見る */
     info(){ return {me:'a@edu.nishi.or.jp', isAdmin:true}; },
-    boot(fn){bootCount++; fn();}, watch(){}},
+    boot(fn){bootCount++; fn();}, watch(){}, readyYear(fn){fn();}},
   view:{kind:'gate'}, selCell:null, storeBroken:'', onStoreError:null,
   loadDb(){}, applyPaper(){}, paintArchive(){}, pollNewYear(){},
   pruneWeeks(){return 0;}, KEEP_WEEKS:60, save(){}, saveNow(){}, showConflicts(){},
@@ -47,8 +47,8 @@ vm.runInContext('start()', context);
 assert.equal(bootCount,1,'初期描画後にGAS初期化へ到達する');
 assert.ok(draws>0 && headers>0,'週移動前に入口と行き先を描画する');
 if(!process.env.BASELINE_REF){
-  /* 教務必携用・時数をコピー・4週まとめて・学年でならべる・カレンダー */
-  assert.equal(outputs.length,5,'出力ボタン5個のHTML契約');
+  /* 教務必携用・時数をコピー・4週まとめて・学年でならべる・カレンダー・連絡帳用 */
+  assert.equal(outputs.length,6,'出力ボタン6個のHTML契約');
   vm.runInContext('showPlanOutputs(false)',context);
   assert.ok(outputs.every(x=>x.hidden));
   vm.runInContext('showGate()',context);

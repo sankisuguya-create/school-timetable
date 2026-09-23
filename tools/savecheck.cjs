@@ -16,6 +16,8 @@ function app(storage=new Map()){
     addDays:(d,n)=>new Date(+d+n*864e5),monday:new Date(mon),gradeOf:()=> '1',
     targetsForView:()=>[{layer:'home',target:'1-1'}],
     setTimeout:()=>1,clearTimeout(){},addEventListener(){},escText:x=>x,
+    /* store.js 側の年度の汚れ印。backend のみを見る検査なので印は捨てる */
+    markYearDirty(){},
     /* 取り込みのたびに上がる版。カレンダーの取り置きがここを見る */
     dataTick:0,
     /* 控えは**タブごと**に分けて持つ（backend.js の tabId）。
