@@ -384,7 +384,11 @@ function applyPalette(d, sid, v, e){
   if(no) return toast(no);
   /* リセット。**ここで入れたものを取り消すだけ。** 各クラスが自分で入れたものは消さない */
   if(v === PAL_CLEAR){
-    const had = !!targetStore()[ck(d, sid)];
+    /* 専科は「自分の層」の棚を1枚持たないので、入っていたかは
+       行き先を束ねた中身（ownCell）で見る。そうしないと、消せたあとでも
+       「もともと入っていない」と出てしまう */
+    const had = view.kind === "special" ? ownCell(d, sid).layer === "special"
+                                        : !!targetStore()[ck(d, sid)];
     writeCell(d, sid, {title:"", note:"", subject:null});
     paintSheet(); selectCell(d, sid, e || cellAt(d, sid));
     toast(had ? "このコマを" + viewName() + "から取り消した"

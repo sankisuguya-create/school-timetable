@@ -904,6 +904,10 @@ function targetStore(){
   const w = week();
   if(view.kind === "school") return w.school;
   if(view.kind === "grade")  return (w.grade[view.grade] || (w.grade[view.grade] = {}));
+  /* **専科は「自分の層」を1枚持たない。** コマはクラスごとの棚（w.special[c]）に
+     散るので、ここで返せる棚が無い。view.cls が無いまま下へ流すと
+     w.home["undefined"] という空っぽの棚が残って、端末の控えにゴミが入る。 */
+  if(view.kind === "special") return {};
   if(scope === "school")     return w.school;
   if(scope === "grade"){
     const g = gradeOf(view.cls);
@@ -1121,7 +1125,13 @@ function writeCell(d, s, patch){
   if(view.kind === "special"){
     const cur = ownCell(d, s);
     let target = ("cls" in patch) ? patch.cls : cur.cls;
-    if("title" in patch && !("cls" in patch)) target = normCls(plain(patch.title));
+    if("title" in patch && !("cls" in patch)){
+      target = normCls(plain(patch.title));
+      /* **編成に無いクラス名は打ち違い。** 先に全クラスから外してしまうと、
+         行き先が見つからず、自分が入れたコマがそっくり消える。字はそのまま残し、
+         何もしないで返す（塗り直しで欄はもとのクラス名に戻る）。 */
+      if(target && allClasses().indexOf(target) < 0) return false;
+    }
     /* **どける前に、行き先のコマの物差しを控える。**
        下のループで消してから読むと、いつも 0 になる。0 は「その行がまだ無い」
        の意味なので、サーバは「無いはずの行を書こうとしている」と見て

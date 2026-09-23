@@ -4416,6 +4416,10 @@ function week(){
   if(!w) w = ws[k] = {school:{}, grade:{}, special:{}, home:{}, acked:[]};
   for(const f of ["school","grade","special","home"]) if(!w[f]) w[f] = {};
   if(!Array.isArray(w.acked)) w.acked = [];
+  /* **古い版が残した空の棚は捨てる。** 以前、専科の面を開くだけで
+     w.home["undefined"] というクラスでない棚が控えに出来た。
+     クラス名で読む場所しか無いので、消えたことはどこにも現れない */
+  if(w.home["undefined"]) delete w.home["undefined"];
   /* **手で変えていない週は、そのつど日付から決め直す。**
      控えに残った古い値を使うと、起点を直しても直らない週が残る */
   if(!w.vset) w.variant = autoVariant(k);
@@ -7680,6 +7684,10 @@ function targetStore(){
   const w = week();
   if(view.kind === "school") return w.school;
   if(view.kind === "grade")  return (w.grade[view.grade] || (w.grade[view.grade] = {}));
+  /* **専科は「自分の層」を1枚持たない。** コマはクラスごとの棚（w.special[c]）に
+     散るので、ここで返せる棚が無い。view.cls が無いまま下へ流すと
+     w.home["undefined"] という空っぽの棚が残って、端末の控えにゴミが入る。 */
+  if(view.kind === "special") return {};
   if(scope === "school")     return w.school;
   if(scope === "grade"){
     const g = gradeOf(view.cls);
@@ -7897,7 +7905,13 @@ function writeCell(d, s, patch){
   if(view.kind === "special"){
     const cur = ownCell(d, s);
     let target = ("cls" in patch) ? patch.cls : cur.cls;
-    if("title" in patch && !("cls" in patch)) target = normCls(plain(patch.title));
+    if("title" in patch && !("cls" in patch)){
+      target = normCls(plain(patch.title));
+      /* **編成に無いクラス名は打ち違い。** 先に全クラスから外してしまうと、
+         行き先が見つからず、自分が入れたコマがそっくり消える。字はそのまま残し、
+         何もしないで返す（塗り直しで欄はもとのクラス名に戻る）。 */
+      if(target && allClasses().indexOf(target) < 0) return false;
+    }
     /* **どける前に、行き先のコマの物差しを控える。**
        下のループで消してから読むと、いつも 0 になる。0 は「その行がまだ無い」
        の意味なので、サーバは「無いはずの行を書こうとしている」と見て
@@ -11028,7 +11042,11 @@ function applyPalette(d, sid, v, e){
   if(no) return toast(no);
   /* リセット。**ここで入れたものを取り消すだけ。** 各クラスが自分で入れたものは消さない */
   if(v === PAL_CLEAR){
-    const had = !!targetStore()[ck(d, sid)];
+    /* 専科は「自分の層」の棚を1枚持たないので、入っていたかは
+       行き先を束ねた中身（ownCell）で見る。そうしないと、消せたあとでも
+       「もともと入っていない」と出てしまう */
+    const had = view.kind === "special" ? ownCell(d, sid).layer === "special"
+                                        : !!targetStore()[ck(d, sid)];
     writeCell(d, sid, {title:"", note:"", subject:null});
     paintSheet(); selectCell(d, sid, e || cellAt(d, sid));
     toast(had ? "このコマを" + viewName() + "から取り消した"
