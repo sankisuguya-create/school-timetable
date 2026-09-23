@@ -149,6 +149,31 @@ await p.addInitScript(() => {
     window.__calls.push({name, args});
     return ret;
   };
+  /* **本番と同じ形で返す。** 画面は「何日目|時程」でコマを持つので、
+     日付で覚えているものをここで直して返す（Store.readWeek/readWeeks と同じ） */
+  function readOneWeek_(y, m, t){
+    const out = {school:{}, grade:{}, special:{}, home:{}};
+    const mon = Date.parse(m + "T00:00:00");
+    const store = window.__sheet();
+    for(const key in store){
+      const p = key.split("\u0001");           /* 年度・層・対象 */
+      if(String(p[0]) !== String(y)) continue;
+      if(t && t.length && !t.some(x => x.layer === p[1] && (x.target || "") === p[2])) continue;
+      const bank = store[key];
+      for(const dk in bank){
+        const q = dk.split("|");
+        const off = Math.round((Date.parse(q[0] + "T00:00:00") - mon) / 86400000);
+        if(off < 0 || off > 6) continue;
+        const kk = off + "|" + q[1];
+        if(p[1] === "school") out.school[kk] = bank[dk];
+        else if(p[1] === "grade") (out.grade[p[2]] || (out.grade[p[2]] = {}))[kk] = bank[dk];
+        else if(p[1] === "special") (out.special[p[2]] || (out.special[p[2]] = {}))[kk] = bank[dk];
+        else (out.home[p[2]] || (out.home[p[2]] = {}))[kk] = bank[dk];
+      }
+    }
+    out.submits = Object.assign({}, ((window.__subs || {})[y + "|" + m]) || {});
+    return out;
+  }
   function runner(){
     let okFn = () => {}, ngFn = () => {};
     const api = {
@@ -167,31 +192,20 @@ await p.addInitScript(() => {
       apiReadWeek(y, m, t){
         /* **本番と同じ形で返す。** 画面は「何日目|時程」でコマを持つので、
            日付で覚えているものをここで直して返す（Store.readWeek と同じ） */
-        const out = {school:{}, grade:{}, special:{}, home:{}};
-        const mon = Date.parse(m + "T00:00:00");
-        const store = window.__sheet();
-        for(const key in store){
-          const p = key.split("\u0001");           /* 年度・層・対象 */
-          if(String(p[0]) !== String(y)) continue;
-          if(t && t.length && !t.some(x => x.layer === p[1] && (x.target || "") === p[2])) continue;
-          const bank = store[key];
-          for(const dk in bank){
-            const q = dk.split("|");
-            const off = Math.round((Date.parse(q[0] + "T00:00:00") - mon) / 86400000);
-            if(off < 0 || off > 6) continue;
-            const kk = off + "|" + q[1];
-            if(p[1] === "school") out.school[kk] = bank[dk];
-            else if(p[1] === "grade") (out.grade[p[2]] || (out.grade[p[2]] = {}))[kk] = bank[dk];
-            else if(p[1] === "special") (out.special[p[2]] || (out.special[p[2]] = {}))[kk] = bank[dk];
-            else (out.home[p[2]] || (out.home[p[2]] = {}))[kk] = bank[dk];
-          }
-        }
-        out.submits = Object.assign({}, ((window.__subs || {})[y + "|" + m]) || {});
+        const out = readOneWeek_(y, m, t);
         call("apiReadWeek", [y, m, t], out);
         /* __lag に週を書いておくと、その週の返事だけ遅れる
            （校内の回線では、古い週の返事があとから届くことがある） */
         const lag = (window.__lag && window.__lag[m]) || window.__slow || 0;
         setTimeout(() => okFn(out), lag);
+      },
+      /* **週の配列を1呼び出しで返す。** Store.readWeeks と同じく
+         {月曜: 週のかたち}（→ gas/Store.gs apiReadWeeks） */
+      apiReadWeeks(y, ms, t){
+        const out = {};
+        for(const m of (ms || [])) out[m] = readOneWeek_(y, m, t);
+        call("apiReadWeeks", [y, ms, t], out);
+        setTimeout(() => okFn(out), window.__slow || 0);
       },
       apiWriteCells(y, patches){
         call("apiWriteCells", [y, patches]);

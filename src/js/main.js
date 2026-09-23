@@ -653,11 +653,15 @@ function wire(){
     catch(e){ $("weekBarStat").textContent="画像を作れませんでした（"+escText(e.message||e)+"）"; }
   });
   on("weekSheet","click", exportWeekSheet);
-  /* 連絡帳。クラス・日付・宿題・持ち物が変わるたびに焼き直す */
+  /* 連絡帳。クラス・日付・宿題・持ち物が変わるたびに焼き直す。
+     **打鍵のたびには焼かない。** 1回の焼き直しは絵を組むのに時間がかかる
+     （実測で10msほど。児童機ではその数倍）。打つのをやめてからまとめて焼く */
+  let renT = 0;
+  const renrakuLater = () => { clearTimeout(renT); renT = setTimeout(renrakuRender, 250); };
   on("renCls",  "change", renrakuRender);
   on("renDate", "change", renrakuRender);
-  on("renHw",   "input",  renrakuRender);
-  on("renItem", "input",  renrakuRender);
+  on("renHw",   "input",  renrakuLater);
+  on("renItem", "input",  renrakuLater);
   on("renImage","click", () => {
     const cv = renrakuCanvas(); if(!cv) return;
     cv.toBlob(b => { downloadBlob(b, renrakuName() + ".png");
@@ -716,7 +720,7 @@ function wire(){
      見込みで出していた数を、確かな数に入れ替える口 */
   on("tlyRead", "click", tallyReadAll);
   /* 時数集計シート。**時間がかかるので、押す前に言う。**
-     押し間違いで1〜3分待たせない（やめる側に落ちる窓で受ける） */
+     押し間違いで待たせない（やめる側に落ちる窓で受ける） */
   on("tlySheet", "click", () => {
     const cs = tallyScope(), one = cs.length === 1;
     askOk({
@@ -726,7 +730,7 @@ function wire(){
               + "</b>数えて、スプレッドシートの<b>「時数集計」シート</b>に置きます。",
               one ? "<b>たいてい数十秒で終わります。</b>年度の後半ほど長くかかります"
                     + "（読む週が増えるため）。"
-                  : "<b>1〜3分かかります。</b>年度の後半ほど長くかかります"
+                  : "<b>少し時間がかかります。</b>年度の後半ほど長くかかります"
                     + "（読む週が増えるため）。",
               "置いたものは、押すたびに<b>そのぶんの行だけ</b>作り直します。"
               + "他のクラスや、他の年度のぶんは残ります。"],

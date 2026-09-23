@@ -635,52 +635,38 @@ const Backend = (function(){
   }
   /* **いくつかの週を、まとめて読む。** 月の面は4週ぶんを一度に出す。
      1週ずつ開いて読ませると、4回待つことになる。
-     いま見ている画面に要る対象だけ読む（27枚は読まない）。 */
+     いま見ている画面に要る対象だけ読む（27枚は読まない）。
+
+     **週ごとに呼ばない。** apiReadWeek は呼ぶたびに対象シートを全部読むので、
+     週数ぶんシートを読み直していた（3月の全クラス集計で1,300枚ぶん）。
+     apiReadWeeks は各シートを1回だけ読んで週ごとに振り分ける。
+     届いたら週ごとに mergeWeek するのは同じ。 */
+  function readWeeksBatch_(mons, want, after){
+    const year = fy(), epoch = editEpoch;
+    const todo = (mons || []).filter(m => want.some(t => !fresh_(weekTag(t, year, m))));
+    if(!todo.length || !want.length) return after();
+    google.script.run
+      .withSuccessHandler(res => {
+        for(const m of todo)
+          if(res && res[m]) mergeWeek(want, res[m], year, m, epoch);
+        after();
+      })
+      /* **読めなくても先へ進む。** 進まないと、開いたつもりの面が出ない */
+      .withFailureHandler(() => after())
+      .apiReadWeeks(year, todo, want);
+  }
   function readWeeks(mons, after, wantOverride){
     if(!onGas) return after();
     /* **画面と別の対象を読むときは渡す。** 連絡帳は開いている面とは別の
        クラスの週を読むので、読む対象を外から渡せるようにする */
-    const want = wantOverride || targetsForView();
-    const year = fy(), epoch = editEpoch;
-    const todo = (mons || []).filter(m => want.some(t => !fresh_(weekTag(t, year, m))));
-    if(!todo.length || !want.length) return after();
-    /* **一度に投げる数を抑える。** カレンダーの面は年度はじめからの累計を出すので、
-       3月には 45 週ぶんになる。45 本を同時に投げると GAS 側で詰まり、
-       どれも返らないまま待ちの表示が残る。 */
-    let left = todo.length, next = 0;
-    const done = () => { if(--left <= 0) after(); else fire(); };
-    function fire(){
-      if(next >= todo.length) return;
-      const m = todo[next++];
-      google.script.run
-        .withSuccessHandler(w => { mergeWeek(want, w, year, m, epoch); done(); })
-        /* **読めなくても先へ進む。** 進まないと、開いたつもりの面が出ない */
-        .withFailureHandler(() => done())
-        .apiReadWeek(year, m, want);
-    }
-    for(let i = 0; i < AT_ONCE && i < todo.length; i++) fire();
+    readWeeksBatch_(mons, wantOverride || targetsForView(), after);
   }
-  const AT_ONCE = 8;
   /* **全クラスぶんの週を読む。** 時数集計は27クラス全部を数えるので、
      いま開いている面（3枚）だけでは足りない。
      時数集計のボタンからしか呼ばない ── ふだんの画面では読みすぎになる。 */
   function readWeeksAll(mons, after){
     if(!onGas) return after();
-    const want = allTargets();
-    const year = fy(), epoch = editEpoch;
-    const todo = (mons || []).filter(m => want.some(t => !fresh_(weekTag(t, year, m))));
-    if(!todo.length) return after();
-    let left = todo.length, next = 0;
-    const done = () => { if(--left <= 0) after(); else fire(); };
-    function fire(){
-      if(next >= todo.length) return;
-      const m = todo[next++];
-      google.script.run
-        .withSuccessHandler(w => { mergeWeek(want, w, year, m, epoch); done(); })
-        .withFailureHandler(() => done())
-        .apiReadWeek(year, m, want);
-    }
-    for(let i = 0; i < AT_ONCE && i < todo.length; i++) fire();
+    readWeeksBatch_(mons, allTargets(), after);
   }
 
   /* 渡した月曜のうち、**まだ読んでいない週の数**。
