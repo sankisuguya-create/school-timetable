@@ -4416,6 +4416,10 @@ function week(){
   if(!w) w = ws[k] = {school:{}, grade:{}, special:{}, home:{}, acked:[]};
   for(const f of ["school","grade","special","home"]) if(!w[f]) w[f] = {};
   if(!Array.isArray(w.acked)) w.acked = [];
+  /* **古い版が残した空の棚は捨てる。** 以前、専科の面を開くだけで
+     w.home["undefined"] というクラスでない棚が控えに出来た。
+     クラス名で読む場所しか無いので、消えたことはどこにも現れない */
+  if(w.home["undefined"]) delete w.home["undefined"];
   /* **手で変えていない週は、そのつど日付から決め直す。**
      控えに残った古い値を使うと、起点を直しても直らない週が残る */
   if(!w.vset) w.variant = autoVariant(k);
