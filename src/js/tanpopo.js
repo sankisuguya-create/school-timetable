@@ -253,7 +253,7 @@ function drawTargets(){
     const empty = tpTargets.filter(x => !String(x.url).trim());
     if(empty.length) return void ($("tpTgtWhy").innerHTML =
       "<div class='box'><b>URLが空の行があります。</b>入れるか、その行を消してください。</div>");
-    const w = Wait.begin("出す先を入れています");
+    const w = Wait.begin("出す先を入れています", true);
     Backend.saveTpTargets(tpTargets, () => {
       Wait.end(w); tpTgtEdit = false; loadTargets();
       toast("出す先を入れた");
@@ -289,7 +289,7 @@ function tpDelAnswer(yes){
 }
 
 function putTargets(after){
-  const w = Wait.begin("出す先を入れています");
+  const w = Wait.begin("出す先を入れています", true);
   Backend.saveTpTargets(tpTargets, () => { Wait.end(w); if(after) after(); drawTanpopoView(); },
                         why => { Wait.end(w); toast(why); loadTargets(); });
 }
@@ -575,7 +575,7 @@ function doExportTanpopo(){
   /* 先に、書いたぶんをシートへ送る。送る前に出すと、出した紙と週案が食い違う */
   $("tpGo").disabled = true;
   $("tpCount").innerHTML = "たんぽぽ時間割へ書いている…";
-  const w = Wait.begin("たんぽぽ時間割へ出しています");
+  const w = Wait.begin("たんぽぽ時間割へ出しています", true);
   Backend.flush(saved => {
     if(!saved){
       Wait.end(w); $("tpGo").disabled = false;

@@ -1185,8 +1185,14 @@ const Store = (function(){
      中だけで実際の行番号を使うため、間に行が入って別の行を直すことはない。 */
   function writeCells(year, patches){
     if(!patches || !patches.length)
-      return {at:{}, count:0, asked:0, conflicts:[], sheets:0,
+      return {at:{}, count:0, asked:0, conflicts:[], invalid:[], sheets:0,
               fullWrites:0, rowWrites:0, ms:0, waitMs:0};
+    /* **退避ずみの年度には書かない。** 保管庫へ移したはずの行が本体へ
+       戻ると、中身の違う正本が2つできる。画面側も同じ理由で止める
+       （→ src/js/compose.js whyCantWrite）が、止めの本番はここ。
+       画面を通らず届いた書き込みでも、同じ場所で同じ理由で弾く */
+    if(archiveDone(year))
+      throw new Error(year + "年度は退避ずみです。本体には書き込めません");
     /* **保存にかかった時間を測って返す。**
        「速くする改造」は、必ず正しさを削る方向に働く。数字が基準に届く前に
        手を入れない（→ docs/spec.md 13-2）。ロック待ちと書き込みは分けて測る。
@@ -1216,9 +1222,20 @@ const Store = (function(){
       const conflicts = [];
       const me = (function(){ try{ return Gate.activeEmail(); }catch(e){ return ""; } })();
 
-      /* シートごとにまとめる */
+      /* シートごとにまとめる。**届いたものは検査してから入れる。**
+         層・対象・時程・日付が読めないパッチをそのまま書くと、誰の面にも
+         出ない行が本体に残る（「週案 変な対象」というシートまで作りかねない）。
+         引っかかったぶんは書かず、理由つきで返す */
       const byName = {};
+      const invalid = [];
       for(const p of patches){
+        const why = badPatch_(p, year, rank);
+        if(why){
+          invalid.push({date:String(p && p.date || ""), slot:String(p && p.slot || ""),
+                        layer:String(p && p.layer || ""), target:String(p && p.target || ""),
+                        why:why});
+          continue;
+        }
         const name = Sheets.planName(p.layer, Sheets.asClass(p.target));
         (byName[name] || (byName[name] = [])).push(p);
       }
@@ -1333,14 +1350,51 @@ const Store = (function(){
         else if(changed.length){ Sheets.writePlanRows(name, changed); rowWrites += changed.length; }
       }
       SpreadsheetApp.flush();
-      return {at, count: patches.length - conflicts.length,
-              asked: patches.length, conflicts: conflicts,
+      return {at, count: patches.length - conflicts.length - invalid.length,
+              asked: patches.length, conflicts: conflicts, invalid: invalid,
               sheets: Object.keys(byName).length,
               fullWrites: fullWrites, rowWrites: rowWrites,
               ms: Date.now() - t1, waitMs: t1 - t0};
     } finally {
       lock.releaseLock();
     }
+  }
+
+  /* その日付がどの年度の週に入るか。**週の年度は、その週の月曜の年度。**
+     画面の locOf（src/js/backend.js）と同じ決まりにする */
+  function weekFy_(date){
+    const d = new Date(String(date) + "T00:00:00");
+    if(isNaN(d.getTime())) return null;
+    const t = new Date(mondayOf_(d));
+    return t.getFullYear() - (t.getMonth() <= 2 ? 1 : 0);
+  }
+
+  /* **届いたものを書く前に検査する。** 画面は正しいものしか送らないが、
+     画面を通らず叩かれたものがそのまま行になると、誰にも見えないゴミが
+     本体に残る。引っかかった理由を返す（書けるなら空文字） */
+  const WRITE_LAYERS_ = {school:true, grade:true, home:true, special:true};
+  function badPatch_(p, year, rank){
+    if(!p || typeof p !== "object") return "形が読めません";
+    if(!WRITE_LAYERS_[p.layer]) return "層「" + p.layer + "」は書けません";
+    const ds = String(p.date || "");
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(ds)
+       || isNaN(new Date(ds + "T00:00:00").getTime()))
+      return "日付「" + ds + "」が読めません";
+    if(weekFy_(ds) !== +year) return ds + " は " + year + "年度の週ではありません";
+    const s = String(p.slot || "");
+    if(!s || s.length > 60) return "時程が読めません";
+    /* 時程表のID・day・memo・memo:◯◯・trip:◯◯・tent:◯◯・wish:◯◯ だけが、
+       本体の行として出る。あてはまらない字は誰の面にも出ない */
+    if(rank[s] === undefined && s !== DAY_SLOT_ && s !== "memo"
+       && s.indexOf("memo:") !== 0 && s.indexOf(TRIP_SLOT_) !== 0
+       && s.indexOf("tent:") !== 0 && s.indexOf("wish:") !== 0)
+      return "時程「" + s + "」は時程表にありません";
+    if(p.layer === "grade" && !/^[1-9]$/.test(String(p.target || "")))
+      return "対象（学年）が読めません";
+    if((p.layer === "home" || p.layer === "special")
+       && !String(p.target || "").trim())
+      return "対象（クラス）が読めません";
+    return "";
   }
 
   /* ── たんぽぽ時間割へ出す ──────────────────────

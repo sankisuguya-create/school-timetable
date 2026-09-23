@@ -1279,7 +1279,7 @@ function nyUndo(s){
        + escText(String(s).replace(/\*\*/g, ""));
 }
 function nyTick(key, on, el){
-  const w = Wait.begin("記録しています");
+  const w = Wait.begin("記録しています", true);
   if(el) el.disabled = true;
   Backend.tickYearSetup(key, on,
     r2 => { Wait.end(w); nySt = r2; drawNewYear(); paintNewYear(); },
@@ -1290,7 +1290,7 @@ function nyTick(key, on, el){
    手順の最後がエディタ頼みだと、そこで止まる。 */
 function makePlanSheets(){
   if(!Wait.guard()) return;
-  const w = Wait.begin("週案シートを作っています");
+  const w = Wait.begin("週案シートを作っています", true);
   Backend.setupPlanSheets(r => {
     Wait.end(w);
     toast("週案シートを " + ((r && r.made && r.made.length) || 0) + " 枚作った");
@@ -1316,7 +1316,7 @@ function saveAb(){
     "<div class='box'><b>月曜を入れてください。</b>月曜でない日を入れると、"
     + "以後の週が全て半週ずれます。</div>");
   if(!Wait.guard()) return;
-  const w = Wait.begin("起点を入れています");
+  const w = Wait.begin("起点を入れています", true);
   Backend.saveVariantOrigin(v, () => {
     Wait.end(w); $("abDlg").close();
     refreshWeek();
@@ -1374,7 +1374,7 @@ function evRead(){
 function evGo(){
   if(!evRows) return;
   if(!Wait.guard()) return;
-  const w = Wait.begin("年間行事計画表を貼り替えています");
+  const w = Wait.begin("年間行事計画表を貼り替えています", true);
   Backend.saveEvents(evRows, r => {
     Wait.end(w);
     $("evDlg").close();
@@ -1544,7 +1544,7 @@ function arRunPurge(){
   const typed = $("arTyped").value.trim();
   $("arGo").disabled = true;
   $("arWhy").textContent = "消しています…";
-  const w = Wait.begin("本体から消しています");
+  const w = Wait.begin("本体から消しています", true);
   Backend.archivePurge(arChecked.year, arChecked.url, typed, r => {
     Wait.end(w);
     $("arWhy").innerHTML = "<b>" + r.year + "年度を退避した。</b>"
@@ -1683,6 +1683,7 @@ function restoreConflicted(h){
   const key = ck(h.loc.d, c.slot), sat = +c.currentAt || 0;
   if(q.remove) delete bank[key];
   else bank[key] = {title:q.title, note:q.note, subject:q.subject || null,
+                    short:q.short || "", u:q.u || "",
                     sp:q.sp || "", at:Date.now(), by:myEmail(), sat};
   Backend.cellChanged(c.layer, c.target, h.loc.d, c.slot, sat,
                       {year:h.loc.year, monday:h.loc.monday});
