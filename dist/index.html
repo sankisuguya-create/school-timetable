@@ -11592,6 +11592,9 @@ function upBadgeFor_(d, s, c){
 
 /* コマのバッジを描く／消す。paintCell の最後に1か所だけ呼ぶ */
 function upPaintBadge_(e, c, d, s){
+  /* 学年ごとの面（gcell）では出さない ── クラスぶんに割った1コマの幅に
+     単元の印は入らない。印を動かす仕掛けも、ここは「見るだけ」の面なので要らない */
+  if(e.classList.contains("gcell")) return;
   let box = e.querySelector(".ub");
   const b = upBadgeFor_(d, s, c);
   if(!b){
@@ -13484,7 +13487,7 @@ function downloadBlob(blob, name){
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 /* 紙面をそのままPNGへする。外部サービスへ週案を送らない。 */
-async function nodePng(node, name){
+async function nodePngBlob(node){
   const r = node.getBoundingClientRect();
   /* **見えていない面は画像にできない。** 隠れた要素は幅も高さも 0 になり、
      0×0 の canvas は toBlob が null を返す ── これをそのまま downloadBlob へ
@@ -13504,19 +13507,40 @@ async function nodePng(node, name){
   const img = new Image(); await new Promise((ok, ng) => { img.onload=ok; img.onerror=ng; img.src=url; });
   const scale=2, cv=document.createElement("canvas"); cv.width=Math.ceil(r.width*scale); cv.height=Math.ceil(r.height*scale);
   const cx=cv.getContext("2d"); cx.scale(scale,scale); cx.fillStyle="#fff"; cx.fillRect(0,0,r.width,r.height); cx.drawImage(img,0,0);
-  const blob=await new Promise(ok => cv.toBlob(ok,"image/png")); downloadBlob(blob,name);
+  return await new Promise(ok => cv.toBlob(ok,"image/png"));
+}
+async function nodePng(node, name){
+  downloadBlob(await nodePngBlob(node), name);
+}
+/* 別窓・別タブに結果を出すときの共通の窓。
+   **窓は押した瞬間に開く** ── 生成を待ってから開くと、クリックから遅れた
+   window.open をブラウザがポップアップとして弾く。先に開いておき、
+   中身ができたら中を差し替える（location を移す）。
+   窓が弾かれたときは null で返るので、呼び元はその場合だけ従来どおりの
+   報せ（リンクや保存）に退ける。 */
+function openOutWindow(kind){
+  const w = window.open("", "_blank");
+  if(w){
+    w.document.write("<body style='font-family:sans-serif;color:#666;padding:2em'>"
+      + (kind || "作っています") + "…</body>");
+    w.document.close();
+  }
+  return w;
 }
 const outputName = suffix => viewName().replace(/[^\w\-ぁ-んァ-ヶ一-龠]/g,"_") + "_" + iso(monday) + "_" + suffix;
 function exportWeekSheet(){
-  $("weekBarStat").textContent="Google Sheetを作っています…";
+  const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(outputName("週案"), planParts(monday,1), r => {
+    if(w){ w.location.href = r.url; return; }
     $("weekBarStat").innerHTML="<b>Sheetを作りました。</b> <a target='_blank' rel='noopener' href='"+escText(r.url)+"'>Google Sheetを開く</a>";
-  }, why => $("weekBarStat").textContent=why);
+  }, why => { if(w) w.close(); toast(escText(why)); });
 }
 function exportMonthSheet(){
+  const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(outputName("4週"), planParts(mMonday,4), r => {
+    if(w){ w.location.href = r.url; return; }
     toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>4週のGoogle Sheetを開く</a>");
-  }, why => toast(escText(why)));
+  }, why => { if(w) w.close(); toast(escText(why)); });
 }
 /* カレンダーの面。**見えている2ヶ月を、週ごとの週案で出す。**
    カレンダー形の表は Sheet では潰れる（1コマ数行を2ヶ月分並べられない）ので、
@@ -13526,9 +13550,11 @@ function exportCalSheet(){
   const start = mondayOf(calFrom);
   const lastM = new Date(calFrom.getFullYear(), calFrom.getMonth() + CAL_MONTHS, 0);
   const count = Math.ceil((addDays(lastM, 1) - start) / (7 * 864e5));
+  const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(outputName("2ヶ月"), planParts(start, count), r => {
+    if(w){ w.location.href = r.url; return; }
     toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>2ヶ月のGoogle Sheetを開く</a>");
-  }, why => toast(escText(why)));
+  }, why => { if(w) w.close(); toast(escText(why)); });
 }
 /* 学年の面。**開いている学年のクラスぶんを、クラスごとに1シートずつ。**
    planValues が読む「いまの面」をクラスに差し替えて組み立て、終わったら戻す */
@@ -13544,10 +13570,12 @@ function exportGradeSheet(){
   }finally{ view = keep; }
   /* 名づけに outputName は使わない ── 先頭に「いま開いている面の名前」が
      入るので、学年のまとめが「1-1 の学年ごと」になってしまう */
+  const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(escText(gGrade) + "年_学年ごと_" + iso(monday), sheets, r => {
+    if(w){ w.location.href = r.url; return; }
     toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>"
           + escText(gGrade) + "年のGoogle Sheetを開く</a>");
-  }, why => toast(escText(why)));
+  }, why => { if(w) w.close(); toast(escText(why)); });
 }
 
 function openBaseDlg(){
@@ -15931,9 +15959,11 @@ function wire(){
   on("gvGrade","change", e => { gGrade = e.target.value; redrawCenter(); });
   on("gvClose","click",  () => setCenter("week"));
   on("gvImage","click", async () => {
-    try{ await nodePng($("gvPaper"), outputName(gGrade + "年_" + "学年") + ".png");
-         toast("学年の画像を保存した"); }
-    catch(e){ toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
+    const w = openOutWindow("画像を作っています");
+    try{ const b = await nodePngBlob($("gvPaper"));
+         if(w){ w.location.href = URL.createObjectURL(b); return; }
+         downloadBlob(b, outputName(gGrade + "年_" + "学年") + ".png"); }
+    catch(e){ if(w) w.close(); toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
   });
   /* **測り直しは間引く。** 掴んで動かすあいだ、1秒に何十回も強制リフローになる
      （週の紙の autoFit と同じ 120ms） */
@@ -15950,9 +15980,11 @@ function wire(){
   on("cvPrint","click", printCal);
   on("gvPrint","click", printGrade);
   on("cvImage","click", async () => {
-    try{ await nodePng($("cvPaper"), outputName("カレンダー") + ".png");
-         toast("カレンダーの画像を保存した"); }
-    catch(e){ toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
+    const w = openOutWindow("画像を作っています");
+    try{ const b = await nodePngBlob($("cvPaper"));
+         if(w){ w.location.href = URL.createObjectURL(b); return; }
+         downloadBlob(b, outputName("カレンダー") + ".png"); }
+    catch(e){ if(w) w.close(); toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
   });
   let cvT = 0;
   addEventListener("resize", () => {
@@ -15966,8 +15998,11 @@ function wire(){
   on("mClose","click", () => setCenter("week"));
   on("mPrint","click", printMonth);
   on("mImage","click", async () => {
-    try{ await nodePng($("mPaper"), outputName("4週_B4")+".png"); toast("4週の画像を保存した"); }
-    catch(e){ toast("画像を作れなかった（"+escText(e.message||e)+"）"); }
+    const w = openOutWindow("画像を作っています");
+    try{ const b = await nodePngBlob($("mPaper"));
+         if(w){ w.location.href = URL.createObjectURL(b); return; }
+         downloadBlob(b, outputName("4週_B4")+".png"); }
+    catch(e){ if(w) w.close(); toast("画像を作れなかった（"+escText(e.message||e)+"）"); }
   });
   on("mSheet","click", exportMonthSheet);
   addEventListener("resize", () => { if(!$("monthView").hidden) fitMonth(); });
@@ -16003,9 +16038,11 @@ function wire(){
   on("setNewYear","click", () => { $("settingsDlg").close(); openNewYearDlg(); });
   on("weekPrint","click", () => { if(centerOk()) setCenter("week"); window.print(); });
   on("weekImage","click", async () => {
-    $("weekBarStat").textContent = "";
-    try{ await nodePng($("sheet"), outputName("B5")+".png"); $("weekBarStat").textContent="画像を保存しました。Google Chatへ添付できます。"; }
-    catch(e){ $("weekBarStat").textContent="画像を作れませんでした（"+escText(e.message||e)+"）"; }
+    const w = openOutWindow("画像を作っています");
+    try{ const b = await nodePngBlob($("sheet"));
+         if(w){ w.location.href = URL.createObjectURL(b); return; }
+         downloadBlob(b, outputName("B5")+".png"); }
+    catch(e){ if(w) w.close(); toast("画像を作れませんでした（"+escText(e.message||e)+"）"); }
   });
   on("weekSheet","click", exportWeekSheet);
   /* 連絡帳。クラス・日付・宿題・持ち物が変わるたびに焼き直す。
@@ -16019,13 +16056,16 @@ function wire(){
   on("renItem", "input",  renrakuLater);
   on("renImage","click", () => {
     const cv = renrakuCanvas(); if(!cv) return;
-    cv.toBlob(b => { downloadBlob(b, renrakuName() + ".png");
-                     $("renStat").textContent = "画像を保存しました"; }, "image/png");
+    const w = openOutWindow("画像を作っています");
+    cv.toBlob(b => {
+      if(w){ w.location.href = URL.createObjectURL(b); return; }
+      downloadBlob(b, renrakuName() + ".png");
+    }, "image/png");
   });
   on("renPrint","click", () => {
     const cv = renrakuCanvas(); if(!cv) return;
     const w = window.open("", "_blank");
-    if(!w){ $("renStat").textContent = "窓が開けませんでした（ポップアップを許可してください）"; return; }
+    if(!w){ toast("窓が開けませんでした（ポップアップを許可してください）"); return; }
     const src = cv.toDataURL("image/png");
     w.document.write("<html><head><title>" + escText(renrakuName()) + "</title>"
       + "<style>@page{size:A4 landscape;margin:0}body{margin:0}img{display:block;width:100vw;height:100vh}</style>"
@@ -16034,10 +16074,11 @@ function wire(){
   });
   on("renSlide","click", () => {
     const cv = renrakuCanvas(); if(!cv) return;
-    $("renStat").textContent = "Google Slideを作っています";
+    const w = openOutWindow("Google Slideを作っています");
     Backend.exportSlide(renrakuName(), cv.toDataURL("image/png"), r => {
+      if(w){ w.location.href = r.url; return; }
       $("renStat").innerHTML = "作りました → <a href='" + escText(r.url) + "' target='_blank' rel='noopener'>" + escText(r.name) + "</a>";
-    }, e => { $("renStat").textContent = e; });
+    }, e => { if(w) w.close(); toast(escText(e)); });
   });
   /* 左メニューの三つ組み。**その面の中にある口と同じ動き**にする ──
      ここで別の動きを書くと、帯と面の中で結果がずれる。
