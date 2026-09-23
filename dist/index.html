@@ -11700,6 +11700,7 @@ function upDropChip_(unit, d, s){
   if(mark && mark !== "-" && mark !== unit.id)
     return toast("ここは別の単元のコマです。先にその単元を動かしてください");
   const other = upViewUnits_().find(u => u !== unit && u.start
+    && u.target === unit.target            /* 専科の面：ほかのクラスの起点は関係ない */
     && u.start.date === dt && u.start.slot === s);
   if(other)
     return toast("ここは「" + escText(other.name) + "」の起点です。単元を変えるときは、"
@@ -11732,6 +11733,16 @@ function upMoveStart_(data, d, s){
   if(!unit || !(unit.start || {}).date) return;
   const why = upCanDrop_(unit, d, s);
   if(why) return toast(why);
+  /* **専科の面では、自分のクラスのコマにしか動かせない。**
+     別のクラスのコマに落とすと、そのクラスが載っていない棚に印が付き、
+     起点や並びが静かに壊れる */
+  if(view.kind === "special"){
+    const dest = upCellClass_(d, s);
+    if(dest !== unit.target)
+      return toast(dest
+        ? "このコマは " + escText(dest) + " のものです"
+        : "このコマのクラスが分かりません");
+  }
   const wk = wkKey(), w = week();
   const srcDt = iso(addDays(monday, srcD));
   const dstDt = iso(addDays(monday, d));
@@ -11756,6 +11767,7 @@ function upMoveStart_(data, d, s){
   /* ほかの単元のコマに落とした → 交換。pin だけでなく、
      印が無くても相手のコマとして数えられている場所も相手のもの */
   const other = upViewUnits_().find(u => u !== unit
+    && u.target === unit.target            /* 交換の相手は同じクラスの単元だけ */
     && (upCellMark_(w, u, d, s) === u.id
         || (!upCellMark_(w, u, d, s)
             && upIsMine_(w, u, upOthers_(u), d, s, dstDt))));
