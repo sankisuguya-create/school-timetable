@@ -1299,6 +1299,7 @@ const Store = (function(){
       }
 
       let fullWrites = 0, rowWrites = 0;
+      const tpTouched = [];
       for(const name in byName){
         const rows = Sheets.readPlan(name, ymd);
         const index = {};
@@ -1387,9 +1388,12 @@ const Store = (function(){
           }
           at[outKey] = now.getTime();
         }
-        markTpChanges_(year, byName[name].filter(p =>
-          p.__tanpopo &&
-          Object.prototype.hasOwnProperty.call(at, [ymd(p.date), p.slot, p.layer, Sheets.asClass(p.target)].join("|"))));
+        /* たんぽぽへ渡る字が変わったコマ。**印を立てるのはシートを回り終えてから
+           1回だけ**（シートごとに立てると、状態の2枚をシートの数だけ読み直す） */
+        for(const p of byName[name])
+          if(p.__tanpopo &&
+             Object.prototype.hasOwnProperty.call(at, [ymd(p.date), p.slot, p.layer, Sheets.asClass(p.target)].join("|")))
+            tpTouched.push(p);
         /* **並べ替えるのは、行が増えたか減ったときだけ。** 既存のコマを直しても
            年度・日付・時程は変わらないので、並びは動かない。毎回 1,200 行を
            並べ直して捨てていた（部分書き込みでは使わない） */
@@ -1407,6 +1411,7 @@ const Store = (function(){
         }
         else if(changed.length){ Sheets.writePlanRows(name, changed); rowWrites += changed.length; }
       }
+      markTpChanges_(year, tpTouched);
       SpreadsheetApp.flush();
       return {at, count: patches.length - conflicts.length - invalid.length,
               asked: patches.length, conflicts: conflicts, invalid: invalid,
@@ -1519,10 +1524,10 @@ const Store = (function(){
      週ごとに持つ。月曜が変われば、また未に戻る。
      たんぽぽ担当は「今週はだれがまだか」を見て支援員を組むので、
      前の週の印が残っていると、組んだあとで予定が変わる。 */
-  function tpSubmits(year, mondayISO){
+  function tpSubmits(year, mondayISO, pre){
     const out = {};
-    const states = tpStates_(year, mondayISO);
-    for(const r of Sheets.readAllSoft("たんぽぽ提出").rows){
+    const states = tpStates_(year, mondayISO, pre);
+    for(const r of (pre ? pre.submit : Sheets.readAllSoft("たんぽぽ提出").rows)){
       if(String(r["年度"]).trim() !== String(year)) continue;
       if(ymd(r["月曜"]) !== String(mondayISO)) continue;
       const c = Sheets.asClass(r["クラス"]);
@@ -1533,9 +1538,9 @@ const Store = (function(){
     }
     return out;
   }
-  function tpStates_(year, mon){
+  function tpStates_(year, mon, pre){
     const out = {};
-    for(const r of Sheets.readAllSoft('たんぽぽ状態').rows)
+    for(const r of (pre ? pre.state : Sheets.readAllSoft('たんぽぽ状態').rows))
       if(String(r['年度']) === String(year) && ymd(r['月曜']) === String(mon)) out[Sheets.asClass(r['クラス'])] = r;
     return out;
   }
@@ -1554,8 +1559,14 @@ const Store = (function(){
       const mon = ymd(addDays_(ymd(p.date), -((dt.getDay() + 6) % 7)));
       (months[mon] || (months[mon] = [])).push(p);
     }
+    /* **2枚は1回ずつだけ読む。** 週ごとに読むと、tpSubmits の中でも
+       状態をもう一度読むので、ロックの中で 週数×3回 の読み直しになる。
+       呼び手は保存1回につき1度だけここを呼ぶ（同じ週・組を二度書かないので、
+       書いたあとに読み直さなくても行番号は食い違わない）。 */
+    const pre = {state: Sheets.readAllSoft('たんぽぽ状態').rows,
+                 submit: Sheets.readAllSoft('たんぽぽ提出').rows};
     for(const mon in months){
-      const states = tpStates_(year, mon), submits = tpSubmits(year, mon);
+      const states = tpStates_(year, mon, pre), submits = tpSubmits(year, mon, pre);
       for(const c in submits){
         if(!months[mon].some(p => TimetableDomain.affectsClass(p, c, Sheets.asClass))) continue;
         const state = states[c] || {};
@@ -2602,31 +2613,33 @@ const BOOT_CONFIG = ["印刷用紙", "印刷余白mm", "印刷倍率",
 
 function apiBoot(year){
   const me = Gate.check();
-  const all = Store.readConfig(), pub = {};
-  BOOT_CONFIG.forEach(function(k){ if(k in all) pub[k] = all[k]; });
-  const out = {
-    me:       me.email,
-    isAdmin:  Gate.isAdmin(me.email),
-    file:     Sheets.bookName(),        /* 管理画面に出す。どのファイルを開いているか */
-    /* **退避ずみの年度。** これを渡さないと、退避した年度を開いた人に
-       基本時間割だけの紙が出て、「週案が全部消えた」と言われる。 */
-    archived: Store.archivedAll(),
-    config:   pub,
-    slots:    Store.readSlots(),
-    subjects: Store.readSubjects()
-  };
-  if(year){
-    const warn = [];
-    out.year   = +year;
-    out.roster = Store.readRoster(+year);
-    out.base   = Store.readBase(+year, warn);
-    /* **年間行事も一緒に返す。** 別に取りに行くと、その回数だけ待つ */
-    try{ const ev = Store.readEvents(+year);
-         out.events = ev.events; if(ev.warn) warn.push.apply(warn, ev.warn); }
-    catch(e){ out.events = {}; warn.push(String(e && e.message)); }
-    out.warn   = warn;
-  }
-  return out;
+  return Sheets.withMemo(function(){
+    const all = Store.readConfig(), pub = {};
+    BOOT_CONFIG.forEach(function(k){ if(k in all) pub[k] = all[k]; });
+    const out = {
+      me:       me.email,
+      isAdmin:  Gate.isAdmin(me.email),
+      file:     Sheets.bookName(),        /* 管理画面に出す。どのファイルを開いているか */
+      /* **退避ずみの年度。** これを渡さないと、退避した年度を開いた人に
+         基本時間割だけの紙が出て、「週案が全部消えた」と言われる。 */
+      archived: Store.archivedAll(),
+      config:   pub,
+      slots:    Store.readSlots(),
+      subjects: Store.readSubjects()
+    };
+    if(year){
+      const warn = [];
+      out.year   = +year;
+      out.roster = Store.readRoster(+year);
+      out.base   = Store.readBase(+year, warn);
+      /* **年間行事も一緒に返す。** 別に取りに行くと、その回数だけ待つ */
+      try{ const ev = Store.readEvents(+year);
+           out.events = ev.events; if(ev.warn) warn.push.apply(warn, ev.warn); }
+      catch(e){ out.events = {}; warn.push(String(e && e.message)); }
+      out.warn   = warn;
+    }
+    return out;
+  });
 }
 /* 年度の検査。**4月に開けたとき、何が足りないかを1画面で言う。**
    直しはここでやらない。黙って直すと、直した中身が誰にも見えない。 */
@@ -2650,23 +2663,25 @@ function apiArchivePurge(year, url, typed){
 }
 function apiReadYear(year){
   Gate.check();
-  const warn = [];
-  const base = Store.readBase(year, warn);
-  let events = {};
-  try{ const ev = Store.readEvents(year);
-       events = ev.events; if(ev.warn) warn.push.apply(warn, ev.warn); }
-  catch(e){ warn.push(String(e && e.message)); }
-  return {roster: Store.readRoster(year), base, events, warn};
+  return Sheets.withMemo(function(){
+    const warn = [];
+    const base = Store.readBase(year, warn);
+    let events = {};
+    try{ const ev = Store.readEvents(year);
+         events = ev.events; if(ev.warn) warn.push.apply(warn, ev.warn); }
+    catch(e){ warn.push(String(e && e.message)); }
+    return {roster: Store.readRoster(year), base, events, warn};
+  });
 }
 function apiReadWeek(year, mondayISO, targets){
   Gate.check();
-  return Store.readWeek(year, mondayISO, targets);
+  return Sheets.withMemo(function(){ return Store.readWeek(year, mondayISO, targets); });
 }
 /* 週の配列を1呼び出しで読む。各シート1回だけ走査し、行を週ごとに振り分ける
    （時数集計・月の面のためのもの。週ごとの繰り返し呼び出しを止める） */
 function apiReadWeeks(year, mondayISOs, targets){
   Gate.check();
-  return Store.readWeeks(year, mondayISOs, targets);
+  return Sheets.withMemo(function(){ return Store.readWeeks(year, mondayISOs, targets); });
 }
 /* 単元進捗。通常の週表示からは呼ばず、単元管理を開いた時だけ使う。
    コマへの印（週案の「単元」列）は apiWriteCells に乗るので、ここには無い。 */

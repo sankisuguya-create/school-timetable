@@ -5003,14 +5003,41 @@ const Backend = (function(){
     preT = setTimeout(() => {
       /* 先読みは**一度も読んでいないもの**だけ。古くなっただけのものまで
          先読みすると、開いてもいないクラスのために毎分読みに行くことになる */
+      if(sending) return;
       const want = allTargets().filter(t => !loadedWeek[weekTag(t)]);
-      if(!want.length || sending) return;
       const year = fy(), mon = wkKey(), epoch = editEpoch;
-      google.script.run
-        .withSuccessHandler(w => mergeWeek(want, w, year, mon, epoch))
-        .withFailureHandler(() => {})     /* 先読みが失敗しても、開くときに読み直す */
-        .apiReadWeek(year, mon, want);
+      if(want.length)
+        google.script.run
+          .withSuccessHandler(w => mergeWeek(want, w, year, mon, epoch))
+          .withFailureHandler(() => {})     /* 先読みが失敗しても、開くときに読み直す */
+          .apiReadWeek(year, mon, want);
+      prefetchNeighbors_(year, epoch);
     }, 1200);
+  }
+  /* **前後の週も待たせない。** 週案は翌週を書くことがいちばん多いので、
+     「次の週」を押すたびに1往復待っていた。いま見ている面のぶんだけ、
+     前後の週を apiReadWeeks の1往復で読んでおく（シートは1回しか走査しない
+     ので、サーバの手間は1週ぶんとほぼ同じ）。**同じ年度の週だけ**
+     （readWeeks は年度ごとに読む）。一度も読んでいない週だけ読む。 */
+  let nbT = 0;
+  function prefetchNeighbors(){
+    if(!onGas) return;
+    clearTimeout(nbT);
+    nbT = setTimeout(() => { if(!sending) prefetchNeighbors_(fy(), editEpoch); }, 1200);
+  }
+  function prefetchNeighbors_(year, epoch){
+    const vw = targetsForView();
+    if(!vw.length) return;
+    const mons = [-7, 7].map(d => addDays(monday, d))
+      .filter(d => String(fyOf(d)) === String(year)).map(iso)
+      .filter(m => vw.some(t => !loadedWeek[weekTag(t, year, m)]));
+    if(!mons.length) return;
+    google.script.run
+      .withSuccessHandler(res => {
+        for(const m of mons) if(res && res[m]) mergeWeek(vw, res[m], year, m, epoch);
+      })
+      .withFailureHandler(() => {})
+      .apiReadWeeks(year, mons, vw);
   }
   function allTargets(){
     const out = [{layer:"school", target:""}];
@@ -5470,7 +5497,7 @@ const Backend = (function(){
   return {isGas, info, saved: () => acknowledged && !unsaved() && !sending,
           /* 書いたのに、まだシートに入っていない。画面の地の色はこれで決める */
           touched: () => touched || !!lastErr, setNotifier, setDirtyWatcher, setConflictWatcher,
-          unsaved, prefetchWeek, readWeeks, readWeeksAll, unread, saveTally,
+          unsaved, prefetchWeek, prefetchNeighbors, readWeeks, readWeeksAll, unread, saveTally,
           watch, stale, heldCells, dropHeld, reloadWeek, discardChanges,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveSubjects, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
@@ -15546,7 +15573,7 @@ function goWeek(n){
     if(view.kind === "gate") drawGate(); else refreshWeek();
     if(fresh) saveNow();          /* 新しい年度をその場で1回だけ書き出す */
   };
-  loadAndDraw(draw, "週を開いています");
+  loadAndDraw(draw, "週を開いています", () => Backend.prefetchNeighbors());  /* 前後の週を先に読む */
 }
 
 /* ── 入力ロック ──────────────────────────────

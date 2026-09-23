@@ -266,13 +266,26 @@ const Sheets = (function(){
           .setValues([PLAN_COLS.slice(have)]).setFontWeight("bold");
     }
     /* **既にあるシートにも掛け直す。** 前の版で作ったシートは字の列が
-       書式なしテキストになっていない（3-3 が日付に化け、= が式として走る） */
-    for(const col of PLAN_TEXT_COLS){
-      const i = PLAN_COLS.indexOf(col);
-      if(i >= 0) sh.getRange(1, i + 1, sh.getMaxRows(), 1).setNumberFormat("@");
+       書式なしテキストになっていない（3-3 が日付に化け、= が式として走る）。
+       **ただし保存のたびには掛け直さない。** 11列ぶんの書式設定は
+       ロックの中で1枚あたり20回以上の往復になり、木曜の夕方に全員の待ちへ
+       積み上がる。「題名」列のいちばん下の1マスを見て、テキストなら掛け済み
+       とみなす（grow が足した行は上の行の書式を引き継ぐ）。
+       この実行の中で一度確かめたシートは、もう見ない。 */
+    if(!fmtDone_[name]){
+      const probe = PLAN_COLS.indexOf("題名") + 1;
+      if(sh.getRange(sh.getMaxRows(), probe).getNumberFormat() !== "@"){
+        const rows = sh.getMaxRows();
+        for(const col of PLAN_TEXT_COLS){
+          const i = PLAN_COLS.indexOf(col);
+          if(i >= 0) sh.getRange(1, i + 1, rows, 1).setNumberFormat("@");
+        }
+      }
+      fmtDone_[name] = true;
     }
     return sh;
   }
+  const fmtDone_ = {};
 
   /* 週案シートを読む。無ければ空。**日付は文字に直して返す。**
      シートに入れた "2026-09-07" は日付として取り込まれ、読むと Date で返る。
@@ -630,12 +643,41 @@ const Sheets = (function(){
      退避の記録のように、あとから足したシートは、古い学校にはまだ無い。
      無いだけで立ち上がらなくなるほうが、よほど困る。 */
   function readAllSoft(name){
-    if(!sheet(name)) return {rows: [], at: {}};
-    try{ return readAll(name); }
-    catch(e){ return {rows: [], at: {}}; }     /* 列が足りない古い形も、無いものとして扱う */
+    if(memo_ && memo_["soft\t" + name]) return copyRead_(memo_["soft\t" + name]);
+    let out;
+    if(!sheet(name)) out = {rows: [], at: {}};
+    else{
+      try{ out = readAll(name); }
+      catch(e){ out = {rows: [], at: {}}; }   /* 列が足りない古い形も、無いものとして扱う */
+    }
+    if(memo_){ memo_["soft\t" + name] = out; return copyRead_(out); }
+    return out;
   }
 
+  /* **読むだけの呼び出しの中では、同じシートを二度読まない。**
+     起動は「時程」を2回（readSlots・readBase）、週の読みは「たんぽぽ状態」を
+     何度も読んでいた。1回の readAll は見出し・行数・本体で約5往復かかる。
+     withMemo で包んだあいだだけ覚え、終われば捨てる（実行をまたいで持たない
+     ので、古いものを返すことはない）。**書く呼び出しは包まない。**
+     書いたあとに覚えた古い行を読むと、書いたはずの行が見えなくなる。
+     返すたびに行を写すので、呼び手が行を書き換えても覚えたものは汚れない。 */
+  let memo_ = null;
+  function withMemo(fn){
+    const prev = memo_;
+    memo_ = prev || {};
+    try{ return fn(); } finally { memo_ = prev; }
+  }
+  function copyRead_(r){
+    return {rows: r.rows.map(o => Object.assign({}, o)), at: r.at};
+  }
   function readAll(name){
+    if(memo_ && memo_[name]) return copyRead_(memo_[name]);
+    const out = readAll_(name);
+    if(memo_){ memo_[name] = out; return copyRead_(out); }
+    return out;
+  }
+
+  function readAll_(name){
     const {sh, at} = head(name);
     const last = sh.getLastRow();
     if(last < 2) return {rows: [], at};
@@ -701,7 +743,7 @@ const Sheets = (function(){
           TANPOPO_FILL, TANPOPO_OWN, asClass, isDate, readGrid,
           book, bookName, stash, shapeOk, shapeError, readAllSoft, grow,
           fillAfterRow, fillSubjectCols,
-          PLAN_PREFIX, PLAN_ALL, PLAN_COLS, planName, ensurePlan, readPlan, writePlan, writePlanRows,
+          PLAN_PREFIX, PLAN_ALL, PLAN_COLS, planName, ensurePlan, withMemo, readPlan, writePlan, writePlanRows,
           planNames, planMap,
           setup, head, readAll, appendRows, toArray, setRow, patchRow, blankRow, sheet};
 })();

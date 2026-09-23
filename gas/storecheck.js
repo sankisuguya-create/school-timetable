@@ -102,7 +102,8 @@ function fakeSheet(name){
         setNumberFormat(f){
           for(let j = 0; j < nc; j++) FORMATS[name + "/" + (c + j)] = f;
           return this;
-        }
+        },
+        getNumberFormat(){ return FORMATS[name + "/" + c] || "General"; }
       };
     },
     setFrozenRows(){},
