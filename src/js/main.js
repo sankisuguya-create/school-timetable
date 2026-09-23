@@ -223,7 +223,7 @@ function goWeek(n){
     if(view.kind === "gate") drawGate(); else refreshWeek();
     if(fresh) saveNow();          /* 新しい年度をその場で1回だけ書き出す */
   };
-  loadAndDraw(draw, "週を開いています");
+  loadAndDraw(draw, "週を開いています", () => Backend.prefetchNeighbors());  /* 前後の週を先に読む */
 }
 
 /* ── 入力ロック ──────────────────────────────

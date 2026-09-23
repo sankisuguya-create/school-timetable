@@ -51,12 +51,17 @@ ok("古い形の端末キャッシュでも、初回から入口を描ける", a
   yr.classes = ["1-1", "2-1"];
   yr.specials = ["音楽"];
   yr.tanpopo = {"1":"1-1"};
+  /* 生の形を入れたら印を落とす。**本番でも読み込みが同じことをする**
+     （backend.js applyYear → yearStale）。落とさないと、そろえ済みの
+     前の形のまま描くので、古い形を読めるかどうかを確かめられない */
+  yearStale(yr);
   try{
     drawGate();
     return document.querySelectorAll("#grid .tile.cls").length === 2
       && $("weekLabel").textContent.length > 0 && $("gClose").hidden;
   }finally{
     yr.classes = keep.classes; yr.specials = keep.specials; yr.tanpopo = keep.tanpopo;
+    yearStale(yr);
     drawGate();
   }
 }) === true);
@@ -113,12 +118,22 @@ ok("ロックと保存が折り返さず、見出しと同じ行に並ぶ",
    await p.evaluate(() => {
      const h = document.querySelector(".phead h2").getBoundingClientRect();
      const b = document.querySelector(".pbtns").getBoundingClientRect();
-     return Math.abs(h.top - b.top) < 12 && b.width < 240;
+     /* **幅は決め打ちしない。** 「変更を破棄」を足して 240px を超えた。
+        見たいのは「折り返さない」「見出しと同じ行」「枠からはみ出さない」 */
+     const tops = [...document.querySelectorAll(".pbtns > button:not([hidden])")]
+       .map(x => Math.round(x.getBoundingClientRect().top));
+     const panel = document.querySelector(".phead").getBoundingClientRect();
+     return Math.abs(h.top - b.top) < 12 && Math.max(...tops) - Math.min(...tops) < 8
+       && b.right <= panel.right + 1;
    }) === true,
    await p.evaluate(() => {
      const h = document.querySelector(".phead h2").getBoundingClientRect();
      const b = document.querySelector(".pbtns").getBoundingClientRect();
-     return [Math.round(h.top), Math.round(b.top), Math.round(b.width)];
+     const tops = [...document.querySelectorAll(".pbtns > button:not([hidden])")]
+       .map(x => Math.round(x.getBoundingClientRect().top));
+     return {h:Math.round(h.top), b:Math.round(b.top), tops,
+             right:Math.round(b.right),
+             panel:Math.round(document.querySelector(".phead").getBoundingClientRect().right)};
    }));
 ok("待っている印は、左メニューの操作のすぐ下に出る",
    await p.locator(".side .wk + #busy").count() === 1);
@@ -371,8 +386,21 @@ ok("Esc で閉じても入らない", await p.evaluate(() =>
      !((week().grade["3"] || {})["3|p4"])) === true,
    await p.evaluate(() => (week().grade["3"] || {})["3|p4"]));
 
+/* **Esc で閉じたあと、同じチップをもう一度押せば、もう一度聞く。**
+   コマを選んでいるあいだは、同じチップの2度目を「手放す」にしない
+   （手放すだけだと、押した人には効かないように見える） */
+ok("Esc のあとも体育のチップは持ったまま",
+   await p.evaluate(() => pickSub) === "taiiku", await p.evaluate(() => pickSub));
 await p.locator(".pal[data-v='taiiku']").click(); await p.waitForTimeout(250);
+ok("コマを選んだまま同じチップを押すと、もう一度聞く", await swOpen() === true);
+ok("そのときチップは手放さない", await p.evaluate(() => pickSub) === "taiiku");
 await p.locator("#swYes").click(); await p.waitForTimeout(300);
+/* 持ったままだと、このあとコマを押すたびに体育が入る。
+   コマを選んでいないときに同じチップを押すと手放す */
+await p.evaluate(() => { selCell = null; paintSheet(); });
+await p.locator(".pal[data-v='taiiku']").click(); await p.waitForTimeout(150);
+ok("コマを選んでいないときに押すと手放す", await p.evaluate(() => pickSub) === "");
+await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").click(); await p.waitForTimeout(150);
 ok("«上書きする»なら入る",
    (await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText()).trim() === "体育",
    await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText());
@@ -397,7 +425,10 @@ ok("«変更しない»なら入らない",
    (await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText()).trim() === beforeCancel,
    [beforeCancel, await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText()]);
 
-/* 打って入れるときも同じ。**打った字ごと元に戻す** */
+/* 打って入れるときも同じ。**打った字ごと元に戻す**
+   前の検査で家庭のチップを持ったままなので、先に手放す（持ったままコマを
+   押すと家庭が入り、打つ前に窓が開いてしまう） */
+await p.evaluate(() => pickRelease_()); await p.waitForTimeout(100);
 await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").click(); await p.waitForTimeout(150);
 await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").type("音"); await p.waitForTimeout(300);
 ok("打ち始めた1打目でも聞く", await swOpen() === true);
@@ -1947,7 +1978,7 @@ ok("色だけでなく、ボタンの字も変わる（✓）",
    (await p.locator("#tpGo").innerText()).indexOf("✓") === 0,
    await p.locator("#tpGo").innerText());
 ok("色だけでなく、となりにも字で出す",
-   (await p.locator("#tpWeek").innerText()).indexOf("ぜんぶ提出ずみ") >= 0,
+   (await p.locator("#tpWeek").innerText()).indexOf("全部提出ずみ") >= 0,
    await p.locator("#tpWeek").innerText());
 ok("緑の上でも字が読める（4.5以上）", await p.evaluate(() => {
      const lin = v => { v /= 255; return v <= .03928 ? v/12.92

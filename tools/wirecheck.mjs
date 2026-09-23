@@ -20,6 +20,22 @@ const ok = (name, cond, got) => {
 };
 
 const b = await chromium.launch(exe ? {executablePath: exe} : {});
+
+/* **偽のサーバに口がそろっているか。** 画面（src/js）が呼ぶ api… を拾い、
+   偽のサーバに同じ名前があるかを見る。無い口を呼ぶと例外で処理が止まり、
+   検査は「読みに行かない」のような見当違いの理由で落ちる。 */
+{
+  const fs = await import("fs");
+  const dir = path.join(ROOT, "src", "js");
+  const used = new Set();
+  for(const f of fs.readdirSync(dir).filter(f => f.endsWith(".js")))
+    for(const m of fs.readFileSync(path.join(dir, f), "utf8").matchAll(/\.(api[A-Za-z]+)\(/g))
+      used.add(m[1]);
+  const self = fs.readFileSync(fileURLToPath(import.meta.url), "utf8");
+  const missing = [...used].filter(n => !new RegExp("^\\s+" + n + "\\(", "m").test(self)).sort();
+  console.log("■ 偽のサーバ");
+  ok("偽のサーバに口がそろっている（画面が呼ぶ api… が全部ある）", !missing.length, missing);
+}
 const p = await (await b.newContext({viewport:{width:1500, height:950}})).newPage();
 await schoolWeek(p);
 const errs = [];
@@ -286,6 +302,56 @@ await p.addInitScript(() => {
           : {ok:false, why:"開けません"}), 0);
       },
       /* 新年度の設定。**手順と、いまどこまで済んでいるか。** */
+      /* ── 単元進捗・紙の書き出し ─────────────────
+         **本番に口を足したら、ここにも足す。** 無いと画面の呼び出しが
+         例外になり、その先（面を開く・週を読む）が黙って止まる。
+         単元進捗の口が無いまま、クラスを開くと週を読まない形で
+         検査が8件落ち続けていた。足し忘れは下の「偽のサーバに口が
+         そろっている」が見つける。 */
+      apiUnitManager(y, layer, target, subject, sp){
+        const u = window.__units || (window.__units = []);
+        const r = {terms:[], termVersion:"[]",
+                   units:u.filter(x => x.layer === layer && x.target === target
+                                  && (!subject || x.subject === subject))};
+        call("apiUnitManager", [y, layer, target, subject, sp], r);
+        setTimeout(() => okFn(JSON.parse(JSON.stringify(r))), 0);
+      },
+      apiWriteUnit(y, input){
+        const u = window.__units || (window.__units = []);
+        const x = Object.assign({}, input, {year:y, updatedAt:String(Date.now())});
+        if(!x.id) x.id = "unit-" + (u.length + 1);
+        const i = u.findIndex(v => v.id === x.id);
+        if(i >= 0) u[i] = x; else u.push(x);
+        call("apiWriteUnit", [y, input], x);
+        setTimeout(() => okFn(Object.assign({}, x)), 0);
+      },
+      apiClearUnitStart(y, id, at){
+        const x = (window.__units || []).find(v => v.id === id) || {id};
+        x.start = {date:"", slot:""};
+        call("apiClearUnitStart", [y, id, at], x);
+        setTimeout(() => okFn(Object.assign({}, x)), 0);
+      },
+      apiDeleteUnit(y, id, at){
+        window.__units = (window.__units || []).filter(v => v.id !== id);
+        call("apiDeleteUnit", [y, id, at]);
+        setTimeout(() => okFn({deleted:id}), 0);
+      },
+      apiWriteTerms(y, list, ver){
+        call("apiWriteTerms", [y, list, ver]);
+        setTimeout(() => okFn({terms:list, version:JSON.stringify(list)}), 0);
+      },
+      apiUnitCandidates(y, cls, subject, fromDate, fromSlot, termEnd){
+        call("apiUnitCandidates", [y, cls, subject, fromDate, fromSlot, termEnd]);
+        setTimeout(() => okFn(null), 0);
+      },
+      apiExportPlanSheet(name, sheets){
+        call("apiExportPlanSheet", [name, sheets]);
+        setTimeout(() => okFn({url:"https://docs.google.com/spreadsheets/d/EXPORT/edit"}), 0);
+      },
+      apiExportSlide(name, png){
+        call("apiExportSlide", [name, png]);
+        setTimeout(() => okFn({url:"https://docs.google.com/presentation/d/EXPORT/edit"}), 0);
+      },
       apiYearSetup(y){
         call("apiYearSetup", [y]);
         setTimeout(() => okFn(window.__nySetup(y)), 0);
@@ -556,10 +622,19 @@ ok("送るのは最後の中身",
 
 console.log("\n■ まとめ送り");
 await p.evaluate(() => { window.__calls.length = 0; });
+/* **いまの中身と違う教科を選ぶ。** 同じ教科を選び直しても変更ではないので
+   送られない（正しい）。検査の週（9/7の週）は月曜1校時がもとから国語なので、
+   決め打ちで国語を押すと2件しか送られず、まとめ送りを確かめられない */
 for(const d of [0, 2, 3]){
-  await p.locator("#sheet .cell[data-d='" + d + "'][data-s='p1'] .t").click();
+  const cell = p.locator("#sheet .cell[data-d='" + d + "'][data-s='p1'] .t");
+  const now = (await cell.innerText()).trim();
+  await cell.click();
   await p.waitForTimeout(80);
-  await p.locator(".pal[data-v='kokugo']").click();
+  const pals = p.locator(".pal[data-v]");
+  for(let i = 0; i < await pals.count(); i++){
+    const pal = pals.nth(i);
+    if((await pal.innerText()).trim() !== now){ await pal.click(); break; }
+  }
   await p.waitForTimeout(80);
 }
 await p.locator("#saveBtn").click(); await p.waitForTimeout(600);
@@ -1580,7 +1655,7 @@ await p.waitForTimeout(400);
 ok("ぜんぶ済むと、左メニューの知らせが消える",
    await p.locator("#navNewYear").isHidden() === true);
 ok("済んだことを言う",
-   (await p.locator("#nyStat").innerText()).indexOf("ぜんぶできています") >= 0,
+   (await p.locator("#nyStat").innerText()).indexOf("全部できています") >= 0,
    await p.locator("#nyStat").innerText());
 
 console.log("\n■ A週の起点と年間行事は、シートを開かずに直せる");
