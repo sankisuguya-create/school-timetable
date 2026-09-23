@@ -153,8 +153,15 @@ function applyZoom(){
   $("vz").value = z; $("vzV").textContent = z;
   $("fitChk").checked = !!db.settings.fit;
 }
+function paintMobWhere(){
+  const e = $("mobWhere"); if(!e) return;
+  const t = $("target");
+  const name = t && t.selectedOptions[0] ? t.selectedOptions[0].textContent : "";
+  e.textContent = name ? name + " " + md(monday) + "→" + md(addDays(monday, 4)) : "";
+}
 function autoFit(){
-  if(!db.settings.fit) return applyZoom();
+  const mob = document.body.classList.contains("mob");
+  if(!db.settings.fit && !mob) return applyZoom();
   const sh = $("sheet"), st = $("stage"), pa = $("paper");
   pa.style.zoom = 1;
   const w = sh.offsetWidth, h = sh.offsetHeight;
@@ -164,6 +171,10 @@ function autoFit(){
   const arrows = [...st.querySelectorAll(".wkarrow")]
     .reduce((n, e) => n + (e.hidden ? 0 : e.offsetWidth + 6), 0);
   const k = Math.min((st.clientWidth - 24 - arrows) / w, (st.clientHeight - 20) / h);
+  /* 携帯では拡大をブラウザのピンチに任せるだけなので、ここでは
+     紙が枠に入る倍率まで測る。**vz には書かない**
+     （携帯で測った小さい倍率が残ると、次にPCで開いたとき紙が縮んで出る） */
+  if(mob){ pa.style.zoom = Math.max(.3, Math.min(1, k)); return; }
   db.settings.vz = Math.max(30, Math.min(160, Math.round(k * 100)));
   applyZoom();
 }
@@ -475,6 +486,38 @@ function wire(){
       saveNow();
     });
   }
+
+  /* 狭い画面では両メニューを引き出しにする。**見ることが主**なので、
+     普段はしまって紙を広く使う。?mob は携帯を持たないPCでの確認用 */
+  const MOBILE = matchMedia("(max-width:920px)");
+  const setMob = () => {
+    document.body.classList.toggle("mob", MOBILE.matches || location.search.includes("mob"));
+    paintMobWhere();
+  };
+  const scrim = el("button", "scrim"); scrim.type = "button"; scrim.hidden = true;
+  scrim.setAttribute("aria-label", "メニューを閉じる");
+  document.body.appendChild(scrim);
+  const setDrawer = (l, p) => {
+    const side = document.querySelector(".side"), panel = document.querySelector(".panel");
+    side.classList.toggle("open", l);
+    if(p && !panel.hidden) panel.classList.toggle("open", true);
+    else panel.classList.remove("open");
+    scrim.hidden = !(l || panel.classList.contains("open"));
+  };
+  on("mobMenu", "click", () =>
+    setDrawer(!document.querySelector(".side").classList.contains("open"), false));
+  on("mobPanel", "click", () =>
+    setDrawer(false, !document.querySelector(".panel").classList.contains("open")));
+  scrim.addEventListener("click", () => setDrawer(false, false));
+  /* 引き出しの中で面を替えたら、開いたままだと替えた先が見えないのでしまう */
+  document.addEventListener("click", ev => {
+    if(ev.target.closest(".side .nav")) setDrawer(false, false);
+  });
+  document.addEventListener("keydown", ev => {
+    if(ev.key === "Escape") setDrawer(false, false);
+  });
+  MOBILE.addEventListener("change", () => { setMob(); setDrawer(false, false); });
+  setMob();
   /* 紙の左右の ‹ › 。**左メニューの ◀ ▶ と同じことをする**
      （行き先を2つ持たない。片方だけ直した版が出る） */
   on("wkPrev","click", () => goWeek(-7));

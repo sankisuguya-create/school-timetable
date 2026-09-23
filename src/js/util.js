@@ -100,6 +100,8 @@ function paintWeekLabel(){
     const px = parseFloat(getComputedStyle(e).fontSize);
     e.style.fontSize = Math.max(Math.floor(px * fit / e.scrollWidth * 10) / 10, 13) + "px";
   }
+  /* 携帯の上の帯にも「何のいつ」を出す */
+  if(typeof paintMobWhere === "function") paintMobWhere();
 }
 
 /* 年度は 4/1 起点 */
