@@ -905,7 +905,7 @@
 <dialog id="impPlanDlg"><div class="dlg wide">
   <h2 id="ipTtl">表から取り込む</h2>
   <p id="ipLead"></p>
-  <div class="row">
+  <div class="row" id="ipTplRow">
     <button class="btn" id="ipTpl">雛形を出す（コピー）</button>
     <span class="hint">今の中身が入った形で出ます。
       <b>変えるところだけ</b>直してください。</span></div>
@@ -918,11 +918,6 @@
   <!-- 時数表はマス目の表。**貼る先をそのまま見せる**ので、
        スプレッドシートを開かずに済む。塊ごと貼れる（左上のマスを選んで Ctrl+V） -->
   <div id="ipTableWrap" hidden><div id="ipTable" class="iptblwrap"></div></div>
-  <!-- 年間行事は1行1件で、行を足し引きする。字の欄のほうが直しやすい -->
-  <div id="ipTextWrap">
-    <textarea id="ipText" rows="7"
-      placeholder="雛形を直したら、見出しの行ごとコピーして貼る（Ctrl+V）"></textarea>
-  </div>
   <div class="row"><button class="btn" id="ipRead">読む</button>
     <span class="hint" id="ipStat"></span></div>
   <div id="ipWarn" class="tpwarn"></div>
