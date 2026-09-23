@@ -113,6 +113,11 @@ function dayHeadEl(d, extra){
     + (f ? "<span class='mark'>" + DAY_FORM[f].mark + "</span>" : ""));
   hd.dataset.d = d;
   if(hasEvents(d)) hd.classList.add("hasev");
+  /* **今日の列は画面で分かるようにする。** 土曜まで並ぶ紙の中で、
+     今日がどこか指されないと、頭の中で曜日を数え直すことになる */
+  const t = new Date();
+  if(dt.getFullYear() === t.getFullYear() && dt.getMonth() === t.getMonth()
+     && dt.getDate() === t.getDate()) hd.classList.add("istoday");
   return hd;
 }
 

@@ -402,6 +402,79 @@ function wire(){
 
   on("prevWk","click", () => goWeek(-7));
   on("nextWk","click", () => goWeek(7));
+
+  /* カレンダーから週を選ぶ ── **往復ボタンでしか辿れなかった遠い週へ、
+     日を押してそのまま飛ぶ。** 開いている週は地色、今日は字を濃く */
+  let calYM = null;
+  const paintWeekCal = () => {
+    const g = $("cpGrid");
+    if(!g || !calYM) return;
+    const {y, m} = calYM;
+    $("cpLabel").textContent = y + "年" + (m + 1) + "月";
+    $("cpDows").innerHTML = DOW.map(w => "<span>" + w + "</span>").join("");
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const curSun = addDays(monday, 6);
+    g.innerHTML = "";
+    for(let i = 0, lead = (new Date(y, m, 1).getDay() + 6) % 7; i < lead; i++)
+      g.appendChild(el("span", "cp-blank"));
+    for(let d = 1, last = new Date(y, m + 1, 0).getDate(); d <= last; d++){
+      const dt = new Date(y, m, d);
+      const b = el("button", "cp-day", String(d));
+      b.type = "button";
+      if(dt.getTime() === today.getTime()) b.classList.add("cp-today");
+      if(dt >= monday && dt <= curSun) b.classList.add("cp-curwk");
+      b.addEventListener("click", () => {
+        $("wkCalPop").hidden = true;
+        const diff = Math.round((mondayOf(dt) - monday) / 86400000);
+        if(diff) goWeek(diff);
+      });
+      g.appendChild(b);
+    }
+  };
+  on("wkCal", "click", ev => {
+    ev.stopPropagation();
+    const p = $("wkCalPop");
+    if(p.hidden){
+      calYM = {y: monday.getFullYear(), m: monday.getMonth()};
+      paintWeekCal();
+      p.hidden = false;
+    } else p.hidden = true;
+  });
+  on("cpPrev", "click", ev => {
+    ev.stopPropagation();
+    if(--calYM.m < 0){ calYM.m = 11; calYM.y--; }
+    paintWeekCal();
+  });
+  on("cpNext", "click", ev => {
+    ev.stopPropagation();
+    if(++calYM.m > 11){ calYM.m = 0; calYM.y++; }
+    paintWeekCal();
+  });
+  /* **外を押す・Esc で閉じる。** 窓の外を押せば消える流儀に揃える */
+  document.addEventListener("click", ev => {
+    const p = $("wkCalPop");
+    if(p && !p.hidden && !ev.target.closest("#wkCalPop,#wkCal")) p.hidden = true;
+  });
+  document.addEventListener("keydown", ev => {
+    if(ev.key === "Escape"){ const p = $("wkCalPop"); if(p) p.hidden = true; }
+  });
+  /* **開いている週から、今週へ一発で戻る。** 遠い週を見たあと、
+     今週まで何十回も戻るボタンを押さなくてよい */
+  on("toTodayBtn", "click", () => {
+    const diff = Math.round((mondayOf(new Date()) - monday) / 86400000);
+    if(diff) goWeek(diff);
+  });
+  /* 右メニューの畳みは既定で全部閉じ、開け閉めを端末に残す。
+     **開けたまま閉じれば、次も開いている** */
+  const folds = db.settings.folds || {};
+  for(const f of document.querySelectorAll("details.fold[id]")){
+    f.open = !!folds[f.id];
+    f.addEventListener("toggle", () => {
+      db.settings.folds = db.settings.folds || {};
+      db.settings.folds[f.id] = f.open;
+      saveNow();
+    });
+  }
   /* 紙の左右の ‹ › 。**左メニューの ◀ ▶ と同じことをする**
      （行き先を2つ持たない。片方だけ直した版が出る） */
   on("wkPrev","click", () => goWeek(-7));
