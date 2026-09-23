@@ -85,8 +85,8 @@ button,select,input,textarea{font:inherit;color:inherit}
 .cp-curwk{background:var(--tint);color:var(--ink-link);font-weight:600}
 .side .wkrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
 /* 「メニューへ」と「今週へ」は横に並べる */
-.navrow{display:flex;gap:6px;padding:0 4px}
-.navrow .nav{flex:1;justify-content:center;gap:6px;padding:8px 6px}
+.navrow{display:flex;gap:5px;padding:0 4px}
+.navrow .nav{flex:1;justify-content:center;gap:5px;padding:8px 4px;font-size:12.5px}
 .side .seg button{padding:5px 10px;font-size:12.5px}
 .side .target{width:100%;font-size:16px;font-weight:700;text-align:center;
   text-align-last:center;padding-top:7px;padding-bottom:7px}

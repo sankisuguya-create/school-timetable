@@ -464,6 +464,17 @@ function wire(){
     const diff = Math.round((mondayOf(new Date()) - monday) / 86400000);
     if(diff) goWeek(diff);
   });
+  /* 右メニューの畳みは既定で全部閉じ、開け閉めを端末に残す。
+     **開けたまま閉じれば、次も開いている** */
+  const folds = db.settings.folds || {};
+  for(const f of document.querySelectorAll("details.fold[id]")){
+    f.open = !!folds[f.id];
+    f.addEventListener("toggle", () => {
+      db.settings.folds = db.settings.folds || {};
+      db.settings.folds[f.id] = f.open;
+      saveNow();
+    });
+  }
   /* 紙の左右の ‹ › 。**左メニューの ◀ ▶ と同じことをする**
      （行き先を2つ持たない。片方だけ直した版が出る） */
   on("wkPrev","click", () => goWeek(-7));

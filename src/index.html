@@ -116,10 +116,10 @@
       <hr>
       <!-- 入口の面へ戻る口と、開いている週から今週への直帰。**「他の週案」は入口の面そのもの** -->
       <div class="navrow">
-        <button class="nav" data-screen="gate" data-act="gate" data-help="gate">
+        <button class="nav" data-screen="gate" data-act="gate">
           <svg width="17" height="17"><use href="#i-layers"/></svg><span>メニューへ</span></button>
         <button class="nav" id="toTodayBtn">
-          <svg width="17" height="17"><use href="#i-cal"/></svg><span>今週へ</span></button>
+          <svg width="15" height="15"><use href="#i-cal"/></svg><span>今週へ</span></button>
       </div>
 
       <!-- 中央に出すかたちを切り替える口。**この並びが「現在地」も言う。**
@@ -389,7 +389,7 @@
            一つ屋根の下に置く。既定は開く ── コマへ引っぱって入れるのは
            毎回の操作なので、畳んだままだと開く手が増える。畳めるようには
            しておく（.fold）。 -->
-      <details class="fold" id="palFold" open>
+      <details class="fold" id="palFold">
         <summary data-help="pals"><span>教科・行事</span></summary>
         <div class="foldin">
         <div class="pals" id="pals"></div>
@@ -508,7 +508,7 @@
            学級・専科の面だけに出す（単元は「クラス×教科」の持ちものなので、
            学年・全校の面には置かない）。チップはこの中 ── 作る・直す・消すは
            「単元進捗管理」の窓。既定は開く（引っぱって落とす毎回の操作）。 -->
-      <details class="fold" id="unitEntry" open hidden>
+      <details class="fold" id="unitEntry" hidden>
         <summary><span>単元管理</span></summary>
         <div class="foldin">
           <div class="pals" id="unitPals"></div>
