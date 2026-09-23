@@ -35,9 +35,11 @@ function app(storage=new Map()){
 }
 for(const finishFirst of [false,true]){
   const a=app();a.edit();a.b.flush();a.b.readWeeks([a.mon],()=>{});
-  const write=a.calls.find(x=>x.key==='apiWriteCells'),read=a.calls.find(x=>x.key==='apiReadWeek');
+  const write=a.calls.find(x=>x.key==='apiWriteCells'),read=a.calls.find(x=>x.key==='apiReadWeeks');
   if(finishFirst)write.ok({at:{}});
-  read.ok({home:{'1-1':{'0|p1':{title:'古い応答'}}}});
+  /* まとめ読みの返事は {月曜: 週} のかたち。古い応答が届いても
+     送信中（hasPending）のコマは mergeWeek が守る（→ backend.js mergeWeek） */
+  read.ok({[a.mon]:{home:{'1-1':{'0|p1':{title:'古い応答'}}}}});
   assert.equal(a.w.home['1-1']['0|p1'].title,'私の入力');
 }
 {

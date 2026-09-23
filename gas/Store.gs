@@ -53,6 +53,44 @@ const Store = (function(){
     return Math.round((x - y) / 86400000);
   }
 
+  /* 行をコマにする。週の読み（readWeek/readWeeks）が分かち持つ形。 */
+  function weekCellFromRow_(r){
+    return {
+      title:   String(r["題名"] || ""),
+      note:    String(r["詳細"] || ""),
+      subject: String(r["教科コード"] || "") || null,
+      /* 時数名。**手で決めた1文字の控え。** 空なら画面側が教科の1文字か
+         題名の頭文字を出す（→ src/js/compose.js shortOf）。 */
+      short:   String(r["時数名"] || ""),
+      /* **単元進捗の印。** "u12"＝所属、"-"＝外す、空＝規定
+         （同じ教科で起点より後ろなら所属）。番号は画面が数える。 */
+      u:       String(r["単元"] || ""),
+      at:      Sheets.isDate(r["更新時刻"]) ? r["更新時刻"].getTime() : 0,
+      /* **競合を見るための物差し。** at とは別に持つ。
+         at は層の重ね順（あとから書いたものが上に出る）にも使うので、
+         更新時刻の無い行を負の値にすると、その行が基本時間割より
+         下に沈んで画面から消える。だから at は 0 のままにする。
+
+         sat の 0 は「その行がまだ無い」の意味に使う。
+         行はあるのに更新時刻が無い（1.3.0 より前に書かれた行、
+         人が手で足した行）を 0 と同じ扱いにすると、
+         画面が「新しいコマだ」と思って送ってくる 0 と一致してしまい、
+         見えないまま上書きできてしまう。だから -1 で区別する。 */
+      sat:     Sheets.isDate(r["更新時刻"]) ? r["更新時刻"].getTime() : -1,
+      by:      String(r["更新者"] || "")
+    };
+  }
+
+  function weekBankPut_(w, off, slot, r, cell){
+    const k = off + "|" + slot;             /* **画面は 何日目|時程 で持つ** */
+    const layer = String(r["層"]), target = Sheets.asClass(r["対象"]);
+    if(layer === "school")       w.school[k] = cell;
+    else if(layer === "grade")   (w.grade[target]   || (w.grade[target]   = {}))[k] = cell;
+    else if(layer === "special"){ cell.sp = String(r["担当"] || "");
+                                  (w.special[target] || (w.special[target] = {}))[k] = cell; }
+    else if(layer === "home")    (w.home[target]    || (w.home[target]    = {}))[k] = cell;
+  }
+
   function readWeek(year, mondayISO, targets){
     /* 本文を読む前の提出版を返す。読込中に再提出されても、古い本文に新しい版を付けない。 */
     const submits = tpSubmits(year, mondayISO);
@@ -71,45 +109,65 @@ const Store = (function(){
         if(String(r["年度"]) !== String(year)) continue;
         const date = r["日付"];
         if(date < start || date > end) continue;
-        const cell = {
-          title:   String(r["題名"] || ""),
-          note:    String(r["詳細"] || ""),
-          subject: String(r["教科コード"] || "") || null,
-          /* 時数名。**手で決めた1文字の控え。** 空なら画面側が教科の1文字か
-             題名の頭文字を出す（→ src/js/compose.js shortOf）。 */
-          short:   String(r["時数名"] || ""),
-          /* **単元進捗の印。** "u12"＝所属、"-"＝外す、空＝規定
-             （同じ教科で起点より後ろなら所属）。番号は画面が数える。 */
-          u:       String(r["単元"] || ""),
-          at:      Sheets.isDate(r["更新時刻"]) ? r["更新時刻"].getTime() : 0,
-          /* **競合を見るための物差し。** at とは別に持つ。
-             at は層の重ね順（あとから書いたものが上に出る）にも使うので、
-             更新時刻の無い行を負の値にすると、その行が基本時間割より
-             下に沈んで画面から消える。だから at は 0 のままにする。
-
-             sat の 0 は「その行がまだ無い」の意味に使う。
-             行はあるのに更新時刻が無い（1.3.0 より前に書かれた行、
-             人が手で足した行）を 0 と同じ扱いにすると、
-             画面が「新しいコマだ」と思って送ってくる 0 と一致してしまい、
-             見えないまま上書きできてしまう。だから -1 で区別する。 */
-          sat:     Sheets.isDate(r["更新時刻"]) ? r["更新時刻"].getTime() : -1,
-          by:      String(r["更新者"] || "")
-        };
         const off = dayOffset_(date, mondayISO);
         if(off < 0 || off > 6) continue;
-        const k = off + "|" + r["時程"];      /* **画面は 何日目|時程 で持つ** */
-        const layer = String(r["層"]), target = Sheets.asClass(r["対象"]);
-        if(layer === "school")       w.school[k] = cell;
-        else if(layer === "grade")   (w.grade[target]   || (w.grade[target]   = {}))[k] = cell;
-        else if(layer === "special"){ cell.sp = String(r["担当"] || "");
-                                      (w.special[target] || (w.special[target] = {}))[k] = cell; }
-        else if(layer === "home")    (w.home[target]    || (w.home[target]    = {}))[k] = cell;
+        weekBankPut_(w, off, r["時程"], r, weekCellFromRow_(r));
       }
     }
     /* **提出の印も一緒に返す。** 別に取りに行くと、その回数だけ待つ。
        週の読みは週ごとに1回来るので、ここに載せるのがいちばん安い */
     w.submits = submits;
     return w;
+  }
+
+  /* **いくつかの週をまとめて読む。** 各シートを1回だけ読んで、行をその週へ
+     振り分ける。時数集計は年度はじめからの週を全部読むので、週ごとに
+     apiReadWeek を繰り返すと 週数×シート数 の全件走査になる（3月の
+     全クラス集計で1,300回ぶん）。こちらはシート数ぶんだけ読む。
+     返すのは {月曜: 週のかたち}（readWeek と同じかたちが週ごとに入る） */
+  function readWeeks(year, mondayISOs, targets){
+    const weeks = {};
+    for(const m of (mondayISOs || [])){
+      const mon = ymd(m);
+      if(mon && !weeks[mon]) weeks[mon] = {school:{}, grade:{}, special:{}, home:{}};
+    }
+    /* **提出版は2枚のシートを1回ずつ読んで週ごとに振り分ける。**
+       tpSubmits を週ごとに呼ぶと、また 週数×2枚 の読み直しになる */
+    const stateRows = Sheets.readAllSoft("たんぽぽ状態").rows;
+    const submitRows = Sheets.readAllSoft("たんぽぽ提出").rows;
+    for(const mon in weeks){
+      const states = {}, out = {};
+      for(const r of stateRows)
+        if(String(r["年度"]) === String(year) && ymd(r["月曜"]) === mon)
+          states[Sheets.asClass(r["クラス"])] = r;
+      for(const r of submitRows){
+        if(String(r["年度"]).trim() !== String(year)) continue;
+        if(ymd(r["月曜"]) !== mon) continue;
+        const c = Sheets.asClass(r["クラス"]);
+        if(c) out[c] = TimetableDomain.submissionView(r, states[c] || {});
+      }
+      weeks[mon].submits = out;
+    }
+    const names = {};
+    if(targets && targets.length){
+      for(const t of targets) names[Sheets.planName(t.layer, t.target)] = true;
+    } else {
+      for(const n of Sheets.planNames()) names[n] = true;
+    }
+    const all = Sheets.planMap();
+    for(const name in names){
+      if(!all[name]) continue;
+      for(const r of Sheets.readPlan(name, ymd, all)){
+        if(String(r["年度"]) !== String(year)) continue;
+        /* **その日が入る週の月曜。** 行がどの週のものかは日付が決める
+           （日曜も同じ週の月曜へ入る） */
+        const w = weeks[mondayISO_(r["日付"])];
+        if(!w) continue;
+        weekBankPut_(w, dayOffset_(r["日付"], mondayISO_(r["日付"])),
+                     r["時程"], r, weekCellFromRow_(r));
+      }
+    }
+    return weeks;
   }
 
   /* ── 人が手で書いた行も読む ────────────────────
@@ -2515,7 +2573,7 @@ const Store = (function(){
     return new Date(+p[0], +p[1] - 1, +p[2] + n);
   }
 
-  return {readWeek, readBase, readRoster, readConfig, readSlots, readSubjects, writeSubjects,
+  return {readWeek, readWeeks, readBase, readRoster, readConfig, readSlots, readSubjects, writeSubjects,
           readTerms, readUnits, unitManager, writeTerms, writeUnit, clearUnitStart,
           deleteUnit, unitCandidates,
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste, exportPlanSheet, exportSlide,
@@ -2603,6 +2661,12 @@ function apiReadYear(year){
 function apiReadWeek(year, mondayISO, targets){
   Gate.check();
   return Store.readWeek(year, mondayISO, targets);
+}
+/* 週の配列を1呼び出しで読む。各シート1回だけ走査し、行を週ごとに振り分ける
+   （時数集計・月の面のためのもの。週ごとの繰り返し呼び出しを止める） */
+function apiReadWeeks(year, mondayISOs, targets){
+  Gate.check();
+  return Store.readWeeks(year, mondayISOs, targets);
 }
 /* 単元進捗。通常の週表示からは呼ばず、単元管理を開いた時だけ使う。
    コマへの印（週案の「単元」列）は apiWriteCells に乗るので、ここには無い。 */
