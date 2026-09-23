@@ -576,9 +576,11 @@ function wire(){
   on("gvGrade","change", e => { gGrade = e.target.value; redrawCenter(); });
   on("gvClose","click",  () => setCenter("week"));
   on("gvImage","click", async () => {
-    try{ await nodePng($("gvPaper"), outputName(gGrade + "年_" + "学年") + ".png");
-         toast("学年の画像を保存した"); }
-    catch(e){ toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
+    const w = openOutWindow("画像を作っています");
+    try{ const b = await nodePngBlob($("gvPaper"));
+         if(w){ w.location.href = URL.createObjectURL(b); return; }
+         downloadBlob(b, outputName(gGrade + "年_" + "学年") + ".png"); }
+    catch(e){ if(w) w.close(); toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
   });
   /* **測り直しは間引く。** 掴んで動かすあいだ、1秒に何十回も強制リフローになる
      （週の紙の autoFit と同じ 120ms） */
@@ -595,9 +597,11 @@ function wire(){
   on("cvPrint","click", printCal);
   on("gvPrint","click", printGrade);
   on("cvImage","click", async () => {
-    try{ await nodePng($("cvPaper"), outputName("カレンダー") + ".png");
-         toast("カレンダーの画像を保存した"); }
-    catch(e){ toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
+    const w = openOutWindow("画像を作っています");
+    try{ const b = await nodePngBlob($("cvPaper"));
+         if(w){ w.location.href = URL.createObjectURL(b); return; }
+         downloadBlob(b, outputName("カレンダー") + ".png"); }
+    catch(e){ if(w) w.close(); toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
   });
   let cvT = 0;
   addEventListener("resize", () => {
@@ -611,8 +615,11 @@ function wire(){
   on("mClose","click", () => setCenter("week"));
   on("mPrint","click", printMonth);
   on("mImage","click", async () => {
-    try{ await nodePng($("mPaper"), outputName("4週_B4")+".png"); toast("4週の画像を保存した"); }
-    catch(e){ toast("画像を作れなかった（"+escText(e.message||e)+"）"); }
+    const w = openOutWindow("画像を作っています");
+    try{ const b = await nodePngBlob($("mPaper"));
+         if(w){ w.location.href = URL.createObjectURL(b); return; }
+         downloadBlob(b, outputName("4週_B4")+".png"); }
+    catch(e){ if(w) w.close(); toast("画像を作れなかった（"+escText(e.message||e)+"）"); }
   });
   on("mSheet","click", exportMonthSheet);
   addEventListener("resize", () => { if(!$("monthView").hidden) fitMonth(); });
@@ -648,9 +655,11 @@ function wire(){
   on("setNewYear","click", () => { $("settingsDlg").close(); openNewYearDlg(); });
   on("weekPrint","click", () => { if(centerOk()) setCenter("week"); window.print(); });
   on("weekImage","click", async () => {
-    $("weekBarStat").textContent = "";
-    try{ await nodePng($("sheet"), outputName("B5")+".png"); $("weekBarStat").textContent="画像を保存しました。Google Chatへ添付できます。"; }
-    catch(e){ $("weekBarStat").textContent="画像を作れませんでした（"+escText(e.message||e)+"）"; }
+    const w = openOutWindow("画像を作っています");
+    try{ const b = await nodePngBlob($("sheet"));
+         if(w){ w.location.href = URL.createObjectURL(b); return; }
+         downloadBlob(b, outputName("B5")+".png"); }
+    catch(e){ if(w) w.close(); toast("画像を作れませんでした（"+escText(e.message||e)+"）"); }
   });
   on("weekSheet","click", exportWeekSheet);
   /* 連絡帳。クラス・日付・宿題・持ち物が変わるたびに焼き直す。
@@ -664,13 +673,16 @@ function wire(){
   on("renItem", "input",  renrakuLater);
   on("renImage","click", () => {
     const cv = renrakuCanvas(); if(!cv) return;
-    cv.toBlob(b => { downloadBlob(b, renrakuName() + ".png");
-                     $("renStat").textContent = "画像を保存しました"; }, "image/png");
+    const w = openOutWindow("画像を作っています");
+    cv.toBlob(b => {
+      if(w){ w.location.href = URL.createObjectURL(b); return; }
+      downloadBlob(b, renrakuName() + ".png");
+    }, "image/png");
   });
   on("renPrint","click", () => {
     const cv = renrakuCanvas(); if(!cv) return;
     const w = window.open("", "_blank");
-    if(!w){ $("renStat").textContent = "窓が開けませんでした（ポップアップを許可してください）"; return; }
+    if(!w){ toast("窓が開けませんでした（ポップアップを許可してください）"); return; }
     const src = cv.toDataURL("image/png");
     w.document.write("<html><head><title>" + escText(renrakuName()) + "</title>"
       + "<style>@page{size:A4 landscape;margin:0}body{margin:0}img{display:block;width:100vw;height:100vh}</style>"
@@ -679,10 +691,11 @@ function wire(){
   });
   on("renSlide","click", () => {
     const cv = renrakuCanvas(); if(!cv) return;
-    $("renStat").textContent = "Google Slideを作っています";
+    const w = openOutWindow("Google Slideを作っています");
     Backend.exportSlide(renrakuName(), cv.toDataURL("image/png"), r => {
+      if(w){ w.location.href = r.url; return; }
       $("renStat").innerHTML = "作りました → <a href='" + escText(r.url) + "' target='_blank' rel='noopener'>" + escText(r.name) + "</a>";
-    }, e => { $("renStat").textContent = e; });
+    }, e => { if(w) w.close(); toast(escText(e)); });
   });
   /* 左メニューの三つ組み。**その面の中にある口と同じ動き**にする ──
      ここで別の動きを書くと、帯と面の中で結果がずれる。

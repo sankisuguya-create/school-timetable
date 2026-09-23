@@ -86,7 +86,7 @@ function downloadBlob(blob, name){
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 /* 紙面をそのままPNGへする。外部サービスへ週案を送らない。 */
-async function nodePng(node, name){
+async function nodePngBlob(node){
   const r = node.getBoundingClientRect();
   /* **見えていない面は画像にできない。** 隠れた要素は幅も高さも 0 になり、
      0×0 の canvas は toBlob が null を返す ── これをそのまま downloadBlob へ
@@ -106,19 +106,40 @@ async function nodePng(node, name){
   const img = new Image(); await new Promise((ok, ng) => { img.onload=ok; img.onerror=ng; img.src=url; });
   const scale=2, cv=document.createElement("canvas"); cv.width=Math.ceil(r.width*scale); cv.height=Math.ceil(r.height*scale);
   const cx=cv.getContext("2d"); cx.scale(scale,scale); cx.fillStyle="#fff"; cx.fillRect(0,0,r.width,r.height); cx.drawImage(img,0,0);
-  const blob=await new Promise(ok => cv.toBlob(ok,"image/png")); downloadBlob(blob,name);
+  return await new Promise(ok => cv.toBlob(ok,"image/png"));
+}
+async function nodePng(node, name){
+  downloadBlob(await nodePngBlob(node), name);
+}
+/* 別窓・別タブに結果を出すときの共通の窓。
+   **窓は押した瞬間に開く** ── 生成を待ってから開くと、クリックから遅れた
+   window.open をブラウザがポップアップとして弾く。先に開いておき、
+   中身ができたら中を差し替える（location を移す）。
+   窓が弾かれたときは null で返るので、呼び元はその場合だけ従来どおりの
+   報せ（リンクや保存）に退ける。 */
+function openOutWindow(kind){
+  const w = window.open("", "_blank");
+  if(w){
+    w.document.write("<body style='font-family:sans-serif;color:#666;padding:2em'>"
+      + (kind || "作っています") + "…</body>");
+    w.document.close();
+  }
+  return w;
 }
 const outputName = suffix => viewName().replace(/[^\w\-ぁ-んァ-ヶ一-龠]/g,"_") + "_" + iso(monday) + "_" + suffix;
 function exportWeekSheet(){
-  $("weekBarStat").textContent="Google Sheetを作っています…";
+  const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(outputName("週案"), planParts(monday,1), r => {
+    if(w){ w.location.href = r.url; return; }
     $("weekBarStat").innerHTML="<b>Sheetを作りました。</b> <a target='_blank' rel='noopener' href='"+escText(r.url)+"'>Google Sheetを開く</a>";
-  }, why => $("weekBarStat").textContent=why);
+  }, why => { if(w) w.close(); toast(escText(why)); });
 }
 function exportMonthSheet(){
+  const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(outputName("4週"), planParts(mMonday,4), r => {
+    if(w){ w.location.href = r.url; return; }
     toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>4週のGoogle Sheetを開く</a>");
-  }, why => toast(escText(why)));
+  }, why => { if(w) w.close(); toast(escText(why)); });
 }
 /* カレンダーの面。**見えている2ヶ月を、週ごとの週案で出す。**
    カレンダー形の表は Sheet では潰れる（1コマ数行を2ヶ月分並べられない）ので、
@@ -128,9 +149,11 @@ function exportCalSheet(){
   const start = mondayOf(calFrom);
   const lastM = new Date(calFrom.getFullYear(), calFrom.getMonth() + CAL_MONTHS, 0);
   const count = Math.ceil((addDays(lastM, 1) - start) / (7 * 864e5));
+  const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(outputName("2ヶ月"), planParts(start, count), r => {
+    if(w){ w.location.href = r.url; return; }
     toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>2ヶ月のGoogle Sheetを開く</a>");
-  }, why => toast(escText(why)));
+  }, why => { if(w) w.close(); toast(escText(why)); });
 }
 /* 学年の面。**開いている学年のクラスぶんを、クラスごとに1シートずつ。**
    planValues が読む「いまの面」をクラスに差し替えて組み立て、終わったら戻す */
@@ -146,10 +169,12 @@ function exportGradeSheet(){
   }finally{ view = keep; }
   /* 名づけに outputName は使わない ── 先頭に「いま開いている面の名前」が
      入るので、学年のまとめが「1-1 の学年ごと」になってしまう */
+  const w = openOutWindow("Google Sheetを作っています");
   Backend.exportPlanSheet(escText(gGrade) + "年_学年ごと_" + iso(monday), sheets, r => {
+    if(w){ w.location.href = r.url; return; }
     toast("<a target='_blank' rel='noopener' href='"+escText(r.url)+"'>"
           + escText(gGrade) + "年のGoogle Sheetを開く</a>");
-  }, why => toast(escText(why)));
+  }, why => { if(w) w.close(); toast(escText(why)); });
 }
 
 function openBaseDlg(){

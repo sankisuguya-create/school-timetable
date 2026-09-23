@@ -298,6 +298,9 @@ function upBadgeFor_(d, s, c){
 
 /* コマのバッジを描く／消す。paintCell の最後に1か所だけ呼ぶ */
 function upPaintBadge_(e, c, d, s){
+  /* 学年ごとの面（gcell）では出さない ── クラスぶんに割った1コマの幅に
+     単元の印は入らない。印を動かす仕掛けも、ここは「見るだけ」の面なので要らない */
+  if(e.classList.contains("gcell")) return;
   let box = e.querySelector(".ub");
   const b = upBadgeFor_(d, s, c);
   if(!b){
