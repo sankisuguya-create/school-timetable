@@ -75,10 +75,25 @@
            空いたところへ、中央のかたち（週案・4週・カレンダー・学年）を上げた ──
            いちばんよく押すのに、いちばん下の紙のとなりにあった。 -->
       <div class="wk">
-        <div class="pill">
-          <button class="ico" id="prevWk" aria-label="前の週"><svg width="18" height="18"><use href="#i-left"/></svg></button>
-          <span class="date" id="weekLabel"></span>
-          <button class="ico" id="nextWk" aria-label="次の週"><svg width="18" height="18"><use href="#i-right"/></svg></button>
+        <div class="pillrow">
+          <div class="pill">
+            <button class="ico" id="prevWk" aria-label="前の週"><svg width="18" height="18"><use href="#i-left"/></svg></button>
+            <span class="date" id="weekLabel"></span>
+            <button class="ico" id="nextWk" aria-label="次の週"><svg width="18" height="18"><use href="#i-right"/></svg></button>
+          </div>
+          <!-- 日を選んでその週へ飛ぶ口。**往復ボタンだけでは遠い週へ行けない** -->
+          <button class="ico wkcal" id="wkCal" aria-label="カレンダーから週を選ぶ"
+                  title="日を選ぶと、その週へ飛ぶ"><svg width="18" height="18"><use href="#i-cal"/></svg></button>
+        </div>
+        <!-- 週のカレンダー。**日を1つ押すと、その日をふくむ週へ飛ぶ。** -->
+        <div class="calpop" id="wkCalPop" hidden>
+          <div class="cp-head">
+            <button class="ico" id="cpPrev" aria-label="前の月"><svg width="14" height="14"><use href="#i-left"/></svg></button>
+            <b id="cpLabel"></b>
+            <button class="ico" id="cpNext" aria-label="次の月"><svg width="14" height="14"><use href="#i-right"/></svg></button>
+          </div>
+          <div class="cp-dows" id="cpDows"></div>
+          <div class="cp-grid" id="cpGrid"></div>
         </div>
         <div class="wkrow" data-help="week">
           <span class="wkno" id="weekNo"></span>
@@ -99,8 +114,13 @@
       </div>
 
       <hr>
-      <button class="nav" data-screen="gate" data-act="gate" data-help="gate">
-        <svg width="17" height="17"><use href="#i-layers"/></svg><span>他の週案を開く</span></button>
+      <!-- 入口の面へ戻る口と、開いている週から今週への直帰。**「他の週案」は入口の面そのもの** -->
+      <div class="navrow">
+        <button class="nav" data-screen="gate" data-act="gate" data-help="gate">
+          <svg width="17" height="17"><use href="#i-layers"/></svg><span>メニューへ</span></button>
+        <button class="nav" id="toTodayBtn">
+          <svg width="17" height="17"><use href="#i-cal"/></svg><span>今週へ</span></button>
+      </div>
 
       <!-- 中央に出すかたちを切り替える口。**この並びが「現在地」も言う。**
            前は左上に専用の帯（週案／4週／カレンダー／学年）を別に置いていたが、
@@ -675,7 +695,7 @@
     <button class="settingcard" id="setSub"><b>教科の表し方</b><span>紙の字・時数の1文字・たんぽぽの字</span></button>
     <button class="settingcard" id="setPaper"><b>印刷と文字</b><span id="setPaperNow">用紙・文字の大きさ</span></button>
     <button class="settingcard" id="setImpTally"><b>時数表から取り込む</b><span>雛形を出して、貼り戻す</span></button>
-    <button class="settingcard" id="setImpEv"><b>年間行事からコマを作る</b><span>行事計画をそのまま貼って、全校・学年へ</span></button>
+    <button class="settingcard" id="setImpEv"><b>年間行事からコマを作る</b><span>連携シートに貼って、全校・学年へ</span></button>
     <button class="settingcard" id="setNewYear"><b>新年度の準備</b><span>4月1日から、上から順に確認</span></button>
   </div>
 </div></dialog>
@@ -1054,12 +1074,12 @@
   <div class="end"><button class="btn go" data-close="warnDlg">確かめた</button></div>
 </div></dialog>
 
-<!-- 専科どうしの月予定（仮）。**画面だけのもの。紙には出さない。**
+<!-- 専科どうしの月予定。**画面だけのもの。紙には出さない。**
      枠を決めている最中の作業であって、刷って残す情報ではない
      （空き枠さがし・年間行事の印と同じ扱い）。
      「くむ」を押すまで、そして「入れる」を押すまで、週案には1文字も書かない -->
 <dialog id="spmDlg"><div class="dlg wide">
-  <h2>専科の月予定を組む（仮）</h2>
+  <h2>専科の月予定を組む</h2>
   <p><b>1ヶ月ぶんの専科の巡りを、干渉が起きないように計算して出す。</b>
      全校の予定・学年の予定・休み・校外行事の入っているコマには置かない。
      同じ時刻に、同じクラスへ2人の専科が行くことも、1人が2クラスへ行くこともない。<br>

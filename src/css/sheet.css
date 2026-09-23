@@ -148,6 +148,9 @@
   border-bottom:1.2px solid var(--rule-week)}
 .hd .dow{font-size:calc(var(--fs-s)*var(--k));color:var(--ink-sub);font-weight:400}
 .hd.sat .dow{color:var(--ink-link)}
+/* 今日の列は地色で示す。**画面だけの印**（紙には「今日」は要らない） */
+@media screen{.hd.istoday{background:var(--tint);border-radius:6px 6px 0 0}}
+.hd.istoday .dow{color:var(--ink-link);font-weight:700}
 
 /* 時程の列。**時刻は置かない**（画面でも紙でも同じ ── 教務必携に刷ってある）。
    校時の数字だけが立つので、離れた位置からでも拾える大きさにしてある。 */

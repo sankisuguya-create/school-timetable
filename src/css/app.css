@@ -63,7 +63,30 @@ button,select,input,textarea{font:inherit;color:inherit}
 .side .pill{justify-content:space-between}
 .side .pill .date{font-size:18px;font-weight:700;padding:5px 4px;
   flex:1;min-width:0;text-align:center;letter-spacing:.01em}
+/* 日付欄を狭めて、右にカレンダーの口を置く */
+.side .pillrow{display:flex;align-items:center;gap:6px}
+.side .pillrow .pill{flex:1;min-width:0}
+.side .pillrow .wkcal{flex:none;border:1px solid var(--line);background:var(--card);
+  border-radius:var(--r);width:34px;height:34px}
+.side .pillrow .wkcal:hover{background:var(--hover)}
+.side .wk{position:relative}
+/* 週のカレンダー。日を押すと、その日をふくむ週へ飛ぶ */
+.calpop{position:absolute;z-index:40;top:44px;left:4px;right:4px;padding:9px;
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.cp-head{display:flex;align-items:center;justify-content:space-between}
+.cp-head b{font-size:14px}
+.cp-dows,.cp-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;text-align:center}
+.cp-dows{margin:7px 0 2px;font-size:10.5px;color:var(--tx-sub)}
+.cp-day{border:0;background:transparent;border-radius:6px;padding:5px 0;
+  font-size:12.5px;font-variant-numeric:tabular-nums;cursor:pointer;font-family:inherit}
+.cp-day:hover{background:var(--hover)}
+.cp-today{font-weight:700;color:var(--ink-link)}
+.cp-curwk{background:var(--tint);color:var(--ink-link);font-weight:600}
 .side .wkrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+/* 「メニューへ」と「今週へ」は横に並べる */
+.navrow{display:flex;gap:6px;padding:0 4px}
+.navrow .nav{flex:1;justify-content:center;gap:6px;padding:8px 6px}
 .side .seg button{padding:5px 10px;font-size:12.5px}
 .side .target{width:100%;font-size:16px;font-weight:700;text-align:center;
   text-align-last:center;padding-top:7px;padding-bottom:7px}
@@ -514,6 +537,14 @@ span.tpin{cursor:default}
    自分の学級へ書くのと同じ手つきで20学級へ出る。
    #A85800 は白字 5.2:1、保存の青 #0F5EA8 とは全色覚型で ΔE00 47.8〜73.4。 */
 .save.apply{border-color:var(--apply);color:var(--apply)}
+/* 「保存ずみ」は押すものではなく状態の表示。**ボタンのかたちにしない。**
+   送るものが有るときだけ dirty/bad のボタン色に戻る（is-saved はそこに入らない） */
+body.is-saved .pbtns .save{background:transparent;border-color:transparent;
+  box-shadow:none;cursor:default;color:var(--tx-sub)}
+body.is-saved .pbtns .save:hover{background:transparent}
+body.is-saved .pbtns .save svg{opacity:.55}
+/* 破棄は消える操作。**未保存があるときだけ、消える先が分かる色に** */
+body.is-unsaved #discardBtn{color:var(--cat-clash);border-color:#ecc0b8}
 .save.apply.dirty{background:var(--apply);border-color:var(--apply);color:#fff}
 .save.apply.bad{background:var(--cat-clash);border-color:var(--cat-clash);color:#fff}
 /* 押す前に、どこへ出るかを字で言う1行 */
