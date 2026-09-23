@@ -386,17 +386,21 @@ ok("Esc で閉じても入らない", await p.evaluate(() =>
      !((week().grade["3"] || {})["3|p4"])) === true,
    await p.evaluate(() => (week().grade["3"] || {})["3|p4"]));
 
-/* **もう一度入れるときは、コマを押す。** 体育のチップは持ったままなので、
-   チップをもう一度押すと「手放す」になる（持つ／手放すの切り替え）。
-   持っているあいだにコマを押すと、その教科が入る */
+/* **Esc で閉じたあと、同じチップをもう一度押せば、もう一度聞く。**
+   コマを選んでいるあいだは、同じチップの2度目を「手放す」にしない
+   （手放すだけだと、押した人には効かないように見える） */
 ok("Esc のあとも体育のチップは持ったまま",
    await p.evaluate(() => pickSub) === "taiiku", await p.evaluate(() => pickSub));
-await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").click(); await p.waitForTimeout(250);
-ok("持ったままコマを押すと、もう一度聞く", await swOpen() === true);
+await p.locator(".pal[data-v='taiiku']").click(); await p.waitForTimeout(250);
+ok("コマを選んだまま同じチップを押すと、もう一度聞く", await swOpen() === true);
+ok("そのときチップは手放さない", await p.evaluate(() => pickSub) === "taiiku");
 await p.locator("#swYes").click(); await p.waitForTimeout(300);
-/* 持ったままだと、このあとコマを押すたびに体育が入る。チップを押して手放す */
+/* 持ったままだと、このあとコマを押すたびに体育が入る。
+   コマを選んでいないときに同じチップを押すと手放す */
+await p.evaluate(() => { selCell = null; paintSheet(); });
 await p.locator(".pal[data-v='taiiku']").click(); await p.waitForTimeout(150);
-ok("チップをもう一度押すと手放す", await p.evaluate(() => pickSub) === "");
+ok("コマを選んでいないときに押すと手放す", await p.evaluate(() => pickSub) === "");
+await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").click(); await p.waitForTimeout(150);
 ok("«上書きする»なら入る",
    (await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText()).trim() === "体育",
    await p.locator("#sheet .cell[data-d='3'][data-s='p4'] .t").innerText());
