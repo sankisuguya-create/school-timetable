@@ -87,7 +87,15 @@ function downloadBlob(blob, name){
 }
 /* 紙面をそのままPNGへする。外部サービスへ週案を送らない。 */
 async function nodePngBlob(node){
+  /* **縮めて見せている紙は、元の大きさで測る。** 画面に合わせる zoom は
+     .paper に掛かっていて、getBoundingClientRect は縮んだ大きさを返す。
+     一方、画像の中の紙は zoom を引き継がず元の大きさで組まれる ──
+     幅が足りず右が見切れる（実測：教務必携用を狭い窓で画像に出すと、
+     右の列が途中で切れた）。測るあいだだけ zoom を 1 に戻す。 */
+  const pa = node.closest(".paper"), z = pa && pa.style.zoom;
+  if(pa && z) pa.style.zoom = 1;
   const r = node.getBoundingClientRect();
+  if(pa && z) pa.style.zoom = z;
   /* **見えていない面は画像にできない。** 隠れた要素は幅も高さも 0 になり、
      0×0 の canvas は toBlob が null を返す ── これをそのまま downloadBlob へ
      渡すと "createObjectURL: Overload resolution failed" という、原因の

@@ -2263,7 +2263,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
            .cvview の印刷・画像・Sheet）と同じことをする ── 口を2つに
            増やしても動きは1つ（二重に聞かれないよう、sb* は既存の口を押す） -->
       <div class="weekbar" id="weekBar" hidden>
-        <button class="btn go" id="weekPrint">印刷</button>
+        <button class="btn" id="weekPrint">印刷</button>
         <button class="btn" id="weekImage">画像</button>
         <button class="btn" id="weekSheet">Sheet</button>
         <p class="hint" id="weekBarStat"></p>
@@ -2271,21 +2271,21 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
       <button class="nav" data-act="month" data-center="month" data-help="month" data-plan-output>
         <svg width="17" height="17"><use href="#i-grid"/></svg><span>4週まとめて（B4）</span></button>
       <div class="weekbar" id="monthBar" hidden>
-        <button class="btn go" id="sbMPrint">印刷</button>
+        <button class="btn" id="sbMPrint">印刷</button>
         <button class="btn" id="sbMImage">画像</button>
         <button class="btn" id="sbMSheet">Sheet</button>
       </div>
       <button class="nav" data-act="cal" data-center="cal" data-help="cal" data-plan-output>
         <svg width="17" height="17"><use href="#i-cal"/></svg><span>2ヶ月（A4）</span></button>
       <div class="weekbar" id="calBar" hidden>
-        <button class="btn go" id="sbCPrint">印刷</button>
+        <button class="btn" id="sbCPrint">印刷</button>
         <button class="btn" id="sbCImage">画像</button>
         <button class="btn" id="sbCSheet">Sheet</button>
       </div>
       <button class="nav" data-act="grade" data-center="grade" data-help="gradeview" data-plan-output>
         <svg width="17" height="17"><use href="#i-users"/></svg><span>学年ごと（A4横）</span></button>
       <div class="weekbar" id="gradeBar" hidden>
-        <button class="btn go" id="sbGPrint">印刷</button>
+        <button class="btn" id="sbGPrint">印刷</button>
         <button class="btn" id="sbGImage">画像</button>
         <button class="btn" id="sbGSheet">Sheet</button>
       </div>
@@ -2343,7 +2343,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
           <b id="mTitle"></b>
           <button class="btn" id="mNext">次の4週 ▶</button>
           <span class="grow"></span>
-          <button class="btn go" id="mPrint">印刷</button>
+          <button class="btn" id="mPrint">印刷</button>
           <button class="btn" id="mImage">画像</button>
           <button class="btn" id="mSheet">Google Sheet</button>
           <button class="btn" id="mClose">週の紙へ戻る</button>
@@ -2365,7 +2365,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
           <select class="target" id="gvGrade" aria-label="見る学年"></select>
           <b id="gvTitle"></b>
           <span class="grow"></span>
-          <button class="btn go" id="gvPrint">印刷</button>
+          <button class="btn" id="gvPrint">印刷</button>
           <button class="btn" id="gvImage">画像</button>
           <button class="btn" id="gvClose">週の紙へ戻る</button>
         </div>
@@ -2385,7 +2385,7 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
           <!-- 備考を出すか。**既定は空欄**（手で書き込む欄として刷る形）。
                週案に書いた備考をそのまま出したい週もあるので、ここで切り替える -->
           <button class="btn tgl" id="cvNote" aria-pressed="false">備考：空欄</button>
-          <button class="btn go" id="cvPrint">印刷</button>
+          <button class="btn" id="cvPrint">印刷</button>
           <button class="btn" id="cvImage">画像</button>
           <button class="btn" id="cvClose">週の紙へ戻る</button>
         </div>
@@ -13502,7 +13502,15 @@ function downloadBlob(blob, name){
 }
 /* 紙面をそのままPNGへする。外部サービスへ週案を送らない。 */
 async function nodePngBlob(node){
+  /* **縮めて見せている紙は、元の大きさで測る。** 画面に合わせる zoom は
+     .paper に掛かっていて、getBoundingClientRect は縮んだ大きさを返す。
+     一方、画像の中の紙は zoom を引き継がず元の大きさで組まれる ──
+     幅が足りず右が見切れる（実測：教務必携用を狭い窓で画像に出すと、
+     右の列が途中で切れた）。測るあいだだけ zoom を 1 に戻す。 */
+  const pa = node.closest(".paper"), z = pa && pa.style.zoom;
+  if(pa && z) pa.style.zoom = 1;
   const r = node.getBoundingClientRect();
+  if(pa && z) pa.style.zoom = z;
   /* **見えていない面は画像にできない。** 隠れた要素は幅も高さも 0 になり、
      0×0 の canvas は toBlob が null を返す ── これをそのまま downloadBlob へ
      渡すと "createObjectURL: Overload resolution failed" という、原因の
