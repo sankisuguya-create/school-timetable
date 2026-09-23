@@ -62,7 +62,7 @@ button,select,input,textarea{font:inherit;color:inherit}
    字の始まりが3つに散らばり、視線が左右に振れる。 */
 .side .pill{justify-content:space-between}
 .side .pill .date{font-size:18px;font-weight:700;padding:5px 4px;
-  flex:1;text-align:center;letter-spacing:.01em}
+  flex:1;min-width:0;text-align:center;letter-spacing:.01em}
 .side .wkrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .side .seg button{padding:5px 10px;font-size:12.5px}
 .side .target{width:100%;font-size:16px;font-weight:700;text-align:center;

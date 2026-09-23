@@ -193,7 +193,7 @@ button,select,input,textarea{font:inherit;color:inherit}
    字の始まりが3つに散らばり、視線が左右に振れる。 */
 .side .pill{justify-content:space-between}
 .side .pill .date{font-size:18px;font-weight:700;padding:5px 4px;
-  flex:1;text-align:center;letter-spacing:.01em}
+  flex:1;min-width:0;text-align:center;letter-spacing:.01em}
 .side .wkrow{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .side .seg button{padding:5px 10px;font-size:12.5px}
 .side .target{width:100%;font-size:16px;font-weight:700;text-align:center;
@@ -3610,6 +3610,20 @@ function mondayOf(d){
 }
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const md = d => (d.getMonth()+1) + "/" + d.getDate();
+
+/* 左上の日付欄。「10/12 → 10/16」のように2桁の月日が並ぶ週は、
+   18px のままでは欄に入りきらず、右の 〉 を枠の外へ押し出す。
+   **入る大きさまで縮める**（ふだんは18pxのまま。はみ出す週だけ縮む）。 */
+function paintWeekLabel(){
+  const e = $("weekLabel"); if(!e) return;
+  e.textContent = md(monday) + " → " + md(addDays(monday, 4));
+  e.style.fontSize = "";
+  const fit = e.clientWidth;             /* flex:1 + min-width:0 の実際の幅 */
+  if(fit && e.scrollWidth > fit){
+    const px = parseFloat(getComputedStyle(e).fontSize);
+    e.style.fontSize = Math.max(Math.floor(px * fit / e.scrollWidth * 10) / 10, 13) + "px";
+  }
+}
 
 /* 年度は 4/1 起点 */
 const fyOf = d => (d.getMonth() >= 3) ? d.getFullYear() : d.getFullYear() - 1;
@@ -13230,7 +13244,7 @@ function loadAndDraw(draw, message, after){
 function drawGate(){
   /* 途中で例外が起きても「閉じる」だけが中央に残らないよう、先に初期状態を作る。 */
   $("gClose").hidden = !lastTarget;
-  $("weekLabel").textContent = md(monday) + " → " + md(addDays(monday, 4));
+  paintWeekLabel();
   const n = weekNo();
   $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   const cols = Math.max.apply(null,
@@ -15575,7 +15589,7 @@ function syncVariant(){
   }
 }
 function refreshWeek(){
-  $("weekLabel").textContent = md(monday) + " → " + md(addDays(monday, 4));
+  paintWeekLabel();
   const n = weekNo();
   $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();

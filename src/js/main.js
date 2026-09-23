@@ -192,7 +192,7 @@ function syncVariant(){
   }
 }
 function refreshWeek(){
-  $("weekLabel").textContent = md(monday) + " → " + md(addDays(monday, 4));
+  paintWeekLabel();
   const n = weekNo();
   $("weekNo").textContent = (n ? "第" + n + "週　" : "") + fy() + "年度";
   syncVariant();
