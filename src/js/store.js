@@ -344,6 +344,21 @@ function spParseLabel_(label){
 /* `sp_数字` は「教科が読めなかった」ときに振る仮の身元。教科としては使えない */
 const isSpDummy_ = s => /^sp_\d+$/.test(String(s || "").trim());
 
+/* 教科の欄の字を、**教科コードへそろえる。**「理科」という名前や
+   「34理科」のような数字つき、仮の身元（sp_数字）も通す。読めなければ ""。
+   読み替えないと、窓の選択肢（コード）に合う字がなく、
+   専科の行には先頭の国語が出てしまう。 */
+function spSubjectCode_(s){
+  s = String(s || "").trim();
+  if(!s || isSpDummy_(s)) return "";
+  if(SUB_BY_CODE[s]) return s;
+  const base = s.replace(/_\d+$/, "");
+  if(SUB_BY_CODE[base]) return base;   /* zuko_2 型の身元が教科に紛れたもの */
+  if(SUB_BY_NAME[s]) return SUB_BY_NAME[s].code;
+  const p = spParseLabel_(s);
+  return p ? p.subject : "";
+}
+
 function normSpecials_(v){
   if(!Array.isArray(v)) return clone(DEFAULT_SPECIALS);
   /* **すでに形がそろっていれば、そのまま返す。** 作り直すと、
@@ -351,7 +366,7 @@ function normSpecials_(v){
      教科が仮の身元（sp_数字）の行は形がそろっていても通さない ──
      ラベルから読み替えて直す（一度保存されると、そのまま残るため） */
   if(v.every(x => x && typeof x.code === "string" && x.code
-       && typeof x.subject === "string" && x.subject && !isSpDummy_(x.subject)
+       && SUB_BY_CODE[x.subject]
        && Array.isArray(x.grades)))
     return v;
   const out = [], seen = {};
@@ -364,11 +379,8 @@ function normSpecials_(v){
     const known = SUB_BY_NAME[label];
     const parsed = spParseLabel_(label) || spParseLabel_(obj.subject)
                 || spParseLabel_(obj.code);
-    let subject = String(obj.subject || "").trim();
-    if(isSpDummy_(subject)) subject = "";
-    if(!subject) subject = String(obj.code || "").trim();
-    if(isSpDummy_(subject)) subject = "";
-    if(!subject) subject = (known ? known.code : "") || (parsed ? parsed.subject : "");
+    let subject = spSubjectCode_(obj.subject) || spSubjectCode_(obj.code)
+               || (known ? known.code : "") || (parsed ? parsed.subject : "");
     const labelOrCode = label || String(obj.code || "").trim();
     if(!subject && !labelOrCode) continue;
     /* 身元。**1人目は教科コードのまま**（前の年度の控えがそのまま読める）。

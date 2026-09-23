@@ -815,7 +815,13 @@ function wire(){
      1人目は教科コードのまま、2人目からは「rika_2」と連番を足す。 */
   on("rsSpAdd","click", () => {
     const list = Y().specials || (Y().specials = []);
-    const sub = (SUBJECTS.find(x => x.count && !x.only) || {code:"ongaku"}).code;
+    /* **専科らしい教科から、まだ枠のないものを優先する。**
+       いつも先頭（国語）を足すと、足すたびに国語専科ができてしまう */
+    const have = new Set(list.map(x => x.subject));
+    const usual = ["ongaku","zuko","gaikoku","rika","taiiku","katei"];
+    const sub = (usual.find(c => !have.has(c))
+              || (SUBJECTS.find(x => x.count && !x.only && !have.has(x.code)) || {}).code
+              || "ongaku");
     let code = sub, n = 2;
     while(list.some(x => x.code === code)) code = sub + "_" + (n++);
     list.push({code, subject:sub, grades:[]});
