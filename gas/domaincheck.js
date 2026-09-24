@@ -69,8 +69,12 @@ ok("提出状態を画面用に組み立てる",
    view.exports.file === "2026-09-16T10:00:00.000Z", view);
 ok("出力時に変更がなければ通す",
    D.submissionUnchanged({at:"x", dirty:false}, {at:"x"}) === true);
-ok("出力時に変更ありなら止める",
+ok("出力時に変更ありなら止める（窓を開いたときは知らなかった）",
    D.submissionUnchanged({at:"x", dirty:true}, {at:"x"}) === false);
+ok("窓が名指しした「提出後に直したクラス」では止めない",
+   D.submissionUnchanged({at:"x", dirty:true}, {at:"x", dirty:true}) === true);
+ok("提出し直されていたら止める",
+   D.submissionUnchanged({at:"y", dirty:false}, {at:"x", dirty:true}) === false);
 ok("出力時刻は同一ミリ秒を避ける",
    D.nextSubmissionTimestamp({"at":"2026-09-16T10:00:00.000Z"},
                               Date.parse("2026-09-16T10:00:00.000Z"))

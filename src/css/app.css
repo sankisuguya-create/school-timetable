@@ -49,12 +49,9 @@ button,select,input,textarea{font:inherit;color:inherit}
 .side .wk{display:flex;flex-direction:column;gap:7px;padding:8px 4px 10px;
   position:sticky;top:-14px;z-index:4;background:var(--card);
   box-shadow:0 6px 10px -8px var(--shade-2)}
-/* 「自動に戻す」。**手で変えた週にだけ出る。** 出しっぱなしにすると、
-   押す必要のないものが毎週目に入る */
-.abauto{border:1px solid var(--line);border-radius:9px;background:var(--card);
-  color:var(--ink-link);font-size:11.5px;padding:3px 8px;cursor:pointer;
-  font-family:inherit;align-self:flex-start}
-.abauto:hover{border-color:var(--ink-link)}
+/* A週・B週の表示。**押せない。** 日付から決まるものを、押せる形で見せない */
+.abnow{border:1px solid var(--line);border-radius:9px;background:var(--card);
+  font-size:12.5px;font-weight:700;padding:3px 10px;white-space:nowrap}
 /* 日付と行き先。**いちばん大きい字を、この2つに渡す。**
    左上で見るのは「いま何週の、どれか」の2つだけ。ここが読めないまま書くと、
    書いた先を間違える ── そのとき戻すのは、書くより何倍も手間がかかる。

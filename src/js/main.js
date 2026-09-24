@@ -191,16 +191,11 @@ addEventListener("resize", () => {
 
 /* ── 週 ──────────────────────────────────────── */
 function syncVariant(){
-  const w = week(), v = w.variant, auto = autoVariant(wkKey());
-  for(const [id, k] of [["abA","A"],["abB","B"]])
-    $(id).setAttribute("aria-pressed", String(v === k));
-  /* **ふだんは日付から決まる。** 手で変えた週だけ、戻す道を出す。
-     出しっぱなしにすると、押す必要のないものが毎週目に入る */
-  const b = $("abAuto");
-  if(b){
-    b.hidden = !w.vset;
-    b.textContent = "自動に戻す（" + auto + "週）";
-  }
+  /* **表示だけ。** A週・B週は日付から決まる（store.js の autoVariant）。
+     ここで手で替えられた頃は、替えた端末にしか残らず、同じ週を
+     人によって違う基本時間割で見ていた */
+  const e = $("abShow");
+  if(e) e.textContent = week().variant + "週";
 }
 function refreshWeek(){
   paintWeekLabel();
@@ -314,17 +309,6 @@ function markOpening(el){
   for(const x of document.querySelectorAll(".opening")) x.classList.remove("opening");
   if(el) el.classList.add("opening");
 }
-/* A週・B週。**ふだんは日付から決まる**（store.js の autoVariant）。
-   ここで押したときだけ、その週にかぎって手で決めた印を付ける。
-   印を付けないと、次に描き直したときに日付から決め直されて元へ戻る。 */
-function setVariant(v){
-  const w = week();
-  if(v === null){ delete w.vset; w.variant = autoVariant(wkKey()); }
-  else { w.vset = true; w.variant = v; }
-  save();
-  if(view.kind === "gate") drawGate(); else refreshWeek();
-}
-
 /* ── キーの近道 ──────────────────────────────
    **欄の中では、ブラウザに任せる。** 字を打っている最中の Ctrl+Z は
    「いま打った字を戻す」であって、「1コマ前の操作を戻す」ではない。
@@ -525,9 +509,6 @@ function wire(){
   on("mobPrev","click", () => goWeek(-7));
   on("mobNext","click", () => goWeek(7));
 
-  on("abA","click", () => setVariant("A"));
-  on("abB","click", () => setVariant("B"));
-  on("abAuto","click", () => { setVariant(null); toast("日付から決まる週に戻した"); });
   on("toGate","click", showGate);
   on("target","change", e => onTargetChange(e.target.value));
   on("tpGo","click", reflectTanpopo);
@@ -623,11 +604,13 @@ function wire(){
   wireHelp();
 
   /* 用紙 */
-  on("stPaper","change", e => { db.settings.paper = e.target.value; save(); applyPaper(); });
-  on("stMg","input",  e => { db.settings.margin = +e.target.value; save(); applyPaper(); });
-  on("stK","input",   e => { db.settings.k = +e.target.value; save(); applyPaper(); });
-  on("stTitle","input", e => { db.settings.titlePt=+e.target.value; save(); applyPaper(); buildSheet(); });
-  on("stNote","input", e => { db.settings.notePt=+e.target.value; save(); applyPaper(); buildSheet(); });
+  /* **直した設定は、この端末の持ちものにする**（config.js markMine）。
+     しないと、次に立ち上がったときに「設定」シートの値で上書きされて戻る */
+  on("stPaper","change", e => { db.settings.paper = e.target.value; markMine("印刷用紙"); save(); applyPaper(); });
+  on("stMg","input",  e => { db.settings.margin = +e.target.value; markMine("印刷余白mm"); save(); applyPaper(); });
+  on("stK","input",   e => { db.settings.k = +e.target.value; markMine("印刷倍率"); save(); applyPaper(); });
+  on("stTitle","input", e => { db.settings.titlePt=+e.target.value; markMine("タイトル文字pt"); save(); applyPaper(); buildSheet(); });
+  on("stNote","input", e => { db.settings.notePt=+e.target.value; markMine("詳細文字pt"); save(); applyPaper(); buildSheet(); });
   on("fitChk","change", e => { db.settings.fit = e.target.checked; save(); autoFit(); });
   on("vz","input", e => {
     db.settings.fit = false; db.settings.vz = +e.target.value; save(); applyZoom();
@@ -637,18 +620,22 @@ function wire(){
   on("baseCls","change", drawBaseGrid);
   on("bvA","click", () => { baseVar = "A"; drawBaseGrid(); });
   on("bvB","click", () => { baseVar = "B"; drawBaseGrid(); });
+  /* 変える範囲。**直す前に選ぶ。** 既定は「今週以降のみ」（窓を開くたびに戻す） */
+  on("bsWeek","click", () => { baseScope = "week"; paintBaseScope($("baseCls").value); });
+  on("bsYear","click", () => { baseScope = "year"; paintBaseScope($("baseCls").value); });
   on("baseCopy","click", () => {
-    const c = $("baseCls").value, B = Y().base;
-    if(!B[c]) B[c] = {};
-    B[c].B = clone(B[c].A || {});
-    save(); Backend.saveBase(c, "B"); baseVar = "B"; drawBaseGrid();
-    toast(c + " のA週をB週へ写した。違うところだけ直す");
+    const c = $("baseCls").value;
+    baseEdit(c, t => { t.B = clone(t.A || {}); });
+    baseVar = "B"; drawBaseGrid();
+    toast(escText(c) + " のA週をB週へ写した。違うところだけ直す");
   });
   on("basePrev","click", () => {
     const c = $("baseCls").value, prev = db.years[String(fy() - 1)];
-    if(!prev || !prev.base[c]) return toast("前年度に " + escText(c) + " の基本時間割が無い");
-    Y().base[c] = clone(prev.base[c]);
-    save(); Backend.saveBase(c, "A"); Backend.saveBase(c, "B"); drawBaseGrid();
+    /* 前年度に途中から改めた版があれば、**いちばん後の版**（年度末の時間割）を写す */
+    const pv = prev && ((prev.baseFrom || {})[c] || []).slice(-1)[0] || (prev && prev.base[c]);
+    if(!pv) return toast("前年度に " + escText(c) + " の基本時間割が無い");
+    baseEdit(c, t => { t.A = clone(pv.A || {}); t.B = clone(pv.B || {}); });
+    drawBaseGrid();
     toast("前年度の " + escText(c) + " を写した");
   });
   /* 窓を閉じたら紙を組み直す。**ボタンではなく窓の close に付ける。**
@@ -844,6 +831,7 @@ function wire(){
       const next = fontPt(k) + (+b.dataset.step);
       if(next < r.min || next > r.max) return;
       db.settings[k] = next;
+      markMine(k === "titlePt" ? "タイトル文字pt" : "詳細文字pt");
       save(); applyPaper(); buildSheet();
     });
 
@@ -987,9 +975,9 @@ function wire(){
   });
 
   /* 時数 */
-  on("tyAnchor","change", e => { db.settings.tally.anchor = e.target.value.trim(); save(); });
-  on("tyCls","change", e => { db.settings.tally.classes = e.target.value; save(); drawTallyPreview(); });
-  on("tyBlock","input", e => { db.settings.tally.block = +e.target.value || 10; save(); drawTallyPreview(); });
+  on("tyAnchor","change", e => { db.settings.tally.anchor = e.target.value.trim(); markMine("時数_貼る先"); save(); });
+  on("tyCls","change", e => { db.settings.tally.classes = e.target.value; markMine("時数_クラスの順"); save(); drawTallyPreview(); });
+  on("tyBlock","input", e => { db.settings.tally.block = +e.target.value || 10; markMine("時数_1日の行数"); save(); drawTallyPreview(); });
   on("tyCopy","click", () => {
     const n = weekNo();
     copyText(tallyTsv(), "コピーした。時数集計表の第" + (n || "?") + "週シートで <b>"

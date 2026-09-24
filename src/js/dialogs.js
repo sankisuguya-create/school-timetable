@@ -41,6 +41,9 @@ function okAnswer(yes){
    担任は毎週30コマ埋めるのではなく、変えたところだけ直す。 */
 
 let baseVar = "A";
+/* 基本時間割を直す範囲。**既定は「今週以降のみ」。**
+   「今年度全体」は過ぎた週の紙・時数・たんぽぽまで変えるので、選んだときだけ */
+let baseScope = "week";
 
 function openSettings(){
   $("settingsFy").textContent = fy() + "年度";
@@ -197,14 +200,140 @@ function openBaseDlg(){
   fillSelect($("baseCls"), list.map(c => ({v:c, t:c})),
              view.kind === "class" ? view.cls : list[0]);
   baseVar = week().variant;
+  baseScope = "week";
   drawBaseGrid();
   $("baseDlg").showModal();
 }
+
+/* ── 基本時間割を直す範囲 ────────────────────────
+   **今年度全体を変更**：年度はじめの版と、途中からの版の全部を同じに直す。
+                         過ぎた週の紙・時数も変わる。
+   **今週以降のみ変更**：開いている週の月曜から使う版を作って（無ければ、
+                         いま効いている版の写しから）、その版とそれより後の版を直す。
+                         それより前の週は1コマも変わらない。
+   開いている週が年度はじめの週なら、2つは同じ（年度はじめの版を直す）。
+   **コマ単位で直す。** 「今年度全体」で1コマ直しても、途中からの版の
+   ほかのコマは残る（2学期に改めたところまで年度はじめに戻さない）。 */
+const baseStartMon = () => Y().week1 || firstMonday(fy());
+/* 「今週以降」の起点。年度はじめの週（とそれより前）なら ""＝年度はじめの版 */
+function baseFromHere(){
+  const m = wkKey();
+  return m <= baseStartMon() ? "" : m;
+}
+/* 直す先の版を返す。**「今週以降」の版が無ければ、ここで作る。** */
+function baseTargets(c){
+  const Yr = Y();
+  if(!Yr.base[c]) Yr.base[c] = {};
+  const vers = Yr.baseFrom[c] || (Yr.baseFrom[c] = []);
+  const from = baseScope === "week" ? baseFromHere() : "";
+  if(!from) return [Yr.base[c]].concat(vers);
+  if(!vers.some(v => v.from === from)){
+    const cur = baseSetAt(c, from) || {};
+    let at = vers.findIndex(v => v.from > from);
+    if(at < 0) at = vers.length;
+    vers.splice(at, 0, {from, A:clone(cur.A || {}), B:clone(cur.B || {})});
+  }
+  return vers.filter(v => v.from >= from);
+}
+/* 1週種の中身が同じか。**キーの並びに依らずに比べる。** */
+function baseBankEq(a, b){
+  a = a || {}; b = b || {};
+  const ka = Object.keys(a), kb = Object.keys(b);
+  if(ka.length !== kb.length) return false;
+  for(const k of ka){
+    const x = a[k], y = b[k];
+    if(!y || String(x.title || "") !== String(y.title || "")
+       || String(x.subject || "") !== String(y.subject || "")) return false;
+  }
+  return true;
+}
+/* **前の版と同じになった版は捨てる。** 「今週以降」で直して元へ戻したとき、
+   中身の同じ版が残ると、どこで時間割が変わったのかが一覧で読めなくなる */
+function baseCompact(c){
+  const Yr = Y();
+  let prev = Yr.base[c] || {};
+  const keep = [];
+  for(const v of (Yr.baseFrom[c] || [])){
+    if(baseBankEq(v.A, prev.A) && baseBankEq(v.B, prev.B)) continue;
+    keep.push(v); prev = v;
+  }
+  if(keep.length) Yr.baseFrom[c] = keep; else delete Yr.baseFrom[c];
+}
+/* 基本時間割を直す入口。**直す・版を片づける・提出を戻す・保存 を1本で。**
+   send=false は、呼ぶ側がまとめて送るとき（固定時間割の取り込み） */
+function baseEdit(c, fn, send){
+  const before = {base: clone(Y().base[c] || {}), from: clone(baseVersions(c))};
+  for(const t of baseTargets(c)) fn(t);
+  baseCompact(c);
+  baseMarkTp(c, before);
+  save();
+  if(send !== false) Backend.saveBase(c);
+}
+/* **提出ずみの週で、たんぽぽへ渡る字が変わったら「未」に戻す。**
+   基本時間割は、担任が書いていないコマにそのまま出る。直しても「済」の
+   ままだと、たんぽぽ担当は古い時間割のまま支援員を組む。
+   ここで見るのは**この端末にある週**だけ。正本はサーバ（gas/Store.gs markTpBase_）で、
+   ほかの週は開いたときにサーバの印で「未」になる */
+function baseMarkTp(c, before){
+  const Yr = Y(), slots = typeof tpSlots === "function" ? tpSlots()
+        : SLOTS.filter(s => s.kind === "lesson").slice(0, 6).map(s => s.id);
+  const setOf = (snap, mon) => {
+    let set = snap.base || {};
+    for(const v of (snap.from || [])) if(v.from <= mon) set = v;
+    return set;
+  };
+  const now = {base: Yr.base[c] || {}, from: baseVersions(c)};
+  let hit = false;
+  for(const k in (Yr.weeks || {})){
+    const w = Yr.weeks[k];
+    if(!w || !w.tpSub || !w.tpSub[c] || w.tpSub[c].dirty) continue;
+    const v = autoVariant(k);
+    const a = setOf(before, k)[v] || {}, b = setOf(now, k)[v] || {};
+    let diff = false;
+    for(let d = 0; d < WEEKDAYS && !diff; d++)
+      for(const sl of slots){
+        const x = a[ck(d, sl)], y = b[ck(d, sl)];
+        if(String((x || {}).title || "") !== String((y || {}).title || "")
+           || String((x || {}).subject || "") !== String((y || {}).subject || "")){ diff = true; break; }
+      }
+    if(!diff) continue;
+    w.tpSub[c].dirty = true;
+    (w.tpEdited || (w.tpEdited = {}))[c] = true;
+    const seq = w.tpEditSeq || (w.tpEditSeq = {});
+    seq[c] = (seq[c] || 0) + 1;
+    hit = true;
+  }
+  if(hit && typeof paintTpSub === "function") paintTpSub();
+}
+/* 範囲の選び方と、いまどの版を見ているかを出す */
+function paintBaseScope(c){
+  const from = baseFromHere(), mon = wkKey();
+  $("bsWeek").textContent = "今週以降のみ変更（" + md(monday) + "の週から）";
+  $("bsWeek").setAttribute("aria-pressed", String(baseScope === "week"));
+  $("bsYear").setAttribute("aria-pressed", String(baseScope === "year"));
+  const vers = baseVersions(c);
+  const lines = [];
+  if(baseScope === "year")
+    lines.push("<b>4月からの全部の週が変わります。</b>過ぎた週の紙と時数も変わり、"
+             + "提出ずみの週は「未」に戻ることがあります。");
+  else if(!from)
+    lines.push("<b>年度はじめの週なので、今年度全体と同じです。</b>");
+  else
+    lines.push("<b>" + md(monday) + "の週から先だけが変わります。</b>"
+             + md(addDays(monday, -7)) + "の週までの紙・時数・たんぽぽはそのままです。");
+  if(vers.length){
+    const cur = baseSetAt(c, mon);
+    const names = ["年度はじめ"].concat(vers.map(v => md(parseISO(v.from)) + "の週から"));
+    const at = cur && cur.from ? names[vers.indexOf(cur) + 1] : names[0];
+    lines.push(escText(c) + " の基本時間割は <b>" + names.length + " 通り</b>（"
+             + names.join("／") + "）。いま出しているのは「" + at + "」のもの。");
+  }
+  $("baseScopeHint").innerHTML = lines.join("<br>");
+}
 function drawBaseGrid(){
-  const c = $("baseCls").value, B = Y().base;
-  if(!B[c]) B[c] = {};
-  if(!B[c][baseVar]) B[c][baseVar] = {};
-  const bank = B[c][baseVar];
+  const c = $("baseCls").value;
+  /* **その週に効いている版を出す。** 描くだけで版を作らない（作るのは直したとき） */
+  const bank = ((baseSetAt(c, wkKey()) || {})[baseVar]) || {};
 
   const rows = ["<table class='grid2'><tr><th></th>"
     + DOW.slice(0, WEEKDAYS).map(d => "<th>" + d + "</th>").join("") + "</tr>"];
@@ -224,21 +353,24 @@ function drawBaseGrid(){
   }
   $("baseGrid").innerHTML = rows.join("") + "</table>";
 
+  const put = (k, cell) => baseEdit(c, t => {
+    const b = t[baseVar] || (t[baseVar] = {});
+    if(cell) b[k] = clone(cell); else delete b[k];
+  });
   for(const e of $("baseGrid").querySelectorAll("select")) e.onchange = () => {
     const s = SUB_BY_CODE[e.value];
     e.dataset.subject = s ? s.code : "";
-    if(s) bank[e.dataset.k] = {title:s.name, subject:s.code};
-    else delete bank[e.dataset.k];
-    save(); Backend.saveBase(c, baseVar);
+    put(e.dataset.k, s ? {title:s.name, subject:s.code} : null);
+    paintBaseScope(c);
   };
   for(const e of $("baseGrid").querySelectorAll("input")) e.onchange = () => {
-    if(e.value.trim()) bank[e.dataset.k] = {title:e.value.trim(), subject:null};
-    else delete bank[e.dataset.k];
-    save(); Backend.saveBase(c, baseVar);
+    put(e.dataset.k, e.value.trim() ? {title:e.value.trim(), subject:null} : null);
+    paintBaseScope(c);
   };
   $("bvA").setAttribute("aria-pressed", String(baseVar === "A"));
   $("bvB").setAttribute("aria-pressed", String(baseVar === "B"));
   $("baseFy").textContent = fy() + "年度";
+  paintBaseScope(c);
 }
 
 /* ── 固定時間割の取り込み ─────────────────────
@@ -321,8 +453,12 @@ function drawImp(){
       + (r.periods || 0) + " 校時ぶん"
     : "";
   $("impGo").disabled = !known.length;
+  /* **どこから入れ替わるかも言う**（基本時間割の窓で選んだ範囲） */
   $("impCount").innerHTML = known.length
-    ? "<b>" + known.length + " クラス</b>の A週・B週を入れ替える" : "";
+    ? "<b>" + known.length + " クラス</b>の A週・B週を"
+      + (baseScope === "week" && baseFromHere()
+          ? "<b>" + md(monday) + "の週から</b>" : "<b>今年度全体で</b>")
+      + "入れ替える" : "";
 
   /* 入れる前に、1クラスだけ表のとおりに見せる */
   $("impPickRow").hidden = !known.length;
@@ -650,7 +786,7 @@ function setGradeClasses(g, text){
 /* そのクラスに何か入っているか（外す前に知らせるため） */
 function hasAnyData(c){
   const Yr = Y();
-  if(Yr.base[c]) return true;
+  if(Yr.base[c] || (Yr.baseFrom || {})[c]) return true;
   for(const k in Yr.weeks){
     const w = Yr.weeks[k];
     if((w.home && w.home[c] && Object.keys(w.home[c]).length)
@@ -820,6 +956,7 @@ function openTallyDlg(){
   for(const e of $("tyCols").querySelectorAll("input")) e.oninput = () => {
     if(String(e.value).trim() === "") delete t.cols[e.dataset.s];
     else t.cols[e.dataset.s] = Math.max(0, +e.value || 0);
+    markMine("時数_列のずれ");
     save(); drawTallyPreview();
   };
   drawTallyPreview();
@@ -869,7 +1006,7 @@ function fillSelect(sel, arr, val){
 const HELP = {
   week: {t:"週を行き来する・A週B週",
     b:["<b>カレンダーの印では日を選んでその週へ飛びます。</b>",
-       "A週・B週は日付から自動で決まるので、ふだんは押しません。",
+       "A週・B週は日付から自動で決まります（ここでは切り替えません）。",
        "一番下の欄で、見るクラス・学年・専科を選びます。"]},
   now: {t:"今：◯◯",
     b:["<b>押すと、いま開いているものへ戻ります。</b>"]},
@@ -961,6 +1098,9 @@ const HELP = {
     b:["<b>ここは見るだけです。直すのは週の紙で。</b>"]},
   base: {t:"基本時間割",
     b:["<b>直すと、まだ書いていない週の見え方が変わります</b>（書いた予定は変わりません）。",
+       "<b>「今週以降のみ変更」（既定）</b>は、開いている週から先だけが変わります。"
+       + "<b>「今年度全体を変更」</b>は、過ぎた週の紙と時数も変わります。",
+       "提出ずみの週で、たんぽぽへ渡る字が変わったら「未」に戻ります。",
        "A週・B週の2種類を持てます。表ごと貼って取り込めます。"]},
   roster: {t:"学級編成",
     b:["<b>ここで決めたものが入口の表になります。</b>"]},

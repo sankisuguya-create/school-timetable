@@ -249,10 +249,13 @@ function fixedBuiltin(){
 /* ── 入れる ────────────────────────────────────
    読めたクラスだけを入れ替える。表に無いクラスの基本時間割は触らない。 */
 function applyFixed(res){
-  const B = Y().base, done = [];
+  const done = [];
   for(const cls of res.order){
     if(allClasses().indexOf(cls) < 0) continue;   /* 編成に無いクラスは入れない */
-    B[cls] = {A:clone(res.classes[cls].A), B:clone(res.classes[cls].B)};
+    /* **基本時間割の窓で選んだ範囲で入れる**（今年度全体／今週以降のみ）。
+       送るのは最後にまとめて1回 */
+    const got = res.classes[cls];
+    baseEdit(cls, t => { t.A = clone(got.A || {}); t.B = clone(got.B || {}); }, false);
     done.push(cls);
   }
   save();

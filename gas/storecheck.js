@@ -415,10 +415,11 @@ ok("もとの教科シートは21行のまま", ev("Store.readSubjects()").lengt
 console.log("\n■ 学級編成（5年6年だけ4クラス）");
 let roster = ev("Store.readRoster(2026)");
 const n = g => (roster.classes[g] || []).length;
-ok("1〜4年が3クラス", [1,2,3,4].every(g => n(g) === 3), [n(1),n(2),n(3),n(4)]);
-ok("5年6年が4クラス", n(5) === 4 && n(6) === 4, [n(5), n(6)]);
-ok("合計20学級",
-   Object.keys(roster.classes).reduce((a,g) => a + n(g), 0) === 20);
+/* **初期編成は各学年3組まで。** 4組目は、その年度の学級編成で足す */
+ok("初期編成は1〜6年とも3クラス", [1,2,3,4,5,6].every(g => n(g) === 3),
+   [n(1),n(2),n(3),n(4),n(5),n(6)]);
+ok("合計18学級",
+   Object.keys(roster.classes).reduce((a,g) => a + n(g), 0) === 18);
 ok("専科が4つ（音楽・図工・理科・外国語）",
    roster.specials.length === 4
    && roster.specials.map(s => s.code).indexOf("gaikoku") >= 0, roster.specials);
@@ -648,8 +649,8 @@ const r27 = ev("Store.readRoster(2027)"), r26 = ev("Store.readRoster(2026)");
 ok("2027年度が入れ替わる",
    r27.classes["1"].length === 2 && r27.classes["6"].length === 4, r27.classes);
 ok("2027年度の第1週の月曜が入る", r27.week1 === "2027-04-05", r27.week1);
-ok("2026年度は変わらない（既定のまま20学級）",
-   Object.keys(r26.classes).reduce((a,g) => a + r26.classes[g].length, 0) === 20);
+ok("2026年度は変わらない（既定のまま18学級）",
+   Object.keys(r26.classes).reduce((a,g) => a + r26.classes[g].length, 0) === 18);
 ok("2027年度の専科は1つ", r27.specials.length === 1, r27.specials);
 
 /* **同じ教科に専科が2人いる学校。** 図工1・2年／図工3〜6年のように分ける。
@@ -925,6 +926,118 @@ ok("ほかの年度も触らない",
    ev("Store.readBase(2027)")["3-3"].A["0|p1"].title === "総合");
 ok("B週を空で渡せばB週は消える", !base["3-3"].B || !Object.keys(base["3-3"].B).length,
    base["3-3"].B);
+
+/* **年度の途中から使う版。** 改めた週より前の紙と時数を、新しい時間割で
+   数え直さないために、版を「適用開始」の行として持つ */
+console.log("\n■ 基本時間割の版（今週以降のみ変更）");
+ev(`Store.writeBaseAll(2026, {"4-2": {
+      A:{"0|p1":{title:"国語",subject:"kokugo"}}, B:{"0|p1":{title:"国語",subject:"kokugo"}},
+      from:[{from:"2026-09-21", A:{"0|p1":{title:"算数",subject:"sansu"}},
+                                B:{"0|p1":{title:"算数",subject:"sansu"}}}]}})`);
+ok("年度はじめの版は年度はじめのまま",
+   ev("Store.readBase(2026)")["4-2"].A["0|p1"].title === "国語", ev("Store.readBase(2026)")["4-2"]);
+(function(){
+  const f = ev("Store.readBaseFrom(2026)")["4-2"] || [];
+  ok("途中からの版が読める", f.length === 1 && f[0].from === "2026-09-21"
+     && f[0].A["0|p1"].title === "算数" && f[0].B["0|p1"].title === "算数", f);
+})();
+ev(`Store.writeBase(2026, "4-2", "A", {"0|p1":{title:"社会",subject:"shakai"}})`);
+ok("前の版の画面の保存（writeBase）は、途中からの版を消さない",
+   (ev("Store.readBaseFrom(2026)")["4-2"] || []).length === 1
+   && ev("Store.readBase(2026)")["4-2"].A["0|p1"].title === "社会",
+   [ev("Store.readBase(2026)")["4-2"], ev("Store.readBaseFrom(2026)")["4-2"]]);
+ev(`Store.writeBaseAll(2026, {"4-2": {A:{"0|p1":{title:"国語",subject:"kokugo"}},
+                                      B:{"0|p1":{title:"国語",subject:"kokugo"}}}})`);
+ok("from を送らない前の版の取り込み（writeBaseAll）も、途中からの版を消さない",
+   (ev("Store.readBaseFrom(2026)")["4-2"] || []).length === 1);
+ok("ほかのクラスには版が出来ない", !ev("Store.readBaseFrom(2026)")["3-3"]);
+
+/* **提出ずみの週で、たんぽぽへ渡る字が変わったら「未」に戻す。** */
+console.log("\n■ 基本時間割を直すと、提出ずみの週が「未」に戻る");
+ev(`Store.tpSubmit(2026, "2026-09-14", "4-2", true)`);   /* B週・版より前 */
+ev(`Store.tpSubmit(2026, "2026-09-28", "4-2", true)`);   /* B週・版のあと */
+ev(`Store.tpSubmit(2026, "2026-10-05", "4-2", true)`);   /* A週・版のあと */
+ok("提出した直後は変更なし",
+   ev('Store.tpSubmits(2026, "2026-09-28")')["4-2"].dirty === false);
+(function(){
+  const r = ev(`Store.writeBaseAll(2026, {"4-2": {
+      A:{"0|p1":{title:"国語",subject:"kokugo"}}, B:{"0|p1":{title:"国語",subject:"kokugo"}},
+      from:[{from:"2026-09-21", A:{"0|p1":{title:"算数",subject:"sansu"}},
+                                B:{"0|p1":{title:"理科",subject:"rika"}}}]}})`);
+  ok("版のあとのB週（9/28）は「変更あり」",
+     ev('Store.tpSubmits(2026, "2026-09-28")')["4-2"].dirty === true);
+  ok("版より前の週（9/14）は変わらない",
+     ev('Store.tpSubmits(2026, "2026-09-14")')["4-2"].dirty === false);
+  ok("直していないA週（10/5）は変わらない",
+     ev('Store.tpSubmits(2026, "2026-10-05")')["4-2"].dirty === false);
+  ok("戻した週を画面へ返す", JSON.stringify((r.marked || {})["4-2"]) === '["2026-09-28"]', r.marked);
+})();
+(function(){
+  /* 授業6コマの外（朝休み）だけを直しても、たんぽぽへ渡る字は変わらない */
+  ev(`Store.tpSubmit(2026, "2026-09-28", "4-2", true)`);
+  ev(`Store.writeBaseAll(2026, {"4-2": {
+      A:{"0|p1":{title:"国語",subject:"kokugo"}}, B:{"0|p1":{title:"国語",subject:"kokugo"}},
+      from:[{from:"2026-09-21", A:{"0|p1":{title:"算数",subject:"sansu"}},
+             B:{"0|p1":{title:"理科",subject:"rika"}, "0|am1":{title:"読書",subject:null}}}]}})`);
+  ok("授業6コマの外だけの直しでは戻さない",
+     ev('Store.tpSubmits(2026, "2026-09-28")')["4-2"].dirty === false);
+})();
+(function(){
+  /* 前の版の画面（writeBase）で年度はじめの版を直しても、同じく戻す */
+  ev(`Store.writeBase(2026, "4-2", "B", {"0|p1":{title:"図工",subject:"zuko"}})`);
+  ok("年度はじめの版を直すと、それを使う提出ずみの週（9/14）が「変更あり」",
+     ev('Store.tpSubmits(2026, "2026-09-14")')["4-2"].dirty === true);
+  ok("途中からの版を使う週（9/28）は、年度はじめを直しても変わらない",
+     ev('Store.tpSubmits(2026, "2026-09-28")')["4-2"].dirty === false);
+})();
+(function(){
+  /* 「適用開始」の欄が日付に化けていても読む */
+  const cols = ev('Sheets.SPEC["基本時間割"].cols');
+  const at = {}; cols.forEach((c, i) => at[c] = i);
+  const at2 = ev('Sheets.head("基本時間割").at');
+  ok("適用開始の見出しが足されている", at2["適用開始"] !== undefined, at2);
+  for(const row of SHEETS["基本時間割"])
+    if(String(row[at2["クラス"]]) === "4-2" && String(row[at2["適用開始"]]) === "2026-09-21")
+      row[at2["適用開始"]] = new Date(2026, 8, 21);
+  const f = ev("Store.readBaseFrom(2026)")["4-2"] || [];
+  ok("日付に化けた適用開始も読める", f.length === 1 && f[0].from === "2026-09-21", f);
+})();
+
+/* **「設定」の値が日付に化けていても、字にして渡す。** 日付のままだと
+   画面は起点を読めず、google.script.run は日付を含む返り値を運べない */
+console.log("\n■ 設定シートの日付は字にして渡す");
+(function(){
+  const at = ev('Sheets.head("設定").at');
+  let keep = null, row0 = null;
+  for(const row of SHEETS["設定"])
+    if(String(row[at["キー"]]) === "A週の起点の月曜"){ row0 = row; keep = row[at["値"]]; }
+  row0[at["値"]] = new Date(2026, 8, 7);
+  ok("日付に化けた起点が「2026-09-07」で読める",
+     ev('Store.readConfig()["A週の起点の月曜"]') === "2026-09-07",
+     ev('Store.readConfig()["A週の起点の月曜"]'));
+  row0[at["値"]] = keep;
+  ev('Store.writeVariantOrigin("2026-09-14")');
+  const col = at["値"] + 1;
+  ok("画面から書いた起点の欄は書式なしテキスト",
+     FORMATS["設定/" + col] === "@", FORMATS["設定/" + col]);
+  ev('Store.writeVariantOrigin("2026-09-07")');
+})();
+
+/* **全角で書いた担当学年も読む**（画面の spGrades_ と同じ） */
+console.log("\n■ 専科の担当学年は全角でも読む");
+(function(){
+  const at = ev('Sheets.head("専科").at');
+  const row = new Array(20).fill("");
+  row[at["年度"]] = 2031; row[at["教科コード"]] = "rika"; row[at["表示名"]] = "理科";
+  row[at["担当学年"]] = "３〜４"; if(at["教科"] !== undefined) row[at["教科"]] = "rika";
+  SHEETS["専科"].push(row);
+  const row2 = row.slice(); row2[at["教科コード"]] = "rika_2"; row2[at["担当学年"]] = "５，６";
+  SHEETS["専科"].push(row2);
+  const sp = ev("Store.readRoster(2031)").specials;
+  ok("「３〜４」は3・4年", JSON.stringify(sp[0].grades) === '["3","4"]', sp);
+  ok("「５，６」は5・6年", JSON.stringify(sp[1].grades) === '["5","6"]', sp);
+  for(const r of [row, row2]){ const i = SHEETS["専科"].indexOf(r); if(i >= 0) SHEETS["専科"].splice(i, 1); }
+})();
 
 console.log("\n■ たんぽぽ時間割へ出す（1週1シート）");
 (function(){

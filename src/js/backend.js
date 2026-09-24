@@ -547,6 +547,8 @@ const Backend = (function(){
         Yr.tanpopo = tpNorm_(r.roster.tanpopo);
     }
     Yr.base = r.base || {};
+    /* 年度の途中から使う版。**前の版のサーバは返さない**ので、無ければ空 */
+    Yr.baseFrom = r.baseFrom || {};
     /* 年間行事。**空も答えのうち**（まだ貼っていない年度がある） */
     if(r.events !== undefined && r.events !== null) Yr.events = r.events;
     /* **読めなかった行は黙って捨てない。** 入っていないのか読めていないのかが
@@ -867,27 +869,27 @@ const Backend = (function(){
       })
       .apiWriteSubjects(rows);
   }
-  function saveBase(cls, variant){
-    if(!onGas) return save();
-    const w = Wait.begin("基本時間割を保存しています", true);
-    google.script.run
-      .withSuccessHandler(() => Wait.end(w))
-      .withFailureHandler(e => { Wait.end(w);
-        notify("基本時間割を保存できなかった（" + escText(String(e && e.message)) + "）"); })
-      .apiWriteBase(fy(), cls, variant, ((Y().base[cls] || {})[variant]) || {});
-  }
+  /* 基本時間割を**クラスごとに丸ごと**送る（年度はじめの版と、途中からの版）。
+     A週・B週を別々に送ると、版を足したときに片方だけ入った形が残る */
+  function saveBase(cls){ saveBaseAll([cls]); }
+  const baseTable_ = list => {
+    const table = {}, B = Y().base, F = Y().baseFrom || {};
+    for(const c of list)
+      table[c] = {A:(B[c] || {}).A || {}, B:(B[c] || {}).B || {},
+                  from:(F[c] || []).map(v => ({from:v.from, A:v.A || {}, B:v.B || {}}))};
+    return table;
+  };
 
   /* 固定時間割の取り込み。**20クラス×A週B週を1回で送る。**
      1クラスずつ送ると、途中で切れたときに半分だけ入った表が残る。 */
   function saveBaseAll(list, after){
     if(!onGas){ save(); return after && after(); }
-    const table = {}, B = Y().base;
-    for(const c of list) if(B[c]) table[c] = {A:B[c].A || {}, B:B[c].B || {}};
+    const table = baseTable_(list);
     const w = Wait.begin("基本時間割を保存しています", true);
     google.script.run
       .withSuccessHandler(r => { Wait.end(w); after && after(r); })
       .withFailureHandler(e => { Wait.end(w);
-        notify("基本時間割を保存できなかった（" + (e && e.message) + "）"); })
+        notify("基本時間割を保存できなかった（" + escText(String(e && e.message)) + "）"); })
       .apiWriteBaseAll(fy(), table);
   }
 
