@@ -195,27 +195,58 @@ const Store = (function(){
   }
 
   function readBase(year, warn){
+    return readBaseAll_(year, warn).base;
+  }
+  /* 年度の途中から使う版。{クラス: [{from:"2026-09-14", A:{…}, B:{…}}, …]}（from の順）。
+     **版は A・B の両方を持つ。** A だけ改めた版でも B はその前の版の写しが入る
+     （画面が版を作るときに写す）ので、ここは読むだけ */
+  function readBaseFrom(year){
+    return readBaseAll_(year).from;
+  }
+  /* 「適用開始」の欄。空＝年度はじめ（""）、読めない字は null */
+  function baseFromOf_(v){
+    if(v === "" || v == null) return "";
+    const t = isoDate_(v);
+    return t || null;
+  }
+  function readBaseAll_(year, warn){
     const rows = Sheets.readAll("基本時間割").rows;
     const ids = Sheets.readAll("時程").rows
       .filter(r => String(r["種別"]).indexOf("授業") >= 0)
       .map(r => String(r["ID"]).trim());
-    const out = {};
+    const out = {}, vers = {};
     for(const r of rows){
       if(String(r["年度"]) !== String(year)) continue;
       const cls = Sheets.asClass(r["クラス"]), v = String(r["週"] || "A").trim() || "A";
       const d = dayIndex(r["曜日"]), sl = slotId(r["時程"], ids);
-      if(d < 0 || !sl || !cls){
-        if(warn) warn.push(r.__row + "行目：" + (!cls ? "クラス" : d < 0 ? "曜日" : "時程")
-                         + "「" + String(!cls ? r["クラス"] : d < 0 ? r["曜日"] : r["時程"])
+      const from = baseFromOf_(r["適用開始"]);
+      if(d < 0 || !sl || !cls || from === null){
+        if(warn) warn.push(r.__row + "行目：" + (!cls ? "クラス" : d < 0 ? "曜日" : !sl ? "時程" : "適用開始")
+                         + "「" + String(!cls ? r["クラス"] : d < 0 ? r["曜日"] : !sl ? r["時程"] : r["適用開始"])
                          + "」が読めない");
         continue;
       }
-      const bank = out[cls] || (out[cls] = {});
+      let bank;
+      if(!from) bank = out[cls] || (out[cls] = {});
+      else{
+        const byFrom = vers[cls] || (vers[cls] = {});
+        bank = byFrom[from] || (byFrom[from] = {from: from, A: {}, B: {}});
+      }
       (bank[v] || (bank[v] = {}))[d + "|" + sl] = {
         title: String(r["表示名"] || ""), subject: String(r["教科コード"] || "") || null
       };
     }
-    return out;
+    const from = {};
+    for(const cls in vers)
+      from[cls] = Object.keys(vers[cls]).sort().map(k => vers[cls][k]);
+    return {base: out, from: from};
+  }
+  /* その週に使う版。**月曜より前に始まった版のうち、いちばん新しいもの。**
+     無ければ年度はじめの版。画面の store.js baseSetAt と同じ決まり */
+  function baseSetAt_(base, from, mondayISO){
+    let set = base || null;
+    for(const v of (from || [])) if(v.from <= mondayISO) set = v;
+    return set || {};
   }
 
   /* そのクラスのたんぽぽ児童が、**どのたんぽぽ組にいるか**。
@@ -283,11 +314,14 @@ const Store = (function(){
      **空なら空の配列を返す＝全学年を受け持つ。** 書いていない学校を、
      どの学年も受け持たない専科にしてしまわない。 */
   function gradeList_(v){
-    const s = String(v == null ? "" : v).trim();
-    if(!s) return [];
+    const s0 = String(v == null ? "" : v).trim();
+    if(!s0) return [];
+    /* **全角の３・ー・，も決まった形で読む**（画面の spGrades_ と同じ）。
+       シートに直に「３〜６」と打つと全部落ちて、空＝全学年の専科になっていた */
+    const s = s0.normalize ? s0.normalize("NFKC") : s0;
     const out = {}, put = g => { if(g >= 1 && g <= 9) out[String(g)] = true; };
     /* まず範囲（3〜6）を開く。開いてから1つずつを拾う */
-    const rest = s.replace(/([1-9])\s*年?\s*[〜～~\-ー－]\s*([1-9])/g, function(_, a, b){
+    const rest = s.replace(/([1-9])\s*年?\s*[〜～~\-ー‐‒–—―−ｰ➖]\s*([1-9])/g, function(_, a, b){
       const lo = Math.min(+a, +b), hi = Math.max(+a, +b);
       for(let g = lo; g <= hi; g++) put(g);
       return " ";
@@ -304,9 +338,16 @@ const Store = (function(){
     return rows.filter(r => String(r["年度"] || "").trim() === "");
   }
 
+  /* **日付に化けた値は「2026-09-07」の字に戻して渡す。**
+     「値」の列は書式なしテキストではないので、起点の月曜を人が打つと日付になる。
+     日付のまま渡すと、画面は起点を読めずに全部の週をA週にし、
+     google.script.run は日付を含む返り値を運べない */
   function readConfig(){
     const out = {};
-    for(const r of Sheets.readAll("設定").rows) out[String(r["キー"]).trim()] = r["値"];
+    for(const r of Sheets.readAll("設定").rows){
+      const v = r["値"];
+      out[String(r["キー"]).trim()] = Sheets.isDate(v) ? ymd(v) : v;
+    }
     return out;
   }
   const truthy = v => v === true || String(v).trim().toLowerCase() === "true";
@@ -717,7 +758,8 @@ const Store = (function(){
 
     /* 基本時間割は1回だけ読む。対象クラス以外も含むが、1,200行程度で、
        学期中の各週を30回読むより安い。 */
-    const base = (readBase(year)[c] || {});
+    const baseAll = readBaseAll_(year);
+    const base0 = baseAll.base[c] || {}, baseVers = baseAll.from[c] || [];
     const anchor = String(readConfig()["A週の起点の月曜"] || "").trim();
 
     /* 必要な3枚だけ読む。同じクラスの専科行も「週案 c」に入っている。 */
@@ -749,6 +791,8 @@ const Store = (function(){
     function effective_(date, slot, dow){
       let cur = null, curAt = -1, curRank = -1;
       const variant = variantForDate_(date, anchor);
+      /* **その週に使う版で見る。** 年度の途中で改めた時間割を、改める前の週へ持ち込まない */
+      const base = baseSetAt_(base0, baseVers, mondayISO_(date));
       const b = ((base[variant] || {})[dow + "|" + slot]);
       if(b){
         cur = {title:String(b.title || ""), subject:String(b.subject || ""), layer:"base"};
@@ -2169,7 +2213,8 @@ const Store = (function(){
       const v = last > 1 ? sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues() : [];
       for(let i = 0; i < v.length; i++){
         if(String(v[i][at["キー"]] || "").trim() === "A週の起点の月曜"){
-          sh.getRange(i + 2, at["値"] + 1).setValue(t);
+          /* **書式なしテキストにしてから書く。** そのまま書くと日付に化ける */
+          sh.getRange(i + 2, at["値"] + 1).setNumberFormat("@").setValue(t);
           SpreadsheetApp.flush();
           return {saved: t};
         }
@@ -2518,63 +2563,138 @@ const Store = (function(){
     Sheets.appendRows(name, objs.map(o => Sheets.toArray(name, o)));
   }
 
+  /* 1クラス・1週種ぶんを書く（**前の版の画面の口**）。
+     年度はじめの版だけを入れ替える。**途中から使う版には触らない** ──
+     版を知らない画面が保存しただけで、改めた時間割が消えないように */
   function writeBase(year, cls, variant, bank){
     const lock = LockService.getScriptLock();
     lock.waitLock(20000);
     try{
+      Sheets.ensureCols("基本時間割");
+      const c = Sheets.asClass(cls);
+      const before = baseSnap_(year, c);
       for(const r of Sheets.readAll("基本時間割").rows)
-        if(String(r["年度"]) === String(year) && Sheets.asClass(r["クラス"]) === Sheets.asClass(cls)
-        && String(r["週"]) === String(variant)) Sheets.blankRow("基本時間割", r.__row);
-      const adds = [];
-      for(const k in (bank || {})){
-        const p = k.split("|");
-        /* **曜日は「月」で書く。** 人が直接書き足す場所なので、
-           0〜4 で書くと、隣の行にならって書いた行が読めなくなる */
-        adds.push(Sheets.toArray("基本時間割", {
-          "年度":year, "クラス":cls, "週":variant,
-          "曜日":(DOW_JP[+p[0]] || p[0]), "時程":p[1],
-          "教科コード":bank[k].subject || "", "表示名":bank[k].title || ""
-        }));
-      }
-      Sheets.appendRows("基本時間割", adds);
+        if(String(r["年度"]) === String(year) && Sheets.asClass(r["クラス"]) === c
+        && String(r["週"]) === String(variant) && baseFromOf_(r["適用開始"]) === "")
+          Sheets.blankRow("基本時間割", r.__row);
+      Sheets.appendRows("基本時間割", baseRows_(year, cls, variant, "", bank));
       SpreadsheetApp.flush();
+      markTpBase_(year, c, before, baseSnap_(year, c));
       return true;
     } finally {
       lock.releaseLock();
     }
   }
+  /* 1つの版の1週種ぶんを、シートの行にする */
+  function baseRows_(year, cls, variant, from, bank){
+    const adds = [];
+    for(const k in (bank || {})){
+      const p = k.split("|");
+      /* **曜日は「月」で書く。** 人が直接書き足す場所なので、
+         0〜4 で書くと、隣の行にならって書いた行が読めなくなる */
+      adds.push(Sheets.toArray("基本時間割", {
+        "年度":year, "クラス":cls, "週":variant,
+        "曜日":(DOW_JP[+p[0]] || p[0]), "時程":p[1],
+        "教科コード":bank[k].subject || "", "表示名":bank[k].title || "",
+        "適用開始":from || ""
+      }));
+    }
+    return adds;
+  }
+  /* そのクラスのいまの基本時間割（年度はじめの版＋途中からの版） */
+  function baseSnap_(year, cls){
+    const all = readBaseAll_(year);
+    return {base: all.base[cls] || {}, from: all.from[cls] || []};
+  }
 
-  /* 固定時間割の取り込み。**クラスごと・週ごとに丸ごと入れ替える。**
+  /* 基本時間割を**クラスごとに丸ごと**入れ替える（固定時間割の取り込み・画面の保存）。
      1クラスずつ40回に分けて送ると、途中で切れたときに半分だけ入った表が残る。
-     table = {クラス: {A:{"曜日|時程":{title,subject}}, B:{…}}} */
+     table = {クラス: {A:{"曜日|時程":{title,subject}}, B:{…},
+                       from:[{from:"2026-09-14", A:{…}, B:{…}}, …]}}
+     **from を送ってきた画面だけ**、途中からの版まで入れ替える。
+     送ってこない画面（前の版）は、年度はじめの版だけを入れ替える。
+
+     **提出ずみの週で、たんぽぽへ渡る字が変わったら「未」に戻す。**
+     基本時間割は担任が書いていないコマにそのまま出るので、ここを直すと
+     提出ずみ・書き出しずみの週の中身も変わる。黙って「済」のままにしない */
   function writeBaseAll(year, table){
     const lock = LockService.getScriptLock();
     lock.waitLock(30000);
     try{
-      const target = {};
-      for(const cls in (table || {})) target[Sheets.asClass(cls)] = true;
-      for(const r of Sheets.readAll("基本時間割").rows)
-        if(String(r["年度"]) === String(year) && target[Sheets.asClass(r["クラス"])])
+      Sheets.ensureCols("基本時間割");
+      const target = {}, full = {};
+      /* **前と後は1回ずつ読む。** クラスごとに読むと、20クラスの取り込みで
+         基本時間割シートを40回読むことになる */
+      const was = readBaseAll_(year);
+      for(const cls in (table || {})){
+        const c = Sheets.asClass(cls);
+        target[c] = true;
+        full[c] = Array.isArray((table[cls] || {}).from);
+      }
+      for(const r of Sheets.readAll("基本時間割").rows){
+        const c = Sheets.asClass(r["クラス"]);
+        if(String(r["年度"]) === String(year) && target[c]
+           && (full[c] || baseFromOf_(r["適用開始"]) === ""))
           Sheets.blankRow("基本時間割", r.__row);
+      }
       const adds = [];
-      for(const cls in (table || {}))
-        for(const v of ["A", "B"]){
-          const bank = (table[cls] || {})[v] || {};
-          for(const k in bank){
-            const p = k.split("|");
-            adds.push(Sheets.toArray("基本時間割", {
-              "年度":year, "クラス":cls, "週":v,
-              "曜日":(DOW_JP[+p[0]] || p[0]), "時程":p[1],
-              "教科コード":bank[k].subject || "", "表示名":bank[k].title || ""
-            }));
-          }
+      for(const cls in (table || {})){
+        const t = table[cls] || {};
+        for(const v of ["A", "B"]) adds.push.apply(adds, baseRows_(year, cls, v, "", t[v]));
+        if(!Array.isArray(t.from)) continue;
+        for(const ver of t.from){
+          const from = baseFromOf_(ver && ver.from);
+          if(!from) continue;             /* 読めない日付の版は入れない */
+          for(const v of ["A", "B"]) adds.push.apply(adds, baseRows_(year, cls, v, from, ver[v]));
         }
+      }
       Sheets.appendRows("基本時間割", adds);
       SpreadsheetApp.flush();
-      return {classes:Object.keys(table || {}).length, rows:adds.length};
+      const now = readBaseAll_(year), marked = {}, ctx = {};
+      const snap = (all, c) => ({base: all.base[c] || {}, from: all.from[c] || []});
+      for(const c in target){
+        const m = markTpBase_(year, c, snap(was, c), snap(now, c), ctx);
+        if(m.length) marked[c] = m;
+      }
+      return {classes:Object.keys(table || {}).length, rows:adds.length, marked:marked};
     } finally {
       lock.releaseLock();
     }
+  }
+  /* 基本時間割を直したクラスの、**提出ずみの週**を見て、たんぽぽへ渡る
+     月〜金×授業6コマの字が変わった週を「変更あり」にする。
+     担任が上から書いたコマで隠れていても、そこまでは見ずに覆す側へ倒す
+     （コマの保存の markTpChanges_ と同じ）。返すのは覆した週の月曜 */
+  /* ctx はクラスをまたいで読んだものを使い回す入れ物（読むのは1回ずつ） */
+  function markTpBase_(year, cls, before, after, ctx){
+    ctx = ctx || {};
+    const pre = ctx.pre || (ctx.pre = {state: Sheets.readAllSoft('たんぽぽ状態').rows,
+                                       submit: Sheets.readAllSoft('たんぽぽ提出').rows});
+    const mons = {};
+    for(const r of pre.submit)
+      if(String(r["年度"]).trim() === String(year) && Sheets.asClass(r["クラス"]) === cls)
+        mons[ymd(r["月曜"])] = true;
+    if(!Object.keys(mons).length) return [];
+    if(ctx.anchor === undefined) ctx.anchor = String(readConfig()["A週の起点の月曜"] || "").trim();
+    if(!ctx.lessons) ctx.lessons = readSlots().filter(s => s.kind === "lesson").slice(0, 6).map(s => s.id);
+    const anchor = ctx.anchor, lessons = ctx.lessons;
+    const txt = e => e ? String(e.title || "") + "\t" + String(e.subject || "") : "";
+    const out = [];
+    for(const mon of Object.keys(mons).sort()){
+      const v = variantForDate_(mon, anchor);
+      const a = baseSetAt_(before.base, before.from, mon)[v] || {};
+      const b = baseSetAt_(after.base, after.from, mon)[v] || {};
+      let diff = false;
+      for(let d = 0; d < 5 && !diff; d++)
+        for(const sl of lessons) if(txt(a[d + "|" + sl]) !== txt(b[d + "|" + sl])){ diff = true; break; }
+      if(!diff) continue;
+      if(!tpSubmits(year, mon, pre)[cls]) continue;
+      const state = tpStates_(year, mon, pre)[cls] || {};
+      state['変更あり'] = '1';
+      putTpState_(year, mon, cls, state);
+      out.push(mon);
+    }
+    return out;
   }
 
   /* 貼り付けたシートを、そのままの形で渡す。読み方は画面側（src/js/fixed.js）。
@@ -2690,7 +2810,7 @@ const Store = (function(){
     return new Date(+p[0], +p[1] - 1, +p[2] + n);
   }
 
-  return {readWeek, readWeeks, readBase, readRoster, readConfig, readSlots, readSubjects, writeSubjects,
+  return {readWeek, readWeeks, readBase, readBaseFrom, readRoster, readConfig, readSlots, readSubjects, writeSubjects,
           readTerms, readUnits, unitManager, writeTerms, writeUnit, clearUnitStart,
           deleteUnit, unitCandidates,
           writeCells, writeRoster, writeBase, writeBaseAll, readPaste, exportPlanSheet, exportSlide,
@@ -2739,6 +2859,7 @@ function apiBoot(year){
       out.year   = +year;
       out.roster = Store.readRoster(+year);
       out.base   = Store.readBase(+year, warn);
+      out.baseFrom = Store.readBaseFrom(+year);
       /* **年間行事も一緒に返す。** 別に取りに行くと、その回数だけ待つ */
       try{ const ev = Store.readEvents(+year);
            out.events = ev.events; if(ev.warn) warn.push.apply(warn, ev.warn); }
@@ -2773,11 +2894,12 @@ function apiReadYear(year){
   return Sheets.withMemo(function(){
     const warn = [];
     const base = Store.readBase(year, warn);
+    const baseFrom = Store.readBaseFrom(year);
     let events = {};
     try{ const ev = Store.readEvents(year);
          events = ev.events; if(ev.warn) warn.push.apply(warn, ev.warn); }
     catch(e){ warn.push(String(e && e.message)); }
-    return {roster: Store.readRoster(year), base, events, warn};
+    return {roster: Store.readRoster(year), base, baseFrom, events, warn};
   });
 }
 function apiReadWeek(year, mondayISO, targets){

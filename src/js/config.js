@@ -76,22 +76,40 @@ function setSubjects(list){
   SUB_BY_NAME = Object.fromEntries(SUBJECTS.map(s => [s.name, s]));
   SUB_BY_CODE = Object.fromEntries(SUBJECTS.map(s => [s.code, s]));
 }
-/* 「設定」シートの値を画面の設定へ移す。空欄はいまの値のまま */
+/* **この端末で直した設定。** 「設定」シートの値は学校の既定で、
+   画面の「印刷と文字」「時数」で直した値はこの端末の持ちもの。
+   前は立ち上がるたびにシートの値で上書きしていたので、直しても
+   再読み込みで戻り、「保存されない」と言われていた。
+   ここに名前（シートのキー）があるものは、シートの値で上書きしない。 */
+function markMine(key){
+  const m = db.settings.mine || (db.settings.mine = {});
+  m[key] = true;
+}
+/* 数として読む。**0 も数のうち**（`+v || 8` だと余白 0 が 8 になる） */
+const numOr = (v, def) => { const n = +v; return Number.isFinite(n) ? n : def; };
+/* 「設定」シートの値を画面の設定へ移す。空欄と、この端末で直したものはいまの値のまま */
 function applyConfig(cfg){
-  const t = db.settings.tally, put = (k, fn) => {
+  const t = db.settings.tally, mine = db.settings.mine || {}, put = (k, fn) => {
     const v = cfg[k];
+    if(mine[k]) return;
     if(v !== undefined && v !== null && String(v).trim() !== "") fn(v);
   };
   put("印刷用紙",        v => db.settings.paper  = String(v).trim());
-  put("印刷余白mm",      v => db.settings.margin = +v || 8);
-  put("印刷倍率",        v => db.settings.k      = +v || 1);
-  put("タイトル文字pt",  v => db.settings.titlePt = +v || 16);
-  put("詳細文字pt",      v => db.settings.notePt  = +v || 12);
+  put("印刷余白mm",      v => db.settings.margin = numOr(v, 8));
+  put("印刷倍率",        v => db.settings.k      = numOr(v, 1) || 1);
+  put("タイトル文字pt",  v => db.settings.titlePt = numOr(v, 16) || 16);
+  put("詳細文字pt",      v => db.settings.notePt  = numOr(v, 12) || 12);
   put("時数_貼る先",     v => t.anchor  = String(v).trim());
   put("時数_クラスの順", v => t.classes = String(v));
-  put("時数_1日の行数",  v => t.block   = +v || 10);
+  put("時数_1日の行数",  v => t.block   = numOr(v, 10) || 10);
   /* A週の起点。**ここを動かすと、以後の週のA/Bが全部入れ替わる。** */
-  put("A週の起点の月曜", v => db.settings.abAnchor = String(v).trim());
+  /* **「2026/9/7」「２０２６－０９－０７」も「2026-09-07」に寄せる。**
+     読めない字のままにすると、起点が無いものとして全部の週がA週になる */
+  put("A週の起点の月曜", v => {
+    const t = String(v).trim(), n = t.normalize ? t.normalize("NFKC") : t;
+    const m = n.match(/^(\d{4})\D(\d{1,2})\D(\d{1,2})/);
+    db.settings.abAnchor = m ? m[1] + "-" + pad(+m[2]) + "-" + pad(+m[3]) : t;
+  });
   /* 場所を取る教科。教科コードでも表示名でも書ける（体育,図書 ／ taiiku,tosho）。
      **読めない字は捨てる。** 捨てたものを黙って全教科に広げない */
   put("場所を取る教科", v => {
@@ -114,16 +132,18 @@ function applyConfig(cfg){
   });
 }
 
-/* クラス編成。学年でクラス数が違う（**5年・6年だけ4クラス**）ので数を決め打ちしない。
+/* クラス編成。学年でクラス数が違う年があるので、数を決め打ちしない。
    本番では「クラス」シートが正本（1行1クラス：年度・学年・クラス）。
-   画面の「学級編成」から直せる。直した値は年度ごとに持つ。 */
+   画面の「学級編成」から直せる。直した値は年度ごとに持つ。
+   **初期値は各学年3組まで。** 4組目は、その年度の学級編成で足す
+   （初期値に4組を置くと、無い組が年度はじめの画面に出る） */
 const DEFAULT_CLASSES = {
   "1":["1-1","1-2","1-3"],
   "2":["2-1","2-2","2-3"],
   "3":["3-1","3-2","3-3"],
   "4":["4-1","4-2","4-3"],
-  "5":["5-1","5-2","5-3","5-4"],
-  "6":["6-1","6-2","6-3","6-4"]
+  "5":["5-1","5-2","5-3"],
+  "6":["6-1","6-2","6-3"]
 };
 /* grades＝受け持つ学年。**空なら全学年。** 同じ教科に専科が2人いる学校で、
    基本時間割のどのコマが誰のものかを決める唯一の材料（「専科」シートの担当学年）。 */

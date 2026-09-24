@@ -49,12 +49,9 @@ button,select,input,textarea{font:inherit;color:inherit}
 .side .wk{display:flex;flex-direction:column;gap:7px;padding:8px 4px 10px;
   position:sticky;top:-14px;z-index:4;background:var(--card);
   box-shadow:0 6px 10px -8px var(--shade-2)}
-/* 「自動に戻す」。**手で変えた週にだけ出る。** 出しっぱなしにすると、
-   押す必要のないものが毎週目に入る */
-.abauto{border:1px solid var(--line);border-radius:9px;background:var(--card);
-  color:var(--ink-link);font-size:11.5px;padding:3px 8px;cursor:pointer;
-  font-family:inherit;align-self:flex-start}
-.abauto:hover{border-color:var(--ink-link)}
+/* A週・B週の表示。**押せない。** 日付から決まるものを、押せる形で見せない */
+.abnow{border:1px solid var(--line);border-radius:9px;background:var(--card);
+  font-size:12.5px;font-weight:700;padding:3px 10px;white-space:nowrap}
 /* 日付と行き先。**いちばん大きい字を、この2つに渡す。**
    左上で見るのは「いま何週の、どれか」の2つだけ。ここが読めないまま書くと、
    書いた先を間違える ── そのとき戻すのは、書くより何倍も手間がかかる。
@@ -129,9 +126,27 @@ button,select,input,textarea{font:inherit;color:inherit}
 /* **折り返させる。** 場所を空けて絶対位置に置くと、字の大きさが変わった
    環境（Windows のフォント）で A週B週の上に重なる。
    入りきらない幅では次の行へ落ちるほうが、重なるより読める */
-.wkrow{flex-wrap:wrap;row-gap:6px}
-.wkrow>.helpq{margin-left:auto}
+.wkrow{flex-wrap:wrap;row-gap:6px;position:relative;padding-right:26px}
+/* **？は行に入れず右端に浮かせる。** 中身（第◯週・A週B週・自動に戻す）が
+   折り返すと、？だけが1行を食って一段空いたように見えた。
+   絶対位置なら行を占有しない。右に余白を空けて、中身と重ならないようにする */
+.wkrow>.helpq{position:absolute;top:50%;right:0;transform:translateY(-50%);margin:0}
 #helpBody p{margin:0 0 10px;font-size:13px;line-height:1.9;color:var(--tx)}
+
+/* **中央の左下に浮かせる「1手戻す」。** fixed なので紙も帯も押さない
+  （レイアウトに干渉しない＝この指定を守る）。入口の面は .gate（z-index:5）
+   が上にかぶさるので、こちらはその下（z-index:4）に置く */
+.undobtn{position:fixed;left:240px;bottom:14px;z-index:4;width:38px;height:38px;
+  border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--tx-sub);
+  font-size:18px;line-height:1;cursor:pointer;padding:0;
+  box-shadow:0 1px 4px rgba(0,0,0,.14);display:flex;align-items:center;justify-content:center}
+.undobtn:hover:not(:disabled){color:var(--ink-link);border-color:var(--ink-link);background:var(--tint)}
+.undobtn:disabled{opacity:.35;cursor:default}
+body.mob .undobtn{left:14px}
+body[data-scope="gate"] .undobtn{display:none}
+
+/* **端末内の控えデータの小さな知らせ。** 待っている印（.busy）のすぐ下に出す */
+.pendnote{margin:2px 10px 6px;font-size:10.5px;color:var(--tx-sub);line-height:1.55}
 #helpBody p:last-child{margin-bottom:0}
 #helpBody b{font-weight:700}
 #helpBody i{font-style:normal;color:var(--tx-sub);font-weight:600}

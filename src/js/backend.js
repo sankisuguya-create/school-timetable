@@ -309,6 +309,24 @@ const Backend = (function(){
   }
   const persistSoon = () => { clearTimeout(pendT); pendT = setTimeout(persistPending, 900); };
 
+  /* **まだシートに入っていないものの件数。** 送り待ち・送り途中・
+     前に閉じたときの持ち越し・競合で止まっているものを、
+     同じコマは1つとして数える（週案に小さく出す印に使う） */
+  function pendingCount(){
+    const seen = {};
+    let n = 0;
+    const add = q => {
+      if(!q || q.date === undefined) return;
+      const k = cfKey(q);
+      if(seen[k]) return; seen[k] = 1; n++;
+    };
+    for(const q of pendingNow()) add(q);
+    for(const q of savedList(PEND, LEGACY_PEND)) add(q);
+    for(const q of savedList(HELD, LEGACY_HELD)) add(q && q.c ? q.c : q);
+    for(const h of held) add(h.c);
+    return n;
+  }
+
   /* 前に閉じたときの持ち越しを送る。**週を読み直す前に送る。**
      あとから送ると、読み直しで消えた中身を送ることになる。 */
   function sendPending(after){
@@ -335,6 +353,7 @@ const Backend = (function(){
         else localStorage.removeItem(PEND);
         if(held.length) localStorage.setItem(HELD, JSON.stringify(held));
       }catch(e){}
+      onDirty(unsaved(), lastErr);   /* 持ち越しが減ったので、控えの知らせも直す */
       after();
     };
     for(const y in byYear)
@@ -547,6 +566,8 @@ const Backend = (function(){
         Yr.tanpopo = tpNorm_(r.roster.tanpopo);
     }
     Yr.base = r.base || {};
+    /* 年度の途中から使う版。**前の版のサーバは返さない**ので、無ければ空 */
+    Yr.baseFrom = r.baseFrom || {};
     /* 年間行事。**空も答えのうち**（まだ貼っていない年度がある） */
     if(r.events !== undefined && r.events !== null) Yr.events = r.events;
     /* **読めなかった行は黙って捨てない。** 入っていないのか読めていないのかが
@@ -578,7 +599,7 @@ const Backend = (function(){
       after();
     };
     const timer = setTimeout(() => {
-      notify("年度の設定の読み込みに時間がかかっている。端末の控えで続ける");
+      notify("年度の設定の読み込みに時間がかかっている。端末内の控えデータで続ける");
       finish();
     }, 15000);
     google.script.run
@@ -867,34 +888,34 @@ const Backend = (function(){
       })
       .apiWriteSubjects(rows);
   }
-  function saveBase(cls, variant){
-    if(!onGas) return save();
-    const w = Wait.begin("基本時間割を保存しています", true);
-    google.script.run
-      .withSuccessHandler(() => Wait.end(w))
-      .withFailureHandler(e => { Wait.end(w);
-        notify("基本時間割を保存できなかった（" + escText(String(e && e.message)) + "）"); })
-      .apiWriteBase(fy(), cls, variant, ((Y().base[cls] || {})[variant]) || {});
-  }
+  /* 基本時間割を**クラスごとに丸ごと**送る（年度はじめの版と、途中からの版）。
+     A週・B週を別々に送ると、版を足したときに片方だけ入った形が残る */
+  function saveBase(cls){ saveBaseAll([cls]); }
+  const baseTable_ = list => {
+    const table = {}, B = Y().base, F = Y().baseFrom || {};
+    for(const c of list)
+      table[c] = {A:(B[c] || {}).A || {}, B:(B[c] || {}).B || {},
+                  from:(F[c] || []).map(v => ({from:v.from, A:v.A || {}, B:v.B || {}}))};
+    return table;
+  };
 
   /* 固定時間割の取り込み。**20クラス×A週B週を1回で送る。**
      1クラスずつ送ると、途中で切れたときに半分だけ入った表が残る。 */
   function saveBaseAll(list, after){
     if(!onGas){ save(); return after && after(); }
-    const table = {}, B = Y().base;
-    for(const c of list) if(B[c]) table[c] = {A:B[c].A || {}, B:B[c].B || {}};
+    const table = baseTable_(list);
     const w = Wait.begin("基本時間割を保存しています", true);
     google.script.run
       .withSuccessHandler(r => { Wait.end(w); after && after(r); })
       .withFailureHandler(e => { Wait.end(w);
-        notify("基本時間割を保存できなかった（" + (e && e.message) + "）"); })
+        notify("基本時間割を保存できなかった（" + escText(String(e && e.message)) + "）"); })
       .apiWriteBaseAll(fy(), table);
   }
 
   /* 年度の退避。**数える／照合する／消す の3つに分けてある。**
      1つにまとめると、確かめずに消せてしまう。 */
   function archiveCount(year, ok, ng){
-    if(!onGas) return ng("手元ではシートにつながっていないので、退避できない");
+    if(!onGas) return ng("手元ではシートにつながっていないので、保管できない");
     google.script.run
       .withSuccessHandler(r => ok(r))
       .withFailureHandler(e => ng("数えられなかった（" + (e && e.message) + "）"))
@@ -1218,7 +1239,7 @@ const Backend = (function(){
           /* 書いたのに、まだシートに入っていない。画面の地の色はこれで決める */
           touched: () => touched || !!lastErr, setNotifier, setDirtyWatcher, setConflictWatcher,
           unsaved, prefetchWeek, prefetchNeighbors, readWeeks, readWeeksAll, unread, saveTally,
-          watch, stale, heldCells, dropHeld, reloadWeek, discardChanges,
+          watch, stale, heldCells, dropHeld, reloadWeek, discardChanges, pendingCount,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveSubjects, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,

@@ -62,8 +62,25 @@ function whoName(by){
 
 /* ── 合成 ────────────────────────────────────── */
 
+/* ── 基本時間割の版 ─────────────────────────────
+   **年度の途中で改めた時間割は、改めた週から先にだけ効かせる。**
+   版が1つしか無いと、2学期に改めた時点で1学期の紙と時数まで
+   新しい時間割で数え直される（担任が書いていないコマには基本時間割が出るため）。
+
+     Y().base[cls]      = {A, B}                   年度はじめから使う版
+     Y().baseFrom[cls]  = [{from:"2026-09-14", A, B}, …]   その月曜から使う版（from の順）
+
+   その週に使うのは、**月曜より前に始まった版のうち、いちばん新しいもの。**
+   サーバの baseSetAt_（gas/Store.gs）と同じ決まり。 */
+const baseVersions = cls => ((Y().baseFrom || {})[cls]) || [];
+function baseSetAt(cls, monISO){
+  let set = Y().base[cls] || null;
+  for(const v of baseVersions(cls)) if(v.from <= monISO) set = v;
+  return set;
+}
+
 function baseCell(cls, d, s){
-  const v = ((Y().base[cls] || {})[week().variant] || {})[ck(d, s)];
+  const v = (((baseSetAt(cls, wkKey()) || {})[week().variant]) || {})[ck(d, s)];
   if(!v) return null;
   return {title:escText(v.title || ""), note:"", subject:v.subject || null, layer:"base", at:0};
 }

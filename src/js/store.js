@@ -65,7 +65,7 @@ function loadDb(){
     catch(e){
       /* 壊れた中身で上書きしない。退避してから初期状態で開く */
       try{ localStorage.setItem(KEY + "/broken/" + Date.now(), raw); }catch(_){}
-      storeBroken = "保存されていた内容を読めなかった。退避して新しく始めた";
+      storeBroken = "保存されていた内容を読めなかった。別の場所に移して新しく始めた";
       got = null;
     }
   }else if(raw){
@@ -220,7 +220,7 @@ const fy    = () => fyOf(monday);
    中身の違う正本が2つできる。シート側も同じ理由で止めるので、
    ここで止まるのは手順の話で、本番の壁は gas/Store.gs の writeCells */
 const archivedYearNow = () => !!(Backend.archivedYear && Backend.archivedYear(fy()));
-const ARCHIVED_WHY = "この年度は<b>退避ずみ</b>です。保管庫に移してあるので、本体には書き込めません";
+const ARCHIVED_WHY = "この年度は<b>保管ずみ</b>です。別の場所に移してあるので、本体には書き込めません";
 
 function newYear(y){
   const prev = db.years[String(y - 1)];
@@ -231,7 +231,7 @@ function newYear(y){
     /* クラスごとの教科チップ。off／screen／output。既定は使わない。 */
     chipModes: prev ? clone(prev.chipModes || {}) : {},
     specials: prev ? clone(prev.specials) : clone(DEFAULT_SPECIALS),
-    base:{}, weeks:{}, week1: firstMonday(y),
+    base:{}, baseFrom:{}, weeks:{}, week1: firstMonday(y),
     /* 年間行事計画表から読んだもの。**日付にしか結びついていない**
        （校時への割り付けは人がする。docs/spec.md 6節） */
     events:{},
@@ -266,6 +266,8 @@ function Y(){
     if(!Yr.chipModes || typeof Yr.chipModes !== "object") Yr.chipModes = {};
     Yr.specials = normSpecials_(Yr.specials);
     if(!Yr.base)  Yr.base  = {};
+    /* 年度の途中から使う基本時間割（compose.js baseSetAt）。前の版の控えには無い */
+    if(!Yr.baseFrom || typeof Yr.baseFrom !== "object") Yr.baseFrom = {};
     if(!Yr.weeks) Yr.weeks = {};
     if(!Yr.week1) Yr.week1 = firstMonday(+y);
     if(!Yr.events || typeof Yr.events !== "object") Yr.events = {};
@@ -559,10 +561,11 @@ function week(){
      w.home["undefined"] というクラスでない棚が控えに出来た。
      クラス名で読む場所しか無いので、消えたことはどこにも現れない */
   if(w.home["undefined"]) delete w.home["undefined"];
-  /* **手で変えていない週は、そのつど日付から決め直す。**
-     控えに残った古い値を使うと、起点を直しても直らない週が残る */
-  if(!w.vset) w.variant = autoVariant(k);
-  else if(!w.variant) w.variant = autoVariant(k);
+  /* **毎回、日付から決め直す。手で決めた印（vset）は読まない。**
+     控えに残った古い値を使うと、起点を直しても直らない週が残る。
+     前の版で手で替えた週（vset）も、その端末にしか無かったので捨てる */
+  if(w.vset) delete w.vset;
+  w.variant = autoVariant(k);
   return w;
 }
 function weekNo(){

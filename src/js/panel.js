@@ -298,6 +298,10 @@ const askedCells = {};
 
 /* 窓の返事を待つあいだ、答えを受け取る先。**Enter や Esc は「変更しない」。** */
 let owAsk = null;
+/* 窓が閉じた直後、閲覧器が押していたコマへ指を戻す → 持ち歩きの教科が
+   もう一度落ちて、同じ窓がすぐ出直してしまう（どう閉じても閉じられない）。
+   その一瞬だけ、コマへの教科の付け落としを止める時刻 */
+let owGuardUntil = 0;
 function whenLabel(d, sid){
   const dt = addDays(monday, d), sl = SLOT_BY_ID[sid];
   return md(dt) + "(" + DOW[d] + ") " + sl.name + (sl.kind === "lesson" ? "校時" : "");

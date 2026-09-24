@@ -117,11 +117,9 @@
         <div class="wkrow" data-help="week">
           <span class="wkno" id="weekNo"></span>
           <!-- A週・B週は**日付から決まる**（起点の月曜から1週ごとに入れ替わる）。
-               押せば、その週だけ手で変えられる。変えたときだけ「自動に戻す」が出る -->
-          <div class="seg" role="group" aria-label="基本時間割のA週・B週">
-            <button id="abA" aria-pressed="true">A週</button><button id="abB">B週</button>
-          </div>
-          <button class="abauto" id="abAuto" hidden title="日付から決まる週に戻す">自動に戻す</button>
+               **ここでは切り替えない。** 手で替えた週は、その端末にしか残らず、
+               ほかの人・たんぽぽ・時数が別の週を見ることになる。直すのは起点 -->
+          <span class="abnow" id="abShow" role="status" title="A週・B週は日付から決まります">A週</span>
         </div>
         <select class="target" id="target" aria-label="開いているもの"></select>
       </div>
@@ -131,6 +129,8 @@
       <div class="busy" id="busy" hidden>
         <span class="spin" aria-hidden="true"></span><span id="busyTxt">読み込み中</span>
       </div>
+      <!-- 端末内の控えデータ（シートに届いていないぶん）の小さな知らせ -->
+      <p class="pendnote" id="pendNote" hidden></p>
 
       <hr>
       <!-- 入口の面へ戻る口と、開いている週から今週への直帰。**「他の週案」は入口の面そのもの** -->
@@ -165,7 +165,7 @@
         <p class="hint" id="weekBarStat"></p>
       </div>
       <button class="nav" data-act="month" data-center="month" data-help="month" data-plan-output>
-        <svg width="17" height="17"><use href="#i-grid"/></svg><span>4週まとめて（B4）</span></button>
+        <svg width="17" height="17"><use href="#i-grid"/></svg><span>4週間（B4）</span></button>
       <div class="weekbar" id="monthBar" hidden>
         <button class="btn" id="sbMPrint">印刷</button>
         <button class="btn" id="sbMImage">画像</button>
@@ -342,6 +342,9 @@
       <div class="tpwarn" id="tpWarn"></div>
       <div class="tpact"><span class="hint" id="tpCount"></span></div>
       </div>
+      <!-- 1手戻す。**中央の左下に浮かせるだけ**（fixed）── 紙も帯も動かない。
+           Ctrl+Z と同じ doUndo を呼ぶ。入口の面は .gate が上にかぶさるので見えない -->
+      <button class="undobtn" id="undoBtn" type="button" title="1手戻す（Ctrl+Z）。やり直しは Ctrl+Shift+Z">↶</button>
     </main>
 
     <aside class="panel">
@@ -685,6 +688,13 @@
     <button class="btn" id="baseCopy">A週をB週へ写す</button>
     <button class="btn" id="basePrev">前年度から写す</button>
     <button class="btn" id="baseImp">表から取り込む</button></div>
+  <!-- 変える範囲。**直す前に選ぶ。** 既定は「今週以降のみ」。
+       「今年度全体」は過ぎた週の紙・時数・たんぽぽまで変える -->
+  <div class="row"><span>変える範囲</span>
+    <div class="seg" role="group" aria-label="変える範囲">
+      <button id="bsYear" aria-pressed="false">今年度全体を変更</button><button id="bsWeek" aria-pressed="true">今週以降のみ変更</button>
+    </div></div>
+  <p class="hint" id="baseScopeHint"></p>
   <div id="baseGrid"></div>
 </div></dialog>
 
@@ -988,11 +998,11 @@
     <span class="hint" id="ckStat"></span></div>
   <div id="ckOut"></div>
   <hr>
-  <h3 style="margin:12px 0 4px;font-size:14px">年度の退避</h3>
+  <h3 style="margin:12px 0 4px;font-size:14px">過去年度の保管</h3>
   <p>年度末に1回。<b>本体のURLは変わりません。</b>新年度も、教員は今までと同じURLを開きます。<br>
      複製した写しが保管庫になり、本体からはその年度の行だけが消えます。
      基本時間割・クラス・専科は残るので「前年度から写す」はそのまま使えます。</p>
-  <div class="row"><span>退避する年度</span>
+  <div class="row"><span>保管する年度</span>
     <input type="number" id="arYear" style="width:7em" step="1">
     <button class="btn" id="arCount">① 数える</button>
     <span class="hint" id="arStat"></span></div>
@@ -1007,7 +1017,7 @@
       <li>コピーの Apps Script は<b>デプロイしない</b>（デプロイは複製されないので、放って置けば動きません）</li>
       <li>コピーのURLを下に貼る</li>
     </ol>
-    <div class="row"><span>退避先のURL</span>
+    <div class="row"><span>保管先のURL</span>
       <input type="text" id="arUrl" style="flex:1;min-width:18em"
              placeholder="https://docs.google.com/spreadsheets/d/… （そのまま貼ってよい）">
       <button class="btn" id="arVerify">③ 照合する</button></div>
