@@ -1582,3 +1582,15 @@ body.mob .panel.open{transform:none}
 /* 紙の左右の ‹ › は幅を食うので、狭い画面では帯へ移して消す。
    そのぶん紙を大きく出す */
 body.mob .wkarrow{display:none}
+/* 入口の表は、指で横にずらして見る。コマの最小幅のまま置くと
+   「◯年・全学年」の列だけ潰れるので、表ごと素直な幅にして、
+   行の先（学年・全学年・たんぽぽ）だけ左に張り付けておく */
+body.mob .grid{width:max-content;min-width:100%;max-width:none;grid-template-columns:auto repeat(var(--cols),minmax(88px,max-content))}
+body.mob .grid .master{position:sticky;left:0;z-index:2}
+/* 出力の紙は刷ったときの縦横のまま（携帯では枠に合わせて潰さない）。
+   紙より広い枠では、まん中に寄せて出す */
+body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
+
+/* 出す面の中の列は1つ。自動のままだと紙のなかの広がりに引っ張られて
+   画面より広くなるので、外の幅に合わせる */
+.mview,.gvview,.cvview,.spmview{grid-template-columns:minmax(0,1fr)}

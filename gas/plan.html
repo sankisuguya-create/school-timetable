@@ -1713,6 +1713,18 @@ body.mob .panel.open{transform:none}
 /* 紙の左右の ‹ › は幅を食うので、狭い画面では帯へ移して消す。
    そのぶん紙を大きく出す */
 body.mob .wkarrow{display:none}
+/* 入口の表は、指で横にずらして見る。コマの最小幅のまま置くと
+   「◯年・全学年」の列だけ潰れるので、表ごと素直な幅にして、
+   行の先（学年・全学年・たんぽぽ）だけ左に張り付けておく */
+body.mob .grid{width:max-content;min-width:100%;max-width:none;grid-template-columns:auto repeat(var(--cols),minmax(88px,max-content))}
+body.mob .grid .master{position:sticky;left:0;z-index:2}
+/* 出力の紙は刷ったときの縦横のまま（携帯では枠に合わせて潰さない）。
+   紙より広い枠では、まん中に寄せて出す */
+body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
+
+/* 出す面の中の列は1つ。自動のままだと紙のなかの広がりに引っ張られて
+   画面より広くなるので、外の幅に合わせる */
+.mview,.gvview,.cvview,.spmview{grid-template-columns:minmax(0,1fr)}
 /* ▲ src/css/app.css ▲ */
 /* ▼ src/css/sheet.css ▼ */
 /* 紙。**刷られる面はここだけ。** 印刷の版面は動かさない。
@@ -10238,6 +10250,33 @@ function gCellEl(d, s, c){
   return e;
 }
 
+/* 携帯では、紙を枠のかたちに合わせて潰さない。**刷ったときと同じ縦横**の
+   まま出し、入りきらないぶんはそのまま小さく出す（広げるのは閲覧器の
+   指の動きに任せる。横ずらしの許容はこのため）。PC では毎回消す ──
+   決めた大きさが残ると、枠いっぱいに広がらなくなる */
+function mobPaperFit(box, ratio){
+  /* **いったん消してから測る。** 決めた大きさが残ったまま測ると、
+     前に決めた値を場所と読み違えて、どんどん外れていく。 */
+  box.style.removeProperty("width");
+  box.style.removeProperty("height");
+  if(!document.body.classList.contains("mob")) return;
+  /* **場所を測るために、いったん枠いっぱいに広げる。**
+     真ん中寄せ（place-self:center）のままだと、中身の広がりを
+     場所と読み違える。100% は紙の置き場（行と列のひと枠） */
+  box.style.width = "100%";
+  box.style.height = "100%";
+  const aw = box.clientWidth, ah = box.clientHeight;
+  if(aw < 2 || ah < 2){
+    box.style.removeProperty("width");
+    box.style.removeProperty("height");
+    return;
+  }
+  let w = aw, h = w / ratio;
+  if(h > ah){ h = ah; w = h * ratio; }
+  box.style.width  = Math.round(w) + "px";
+  box.style.height = Math.round(h) + "px";
+}
+
 /* 入るところまで --k を下げる。**測って決める。**
    行の高さは mm で書いてあるが、字の回り込みまでは式で出せない。
    `nodes` に倍率を入れて `probe` の高さを測り、`want` に収まるまで繰り返す。
@@ -10290,6 +10329,8 @@ function fitGradeK(sh, availH, availW){
 function fitGrade(){
   const box = $("gvPaper"), sh = box && box.querySelector(".gsheet");
   if(!box || !sh) return;
+  /* 携帯では A4 よこの縦横のまま出す（枠のかたちに潰さない） */
+  mobPaperFit(box, GV_PAGE.w / GV_PAGE.h);
   const availW = box.clientWidth, availH = box.clientHeight;
   if(availW < 2 || availH < 2) return;
   sh.style.setProperty("--pw", availW + "px");
@@ -10330,23 +10371,25 @@ function mCellMM(){
 function fitMonth(cell){
   const box = $("mPaper"), one = $("mS0");
   if(!box || !one) return;
-  const c = cell || {w: ((box.clientWidth  - M_GAP) / 2) + "px",
-                     h: ((box.clientHeight - M_GAP) / 2) + "px"};
-  if(!cell && (box.clientWidth < 2 || box.clientHeight < 2)) return;
   /* **枠の大きさを、並べ方の側にも入れる。**
      1fr のままだと、刷るときに画面の広さで割った幅に押し戻される
      （紙は 352mm なのに、画面の 1500px を割った幅で組まれる）。 */
   if(cell){
-    box.style.gridTemplateColumns = "repeat(2," + c.w + ")";
-    box.style.gridTemplateRows    = "repeat(2," + c.h + ")";
+    box.style.gridTemplateColumns = "repeat(2," + cell.w + ")";
+    box.style.gridTemplateRows    = "repeat(2," + cell.h + ")";
     /* **入れものにも幅を持たせる。** 持たせないと画面の幅いっぱいに広がり、
        紙からはみ出したぶんが切られる（右半分が出ない） */
-    box.style.width = "calc(" + c.w + "*2 + " + M_GAP + "mm)";
+    box.style.width = "calc(" + cell.w + "*2 + " + M_GAP + "mm)";
   }else{
     box.style.removeProperty("grid-template-columns");
     box.style.removeProperty("grid-template-rows");
     box.style.removeProperty("width");
+    /* 携帯では B4 の縦横のまま出す（枠のかたちに潰さない） */
+    mobPaperFit(box, M_PAGE.w / M_PAGE.h);
+    if(box.clientWidth < 2 || box.clientHeight < 2) return;
   }
+  const c = cell || {w: ((box.clientWidth  - M_GAP) / 2) + "px",
+                     h: ((box.clientHeight - M_GAP) / 2) + "px"};
   let k = 1;
   for(let pass = 0; pass < 4; pass++){
     for(let i = 0; i < MONTH_WEEKS; i++){
@@ -10737,18 +10780,20 @@ function calCellMM(){
 function fitCal(cell){
   const box = $("cvPaper"), one = box && box.querySelector(".cmonth");
   if(!box || !one) return;
-  const c = cell || {w:((box.clientWidth - 6) / 2) + "px",
-                     h:box.clientHeight + "px"};
-  if(!cell && (box.clientWidth < 2 || box.clientHeight < 2)) return;
   if(cell){
-    box.style.gridTemplateColumns = "repeat(2," + c.w + ")";
-    box.style.gridTemplateRows    = c.h;
-    box.style.width = "calc(" + c.w + "*2 + 6mm)";
+    box.style.gridTemplateColumns = "repeat(2," + cell.w + ")";
+    box.style.gridTemplateRows    = cell.h;
+    box.style.width = "calc(" + cell.w + "*2 + 6mm)";
   }else{
     box.style.removeProperty("grid-template-columns");
     box.style.removeProperty("grid-template-rows");
     box.style.removeProperty("width");
+    /* 携帯では A4 よこの縦横のまま出す（枠のかたちに潰さない） */
+    mobPaperFit(box, CAL_PAGE.w / CAL_PAGE.h);
+    if(box.clientWidth < 2 || box.clientHeight < 2) return;
   }
+  const c = cell || {w:((box.clientWidth - 6) / 2) + "px",
+                     h:box.clientHeight + "px"};
   const rows = getComputedStyle(box).gridTemplateRows.split(" ");
   const want = parseFloat(rows[0]) || one.clientHeight;
   fitK([...box.querySelectorAll(".cmonth")], one, want,
