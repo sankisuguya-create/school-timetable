@@ -52,9 +52,7 @@ function paintSave(){
     pn.hidden = !np;
     if(np) pn.textContent = "端末内の控えデータが " + np + " 件あります（まだシートに入っていません）";
   }
-  /* **1手戻す。** 戻せるものがあるときだけ押せる */
-  const ub = $("undoBtn");
-  if(ub) ub.disabled = !(typeof canUndo === "function" && canUndo());
+  paintUndo();
   b.title = busy ? "送っています。途中で閉じると送信されません"
           : err  ? "もう一度押す。閉じると消える"
           : n    ? n + " コマぶんがまだシートに入っていない"
@@ -208,6 +206,12 @@ function syncVariant(){
   const e = $("abShow");
   if(e) e.textContent = week().variant + "週";
 }
+/* **1手戻す。** 戻せるぶんが残っているときだけ押せる（薄いときは棚が空） */
+function paintUndo(){
+  const ub = $("undoBtn");
+  if(ub) ub.disabled = !(typeof undoAvail === "function" && undoAvail());
+}
+
 function refreshWeek(){
   paintWeekLabel();
   const n = weekNo();
@@ -217,6 +221,7 @@ function refreshWeek(){
   drawTallyPanel();               /* 時数。週をまたぐと「今月」が変わる */
   paintArchive();                 /* 週をまたぐと年度が変わる。**そのつど見る** */
   paintTpSub();                   /* 提出の印は週ごと。週をまたぐと未に戻る */
+  paintUndo();                    /* 週をまたぐと、戻せる相手が変わる */
   if(view.kind === "tanpopo"){
     /* **待たせない。** 先に面を描いて、出す先は届いてから描き直す。
        出す先は1回だけ読む（週を繰るたびに読みに行かない） */
