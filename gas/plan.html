@@ -1679,6 +1679,9 @@ body.mob .mobbar .mb{display:inline-flex;align-items:center;gap:6px;
 body.mob .mobbar .mb:hover{background:var(--hover)}
 body.mob .mobwhere{flex:1;min-width:0;text-align:center;font-size:12.5px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 週の往復は週の表示の左右。入口（週の表示が無い面）では出さない */
+body.mob .mobbar .wkn{flex:0 0 auto;padding:8px 10px;font-size:16px;line-height:1}
+body.mob:has(#gate:not([hidden])) .mobbar .wkn{display:none}
 /* 右メニューの無い面（入口・週以外の面）では「入力」の口は出さない */
 body.mob:has(.work.no-panel) #mobPanel,
 body.mob:has(#gate:not([hidden])) #mobPanel{display:none}
@@ -1692,8 +1695,9 @@ body.mob .panel{position:fixed;right:0;top:0;bottom:0;width:min(340px,92vw);z-in
   transform:translateX(105%);transition:transform .16s ease;
   box-shadow:0 0 32px rgba(0,0,0,.28)}
 body.mob .panel.open{transform:none}
-/* 紙の左右の ‹ › は幅を食うので、狭い画面では細くする */
-body.mob .wkarrow{width:24px;height:56px}
+/* 紙の左右の ‹ › は幅を食うので、狭い画面では帯へ移して消す。
+   そのぶん紙を大きく出す */
+body.mob .wkarrow{display:none}
 /* ▲ src/css/app.css ▲ */
 /* ▼ src/css/sheet.css ▼ */
 /* 紙。**刷られる面はここだけ。** 印刷の版面は動かさない。
@@ -2291,7 +2295,11 @@ body.mob .wkarrow{width:24px;height:56px}
        （→ css .work.no-panel を見る） -->
   <div class="mobbar" id="mobbar">
     <button class="mb" id="mobMenu"><svg width="19" height="19"><use href="#i-menu"/></svg><span>メニュー</span></button>
+    <!-- 週の往復は**週の表示の左右**へ。紙の外の矢印は幅を食うので、
+         狭い画面では帯へ上げて、そのぶん紙を大きく出す -->
+    <button class="mb wkn" id="mobPrev" aria-label="前の週">‹</button>
     <b class="mobwhere" id="mobWhere"></b>
+    <button class="mb wkn" id="mobNext" aria-label="次の週">›</button>
     <button class="mb" id="mobPanel"><svg width="18" height="18"><use href="#i-edit"/></svg><span>入力</span></button>
   </div>
   <div class="work">
@@ -2418,7 +2426,7 @@ body.mob .wkarrow{width:24px;height:56px}
 
       <hr>
       <button class="nav" id="guideOpen">使い方</button>
-      <button class="nav" data-act="settings" data-help="settings">
+      <button class="nav" data-act="settings">
         <svg width="17" height="17"><use href="#i-gear"/></svg><span>設定</span></button>
 
       <!-- 管理。**担任は使わない。** 学校で3人だけが押す。
@@ -2998,6 +3006,10 @@ body.mob .wkarrow{width:24px;height:56px}
     <span class="hint" id="rsAbNow"></span></div>
   <p class="hint" style="margin:2px 0 0">A週の起点は<b>毎年直すものではありません。</b>
      年間行事計画表の「週」欄と1週ずれていたときだけ動かします。</p>
+  <!-- **編集は下書き。ここの保存でまとめてシートへ入る。**
+       閉じるだけ（✕・Esc・外側）では入らない ── 残っていれば聞く -->
+  <div class="end"><span class="hint" id="rsStat"></span>
+    <button class="btn" id="rsSave">保存して閉じる</button></div>
 </div></dialog>
 
 <dialog id="setDlg"><div class="dlg">
@@ -13181,8 +13193,12 @@ function drawTanpopoView(){
   const noTarget = Backend.isGas() && !tgt;
   /* **ロックでは止めない。** ロックが守るのは出す先と組分けで、
      毎週の出力はロックしたまま押してよい（むしろ、触らずに出したい人の面）。
-     複数の理由が重なったら、先に解消しないと先へ進めないものを出す。 */
+     複数の理由が重なったら、先に解消しないと先へ進めないものを出す。
+     **読み込み中は押させない。** まだ届いていない週を出すと、空の時間割が
+     本物として出来てしまう */
   const why = tpTgtEdit ? "出す先の編集を終えてください"
+            : Backend.isGas() && tpTargets === null ? "出す先を読んでいます"
+            : Backend.isGas() && Backend.unread([wkKey()]) > 0 ? "この週をまだ読んでいます"
             : !tpTotal() ? "先に組分けで交流級を入れてください"
             : noTarget ? "出す先を設定してください" : "";
   $("tpGo").disabled = !!why;
@@ -13353,6 +13369,9 @@ function doExportTanpopo(){
         Wait.end(w);
         $("tpGo").disabled = false;
         drawTanpopoView();
+        /* **理由は箱の中だけにしない。** tpWarn は畳んだ面の内側なので、
+           閉じていれば止まったこと自体が見えない。押した人には必ず届ける */
+        toast("<b>たんぽぽ時間割へ出せませんでした。</b><br>" + escText(why));
         $("tpWarn").innerHTML =
           "<div class='box'><b>たんぽぽ時間割へ出せませんでした。</b><br>"
           + escText(why) + "</div>" + $("tpWarn").innerHTML;
@@ -13364,9 +13383,14 @@ function doExportTanpopo(){
    「出しました」だけだと、前のシートがどこへ行ったのか分からない。 */
 function showTanpopoResult(r){
   const box = [];
+  /* **出来たシートへの直つながりを必ず付ける。** 「ファイル名＋シート名」
+     だけだと、開いているファイルと別のところに出来ていても分からない。
+     つながりで開けば、どこに出来たかが確かめられる */
   box.push("<div class='box ok'><b>たんぽぽ時間割に出した。</b>"
-    + escText(r.file || "") + "／シート「" + escText(r.sheet || "") + "」<br>"
-    + "児童 " + (r.cols || 0) + " 列"
+    + escText(r.file || "") + "／シート「" + escText(r.sheet || "") + "」"
+    + (r.sheetUrl ? "　<a target='_blank' rel='noopener' href='"
+                  + escText(r.sheetUrl) + "'>出来たシートを開く</a>" : "")
+    + "<br>児童 " + (r.cols || 0) + " 列"
     + (r.staff ? "＋支援員 " + r.staff + " 列" : "")
     + "・" + (r.days || 0) + "日ぶん・授業名 " + (r.wrote || 0) + " コマ"
     + (r.empty ? "（空のコマ " + r.empty + "）" : "")
@@ -13374,7 +13398,10 @@ function showTanpopoResult(r){
                 + escText(r.backup) + "」に名前を変えて残した" : "")
     + "<br>シートは<b>週の順</b>（4月→翌3月）に並ぶ。"
     + "児童の列の幅は <b>" + (r.colW || 50) + "px</b>"
-    + "（設定シートの「たんぽぽ列幅」で変えられる）</div>");
+    + "（設定シートの「たんぽぽ列幅」で変えられる）"
+    + (r.recordWhy ? "<br>※ 出した印の記録だけ付けられなかった（"
+                  + escText(r.recordWhy) + "）。シート自体は出来ている" : "")
+    + "</div>");
   $("tpWarn").innerHTML = box.join("") + $("tpWarn").innerHTML;
   toast("たんぽぽ時間割に <b>" + (r.wrote || 0) + " コマ</b>入れた");
 }
@@ -13968,11 +13995,55 @@ function goImp(){
 
 /* ── 学級編成 ───────────────────────────────────
    本番では「クラス」シートが正本。ここはその写し。
-   **年度ごとに持つ。** 直しても前の年度は変わらない。 */
+   **年度ごとに持つ。** 直しても前の年度は変わらない。
+
+   **直す途中は下書き（rsDraft）に入れ、「保存して閉じる」で一括反映。**
+   打鍵のたびにシートへ書いていたころは、通信の切れたままの直しが
+   画面には出るのにシートには無い形になり、誰にも分からなかった。
+   閉じるとき直しが残っていれば「入れる／捨てる」を聞く。 */
+let rsDraft = null;     /* 下書き。null のときは窓を開いていない */
+let rsDirty = false;    /* 下書きに未反映の直しがある */
+let rsCloseWired = false;
 
 function openRosterDlg(){
+  const Yr = Y();
+  rsDraft = {classes: clone(Yr.classes || {}),
+             specials: clone(Yr.specials || []),
+             week1: Yr.week1 || ""};
+  rsDirty = false;
+  if(!rsCloseWired){
+    rsCloseWired = true;
+    /* 閉じ方が何であれ（✕・Esc・外側）ここへ来る。
+       残っていれば聞く。既定は安全側（入れて閉じる） */
+    $("rosterDlg").addEventListener("close", () => {
+      if(!rsDirty) return;
+      const d = rsDraft;
+      rsDirty = false;
+      askOk({title:"直したぶんを入れますか",
+        lines:["閉じるだけでは、直したぶんはシートに入りません。",
+               "入れないで閉じると、直したぶんは捨てられます。"],
+        noLabel:"入れて閉じる", goLabel:"捨てる",
+        onNo: () => applyRosterDraft_(d)});
+    });
+  }
   drawRoster();
   $("rosterDlg").showModal();
+}
+/* 下書きを本体へ入れてシートへ送る */
+function applyRosterDraft_(d){
+  if(!d) return;
+  const Yr = Y();
+  Yr.classes  = clone(d.classes);
+  Yr.specials = clone(d.specials);
+  if(d.week1) Yr.week1 = d.week1;
+  save(); Backend.saveRoster();
+  afterRosterChange();
+}
+/* 「まだ入れていません」を出す。未反映のときだけ保存を強調する */
+function paintRsSave(){
+  if(!$("rsSave")) return;
+  $("rsStat").textContent = rsDirty ? "まだ入れていません" : "";
+  $("rsSave").classList.toggle("go", rsDirty);
 }
 /* ── 教科の表し方 ────────────────────────────
    **紙の字・時数の1文字・たんぽぽの字を、1つの表で直す。**
@@ -14033,8 +14104,11 @@ function saveSubTable(){
 
 function drawRoster(){
   const Yr = Y();
+  /* 下書きを描く。窓の外から呼ばれたとき（保存直後の組み直しなど）は本体を見る */
+  const dr = rsDraft || {classes: Yr.classes || {}, specials: Yr.specials || [],
+                         week1: Yr.week1 || ""};
   $("rsFy").textContent = fy() + "年度";
-  $("rsW1").value = Yr.week1 || firstMonday(fy());
+  $("rsW1").value = dr.week1 || firstMonday(fy());
   $("rsAbNow").textContent = "今は " + (db.settings.abAnchor || AB_ANCHOR);
   /* 専科の枠。**1行が1人ぶん。** 教科 ＋ 担当学年 ＋ 消す。
      同じ教科の行が2つあってよい（図工1・2年／図工3〜6年）。
@@ -14042,7 +14116,7 @@ function drawRoster(){
      見せても直させない（直すと、入れたコマの持ち主が変わる）。 */
   /* 専科が持つのは、時数に数える教科だけ（図書・給食・クラブは専科にしない） */
   const spSubs = SUBJECTS.filter(x => x.count && !x.only);
-  $("rsSpRows").innerHTML = (Yr.specials || []).map(sp =>
+  $("rsSpRows").innerHTML = (dr.specials || []).map(sp =>
     "<div class='row sprow'>"
     + "<select data-spsub='" + escText(sp.code) + "'>"
     + spSubs.map(x => "<option value='" + escText(x.code) + "'"
@@ -14057,17 +14131,18 @@ function drawRoster(){
     + "</div>").join("")
     || "<p class='hint'>専科の枠がありません。「枠を足す」から作ります。</p>";
 
-  const spSave = () => { save(); Backend.saveRoster(); drawRoster(); afterRosterChange(); };
+  /* **下書きだけを直す。** シートには「保存して閉じる」まで書かない */
+  const spSave = () => { rsDirty = true; drawRoster(); };
   for(const e of $("rsSpRows").querySelectorAll("input[data-sp]"))
     e.onchange = () => {
-      const t = (Y().specials || []).find(x => x.code === e.dataset.sp);
+      const t = (dr.specials || []).find(x => x.code === e.dataset.sp);
       if(!t) return;
       t.grades = spGrades_(e.value);
       spSave();
     };
   for(const e of $("rsSpRows").querySelectorAll("select[data-spsub]"))
     e.onchange = () => {
-      const t = (Y().specials || []).find(x => x.code === e.dataset.spsub);
+      const t = (dr.specials || []).find(x => x.code === e.dataset.spsub);
       if(!t) return;
       /* **身元は変えない。** 変えると、その枠で入れたコマの持ち主が
          行方不明になる（週案の棚には身元の字が入っている） */
@@ -14077,7 +14152,7 @@ function drawRoster(){
   for(const b of $("rsSpRows").querySelectorAll("button[data-spdel]"))
     b.onclick = () => {
       const code = b.dataset.spdel;
-      const t = (Y().specials || []).find(x => x.code === code);
+      const t = (dr.specials || []).find(x => x.code === code);
       askOk({
         title: (t ? spLabel(t) : "この枠") + " を消しますか",
         lines:["<b>その枠で入れたコマは消えません。</b>枠が無くなるので、"
@@ -14085,16 +14160,16 @@ function drawRoster(){
                "学年を直したいだけなら、消さずに<b>担当学年の欄</b>を直してください。"],
         goLabel:"消す",
         onYes: () => {
-          Y().specials = (Y().specials || []).filter(x => x.code !== code);
+          dr.specials = (dr.specials || []).filter(x => x.code !== code);
           spSave();
         }
       });
     };
 
-  $("rsRows").innerHTML = grades().map(g =>
+  $("rsRows").innerHTML = Object.keys(dr.classes).sort().map(g =>
     "<div class='row'><span>" + escText(g) + "年</span>"
     + "<input type='text' data-g='" + escText(g) + "' style='flex:1;min-width:16em' value='"
-    + escText((Yr.classes[g] || []).join(", ")) + "'>"
+    + escText((dr.classes[g] || []).join(", ")) + "'>"
     + "<button class='btn danger' data-del='" + escText(g) + "'>行を消す</button></div>").join("");
 
   for(const e of $("rsRows").querySelectorAll("input[data-g]"))
@@ -14102,10 +14177,10 @@ function drawRoster(){
   for(const b of $("rsRows").querySelectorAll("button[data-del]"))
     b.onclick = () => {
       const g = b.dataset.del;
-      const used = (Y().classes[g] || []).filter(hasAnyData);
+      const used = (dr.classes[g] || []).filter(hasAnyData);
       const go = () => {
-        delete Y().classes[g];
-        save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+        delete dr.classes[g];
+        rsDirty = true; drawRoster();
       };
       if(!used.length) return go();
       askOk({
@@ -14116,19 +14191,21 @@ function drawRoster(){
         goLabel: "消す", onYes: go
       });
     };
+  paintRsSave();
 }
-/* 「1-1, 1-2, 1-3」を配列にする。空と重複は落とす。 */
+/* 「1-1, 1-2, 1-3」を配列にする。空と重複は落とす。下書きへ入れる。 */
 function setGradeClasses(g, text){
+  const dr = rsDraft || {classes: Y().classes || {}};
   const seen = {}, out = [];
   for(const raw of String(text).split(/[,、\s]+/)){
     const n = normCls(raw);
     if(!n || seen[n]) continue;
     seen[n] = 1; out.push(n);
   }
-  const gone = (Y().classes[g] || []).filter(c => out.indexOf(c) < 0 && hasAnyData(c));
+  const gone = (dr.classes[g] || []).filter(c => out.indexOf(c) < 0 && hasAnyData(c));
   const go = () => {
-    Y().classes[g] = out;
-    save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+    dr.classes[g] = out;
+    rsDirty = true; drawRoster();
   };
   if(!gone.length) return go();
   askOk({
@@ -15225,7 +15302,9 @@ function renrakuModel(cls, dt, hwText, itemText){
         const c = compose(cls, d, s.id);
         const t = plain(c.title || "").trim();
         if(!t){ letters.push({t:"", rt:""}); continue; }
-        if(t === NO_LESSON){ letters.push({t:"なし", rt:""}); continue; }
+        /* **授業なしは何も出さない。** 空きコマと同じく、連絡帳には
+           何も書かないほうが紙として読みやすい */
+        if(t === NO_LESSON){ letters.push({t:"", rt:""}); continue; }
         const lt = shortOf(c.subject, t, c.short);
         /* 1文字コマはその字の読み（国→こく）。語で出るものは語の読み */
         letters.push({t:lt, rt:lt.length === 1 ? (REN_CHAR[lt] || "")
@@ -15856,10 +15935,12 @@ function wire(){
   });
   MOBILE.addEventListener("change", () => { setMob(); setDrawer(false, false); });
   setMob();
-  /* 紙の左右の ‹ › 。**左メニューの ◀ ▶ と同じことをする**
+  /* 紙の左右・上の帯の ‹ › 。**左メニューの ◀ ▶ と同じことをする**
      （行き先を2つ持たない。片方だけ直した版が出る） */
   on("wkPrev","click", () => goWeek(-7));
   on("wkNext","click", () => goWeek(7));
+  on("mobPrev","click", () => goWeek(-7));
+  on("mobNext","click", () => goWeek(7));
 
   on("abA","click", () => setVariant("A"));
   on("abB","click", () => setVariant("B"));
@@ -16262,15 +16343,18 @@ function wire(){
   on("rsAddG","click", () => {
     const g = String($("rsNewG").value || "").trim();
     if(!g) return;
-    if(Y().classes[g]) return toast("その学年はもうある");
-    Y().classes[g] = [];
+    if(!rsDraft) return;   /* 窓を開いていないときは来ないが念のため */
+    if(rsDraft.classes[g]) return toast("その学年はもうある");
+    rsDraft.classes[g] = [];
     $("rsNewG").value = "";
-    save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+    rsDirty = true; drawRoster();
   });
   /* 専科の枠を足す。**身元は重ならないように付ける**（週案の棚に入る字）。
-     1人目は教科コードのまま、2人目からは「rika_2」と連番を足す。 */
+     1人目は教科コードのまま、2人目からは「rika_2」と連番を足す。
+     ここも下書きへ ── シートへは「保存して閉じる」でまとめて入る。 */
   on("rsSpAdd","click", () => {
-    const list = Y().specials || (Y().specials = []);
+    if(!rsDraft) return;
+    const list = rsDraft.specials || (rsDraft.specials = []);
     /* **専科らしい教科から、まだ枠のないものを優先する。**
        いつも先頭（国語）を足すと、足すたびに国語専科ができてしまう */
     const have = new Set(list.map(x => x.subject));
@@ -16281,21 +16365,33 @@ function wire(){
     let code = sub, n = 2;
     while(list.some(x => x.code === code)) code = sub + "_" + (n++);
     list.push({code, subject:sub, grades:[]});
-    save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+    rsDirty = true; drawRoster();
   });
   on("rsW1","change", e => {
     const v = String(e.target.value).trim();
     if(!parseISO(v)) return toast("日付は 2026-04-06 の形で書く");
-    Y().week1 = v; save(); Backend.saveRoster();
-    if(view.kind === "gate") drawGate(); else refreshWeek();
+    if(!rsDraft) return;
+    rsDraft.week1 = v;
+    rsDirty = true; paintRsSave();
   });
   on("rsPrev","click", () => {
     const prev = db.years[String(fy() - 1)];
     if(!prev) return toast("前年度のデータがまだ無い");
-    Y().classes  = clone(prev.classes);
-    Y().specials = clone(prev.specials);
-    save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
-    toast("前年度の編成を写した");
+    if(!rsDraft) return;
+    rsDraft.classes  = clone(prev.classes);
+    rsDraft.specials = clone(prev.specials);
+    rsDirty = true; drawRoster();
+    toast("前年度の編成を下書きに写した。「保存して閉じる」で入る");
+  });
+  /* 「保存して閉じる」─ 下書きを本体へ入れてシートへ送ってから閉じる。
+     直すところが無ければそのまま閉じる。 */
+  on("rsSave","click", () => {
+    if(rsDirty){
+      applyRosterDraft_(rsDraft);
+      rsDirty = false;
+      toast("編成を保存した");
+    }
+    $("rosterDlg").close();
   });
 
   /* 時数 */

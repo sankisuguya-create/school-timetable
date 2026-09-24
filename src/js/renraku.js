@@ -151,7 +151,9 @@ function renrakuModel(cls, dt, hwText, itemText){
         const c = compose(cls, d, s.id);
         const t = plain(c.title || "").trim();
         if(!t){ letters.push({t:"", rt:""}); continue; }
-        if(t === NO_LESSON){ letters.push({t:"なし", rt:""}); continue; }
+        /* **授業なしは何も出さない。** 空きコマと同じく、連絡帳には
+           何も書かないほうが紙として読みやすい */
+        if(t === NO_LESSON){ letters.push({t:"", rt:""}); continue; }
         const lt = shortOf(c.subject, t, c.short);
         /* 1文字コマはその字の読み（国→こく）。語で出るものは語の読み */
         letters.push({t:lt, rt:lt.length === 1 ? (REN_CHAR[lt] || "")

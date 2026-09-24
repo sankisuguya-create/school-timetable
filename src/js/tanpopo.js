@@ -422,8 +422,12 @@ function drawTanpopoView(){
   const noTarget = Backend.isGas() && !tgt;
   /* **ロックでは止めない。** ロックが守るのは出す先と組分けで、
      毎週の出力はロックしたまま押してよい（むしろ、触らずに出したい人の面）。
-     複数の理由が重なったら、先に解消しないと先へ進めないものを出す。 */
+     複数の理由が重なったら、先に解消しないと先へ進めないものを出す。
+     **読み込み中は押させない。** まだ届いていない週を出すと、空の時間割が
+     本物として出来てしまう */
   const why = tpTgtEdit ? "出す先の編集を終えてください"
+            : Backend.isGas() && tpTargets === null ? "出す先を読んでいます"
+            : Backend.isGas() && Backend.unread([wkKey()]) > 0 ? "この週をまだ読んでいます"
             : !tpTotal() ? "先に組分けで交流級を入れてください"
             : noTarget ? "出す先を設定してください" : "";
   $("tpGo").disabled = !!why;
@@ -594,6 +598,9 @@ function doExportTanpopo(){
         Wait.end(w);
         $("tpGo").disabled = false;
         drawTanpopoView();
+        /* **理由は箱の中だけにしない。** tpWarn は畳んだ面の内側なので、
+           閉じていれば止まったこと自体が見えない。押した人には必ず届ける */
+        toast("<b>たんぽぽ時間割へ出せませんでした。</b><br>" + escText(why));
         $("tpWarn").innerHTML =
           "<div class='box'><b>たんぽぽ時間割へ出せませんでした。</b><br>"
           + escText(why) + "</div>" + $("tpWarn").innerHTML;
@@ -605,9 +612,14 @@ function doExportTanpopo(){
    「出しました」だけだと、前のシートがどこへ行ったのか分からない。 */
 function showTanpopoResult(r){
   const box = [];
+  /* **出来たシートへの直つながりを必ず付ける。** 「ファイル名＋シート名」
+     だけだと、開いているファイルと別のところに出来ていても分からない。
+     つながりで開けば、どこに出来たかが確かめられる */
   box.push("<div class='box ok'><b>たんぽぽ時間割に出した。</b>"
-    + escText(r.file || "") + "／シート「" + escText(r.sheet || "") + "」<br>"
-    + "児童 " + (r.cols || 0) + " 列"
+    + escText(r.file || "") + "／シート「" + escText(r.sheet || "") + "」"
+    + (r.sheetUrl ? "　<a target='_blank' rel='noopener' href='"
+                  + escText(r.sheetUrl) + "'>出来たシートを開く</a>" : "")
+    + "<br>児童 " + (r.cols || 0) + " 列"
     + (r.staff ? "＋支援員 " + r.staff + " 列" : "")
     + "・" + (r.days || 0) + "日ぶん・授業名 " + (r.wrote || 0) + " コマ"
     + (r.empty ? "（空のコマ " + r.empty + "）" : "")
@@ -615,7 +627,10 @@ function showTanpopoResult(r){
                 + escText(r.backup) + "」に名前を変えて残した" : "")
     + "<br>シートは<b>週の順</b>（4月→翌3月）に並ぶ。"
     + "児童の列の幅は <b>" + (r.colW || 50) + "px</b>"
-    + "（設定シートの「たんぽぽ列幅」で変えられる）</div>");
+    + "（設定シートの「たんぽぽ列幅」で変えられる）"
+    + (r.recordWhy ? "<br>※ 出した印の記録だけ付けられなかった（"
+                  + escText(r.recordWhy) + "）。シート自体は出来ている" : "")
+    + "</div>");
   $("tpWarn").innerHTML = box.join("") + $("tpWarn").innerHTML;
   toast("たんぽぽ時間割に <b>" + (r.wrote || 0) + " コマ</b>入れた");
 }

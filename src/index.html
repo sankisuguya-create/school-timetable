@@ -75,7 +75,11 @@
        （→ css .work.no-panel を見る） -->
   <div class="mobbar" id="mobbar">
     <button class="mb" id="mobMenu"><svg width="19" height="19"><use href="#i-menu"/></svg><span>メニュー</span></button>
+    <!-- 週の往復は**週の表示の左右**へ。紙の外の矢印は幅を食うので、
+         狭い画面では帯へ上げて、そのぶん紙を大きく出す -->
+    <button class="mb wkn" id="mobPrev" aria-label="前の週">‹</button>
     <b class="mobwhere" id="mobWhere"></b>
+    <button class="mb wkn" id="mobNext" aria-label="次の週">›</button>
     <button class="mb" id="mobPanel"><svg width="18" height="18"><use href="#i-edit"/></svg><span>入力</span></button>
   </div>
   <div class="work">
@@ -202,7 +206,7 @@
 
       <hr>
       <button class="nav" id="guideOpen">使い方</button>
-      <button class="nav" data-act="settings" data-help="settings">
+      <button class="nav" data-act="settings">
         <svg width="17" height="17"><use href="#i-gear"/></svg><span>設定</span></button>
 
       <!-- 管理。**担任は使わない。** 学校で3人だけが押す。
@@ -782,6 +786,10 @@
     <span class="hint" id="rsAbNow"></span></div>
   <p class="hint" style="margin:2px 0 0">A週の起点は<b>毎年直すものではありません。</b>
      年間行事計画表の「週」欄と1週ずれていたときだけ動かします。</p>
+  <!-- **編集は下書き。ここの保存でまとめてシートへ入る。**
+       閉じるだけ（✕・Esc・外側）では入らない ── 残っていれば聞く -->
+  <div class="end"><span class="hint" id="rsStat"></span>
+    <button class="btn" id="rsSave">保存して閉じる</button></div>
 </div></dialog>
 
 <dialog id="setDlg"><div class="dlg">

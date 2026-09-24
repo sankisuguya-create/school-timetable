@@ -381,11 +381,55 @@ function goImp(){
 
 /* ── 学級編成 ───────────────────────────────────
    本番では「クラス」シートが正本。ここはその写し。
-   **年度ごとに持つ。** 直しても前の年度は変わらない。 */
+   **年度ごとに持つ。** 直しても前の年度は変わらない。
+
+   **直す途中は下書き（rsDraft）に入れ、「保存して閉じる」で一括反映。**
+   打鍵のたびにシートへ書いていたころは、通信の切れたままの直しが
+   画面には出るのにシートには無い形になり、誰にも分からなかった。
+   閉じるとき直しが残っていれば「入れる／捨てる」を聞く。 */
+let rsDraft = null;     /* 下書き。null のときは窓を開いていない */
+let rsDirty = false;    /* 下書きに未反映の直しがある */
+let rsCloseWired = false;
 
 function openRosterDlg(){
+  const Yr = Y();
+  rsDraft = {classes: clone(Yr.classes || {}),
+             specials: clone(Yr.specials || []),
+             week1: Yr.week1 || ""};
+  rsDirty = false;
+  if(!rsCloseWired){
+    rsCloseWired = true;
+    /* 閉じ方が何であれ（✕・Esc・外側）ここへ来る。
+       残っていれば聞く。既定は安全側（入れて閉じる） */
+    $("rosterDlg").addEventListener("close", () => {
+      if(!rsDirty) return;
+      const d = rsDraft;
+      rsDirty = false;
+      askOk({title:"直したぶんを入れますか",
+        lines:["閉じるだけでは、直したぶんはシートに入りません。",
+               "入れないで閉じると、直したぶんは捨てられます。"],
+        noLabel:"入れて閉じる", goLabel:"捨てる",
+        onNo: () => applyRosterDraft_(d)});
+    });
+  }
   drawRoster();
   $("rosterDlg").showModal();
+}
+/* 下書きを本体へ入れてシートへ送る */
+function applyRosterDraft_(d){
+  if(!d) return;
+  const Yr = Y();
+  Yr.classes  = clone(d.classes);
+  Yr.specials = clone(d.specials);
+  if(d.week1) Yr.week1 = d.week1;
+  save(); Backend.saveRoster();
+  afterRosterChange();
+}
+/* 「まだ入れていません」を出す。未反映のときだけ保存を強調する */
+function paintRsSave(){
+  if(!$("rsSave")) return;
+  $("rsStat").textContent = rsDirty ? "まだ入れていません" : "";
+  $("rsSave").classList.toggle("go", rsDirty);
 }
 /* ── 教科の表し方 ────────────────────────────
    **紙の字・時数の1文字・たんぽぽの字を、1つの表で直す。**
@@ -446,8 +490,11 @@ function saveSubTable(){
 
 function drawRoster(){
   const Yr = Y();
+  /* 下書きを描く。窓の外から呼ばれたとき（保存直後の組み直しなど）は本体を見る */
+  const dr = rsDraft || {classes: Yr.classes || {}, specials: Yr.specials || [],
+                         week1: Yr.week1 || ""};
   $("rsFy").textContent = fy() + "年度";
-  $("rsW1").value = Yr.week1 || firstMonday(fy());
+  $("rsW1").value = dr.week1 || firstMonday(fy());
   $("rsAbNow").textContent = "今は " + (db.settings.abAnchor || AB_ANCHOR);
   /* 専科の枠。**1行が1人ぶん。** 教科 ＋ 担当学年 ＋ 消す。
      同じ教科の行が2つあってよい（図工1・2年／図工3〜6年）。
@@ -455,7 +502,7 @@ function drawRoster(){
      見せても直させない（直すと、入れたコマの持ち主が変わる）。 */
   /* 専科が持つのは、時数に数える教科だけ（図書・給食・クラブは専科にしない） */
   const spSubs = SUBJECTS.filter(x => x.count && !x.only);
-  $("rsSpRows").innerHTML = (Yr.specials || []).map(sp =>
+  $("rsSpRows").innerHTML = (dr.specials || []).map(sp =>
     "<div class='row sprow'>"
     + "<select data-spsub='" + escText(sp.code) + "'>"
     + spSubs.map(x => "<option value='" + escText(x.code) + "'"
@@ -470,17 +517,18 @@ function drawRoster(){
     + "</div>").join("")
     || "<p class='hint'>専科の枠がありません。「枠を足す」から作ります。</p>";
 
-  const spSave = () => { save(); Backend.saveRoster(); drawRoster(); afterRosterChange(); };
+  /* **下書きだけを直す。** シートには「保存して閉じる」まで書かない */
+  const spSave = () => { rsDirty = true; drawRoster(); };
   for(const e of $("rsSpRows").querySelectorAll("input[data-sp]"))
     e.onchange = () => {
-      const t = (Y().specials || []).find(x => x.code === e.dataset.sp);
+      const t = (dr.specials || []).find(x => x.code === e.dataset.sp);
       if(!t) return;
       t.grades = spGrades_(e.value);
       spSave();
     };
   for(const e of $("rsSpRows").querySelectorAll("select[data-spsub]"))
     e.onchange = () => {
-      const t = (Y().specials || []).find(x => x.code === e.dataset.spsub);
+      const t = (dr.specials || []).find(x => x.code === e.dataset.spsub);
       if(!t) return;
       /* **身元は変えない。** 変えると、その枠で入れたコマの持ち主が
          行方不明になる（週案の棚には身元の字が入っている） */
@@ -490,7 +538,7 @@ function drawRoster(){
   for(const b of $("rsSpRows").querySelectorAll("button[data-spdel]"))
     b.onclick = () => {
       const code = b.dataset.spdel;
-      const t = (Y().specials || []).find(x => x.code === code);
+      const t = (dr.specials || []).find(x => x.code === code);
       askOk({
         title: (t ? spLabel(t) : "この枠") + " を消しますか",
         lines:["<b>その枠で入れたコマは消えません。</b>枠が無くなるので、"
@@ -498,16 +546,16 @@ function drawRoster(){
                "学年を直したいだけなら、消さずに<b>担当学年の欄</b>を直してください。"],
         goLabel:"消す",
         onYes: () => {
-          Y().specials = (Y().specials || []).filter(x => x.code !== code);
+          dr.specials = (dr.specials || []).filter(x => x.code !== code);
           spSave();
         }
       });
     };
 
-  $("rsRows").innerHTML = grades().map(g =>
+  $("rsRows").innerHTML = Object.keys(dr.classes).sort().map(g =>
     "<div class='row'><span>" + escText(g) + "年</span>"
     + "<input type='text' data-g='" + escText(g) + "' style='flex:1;min-width:16em' value='"
-    + escText((Yr.classes[g] || []).join(", ")) + "'>"
+    + escText((dr.classes[g] || []).join(", ")) + "'>"
     + "<button class='btn danger' data-del='" + escText(g) + "'>行を消す</button></div>").join("");
 
   for(const e of $("rsRows").querySelectorAll("input[data-g]"))
@@ -515,10 +563,10 @@ function drawRoster(){
   for(const b of $("rsRows").querySelectorAll("button[data-del]"))
     b.onclick = () => {
       const g = b.dataset.del;
-      const used = (Y().classes[g] || []).filter(hasAnyData);
+      const used = (dr.classes[g] || []).filter(hasAnyData);
       const go = () => {
-        delete Y().classes[g];
-        save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+        delete dr.classes[g];
+        rsDirty = true; drawRoster();
       };
       if(!used.length) return go();
       askOk({
@@ -529,19 +577,21 @@ function drawRoster(){
         goLabel: "消す", onYes: go
       });
     };
+  paintRsSave();
 }
-/* 「1-1, 1-2, 1-3」を配列にする。空と重複は落とす。 */
+/* 「1-1, 1-2, 1-3」を配列にする。空と重複は落とす。下書きへ入れる。 */
 function setGradeClasses(g, text){
+  const dr = rsDraft || {classes: Y().classes || {}};
   const seen = {}, out = [];
   for(const raw of String(text).split(/[,、\s]+/)){
     const n = normCls(raw);
     if(!n || seen[n]) continue;
     seen[n] = 1; out.push(n);
   }
-  const gone = (Y().classes[g] || []).filter(c => out.indexOf(c) < 0 && hasAnyData(c));
+  const gone = (dr.classes[g] || []).filter(c => out.indexOf(c) < 0 && hasAnyData(c));
   const go = () => {
-    Y().classes[g] = out;
-    save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+    dr.classes[g] = out;
+    rsDirty = true; drawRoster();
   };
   if(!gone.length) return go();
   askOk({

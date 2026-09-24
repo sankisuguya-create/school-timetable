@@ -588,6 +588,11 @@ await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(400);
 console.log("\n■ 書いても、押すまで送らない");
 ok("紙は5行ぶん × 月〜土の6列", await p.locator("#sheet .cell").count() === 30,
    await p.locator("#sheet .cell").count());
+/* **右メニューの畳みは最初は全部閉じ（仕様）。** 閉じた面の中身は
+   押せないので、人がやるのと同じく、使う前に開けておく */
+await p.evaluate(() => document.querySelectorAll("details.fold[id] > summary")
+  .forEach(s => { if(!s.parentElement.open) s.click(); }));
+await p.waitForTimeout(200);
 await p.evaluate(() => { window.__calls.length = 0; });
 await p.locator("#sheet .cell[data-d='1'][data-s='p2'] .t").click();
 await p.waitForTimeout(150);
@@ -780,11 +785,30 @@ await p.waitForTimeout(250);
 await p.locator("#rsRows input[data-g='1']").fill("1-1, 1-2, 1-3");
 await p.locator("#rsRows input[data-g='1']").press("Enter");
 await p.waitForTimeout(400);
-const rq = await lastCall("apiWriteRoster");
-ok("apiWriteRoster が呼ばれる", !!rq);
+/* **直しただけでは送らない。** シートへは「保存して閉じる」でまとめて入る */
+let rq = await lastCall("apiWriteRoster");
+ok("直しただけではシートへ書かない", !rq, rq);
+await p.locator("#rsSave").click(); await p.waitForTimeout(400);
+rq = await lastCall("apiWriteRoster");
+ok("「保存して閉じる」で apiWriteRoster が呼ばれる", !!rq);
 ok("直した編成が届く", rq && rq.args[1]["1"].length === 3, rq && rq.args[1]);
+ok("窓が閉じる", (await p.locator("#rosterDlg[open]").count()) === 0);
 
-await p.locator("#rosterDlg .dlgx").click(); await p.waitForTimeout(200);
+/* ✕やEscで閉じると、未反映の直しを「入れる／捨てる」と聞く */
+await p.locator("[data-act='settings']").click();
+await p.locator('#setRoster').click();
+await p.waitForTimeout(250);
+await p.locator("#rsRows input[data-g='1']").fill("1-1, 1-2");
+await p.locator("#rsRows input[data-g='1']").press("Enter");
+await p.waitForTimeout(300);
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator("#rosterDlg .dlgx").click(); await p.waitForTimeout(250);
+ok("未反映のまま閉じると確認が出る",
+   (await p.locator("#okDlg[open]").count()) === 1);
+await p.locator("#okNo").click(); await p.waitForTimeout(400);
+rq = await lastCall("apiWriteRoster");
+ok("「入れて閉じる」で apiWriteRoster が呼ばれる", !!rq);
+ok("戻した編成が届く", rq && rq.args[1]["1"].length === 2, rq && rq.args[1]);
 
 console.log("\n■ 固定時間割の取り込み");
 await p.evaluate(() => { window.__calls.length = 0; });
@@ -2499,7 +2523,7 @@ ok("ボタンが出る", await p.evaluate(() => !!$("tlySheet")) === true);
 /* 断りは ？ の中だけにする。ボタンの下に置くと、押す前に読むとは限らない字が
    時数の表の下に積み上がる（畳んだときに見えなくなる場所でもある） */
 ok("？の説明に、時間がかかると書いてある", await p.evaluate(() =>
-   /分/.test(HELP.tally2.b.join("")) ) === true);
+   /読む週が増える|時間がかかる|分/.test(HELP.tally2.b.join("")) ) === true);
 /* **数えるのは開いている面のぶんだけ。** 前は全27クラスを数えていて、
    担任が自分のクラスを見たいだけでも 1〜3分待たされた */
 ok("学級を開いていれば、そのクラス1つだけ数える", await p.evaluate(() => {
