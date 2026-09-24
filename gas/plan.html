@@ -4186,8 +4186,11 @@ function spGrades_(v){
   if(Array.isArray(v)) return v.map(String).filter(g => /^[1-9]$/.test(g)).sort();
   const s = String(v == null ? "" : v).trim();
   if(!s) return [];
+  /* **全角の３・ー・，も決まった形で読む。** 全角で打つと全部落ちて、
+     空＝全学年の専科が静かにできてしまう */
+  const t = s.normalize ? s.normalize("NFKC") : s;
   const out = {};
-  const rest = s.replace(/([1-9])\s*年?\s*[〜～~\-ー－]\s*([1-9])/g, function(_, a, b){
+  const rest = t.replace(/([1-9])\s*年?\s*[〜～~\-ー‐‒–—―−ｰ➖]\s*([1-9])/g, function(_, a, b){
     const lo = Math.min(+a, +b), hi = Math.max(+a, +b);
     for(let g = lo; g <= hi; g++) out[String(g)] = true;
     return " ";
@@ -4946,7 +4949,7 @@ const Backend = (function(){
     /* google.script.run は回線断で成功・失敗のどちらも返らないことがある。
        入口と週移動を永久に待たせず、端末の控えで開ける状態へ戻す。 */
     const timer = setTimeout(() => {
-      notify("最初の読み込みに時間がかかっている。<b>端末の控えで開いた</b>。回線を確かめて再読み込みしてください");
+      notify("最初の読み込みに時間がかかっている。<b>端末内の控えデータで開いた</b>。回線を確かめて再読み込みしてください");
       finish();
     }, 15000);
     google.script.run
@@ -5066,7 +5069,7 @@ const Backend = (function(){
       after();
     };
     const timer = setTimeout(() => {
-      notify("この週の読み込みに時間がかかっている。<b>端末の控えで開いた</b>");
+      notify("この週の読み込みに時間がかかっている。<b>端末内の控えデータで開いた</b>");
       finish();
     }, 15000);
     google.script.run
@@ -6425,7 +6428,9 @@ function impDocLines(text){
    頁の月が1つ（月ごとの計画表）なら全部その月。3つ（3ヶ月横並び）なら
    欄の順に宛てる。数が合わないときは、欄の位置にいちばん近い月。 */
 function impDocMonth(L, d){
-  const pg = d.pg >= 0 ? L.pages[d.pg] : L.pages[0];
+  /* **直前の頁に勝手に押し込まない。** 月の行がまだ無いうちの日の字に
+     いちばん手前の頁の月をあてると、別の月の日付が静かに混ざる */
+  const pg = d.pg >= 0 ? L.pages[d.pg] : null;
   if(!pg || !pg.months.length) return 0;
   const ms = pg.months;
   if(ms.length === L.childCols.length && ms[d.band]) return ms[d.band].m;
@@ -6444,10 +6449,10 @@ function impDocRead(text){
     return {warn:"<b>日にちと曜日の並びが見つかりません。</b>"};
   const year = L.year || fy();
   const rows = [], bad = [], map = {};
-  let daysHit = 0, sunday = 0;
+  let daysHit = 0, sunday = 0, monthBad = 0;
   for(const d of L.days){
     const m = impDocMonth(L, d);
-    if(!m){ bad.push(d.d + "日：月が読めない"); continue; }
+    if(!m){ monthBad++; continue; }   /* 月が決められない日の字 */
     const dt = new Date(year, m - 1, d.d);
     if(dt.getMonth() !== m - 1){ bad.push(m + "月" + d.d + "日：日付が変"); continue; }
     if((dt.getDay() + 6) % 7 >= DAYS){ sunday++; continue; }  /* 日曜は紙に無い */
@@ -6485,6 +6490,13 @@ function impDocRead(text){
       }
     }
   }
+  /* **月が決められない日の字があるなら、丸ごと受け付けない。**
+     手前の頁の月に押し込んで混ぜるより、「◯月」の行を足して
+     もらうほうが手堅い */
+  if(monthBad)
+    return {warn:"<b>「◯月」の行が見つからない日付が " + monthBad + " あります。</b>"
+          + "どの月か決められないので、読むのをやめました。"
+          + "表の見出しに月の行（「4月」など）を入れてから読んでください。"};
   const headInfo = "<b>読んだ形：</b>"
     + (L.pages.length === 1 && L.pages[0].months.length === 1
         ? L.pages[0].months[0].m + "月行事計画"
@@ -14187,17 +14199,48 @@ function drawRoster(){
 function setGradeClasses(g, text){
   const dr = rsDraft || {classes: Y().classes || {}};
   const seen = {}, out = [];
-  for(const raw of String(text).split(/[,、\s]+/)){
+  /* **全角の数字・ー・，も決まった形で読む**（normCls と同じ揺れ） */
+  for(const raw of String(text).normalize("NFKC").split(/[,、，\s]+/)){
     const n = normCls(raw);
     if(!n || seen[n]) continue;
     seen[n] = 1; out.push(n);
   }
-  const gone = (dr.classes[g] || []).filter(c => out.indexOf(c) < 0 && hasAnyData(c));
+  /* **学年をまたいだ同名は置かせない。** クラス名は週案・基本時間割・
+     単元・たんぽぽの身元なので、2つの学年に同じ名があると、
+     あとのぶんが全部手前の学年扱いになる（gradeOf は先勝ち） */
+  for(const g2 in dr.classes){
+    if(g2 === g) continue;
+    const dup = out.filter(c => (dr.classes[g2] || []).indexOf(c) >= 0);
+    if(dup.length){
+      toast("「" + escText(dup.join("・")) + "」は <b>" + escText(g2)
+          + "年</b> にあります ── 2つの学年に同じ名は置けません");
+      return drawRoster();
+    }
+  }
+  const cur = dr.classes[g] || [];
+  const gone = cur.filter(c => out.indexOf(c) < 0 && hasAnyData(c));
+  const added = out.filter(c => cur.indexOf(c) < 0);
   const go = () => {
     dr.classes[g] = out;
     rsDirty = true; drawRoster();
   };
   if(!gone.length) return go();
+  /* **消える名と増える名がそろうときは「名前の打ち替え」。**
+     クラス名はどこでも身元なので、打ち替えるといまの中身は
+     古い名のまま残り、新しい面は空から始まる ── 先に断る */
+  if(added.length){
+    askOk({
+      title: gone.join("・") + " の名を " + added.join("・") + " に替えますか",
+      lines: ["いま入っている<b>コマ・基本時間割・単元は「"
+              + escText(gone.join("・")) + "」のまま残ります</b>。",
+              escText(added.join("・")) + " の面は<b>空から</b>始まります。"],
+      goLabel: "替える",
+      onYes: go,
+      /* **やめたら、打ち込んだ字を元の並びへ戻す** */
+      onNo: () => drawRoster()
+    });
+    return;
+  }
   askOk({
     title: gone.join("・") + " を、この年度の編成から外しますか",
     lines: ["このクラスには<b>書き込みが残っています</b>。",
@@ -16164,7 +16207,7 @@ function wire(){
   addEventListener("resize", () => { if(!$("spmView").hidden) fitSpm(); });
   /* **案を入れずに閉じても、希望は残す。** 希望はその人の持ちもので、
      案とは別のもの（触っていなければ1コマも書かない） */
-  on("spmDlg","close", () => { if(spmSaveWish()) toast("<b>専科の希望を控えた。</b>保存を押す"); });
+  on("spmDlg","close", () => { if(spmSaveWish()) toast("<b>専科の希望を端末内の控えデータに置いた。</b>保存を押す"); });
   /* 新年度の設定。**ふだんは管理・システムの中だけ。**
      未了のあいだだけ、左メニューにも出る（結線は dialogs.js） */
   on("nyOpen","click", () => { $("adminDlg").close(); openNewYearDlg(); });
@@ -16331,9 +16374,14 @@ function wire(){
 
   /* 学級編成 */
   on("rsAddG","click", () => {
-    const g = String($("rsNewG").value || "").trim();
-    if(!g) return;
+    let g = String($("rsNewG").value || "").trim();
+    if(g.normalize) g = g.normalize("NFKC").trim();
+    if(g === "特別支援") g = "特支";        /* 正式名は「特支」に寄せる */
     if(!rsDraft) return;   /* 窓を開いていないときは来ないが念のため */
+    /* **決まった形だけ受け付ける。** 変な字や空の学年ができると、
+       「これは何」行が残る */
+    if(!/^([1-9]\d*|特支)$/.test(g))
+      return toast("学年は「3」などの数か「特支」で");
     if(rsDraft.classes[g]) return toast("その学年はもうある");
     rsDraft.classes[g] = [];
     $("rsNewG").value = "";

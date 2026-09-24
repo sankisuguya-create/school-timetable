@@ -593,17 +593,48 @@ function drawRoster(){
 function setGradeClasses(g, text){
   const dr = rsDraft || {classes: Y().classes || {}};
   const seen = {}, out = [];
-  for(const raw of String(text).split(/[,、\s]+/)){
+  /* **全角の数字・ー・，も決まった形で読む**（normCls と同じ揺れ） */
+  for(const raw of String(text).normalize("NFKC").split(/[,、，\s]+/)){
     const n = normCls(raw);
     if(!n || seen[n]) continue;
     seen[n] = 1; out.push(n);
   }
-  const gone = (dr.classes[g] || []).filter(c => out.indexOf(c) < 0 && hasAnyData(c));
+  /* **学年をまたいだ同名は置かせない。** クラス名は週案・基本時間割・
+     単元・たんぽぽの身元なので、2つの学年に同じ名があると、
+     あとのぶんが全部手前の学年扱いになる（gradeOf は先勝ち） */
+  for(const g2 in dr.classes){
+    if(g2 === g) continue;
+    const dup = out.filter(c => (dr.classes[g2] || []).indexOf(c) >= 0);
+    if(dup.length){
+      toast("「" + escText(dup.join("・")) + "」は <b>" + escText(g2)
+          + "年</b> にあります ── 2つの学年に同じ名は置けません");
+      return drawRoster();
+    }
+  }
+  const cur = dr.classes[g] || [];
+  const gone = cur.filter(c => out.indexOf(c) < 0 && hasAnyData(c));
+  const added = out.filter(c => cur.indexOf(c) < 0);
   const go = () => {
     dr.classes[g] = out;
     rsDirty = true; drawRoster();
   };
   if(!gone.length) return go();
+  /* **消える名と増える名がそろうときは「名前の打ち替え」。**
+     クラス名はどこでも身元なので、打ち替えるといまの中身は
+     古い名のまま残り、新しい面は空から始まる ── 先に断る */
+  if(added.length){
+    askOk({
+      title: gone.join("・") + " の名を " + added.join("・") + " に替えますか",
+      lines: ["いま入っている<b>コマ・基本時間割・単元は「"
+              + escText(gone.join("・")) + "」のまま残ります</b>。",
+              escText(added.join("・")) + " の面は<b>空から</b>始まります。"],
+      goLabel: "替える",
+      onYes: go,
+      /* **やめたら、打ち込んだ字を元の並びへ戻す** */
+      onNo: () => drawRoster()
+    });
+    return;
+  }
   askOk({
     title: gone.join("・") + " を、この年度の編成から外しますか",
     lines: ["このクラスには<b>書き込みが残っています</b>。",

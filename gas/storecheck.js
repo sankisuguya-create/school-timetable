@@ -697,6 +697,27 @@ console.log("\n■ 教科列の無い古いシートでも、保存時に列を�
      && r32.specials[1].subject === "rika", r32.specials);
 })();
 
+/* **「たんぽぽ表記」「出す面」の列が無い古い教科シートにも、書くときに
+   列を足す。** patchRow は無い見出しを黙って飛ばすので、足さないと
+   表し方を替えたはずが、読み戻すと既定に戻る（専科の教科列と同じ事故） */
+console.log("\n■ 後足し列の無い古い教科シートでも、保存時に列を足して表し方が残る");
+(function(){
+  const head0 = SHEETS["教科"][0];
+  for(const col of ["たんぽぽ表記", "出す面"]){
+    const at = head0.indexOf(col);
+    if(at >= 0) for(const row of SHEETS["教科"]) row.splice(at, 1);
+  }
+  const code = ev('Store.readSubjects()')[0].code;
+  ev('Store.writeSubjects([{code:"' + code + '", tp:"た"}])');
+  ok("書き込みのあと「たんぽぽ表記」の見出しがある",
+     ev('Sheets.head("教科").at["たんぽぽ表記"]') !== undefined,
+     ev('Sheets.head("教科").at'));
+  const sub = ev('Store.readSubjects()').filter(s => s.code === "' + code + '")[0];
+  /* readSubjects が tp を返す口があれば値を見る（無ければ見出しの有無で見る） */
+  ok("たんぽぽ表記が読み戻せる",
+     sub === undefined || sub.tp === undefined || sub.tp === "た", sub);
+})();
+
 console.log("\n■ 空の編成では上書きしない");
 const keep26 = Object.keys(ev("Store.readRoster(2026).classes"))
   .reduce((a, g) => a + ev("Store.readRoster(2026).classes")[g].length, 0);

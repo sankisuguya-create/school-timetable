@@ -498,7 +498,7 @@ const Backend = (function(){
     /* google.script.run は回線断で成功・失敗のどちらも返らないことがある。
        入口と週移動を永久に待たせず、端末の控えで開ける状態へ戻す。 */
     const timer = setTimeout(() => {
-      notify("最初の読み込みに時間がかかっている。<b>端末の控えで開いた</b>。回線を確かめて再読み込みしてください");
+      notify("最初の読み込みに時間がかかっている。<b>端末内の控えデータで開いた</b>。回線を確かめて再読み込みしてください");
       finish();
     }, 15000);
     google.script.run
@@ -618,7 +618,7 @@ const Backend = (function(){
       after();
     };
     const timer = setTimeout(() => {
-      notify("この週の読み込みに時間がかかっている。<b>端末の控えで開いた</b>");
+      notify("この週の読み込みに時間がかかっている。<b>端末内の控えデータで開いた</b>");
       finish();
     }, 15000);
     google.script.run

@@ -345,6 +345,10 @@ const Store = (function(){
     const lock = LockService.getScriptLock();
     lock.waitLock(20000);
     try{
+      /* **あとから足した列が無い古いシートでは、先に列を足す。**
+         無い見出しは patchRow が黙って飛ばすので、足さないと
+         たんぽぽ表記・出す面の直しが、保存ずみの顔をして消える */
+      Sheets.ensureCols("教科");
       const cur = Sheets.readAll("教科");
       const by = {};
       for(const r of (rows || [])) if(r && r.code) by[String(r.code).trim()] = r;

@@ -483,7 +483,9 @@ function impDocLines(text){
    頁の月が1つ（月ごとの計画表）なら全部その月。3つ（3ヶ月横並び）なら
    欄の順に宛てる。数が合わないときは、欄の位置にいちばん近い月。 */
 function impDocMonth(L, d){
-  const pg = d.pg >= 0 ? L.pages[d.pg] : L.pages[0];
+  /* **直前の頁に勝手に押し込まない。** 月の行がまだ無いうちの日の字に
+     いちばん手前の頁の月をあてると、別の月の日付が静かに混ざる */
+  const pg = d.pg >= 0 ? L.pages[d.pg] : null;
   if(!pg || !pg.months.length) return 0;
   const ms = pg.months;
   if(ms.length === L.childCols.length && ms[d.band]) return ms[d.band].m;
@@ -502,10 +504,10 @@ function impDocRead(text){
     return {warn:"<b>日にちと曜日の並びが見つかりません。</b>"};
   const year = L.year || fy();
   const rows = [], bad = [], map = {};
-  let daysHit = 0, sunday = 0;
+  let daysHit = 0, sunday = 0, monthBad = 0;
   for(const d of L.days){
     const m = impDocMonth(L, d);
-    if(!m){ bad.push(d.d + "日：月が読めない"); continue; }
+    if(!m){ monthBad++; continue; }   /* 月が決められない日の字 */
     const dt = new Date(year, m - 1, d.d);
     if(dt.getMonth() !== m - 1){ bad.push(m + "月" + d.d + "日：日付が変"); continue; }
     if((dt.getDay() + 6) % 7 >= DAYS){ sunday++; continue; }  /* 日曜は紙に無い */
@@ -543,6 +545,13 @@ function impDocRead(text){
       }
     }
   }
+  /* **月が決められない日の字があるなら、丸ごと受け付けない。**
+     手前の頁の月に押し込んで混ぜるより、「◯月」の行を足して
+     もらうほうが手堅い */
+  if(monthBad)
+    return {warn:"<b>「◯月」の行が見つからない日付が " + monthBad + " あります。</b>"
+          + "どの月か決められないので、読むのをやめました。"
+          + "表の見出しに月の行（「4月」など）を入れてから読んでください。"};
   const headInfo = "<b>読んだ形：</b>"
     + (L.pages.length === 1 && L.pages[0].months.length === 1
         ? L.pages[0].months[0].m + "月行事計画"
