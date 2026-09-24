@@ -44,6 +44,17 @@ function paintSave(){
                        : "保存ずみ";
   const sub = $("saveSub");
   if(sub) sub.textContent = busy ? "途中で閉じると送信されません" : "";
+  /* **端末内の控えデータの小さな知らせ。** シートに届いていないぶんが
+     残っているあいだだけ出す（前に閉じたときの持ち越しも数に入る） */
+  const pn = $("pendNote");
+  if(pn){
+    const np = (Backend.pendingCount ? Backend.pendingCount() : 0);
+    pn.hidden = !np;
+    if(np) pn.textContent = "端末内の控えデータが " + np + " 件あります（まだシートに入っていません）";
+  }
+  /* **1手戻す。** 戻せるものがあるときだけ押せる */
+  const ub = $("undoBtn");
+  if(ub) ub.disabled = !(typeof canUndo === "function" && canUndo());
   b.title = busy ? "送っています。途中で閉じると送信されません"
           : err  ? "もう一度押す。閉じると消える"
           : n    ? n + " コマぶんがまだシートに入っていない"
@@ -556,6 +567,17 @@ function wire(){
   on("swNo","click",  () => { $("swDlg").close(); });
   on("swYes","click", () => { owAnswer(true); $("swDlg").close(); });
   on("swDlg","close", () => owAnswer(false));
+  /* 窓が閉じると、ブラウザは押していたコマへ指を戻す。持ち歩きの教科が
+     そのままだと、その戻しでもう一度教科が落ちて、同じ窓がすぐ出直して
+     しまう（どう閉じても閉じられない）。閉じる瞬間だけ落とすのを止める。
+     Esc は cancel・それ以外（ボタン・✕・外側）は close を通るので、両方で立てる */
+  (() => {
+    const d = $("swDlg");
+    if(!d) return;
+    const rawClose = d.close.bind(d);
+    d.close = () => { owGuardUntil = Date.now() + 400; rawClose(); };
+    d.addEventListener("cancel", () => { owGuardUntil = Date.now() + 400; });
+  })();
 
   /* 文だけの確認。**閉じ方が何であれ「やめる」に落ちる。**
      ここが confirm の代わり（→ dialogs.js askOk） */
@@ -659,6 +681,9 @@ function wire(){
   /* 押した瞬間から2回目を受けない。窓が出る 200ms のあいだも、ここが受ける。
      doSave 自体は弾かない（重なりの入れ直しがコードから呼ぶ。弾くと黙って送られない） */
   on("saveBtn","click", () => { if(Wait.guard()) requestSave(); });
+  /* **中央左下の「1手戻す」。** Ctrl+Z と同じ場所へ通す（ロック中・保管ずみの
+     年度では doUndo 側が断るので、ここでは押し口だけ） */
+  on("undoBtn","click", () => { if(Wait.guard()) doUndo(); });
   /* 変更を破棄。**まだシートに入っていない自分のぶんを捨てて読み直す。**
      競合の窓が開いていたら先に閉じる（残しておくと、捨てたぶんを
      その窓から入れ直せてしまう） */
@@ -800,7 +825,7 @@ function wire(){
   on("renPrint","click", () => {
     const cv = renrakuCanvas(); if(!cv) return;
     const w = window.open("", "_blank");
-    if(!w){ toast("窓が開けませんでした（ポップアップを許可してください）"); return; }
+    if(!w){ toast("別の窓が開けませんでした（ブラウザでポップアップを許可してください）"); return; }
     const src = cv.toDataURL("image/png");
     w.document.write("<html><head><title>" + escText(renrakuName()) + "</title>"
       + "<style>@page{size:A4 landscape;margin:0}body{margin:0}img{display:block;width:100vw;height:100vh}</style>"

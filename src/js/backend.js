@@ -309,6 +309,24 @@ const Backend = (function(){
   }
   const persistSoon = () => { clearTimeout(pendT); pendT = setTimeout(persistPending, 900); };
 
+  /* **まだシートに入っていないものの件数。** 送り待ち・送り途中・
+     前に閉じたときの持ち越し・競合で止まっているものを、
+     同じコマは1つとして数える（週案に小さく出す印に使う） */
+  function pendingCount(){
+    const seen = {};
+    let n = 0;
+    const add = q => {
+      if(!q || q.date === undefined) return;
+      const k = cfKey(q);
+      if(seen[k]) return; seen[k] = 1; n++;
+    };
+    for(const q of pendingNow()) add(q);
+    for(const q of savedList(PEND, LEGACY_PEND)) add(q);
+    for(const q of savedList(HELD, LEGACY_HELD)) add(q && q.c ? q.c : q);
+    for(const h of held) add(h.c);
+    return n;
+  }
+
   /* 前に閉じたときの持ち越しを送る。**週を読み直す前に送る。**
      あとから送ると、読み直しで消えた中身を送ることになる。 */
   function sendPending(after){
@@ -335,6 +353,7 @@ const Backend = (function(){
         else localStorage.removeItem(PEND);
         if(held.length) localStorage.setItem(HELD, JSON.stringify(held));
       }catch(e){}
+      onDirty(unsaved(), lastErr);   /* 持ち越しが減ったので、控えの知らせも直す */
       after();
     };
     for(const y in byYear)
@@ -578,7 +597,7 @@ const Backend = (function(){
       after();
     };
     const timer = setTimeout(() => {
-      notify("年度の設定の読み込みに時間がかかっている。端末の控えで続ける");
+      notify("年度の設定の読み込みに時間がかかっている。端末内の控えデータで続ける");
       finish();
     }, 15000);
     google.script.run
@@ -894,7 +913,7 @@ const Backend = (function(){
   /* 年度の退避。**数える／照合する／消す の3つに分けてある。**
      1つにまとめると、確かめずに消せてしまう。 */
   function archiveCount(year, ok, ng){
-    if(!onGas) return ng("手元ではシートにつながっていないので、退避できない");
+    if(!onGas) return ng("手元ではシートにつながっていないので、保管できない");
     google.script.run
       .withSuccessHandler(r => ok(r))
       .withFailureHandler(e => ng("数えられなかった（" + (e && e.message) + "）"))
@@ -1218,7 +1237,7 @@ const Backend = (function(){
           /* 書いたのに、まだシートに入っていない。画面の地の色はこれで決める */
           touched: () => touched || !!lastErr, setNotifier, setDirtyWatcher, setConflictWatcher,
           unsaved, prefetchWeek, prefetchNeighbors, readWeeks, readWeeksAll, unread, saveTally,
-          watch, stale, heldCells, dropHeld, reloadWeek, discardChanges,
+          watch, stale, heldCells, dropHeld, reloadWeek, discardChanges, pendingCount,
           cellChanged, flush, boot, ready, readyYear,
           saveRoster, saveSubjects, saveBase, saveBaseAll, readPaste, checkYear, archivedYear,
           archiveCount, archiveVerify, archivePurge, exportWeek,

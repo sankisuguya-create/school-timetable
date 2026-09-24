@@ -232,7 +232,10 @@ function cellEl(d, s){
       const c = cellFor(d, s.id);
       if(rootSubject(c.subject || "") !== pickSub){
         selectCell(d, s.id, e);          /* 入らなくても見られるように、先に選ぶ */
-        applyPalette(d, s.id, pickSub, e);
+        /* 「ほかの人の予定」の窓が閉じた直後の指の戻しでは落とさない。
+           落とすと同じ窓が出直して、どう閉じても閉じられなくなる */
+        if(typeof owGuardUntil === "undefined" || Date.now() >= owGuardUntil)
+          applyPalette(d, s.id, pickSub, e);
         return;
       }
     }

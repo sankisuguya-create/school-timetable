@@ -947,7 +947,7 @@ const HELP = {
   tally3: {t:"時数",
     b:["<b>書いていない日は基本時間割どおりとして数えます。</b>",
        "「年度始めから読み直す」で、確かな数に直せます。"]},
-  imptally: {t:"時数表からインポート",
+  imptally: {t:"時数表から取り込む",
     b:["<b>時数表の1週ぶんを、今のクラスの週案に入れます。</b>",
        "表の左上のマスを選んで貼ると、1回で入ります。",
        "入るのは、今のクラスの行だけ・この週だけ・変えた欄だけです。",
@@ -1066,7 +1066,7 @@ function loadNewYear(){
 /* 押す先。**画面のどの窓を開くか。** 閉じて開き直させない
    （閉じると、どこまでやったか分からなくなる） */
 const NY_ACT = {
-  admin:   {label:"年度の退避を開く", go: () => { $("nyDlg").close(); openAdminDlg(); }},
+  admin:   {label:"過去年度の保管を開く", go: () => { $("nyDlg").close(); openAdminDlg(); }},
   roster:  {label:"学級編成を開く",   go: () => { $("nyDlg").close(); openRosterDlg(); }},
   base:    {label:"基本時間割を開く", go: () => { $("nyDlg").close(); openBaseDlg(); }},
   tanpopo: {label:"たんぽぽを開く",   go: () => { $("nyDlg").close(); openView({kind:"tanpopo"}); }},
@@ -1355,7 +1355,7 @@ function drawArchive(){
   $("arYear").value = fy() - 1;             /* 既定は「1つ前の年度」 */
   $("arYear").disabled = !b.gas;
   $("arCount").disabled = !b.gas;
-  $("arStat").textContent = b.gas ? "" : "手元では退避できない";
+  $("arStat").textContent = b.gas ? "" : "手元では保管できない";
   $("arOut").innerHTML = "";
   $("arStep2").hidden = true;
   $("arStep4").hidden = true;
@@ -1374,7 +1374,7 @@ function arRunCount(){
   Backend.archiveCount(y, r => {
     Wait.end(w);
     const done = r.done;
-    $("arStat").textContent = done ? y + "年度は退避ずみ" : "";
+    $("arStat").textContent = done ? y + "年度は保管ずみ" : "";
     $("arOut").innerHTML =
       "<table class=\"sys\">"
       + "<tr><th>年度</th><td>" + r.year + "年度</td></tr>"
@@ -1385,11 +1385,11 @@ function arRunCount(){
       + (r.sheets.length
          ? "<tr><th>内わけ</th><td>" + r.sheets.map(s =>
              escText(s.name) + " " + s.rows + "行").join("　") + "</td></tr>" : "")
-      + (done ? "<tr><th>退避ずみ</th><td>" + escText(done.at) + "　"
+      + (done ? "<tr><th>保管ずみ</th><td>" + escText(done.at) + "　"
                 + escText(whoName(done.by)) + "</td></tr>" : "")
       + "</table>";
     if(!r.rows){
-      $("arStat").textContent = y + "年度の週案は1行もない。退避するものがない";
+      $("arStat").textContent = y + "年度の週案は1行もない。保管するものがない";
       return;
     }
     $("arFile").textContent = r.file;
@@ -1402,10 +1402,10 @@ function arRunCount(){
 function arRunVerify(){
   if(!Wait.guard()) return;
   const y = arYear(), url = $("arUrl").value.trim();
-  if(!url) return void ($("arWhy").textContent = "退避先のURLを貼る");
+  if(!url) return void ($("arWhy").textContent = "保管先のURLを貼る");
   $("arWhy").textContent = "照合しています…";
   $("arStep4").hidden = true; arChecked = null;
-  const w = Wait.begin("退避先と照合しています");
+  const w = Wait.begin("保管先と照合しています");
   Backend.archiveVerify(y, url, r => {
     Wait.end(w);
     if(!r.ok){
@@ -1432,13 +1432,13 @@ function arRunPurge(){
   const w = Wait.begin("本体から消しています", true);
   Backend.archivePurge(arChecked.year, arChecked.url, typed, r => {
     Wait.end(w);
-    $("arWhy").innerHTML = "<b>" + r.year + "年度を退避した。</b>"
+    $("arWhy").innerHTML = "<b>" + r.year + "年度を保管した。</b>"
       + r.rows + " 行（" + r.cells + " コマ・" + r.sheets + " シート）を本体から消した。"
       + "中身は保管庫に残っている。";
     $("arStep4").hidden = true;
     arChecked = null;
     paintArchive();
-    toast(r.year + "年度を退避した。本体のURLは変わっていない");
+    toast(r.year + "年度を保管した。本体のURLは変わっていない");
   }, why => {
     Wait.end(w);
     $("arWhy").innerHTML = "<b>消さなかった。</b><br>" + escText(why).replace(/\n/g, "<br>");
@@ -1454,7 +1454,7 @@ function paintArchive(){
   const a = Backend.archivedYear ? Backend.archivedYear(fy()) : null;
   if(!a || view.kind === "gate" || view.kind === "tanpopo"){ bar.hidden = true; return; }
   bar.hidden = false;
-  $("arcTitle").textContent = fy() + "年度は退避ずみです";
+  $("arcTitle").textContent = fy() + "年度は保管ずみです";
   $("arcNote").textContent =
     "この年度の週案は保管庫に移してあります。ここに出ているのは基本時間割です。"
     + (a.at ? "（" + a.at + "　" + whoName(a.by) + "）" : "");

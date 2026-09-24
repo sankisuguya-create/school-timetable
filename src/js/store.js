@@ -65,7 +65,7 @@ function loadDb(){
     catch(e){
       /* 壊れた中身で上書きしない。退避してから初期状態で開く */
       try{ localStorage.setItem(KEY + "/broken/" + Date.now(), raw); }catch(_){}
-      storeBroken = "保存されていた内容を読めなかった。退避して新しく始めた";
+      storeBroken = "保存されていた内容を読めなかった。別の場所に移して新しく始めた";
       got = null;
     }
   }else if(raw){
@@ -220,7 +220,7 @@ const fy    = () => fyOf(monday);
    中身の違う正本が2つできる。シート側も同じ理由で止めるので、
    ここで止まるのは手順の話で、本番の壁は gas/Store.gs の writeCells */
 const archivedYearNow = () => !!(Backend.archivedYear && Backend.archivedYear(fy()));
-const ARCHIVED_WHY = "この年度は<b>退避ずみ</b>です。保管庫に移してあるので、本体には書き込めません";
+const ARCHIVED_WHY = "この年度は<b>保管ずみ</b>です。別の場所に移してあるので、本体には書き込めません";
 
 function newYear(y){
   const prev = db.years[String(y - 1)];

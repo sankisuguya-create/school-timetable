@@ -2315,7 +2315,7 @@ ok("左に「紙の上の見え方」は置かない",
    (await p.locator(".side").innerText()).indexOf("紙の上の見え方") < 0);
 ok("B5・B4・時数コピーは左に残す", await p.evaluate(() => {
      const t=document.querySelector(".side").innerText;
-     return t.includes("教務必携用（B5）") && t.includes("4週まとめて（B4）") && t.includes("時数をコピー");
+     return t.includes("教務必携用（B5）") && t.includes("4週間（B4）") && t.includes("時数をコピー");
    }) === true);
 ok("基本時間割は設定から開く", await (async () => {
      await p.locator("[data-act=settings]").click(); await p.waitForTimeout(100);
