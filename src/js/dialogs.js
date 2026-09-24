@@ -512,7 +512,7 @@ function drawRoster(){
     + "<input type='text' data-sp='" + escText(sp.code) + "' style='flex:1;min-width:8em'"
     + " placeholder='担当学年（空欄＝全学年）' value='"
     + escText((sp.grades || []).join(",")) + "'>"
-    + "<span class='splab'>" + escText(spLabel(sp)) + "</span>"
+    + "<span class='splab'>" + escText(spLabel(sp, dr.specials)) + "</span>"
     + "<button class='btn danger' data-spdel='" + escText(sp.code) + "'>消す</button>"
     + "</div>").join("")
     || "<p class='hint'>専科の枠がありません。「枠を足す」から作ります。</p>";
@@ -550,7 +550,7 @@ function drawRoster(){
       const code = b.dataset.spdel;
       const t = (dr.specials || []).find(x => x.code === code);
       askOk({
-        title: (t ? spLabel(t) : "この枠") + " を消しますか",
+        title: (t ? spLabel(t, dr.specials) : "この枠") + " を消しますか",
         lines:["<b>その枠で入れたコマは消えません。</b>枠が無くなるので、"
               + "入口からその面を開けなくなります。",
                "学年を直したいだけなら、消さずに<b>担当学年の欄</b>を直してください。"],

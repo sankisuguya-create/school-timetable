@@ -2333,12 +2333,12 @@ ok("「？」に説明の中身がある（空の窓を開かない）",
      .filter(e => !HELP[e.dataset.help]).map(e => e.dataset.help)));
 /* **？を押しても、親の画面は切り替わらない。**
    読もうとしただけの人が、開く気のない週案を開いてしまう */
-await p.locator(".nav[data-help='settings'] .helpq").click();
+await p.locator(".admin[data-help='admin'] .helpq").click();
 await p.waitForTimeout(300);
 ok("「？」を押すと説明の窓が開く",
    await p.locator("#helpDlg").evaluate(d => d.open) === true);
 ok("「？」を押しても、その項目そのものは開かない",
-   await p.locator("#settingsDlg").evaluate(d => d.open) === false);
+   await p.locator("#adminDlg").evaluate(d => d.open) === false);
 ok("説明は、何が起きるかを字で書いてある",
    (await p.locator("#helpBody").innerText()).length > 40,
    (await p.locator("#helpBody").innerText()).length);

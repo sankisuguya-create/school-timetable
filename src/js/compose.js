@@ -236,9 +236,13 @@ function spSubjectOf(code){
   return (parsed && parsed.subject) || sub || code;
 }
 
-/* 画面に出す名前。**担当学年まで入れる。** 同じ教科が2人並ぶと、
-   「理科」「理科」では入口でどちらか分からない。 */
-function spLabel(sp){
+/* 画面に出す名前。**同じ教科の枠が2つ以上あるときだけ、学年の数字を
+   詰めて教科名の前に置く** ── 「34理科」「3456図工」。「理科3・4年」
+   では長すぎるし、「理科」「理科」と並んでもどちらか分からない。
+   1つしか無い教科は、担当学年によらず教科名だけ ── 「3456外国語」
+   ではなく「外国語」（どの学年かは開けば分かる）。
+   第2引数 within は、編成を直している最中の下書き一覧を渡す口。 */
+function spLabel(sp, within){
   if(!sp) return "";
   const sub = SUB_BY_CODE[sp.subject || sp.code];
   /* **教科が分かるなら、その名前。** 表示名（シートの人の手の欄）を先に見ていたころは、
@@ -247,36 +251,12 @@ function spLabel(sp){
   /* **仮の身元（sp_数字）は画面に出さない。** 教科が読めない枠でも、
      先生に見せるのは内部の字ではなく「専科」である */
   if(/^sp_\d+$/.test(name)) name = "専科";
-  const gs = sp.grades || [];
-  if(!gs.length) return name;                 /* 空欄＝全学年 */
-  /* **学年の数ではなく、中身で比べる。** 数で見ると、いまある学年が
-     2つの学校で「3・4年」を持つ枠が「全学年」に化ける（実測）。
-     いまある学年をぜんぶ持っているときだけ、学年を並べない */
-  const all = gradesAll();
-  if(all.length && all.every(g => gs.indexOf(g) >= 0)) return name;
-  return name + gs.join("・") + "年";
-}
-
-/* 入口のグリッドに出す名前。**spLabel とは別もの。**
-   spLabel は「理科3・4年」のように学年を丁寧に書く（週案の見出し・
-   確認ダイアログなど、字数に余裕がある場所むけ）。
-   グリッドのタイルは幅が狭く、同じ形の升目が並ぶところなので、
-   「12図工」「34理科」のように**数字をそのまま詰めて**教科名の前に置く。
-
-   **学年を付けるのは、同じ教科の枠が2つ以上あるときだけ。**
-   外国語のように枠が1つしか無ければ、どの学年を受け持つかは
-   紙を開けば分かることで、タイルの字数を削ってまで書く理由が無い
-   （担当学年が全学年でなくても「外国語」とだけ出す）。 */
-function spGridLabel(sp){
-  if(!sp) return "";
-  const sub = SUB_BY_CODE[sp.subject || sp.code];
-  let name = sub ? sub.name : (sp.label || sp.subject || sp.code);
-  if(/^sp_\d+$/.test(name)) name = "専科";   /* 仮の身元は画面に出さない（spLabel 同じ） */
+  /* **学年を付けるのは、同じ教科の枠が2つ以上あるときだけ。** */
   const subject = sp.subject || sp.code;
-  const siblings = specials().filter(x => (x.subject || x.code) === subject);
+  const siblings = (within || specials()).filter(x => (x.subject || x.code) === subject);
   if(siblings.length <= 1) return name;
   const gs = sp.grades || [];
-  if(!gs.length) return name;
+  if(!gs.length) return name;                 /* 空欄＝全学年 */
   return gs.join("") + name;
 }
 

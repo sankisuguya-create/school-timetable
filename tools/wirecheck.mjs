@@ -2912,18 +2912,28 @@ console.log("\n■ 専科の枠（同じ教科を学年で分けて持てる）"
    実際にある（図工1・2年／図工3〜6年、理科3・4年／理科5・6年）ので、
    教科コードそのものを身元にはできない */
 await p.evaluate(() => {
+  /* この環境の教科は4つ。理科と違う1つを「1枠だけの教科」に使う */
+  const single = SUBJECTS.find(x => x.code !== "rika" && x.count && !x.only);
   Y().specials = [
-    {code:"rika",   subject:"rika", grades:["3","4"]},
-    {code:"rika_2", subject:"rika", grades:["5","6"]}
+    {code:"rika",   subject:"rika",       grades:["3","4"]},
+    {code:"rika_2", subject:"rika",       grades:["5","6"]},
+    {code:single.code, subject:single.code, grades:["3","4","5","6"]}
   ];
   save(); drawGate();
 });
 await p.waitForTimeout(400); await closeDlgs();
 ok("同じ教科の枠が2つ持てる", await p.evaluate(() =>
    specials().filter(s => spSubjectOf(s.code) === "rika").length) === 2);
-ok("名前に担当学年が付く（入口で見分けられる）", await p.evaluate(() =>
-   specials().map(s => spLabel(s)).join("/")) === "理科3・4年/理科5・6年",
+ok("同じ教科が2枠あるときは、学年の数字＋教科名（入口で見分けられる）",
+   await p.evaluate(() =>
+     specials().filter(s => spSubjectOf(s.code) === "rika")
+       .map(s => spLabel(s)).join("/")) === "34理科/56理科",
    await p.evaluate(() => specials().map(s => spLabel(s))));
+ok("1枠しか無い教科は、担当学年によらず教科名だけ",
+   await p.evaluate(() => {
+     const s = specials().find(x => spSubjectOf(x.code) !== "rika");
+     return spLabel(s) === (SUB_BY_CODE[s.subject] || {}).name;
+   }), await p.evaluate(() => specials().map(s => spLabel(s))));
 ok("身元が違えば、受け持つクラスも違う", await p.evaluate(() => {
      const a = classesOfSpecial("rika"), b = classesOfSpecial("rika_2");
      return a.join(",") !== b.join(",") && !a.some(c => b.indexOf(c) >= 0);
