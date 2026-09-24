@@ -577,7 +577,7 @@ const Store = (function(){
       const me = (function(){ try{ return Gate.activeEmail(); }catch(e){ return ""; } })();
       const obj = unitRowObject_(planned, me, new Date());
       if(before) Sheets.setRow("単元", before.row, obj);
-      else Sheets.appendRows("単元", [Sheets.toArray("単元", obj)]);
+      else Sheets.appendObjs("単元", [obj]);
       SpreadsheetApp.flush();
       return readUnits(y, planned.layer, planned.target, planned.subject)
         .filter(x => x.id === planned.id)[0];
@@ -656,7 +656,7 @@ const Store = (function(){
         if(String(r["年度"]).trim() === String(y)) Sheets.blankRow("学期設定", r.__row);
 
       if(normalized.length)
-        Sheets.appendRows("学期設定", normalized.map(t => Sheets.toArray("学期設定", {
+        Sheets.appendObjs("学期設定", normalized.map(t => ({
           "年度":y, "学期":t.name, "開始日":t.start, "終了日":t.end
         })));
       SpreadsheetApp.flush();
@@ -874,7 +874,7 @@ const Store = (function(){
     const rows = Sheets.readAll("設定").rows;
     const hit = rows.find(function(r){ return String(r["キー"] || "").trim() === key; });
     if(hit) Sheets.patchRow("設定", hit.__row, {"値": value});
-    else Sheets.appendRows("設定", [[key, value, ""]]);
+    else Sheets.appendObjs("設定", [{"キー":key, "値":value, "覚え書き":""}]);
   }
 
   /* 行事計画を貼り付ける連携シート。**サイトが作って「設定」に紐づける。**
@@ -1325,10 +1325,10 @@ const Store = (function(){
       const me = (function(){ try{ return Gate.activeEmail(); }catch(e){ return ""; } })();
       const when = Utilities.formatDate(new Date(), TZ, "yyyy-MM-dd HH:mm");
       Sheets.setup();                    /* 「退避」シートがまだ無い学校でも書ける */
-      Sheets.appendRows("退避", [Sheets.toArray("退避", {
+      Sheets.appendObjs("退避", [{
         "年度": +y, "退避先URL": String(url || ""), "退避日": when,
         "退避した人": me, "行数": now.rows, "コマ数": now.cells
-      })]);
+      }]);
       SpreadsheetApp.flush();
       return {year:+y, sheets:gone.length, rows:now.rows, cells:now.cells,
               at:when, by:me, url:String(url || "")};
@@ -1653,7 +1653,7 @@ const Store = (function(){
     if(!Sheets.sheet('たんぽぽ状態')) Sheets.setup();
     const obj = Object.assign({}, state, {'年度':year, '月曜':mon, 'クラス':cls});
     if(state.__row) Sheets.setRow('たんぽぽ状態', state.__row, obj);
-    else Sheets.appendRows('たんぽぽ状態', [Sheets.toArray('たんぽぽ状態', obj)]);
+    else Sheets.appendObjs('たんぽぽ状態', [obj]);
   }
   function markTpChanges_(year, patches){
     if(!patches.length) return;
@@ -1703,7 +1703,7 @@ const Store = (function(){
         const obj = {"年度": +year, "月曜": String(mondayISO), "クラス": c,
                      "提出日時": when, "提出者": me};
         if(row) Sheets.setRow("たんぽぽ提出", row, obj);
-        else Sheets.appendRows("たんぽぽ提出", [Sheets.toArray("たんぽぽ提出", obj)]);
+        else Sheets.appendObjs("たんぽぽ提出", [obj]);
         const state = tpStates_(year, mondayISO)[c] || {};
         state['変更あり'] = '';
         putTpState_(year, mondayISO, c, state);
@@ -1768,8 +1768,7 @@ const Store = (function(){
         sh.getRange(2, 1, sh.getLastRow() - 1, Sheets.SPEC["たんぽぽ出力先"].cols.length)
           .clearContent();
       if(objs.length)
-        Sheets.appendRows("たんぽぽ出力先",
-          objs.map(function(o){ return Sheets.toArray("たんぽぽ出力先", o); }));
+        Sheets.appendObjs("たんぽぽ出力先", objs);
       SpreadsheetApp.flush();
       return {saved: objs.length};
     }finally{ lock.releaseLock(); }
@@ -2150,7 +2149,7 @@ const Store = (function(){
       const obj = {"年度": +year, "項目": key, "済": !!on,
                    "記録した人": on ? me : "", "記録した日時": on ? when : ""};
       if(had) Sheets.setRow("新年度設定", had.row, obj);
-      else Sheets.appendRows("新年度設定", [Sheets.toArray("新年度設定", obj)]);
+      else Sheets.appendObjs("新年度設定", [obj]);
       SpreadsheetApp.flush();
       return yearSetup(year);
     }finally{ lock.releaseLock(); }
@@ -2219,8 +2218,8 @@ const Store = (function(){
           return {saved: t};
         }
       }
-      Sheets.appendRows("設定", [Sheets.toArray("設定",
-        {"キー":"A週の起点の月曜", "値":t, "覚え書き":"この週がA週。あとは1週ごとに入れ替わる"})]);
+      Sheets.appendObjs("設定",
+        [{"キー":"A週の起点の月曜", "値":t, "覚え書き":"この週がA週。あとは1週ごとに入れ替わる"}]);
       SpreadsheetApp.flush();
       return {saved: t};
     }finally{ lock.releaseLock(); }
@@ -2560,7 +2559,11 @@ const Store = (function(){
   function replaceYear_(name, year, objs){
     for(const r of Sheets.readAll(name).rows)
       if(String(r["年度"]).trim() === String(year)) Sheets.blankRow(name, r.__row);
-    Sheets.appendRows(name, objs.map(o => Sheets.toArray(name, o)));
+    /* **見出しの位置で書く。** toArray（SPECの並びの位置書き）だと、
+       学校が足した列や重なった見出しのあるシートで値が別の列に入り、
+       読み戻しで見つからなくなる（専科の「教科」が読めず身元の教科に
+       戻ったことがある） */
+    Sheets.appendObjs(name, objs);
   }
 
   /* 1クラス・1週種ぶんを書く（**前の版の画面の口**）。
@@ -2577,7 +2580,7 @@ const Store = (function(){
         if(String(r["年度"]) === String(year) && Sheets.asClass(r["クラス"]) === c
         && String(r["週"]) === String(variant) && baseFromOf_(r["適用開始"]) === "")
           Sheets.blankRow("基本時間割", r.__row);
-      Sheets.appendRows("基本時間割", baseRows_(year, cls, variant, "", bank));
+      Sheets.appendObjs("基本時間割", baseRows_(year, cls, variant, "", bank));
       SpreadsheetApp.flush();
       markTpBase_(year, c, before, baseSnap_(year, c));
       return true;
@@ -2592,12 +2595,14 @@ const Store = (function(){
       const p = k.split("|");
       /* **曜日は「月」で書く。** 人が直接書き足す場所なので、
          0〜4 で書くと、隣の行にならって書いた行が読めなくなる */
-      adds.push(Sheets.toArray("基本時間割", {
+      /* **行は見出し名の対応で渡す**（appendObjs が位置へ落とす）。
+         位置書きだと列の並びがずれたシートで別の列に入る */
+      adds.push({
         "年度":year, "クラス":cls, "週":variant,
         "曜日":(DOW_JP[+p[0]] || p[0]), "時程":p[1],
         "教科コード":bank[k].subject || "", "表示名":bank[k].title || "",
         "適用開始":from || ""
-      }));
+      });
     }
     return adds;
   }
@@ -2648,7 +2653,7 @@ const Store = (function(){
           for(const v of ["A", "B"]) adds.push.apply(adds, baseRows_(year, cls, v, from, ver[v]));
         }
       }
-      Sheets.appendRows("基本時間割", adds);
+      Sheets.appendObjs("基本時間割", adds);
       SpreadsheetApp.flush();
       const now = readBaseAll_(year), marked = {}, ctx = {};
       const snap = (all, c) => ({base: all.base[c] || {}, from: all.from[c] || []});

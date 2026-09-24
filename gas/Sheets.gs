@@ -595,7 +595,7 @@ const Sheets = (function(){
     let w = Math.max(1, sh.getLastColumn());
     const at = {};
     sh.getRange(1, 1, 1, w).getValues()[0]
-      .forEach((v, i) => { const k = String(v).trim(); if(k) at[k] = i; });
+      .forEach((v, i) => { const k = String(v).trim(); if(k && !(k in at)) at[k] = i; });
     const added = [];
     for(const c of opt){
       if(c in at) continue;
@@ -637,7 +637,11 @@ const Sheets = (function(){
     const w = Math.max(1, sh.getLastColumn());
     const row = sh.getRange(1, 1, 1, w).getValues()[0];
     const at = {};
-    row.forEach((v, i) => { const k = String(v).trim(); if(k) at[k] = i; });
+    /* **同じ見出しが2列あれば、前のほうを読む。** あとから足した列と
+       同じ見出しの列を学校が足していると、後ろの列が本物を追い越す ──
+       「担当学年」が2列あるシートで、後ろの列（じつは教科の値が入って
+       いた）を読んでしまい、教科と担当学年の両方が読めなくなった */
+    row.forEach((v, i) => { const k = String(v).trim(); if(k && !(k in at)) at[k] = i; });
     const opt = SPEC[name].opt || [];
     for(const c of SPEC[name].cols)
       if(!(c in at) && opt.indexOf(c) < 0)
@@ -726,10 +730,41 @@ const Sheets = (function(){
   function toArray(name, obj){
     return SPEC[name].cols.map(c => (c in obj && obj[c] != null) ? obj[c] : "");
   }
+  /* **見出しの位置に合わせた1行ぶんの配列。** SPEC の並びで位置書きする
+     と、学校が足した列やあとから足した列で見出しがずれたシートでは、
+     値が別の見出しの下に入る ── 読むときは見出し名で読むので、ずれた
+     値は二度と見つからない（専科の「教科」が「担当学年」の下に入って
+     読めなくなったことがある）。見出しの無い欄は黙って飛ばす */
+  function toRow(name, obj){
+    const {at, width} = head(name);
+    return objRow_(obj, at, width);
+  }
+  function objRow_(obj, at, width){
+    const line = new Array(width).fill("");
+    for(const k in obj)
+      if(k in at && obj[k] != null) line[at[k]] = obj[k];
+    return line;
+  }
+  /* **見出しの位置で足す。** 読み書きで同じ見出しの対応を使うので、
+     列の並びが SPEC とちがうシートでも正しい列に入る。
+     見出しは1回だけ読む ── 行ごとに読むと、何百行も足す
+     基本時間割の取り込みが行の数だけ読み直すことになる */
+  function appendObjs(name, objs){
+    if(!objs || !objs.length) return;
+    const {sh, at, width} = head(name);
+    const arrays = objs.map(o => objRow_(o, at, width));
+    const last = sh.getLastRow() + 1;
+    grow(sh, last + arrays.length - 1, width);
+    sh.getRange(last, 1, arrays.length, width).setValues(arrays);
+  }
   function setRow(name, rowNo, obj){
-    const {sh} = head(name);
-    grow(sh, rowNo, SPEC[name].cols.length);
-    sh.getRange(rowNo, 1, 1, SPEC[name].cols.length).setValues([toArray(name, obj)]);
+    /* **見出しの位置で書く。** SPEC の並びで1行まるごと位置書きすると、
+       並びがずれたシートでは中身が別の列に入る。SPEC の欄は見出しの位置
+       へ書き、見出しに無い学校独自の列には触らない */
+    const {sh, at} = head(name);
+    for(const c of SPEC[name].cols)
+      if(c in at)
+        sh.getRange(rowNo, at[c] + 1).setValue((c in obj && obj[c] != null) ? obj[c] : "");
   }
   /* 1行のうち、**渡した見出しの欄だけ**を書き替える。
      `setRow` は SPEC の並びで1行まるごと書くので、列を入れ替えた学校では
@@ -743,10 +778,13 @@ const Sheets = (function(){
     }
   }
   /* 行は消さずに空にする。**消すと、その下の行番号がすべてずれる。**
-     同じ書き込みの途中で覚えた行番号が、別の行を指すようになる。 */
+     同じ書き込みの途中で覚えた行番号が、別の行を指すようになる。
+     **見出しのある幅だけ消す** ── 学校が右に足した列までは触らない
+     が、SPEC より広いシートで残った古い値があとで迷子にならないよう、
+     SPEC の幅ではなく見出しの幅で消す */
   function blankRow(name, rowNo){
-    const {sh} = head(name);
-    sh.getRange(rowNo, 1, 1, SPEC[name].cols.length).clearContent();
+    const {sh, width} = head(name);
+    sh.getRange(rowNo, 1, 1, width).clearContent();
   }
 
   /* 貼り付けたシートを、字の入っている範囲だけ**そのままの形**で読む。
@@ -766,7 +804,7 @@ const Sheets = (function(){
           fillAfterRow, fillSubjectCols,
           PLAN_PREFIX, PLAN_ALL, PLAN_COLS, planName, ensurePlan, withMemo, readPlan, writePlan, writePlanRows,
           planNames, planMap,
-          setup, head, readAll, appendRows, toArray, setRow, patchRow, blankRow, sheet,
+          setup, head, readAll, appendRows, toArray, toRow, appendObjs, setRow, patchRow, blankRow, sheet,
           ensureCols};
 })();
 
