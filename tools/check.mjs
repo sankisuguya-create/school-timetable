@@ -32,11 +32,12 @@ await p.goto(PAGE);
 await p.waitForTimeout(400);
 
 console.log("■ 入口");
-ok("学級が20（1〜4年は3クラス・5年6年だけ4クラス）",
-   await p.locator(".tile.cls").count() === 20,
+/* **初期編成は各学年3組まで。** 4組目は学級編成で足す */
+ok("学級が18（初期編成は各学年3組まで）",
+   await p.locator(".tile.cls").count() === 18,
    await p.locator(".tile.cls").count());
-ok("5年に 5-4 がある", await p.locator(".tile[data-c='5-4']").count() === 1);
-ok("6年に 6-4 がある", await p.locator(".tile[data-c='6-4']").count() === 1);
+ok("5年に 5-4 は無い（初期編成）", await p.locator(".tile[data-c='5-4']").count() === 0);
+ok("6年に 6-3 がある", await p.locator(".tile[data-c='6-3']").count() === 1);
 ok("4年に 4-4 は無い", await p.locator(".tile[data-c='4-4']").count() === 0);
 ok("学年マスターが6つ＋全学年", await p.locator(".master:not(.tp)").count() === 7,
    await p.locator(".master:not(.tp)").count());
@@ -71,8 +72,8 @@ ok("入口の帯は無い", await p.locator("#gate .head").count() === 0);
 ok("週・年度・A週B週は左に1つだけ",
    await p.locator("#weekLabel").count() === 1
    && await p.locator("#weekNo").count() === 1
-   && await p.locator("#abA").count() === 1, [
-     await p.locator("#weekLabel").count(), await p.locator("#abA").count()]);
+   && await p.locator("#abShow").count() === 1, [
+     await p.locator("#weekLabel").count(), await p.locator("#abShow").count()]);
 ok("入口を出しているときも、左の週表示は合っている",
    /\d+\/\d+ → \d+\/\d+/.test(await p.locator("#weekLabel").innerText())
    && (await p.locator("#weekNo").innerText()).indexOf("年度") >= 0,
@@ -84,17 +85,20 @@ ok("入口からでも週を動かせる", await (async () => {
   await p.locator("#prevWk").click(); await p.waitForTimeout(300);
   return before !== after;
 })() === true);
-ok("入口からでもA週B週を変えられる", await (async () => {
-  await p.locator("#abB").click(); await p.waitForTimeout(200);
-  const v = await p.evaluate(() => week().variant);
-  /* **日付から決まる週へ戻しておく。** 手で変えたままにすると、
-     あとの検査が「手で変えた週」を見ることになる */
-  await p.locator("#abAuto").click(); await p.waitForTimeout(200);
-  return v === "B";
-})() === true);
-ok("戻すと、日付から決まる週になる",
-   await p.evaluate(() => !week().vset && week().variant === autoVariant(wkKey())) === true,
-   await p.evaluate(() => [week().variant, autoVariant(wkKey()), !!week().vset]));
+/* **A週・B週は左で切り替えない。** 手で替えた週は、その端末にしか残らず、
+   ほかの人・たんぽぽ・時数が別の週を見ることになっていた */
+ok("A週B週は左で押して変えられない（表示だけ）",
+   await p.locator("#abA, #abB, #abAuto").count() === 0
+   && await p.locator("#abShow").evaluate(e => e.tagName !== "BUTTON"
+        && !e.querySelector("button")) === true);
+ok("左の表示は、日付から決まる週と同じ",
+   await p.locator("#abShow").innerText() === await p.evaluate(() => autoVariant(wkKey()) + "週"),
+   [await p.locator("#abShow").innerText(), await p.evaluate(() => autoVariant(wkKey()))]);
+ok("前の版で手で替えた週（vset）も、日付から決め直す", await p.evaluate(() => {
+     const w = week(), auto = autoVariant(wkKey());
+     w.vset = true; w.variant = auto === "A" ? "B" : "A";
+     return week().variant === auto && !week().vset;
+   }) === true);
 
 console.log("\n■ 手の届くところ");
 /* 見出しの「週案」と、その右のグリッド（入口へ飛ぶ口）は外した。
@@ -337,7 +341,9 @@ ok("前の年度の書き込みが残っている",
      return Object.keys(ws).some(k => Object.keys(ws[k].home || {}).length);
    }, y0));
 ok("新しい年度はクラス編成を引き継ぐ",
-   await p.evaluate(() => allClasses().length) === 20,
+   await p.evaluate(y => JSON.stringify(allClasses())
+     === JSON.stringify(Object.keys(db.years[String(y)].classes).sort()
+          .reduce((a, g) => a.concat(db.years[String(y)].classes[g]), [])), y0) === true,
    await p.evaluate(() => allClasses()));
 ok("新しい年度の基本時間割は空（毎年変わるものを持ち越さない）",
    await p.evaluate(() => Object.keys(Y().base).length) === 0);
@@ -882,6 +888,123 @@ ok("「ー」は読めない字として知らせない（授業なしと分か�
      return parseFixed(g).unknown.join("");
    }) === "");
 
+/* **年度の途中で改めた時間割は、改めた週から先にだけ効く。**
+   版が1つしか無いと、2学期に改めた時点で1学期の紙と時数まで変わっていた */
+console.log("\n■ 基本時間割を直す範囲（今年度全体／今週以降のみ）");
+await p.evaluate(() => {
+  document.querySelectorAll("dialog[open]").forEach(d => d.close());
+  window.__keepMon = monday;
+  monday = parseISO("2026-09-28"); refreshWeek();
+  document.querySelectorAll("dialog[open]").forEach(d => d.close());
+  openBaseDlg();
+  $("baseCls").value = "3-1"; drawBaseGrid();
+});
+/* 3-1 の月1を、その週の月曜で引く（週をまたいで見るため monday を差し替える） */
+const baseAt = (mon, key) => p.evaluate(([mon, key]) => {
+  const keep = monday; monday = parseISO(mon);
+  const p_ = key.split("|");
+  const v = (baseCell("3-1", +p_[0], p_[1]) || {}).title || "";
+  monday = keep; return v;
+}, [mon, key]);
+ok("既定は「今週以降のみ変更」",
+   await p.locator("#bsWeek").getAttribute("aria-pressed") === "true"
+   && await p.locator("#bsYear").getAttribute("aria-pressed") === "false");
+ok("今週以降の日付がボタンと説明に出る",
+   (await p.locator("#bsWeek").innerText()).indexOf("9/28") >= 0
+   && (await p.locator("#baseScopeHint").innerText()).indexOf("9/21の週まで") >= 0,
+   [await p.locator("#bsWeek").innerText(), await p.locator("#baseScopeHint").innerText()]);
+const v0914 = await baseAt("2026-09-14", "0|p1");      /* 9/28 と同じB週・前の週 */
+const pick = v0914 === "理科" ? "zuko" : "rika", pickName = v0914 === "理科" ? "図工" : "理科";
+await p.evaluate(() => {                                /* 提出ずみの週を作っておく */
+  const Yr = Y();
+  for(const k of ["2026-09-14", "2026-10-05", "2026-10-12"]){
+    const w = Yr.weeks[k] || (Yr.weeks[k] = {school:{}, grade:{}, special:{}, home:{}, acked:[]});
+    w.tpSub = {"3-1": {at:"x", by:"", dirty:false, exports:{}}};
+  }
+});
+await p.locator("#baseGrid select[data-k='0|p1']").selectOption(pick);
+await p.waitForTimeout(150);
+ok("今週以降：開いている週から変わる", await baseAt("2026-09-28", "0|p1") === pickName,
+   await baseAt("2026-09-28", "0|p1"));
+ok("今週以降：先の週（同じB週）も変わる", await baseAt("2026-10-12", "0|p1") === pickName);
+ok("今週以降：前の週は変わらない", await baseAt("2026-09-14", "0|p1") === v0914,
+   [await baseAt("2026-09-14", "0|p1"), v0914]);
+ok("今週以降：9/28 から使う版ができる",
+   await p.evaluate(() => (Y().baseFrom["3-1"] || []).map(v => v.from).join()) === "2026-09-28",
+   await p.evaluate(() => Y().baseFrom["3-1"]));
+ok("いまどの版を出しているかを言う",
+   (await p.locator("#baseScopeHint").innerText()).indexOf("9/28の週から") >= 0,
+   await p.locator("#baseScopeHint").innerText());
+ok("提出ずみの週で字が変わった週（10/12・B週）は「未」に戻る",
+   await p.evaluate(() => Y().weeks["2026-10-12"].tpSub["3-1"].dirty) === true);
+ok("変わっていない週（9/14・前の週）は戻さない",
+   await p.evaluate(() => Y().weeks["2026-09-14"].tpSub["3-1"].dirty) === false);
+ok("変わっていない週（10/5・A週）は戻さない",
+   await p.evaluate(() => Y().weeks["2026-10-05"].tpSub["3-1"].dirty) === false);
+
+await p.locator("#bsYear").click(); await p.waitForTimeout(100);
+ok("「今年度全体」を選ぶと、過ぎた週も変わると言う",
+   (await p.locator("#baseScopeHint").innerText()).indexOf("4月からの全部の週") >= 0,
+   await p.locator("#baseScopeHint").innerText());
+const p2old = await baseAt("2026-09-14", "0|p2");
+const pick2 = p2old === "体育" ? "ongaku" : "taiiku", pick2Name = p2old === "体育" ? "音楽" : "体育";
+await p.locator("#baseGrid select[data-k='0|p2']").selectOption(pick2);
+await p.waitForTimeout(150);
+ok("今年度全体：前の週も変わる", await baseAt("2026-09-14", "0|p2") === pick2Name);
+ok("今年度全体：途中からの版も変わる", await baseAt("2026-10-12", "0|p2") === pick2Name);
+ok("今年度全体：途中からの版のほかのコマは残る", await baseAt("2026-10-12", "0|p1") === pickName);
+ok("今年度全体：提出ずみの前の週（9/14）も「未」に戻る",
+   await p.evaluate(() => Y().weeks["2026-09-14"].tpSub["3-1"].dirty) === true);
+
+/* 戻したら、同じ中身の版は残さない */
+await p.locator("#bsWeek").click(); await p.waitForTimeout(100);
+await p.locator("#baseGrid select[data-k='0|p1']").selectOption(
+  await p.evaluate(n => (SUB_BY_NAME[n] || {}).code || "", v0914));
+await p.waitForTimeout(150);
+ok("元へ戻すと、途中からの版は片づく",
+   await p.evaluate(() => !Y().baseFrom["3-1"]) === true,
+   await p.evaluate(() => Y().baseFrom["3-1"]));
+ok("窓を開き直すと「今週以降のみ」に戻る", await p.evaluate(() => {
+     baseScope = "year"; $("baseDlg").close(); openBaseDlg();
+     const r = baseScope === "week"; $("baseDlg").close(); return r;
+   }) === true);
+await p.evaluate(() => {
+  for(const k of ["2026-09-14", "2026-10-05", "2026-10-12"]) delete Y().weeks[k].tpSub;
+  /* 開いていた週へ戻す（あとの検査はその週を前提にしている） */
+  monday = window.__keepMon; refreshWeek();
+  document.querySelectorAll("dialog[open]").forEach(d => d.close());
+});
+
+/* **画面で直した設定は、その端末の持ちもの。** 前は立ち上がるたびに
+   「設定」シートの値で上書きされ、直しても再読み込みで戻っていた */
+console.log("\n■ 画面で直した設定は、シートの値で上書きしない");
+ok("直した項目は残り、直していない項目はシートの値になる", await p.evaluate(() => {
+     const keep = JSON.stringify(db.settings);
+     db.settings.margin = 5; markMine("印刷余白mm");
+     db.settings.tally.classes = "5-1,5-2"; markMine("時数_クラスの順");
+     applyConfig({"印刷余白mm": 8, "時数_クラスの順": "3-1,3-2,3-3", "印刷倍率": 0.9});
+     const r = db.settings.margin === 5 && db.settings.tally.classes === "5-1,5-2"
+            && db.settings.k === 0.9;
+     db.settings = JSON.parse(keep);
+     return r;
+   }) === true);
+ok("余白 0 は 0 のまま（8 に化けない）", await p.evaluate(() => {
+     const keep = JSON.stringify(db.settings);
+     db.settings.mine = {};
+     applyConfig({"印刷余白mm": 0});
+     const r = db.settings.margin === 0;
+     db.settings = JSON.parse(keep);
+     return r;
+   }) === true);
+ok("起点「2026/9/14」「２０２６－０９－１４」は 2026-09-14 に寄せる", await p.evaluate(() => {
+     const keep = db.settings.abAnchor, out = [];
+     for(const v of ["2026/9/14", "２０２６－０９－１４"]){
+       applyConfig({"A週の起点の月曜": v}); out.push(db.settings.abAnchor);
+     }
+     db.settings.abAnchor = keep;
+     return out.join();
+   }) === "2026-09-14,2026-09-14");
+
 console.log("\n■ 固定時間割の取り込み");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='3-1']").click(); await p.waitForTimeout(300);
@@ -894,9 +1017,14 @@ ok("読む前は入れられない", await p.locator("#impGo").isDisabled() === 
 /* 同梱の表（2026 固定時間割案） */
 await p.locator("#impSrc button[data-s='builtin']").click(); await p.waitForTimeout(150);
 await p.locator("#impRead").click(); await p.waitForTimeout(300);
-ok("同梱の表は20学級ぶん読める",
-   (await p.locator("#impStat").innerText()).indexOf("20 クラス") >= 0,
+/* 同梱の表は20学級あるが、初期編成は各学年3組まで。**入るのは編成にある18学級**で、
+   5-4・6-4 は「今の学級編成に無い」と名指しする */
+ok("同梱の表のうち、編成にある18学級を入れる",
+   (await p.locator("#impStat").innerText()).indexOf("18 クラス") >= 0,
    await p.locator("#impStat").innerText());
+ok("編成に無い 5-4・6-4 は名指しする",
+   /5-4[\s\S]*6-4[\s\S]*今の学級編成に無い/.test(await p.locator("#impWarn").innerText()),
+   await p.locator("#impWarn").innerText());
 ok("同梱の表に読めない字は無い",
    (await p.locator("#impWarn").innerText()).indexOf("読めない字") < 0,
    await p.locator("#impWarn").innerText());
@@ -1480,21 +1608,8 @@ ok("起点は設定から動かせる", await p.evaluate(() => {
      db.settings.abAnchor = keep;
      return v;
    }) === "B");
-ok("ふだんは「自動に戻す」を出さない",
-   await p.locator("#abAuto").isHidden());
-ok("手で変えると、その週だけ変わる", await (async () => {
-     const before = await p.evaluate(() => week().variant);
-     await p.locator("#ab" + (before === "A" ? "B" : "A")).click();
-     await p.waitForTimeout(250);
-     return await p.evaluate(() => week().variant) !== before;
-   })() === true);
-ok("手で変えた週にだけ「自動に戻す」が出る",
-   await p.locator("#abAuto").isVisible());
-ok("「自動に戻す」で日付どおりに戻る", await (async () => {
-     await p.locator("#abAuto").click(); await p.waitForTimeout(250);
-     return await p.evaluate(() => week().variant === autoVariant(wkKey()))
-         && await p.locator("#abAuto").isHidden();
-   })() === true);
+ok("「自動に戻す」は無い（手で替える口が無いので戻す口も要らない）",
+   await p.locator("#abAuto").count() === 0);
 
 console.log("\n■ 左の並びと入口の見え方");
 ok("左の並びは、どれも1行に収まる（折り返さない）", await p.evaluate(() =>
@@ -2280,7 +2395,7 @@ ok("字幅を詰めるのは紙の上だけ", await p.evaluate(() => {
      getComputedStyle(document.body).fontFeatureSettings,
      getComputedStyle(document.querySelector(".sheet")).fontFeatureSettings]));
 ok("左の並びの「？」が、A週B週の上に重ならない", await p.evaluate(() => {
-     const q = document.querySelector(".wkrow > .helpq"), b2 = document.getElementById("abB");
+     const q = document.querySelector(".wkrow > .helpq"), b2 = document.getElementById("abShow");
      if(!q || !b2) return "無い";
      const a = q.getBoundingClientRect(), c = b2.getBoundingClientRect();
      return !(a.left < c.right && a.right > c.left && a.top < c.bottom && a.bottom > c.top);

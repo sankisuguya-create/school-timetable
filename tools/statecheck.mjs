@@ -74,7 +74,7 @@ try{
   assert.match(await p.locator('#saveTxt').innerText(),/保存・反映/);
   /* 「ここで直したものは◯クラスに出る」の1行は外した。
      効く先が広いことは、保存ボタンの字（保存・反映）と左上の行き先が言う */
-  assert.equal(await p.evaluate(()=>writeClasses().length),4);
+  assert.equal(await p.evaluate(()=>writeClasses().length),3);  /* 初期編成は各学年3組まで */
   await p.locator('#saveBtn').click();
   assert.ok(await p.locator('#apDlg').evaluate(d=>d.open));
   assert.equal(await p.evaluate(()=>document.activeElement.id),'apNo');

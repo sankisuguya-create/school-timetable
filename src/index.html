@@ -117,11 +117,9 @@
         <div class="wkrow" data-help="week">
           <span class="wkno" id="weekNo"></span>
           <!-- A週・B週は**日付から決まる**（起点の月曜から1週ごとに入れ替わる）。
-               押せば、その週だけ手で変えられる。変えたときだけ「自動に戻す」が出る -->
-          <div class="seg" role="group" aria-label="基本時間割のA週・B週">
-            <button id="abA" aria-pressed="true">A週</button><button id="abB">B週</button>
-          </div>
-          <button class="abauto" id="abAuto" hidden title="日付から決まる週に戻す">自動に戻す</button>
+               **ここでは切り替えない。** 手で替えた週は、その端末にしか残らず、
+               ほかの人・たんぽぽ・時数が別の週を見ることになる。直すのは起点 -->
+          <span class="abnow" id="abShow" role="status" title="A週・B週は日付から決まります">A週</span>
         </div>
         <select class="target" id="target" aria-label="開いているもの"></select>
       </div>
@@ -690,6 +688,13 @@
     <button class="btn" id="baseCopy">A週をB週へ写す</button>
     <button class="btn" id="basePrev">前年度から写す</button>
     <button class="btn" id="baseImp">表から取り込む</button></div>
+  <!-- 変える範囲。**直す前に選ぶ。** 既定は「今週以降のみ」。
+       「今年度全体」は過ぎた週の紙・時数・たんぽぽまで変える -->
+  <div class="row"><span>変える範囲</span>
+    <div class="seg" role="group" aria-label="変える範囲">
+      <button id="bsYear" aria-pressed="false">今年度全体を変更</button><button id="bsWeek" aria-pressed="true">今週以降のみ変更</button>
+    </div></div>
+  <p class="hint" id="baseScopeHint"></p>
   <div id="baseGrid"></div>
 </div></dialog>
 
