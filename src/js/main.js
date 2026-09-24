@@ -938,13 +938,17 @@ function wire(){
   on("rsSpAdd","click", () => {
     if(!rsDraft) return;
     const list = rsDraft.specials || (rsDraft.specials = []);
-    /* **専科らしい教科から、まだ枠のないものを優先する。**
-       いつも先頭（国語）を足すと、足すたびに国語専科ができてしまう */
+    /* **枠を足すのは、たいてい「分ける」とき。** 理科を3・4年と5・6年に
+       分けるなど、いちばん下の行と同じ教科を足すのがふつう ── まだ枠の
+       無い教科（体育など）を出すと、分けたい教科に直し忘れてしまう。
+       枠がひとつも無いときは、専科らしい教科の、まだ枠の無いものから。 */
     const have = new Set(list.map(x => x.subject));
+    const last = list[list.length - 1];
     const usual = ["ongaku","zuko","gaikoku","rika","taiiku","katei"];
-    const sub = (usual.find(c => !have.has(c))
-              || (SUBJECTS.find(x => x.count && !x.only && !have.has(x.code)) || {}).code
-              || "ongaku");
+    const sub = ((last && SUB_BY_CODE[last.subject]) ? last.subject : "")
+             || usual.find(c => !have.has(c))
+             || (SUBJECTS.find(x => x.count && !x.only && !have.has(x.code)) || {}).code
+             || "ongaku";
     let code = sub, n = 2;
     while(list.some(x => x.code === code)) code = sub + "_" + (n++);
     list.push({code, subject:sub, grades:[]});

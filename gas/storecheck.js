@@ -675,6 +675,28 @@ ok("教科を書かない枠は、身元がそのまま教科になる",
    ev("Store.readRoster(2031)").specials[0].subject === "ongaku",
    ev("Store.readRoster(2031)").specials);
 
+/* **「教科」列の無い古いシートにも、書くときに列を足す。** 足さないと、
+   教科を替えた枠は読み戻しで身元の教科に戻る（教科を替えたはずが、
+   立ち上げ直すと別の教科になっている事故）。 */
+console.log("\n■ 教科列の無い古いシートでも、保存時に列を足して教科が残る");
+(function(){
+  /* 専科シートの見出しから「教科」を削って、古い形にする */
+  const head0 = SHEETS["専科"][0];
+  const atSub = head0.indexOf("教科");
+  for(const row of SHEETS["専科"]) row.splice(atSub, 1);
+  ev(`Store.writeRoster(2032, {"3":["3-1"]},
+      [{code:"taiiku", subject:"taiiku", grades:["1","2"]},
+       {code:"rika_3", subject:"rika", grades:["3","4"]}], "2032-04-04")`);
+  const r32 = ev("Store.readRoster(2032)");
+  ok("書き込みのあと「教科」の見出しがある",
+     ev('Sheets.head("専科").at["教科"]') !== undefined,
+     ev('Sheets.head("専科").at'));
+  ok("身元と教科が違う枠も、読み戻すと教科は理科のまま",
+     r32.specials.length === 2
+     && r32.specials[0].subject === "taiiku"
+     && r32.specials[1].subject === "rika", r32.specials);
+})();
+
 console.log("\n■ 空の編成では上書きしない");
 const keep26 = Object.keys(ev("Store.readRoster(2026).classes"))
   .reduce((a, g) => a + ev("Store.readRoster(2026).classes")[g].length, 0);
