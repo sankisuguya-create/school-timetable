@@ -757,7 +757,7 @@ function wire(){
   addEventListener("resize", () => { if(!$("spmView").hidden) fitSpm(); });
   /* **案を入れずに閉じても、希望は残す。** 希望はその人の持ちもので、
      案とは別のもの（触っていなければ1コマも書かない） */
-  on("spmDlg","close", () => { if(spmSaveWish()) toast("<b>専科の希望を控えた。</b>保存を押す"); });
+  on("spmDlg","close", () => { if(spmSaveWish()) toast("<b>専科の希望を端末内の控えデータに置いた。</b>保存を押す"); });
   /* 新年度の設定。**ふだんは管理・システムの中だけ。**
      未了のあいだだけ、左メニューにも出る（結線は dialogs.js） */
   on("nyOpen","click", () => { $("adminDlg").close(); openNewYearDlg(); });
@@ -924,9 +924,14 @@ function wire(){
 
   /* 学級編成 */
   on("rsAddG","click", () => {
-    const g = String($("rsNewG").value || "").trim();
-    if(!g) return;
+    let g = String($("rsNewG").value || "").trim();
+    if(g.normalize) g = g.normalize("NFKC").trim();
+    if(g === "特別支援") g = "特支";        /* 正式名は「特支」に寄せる */
     if(!rsDraft) return;   /* 窓を開いていないときは来ないが念のため */
+    /* **決まった形だけ受け付ける。** 変な字や空の学年ができると、
+       「これは何」行が残る */
+    if(!/^([1-9]\d*|特支)$/.test(g))
+      return toast("学年は「3」などの数か「特支」で");
     if(rsDraft.classes[g]) return toast("その学年はもうある");
     rsDraft.classes[g] = [];
     $("rsNewG").value = "";

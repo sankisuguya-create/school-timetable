@@ -310,8 +310,11 @@ function spGrades_(v){
   if(Array.isArray(v)) return v.map(String).filter(g => /^[1-9]$/.test(g)).sort();
   const s = String(v == null ? "" : v).trim();
   if(!s) return [];
+  /* **全角の３・ー・，も決まった形で読む。** 全角で打つと全部落ちて、
+     空＝全学年の専科が静かにできてしまう */
+  const t = s.normalize ? s.normalize("NFKC") : s;
   const out = {};
-  const rest = s.replace(/([1-9])\s*年?\s*[〜～~\-ー－]\s*([1-9])/g, function(_, a, b){
+  const rest = t.replace(/([1-9])\s*年?\s*[〜～~\-ー‐‒–—―−ｰ➖]\s*([1-9])/g, function(_, a, b){
     const lo = Math.min(+a, +b), hi = Math.max(+a, +b);
     for(let g = lo; g <= hi; g++) out[String(g)] = true;
     return " ";
