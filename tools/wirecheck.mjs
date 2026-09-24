@@ -810,6 +810,36 @@ rq = await lastCall("apiWriteRoster");
 ok("「入れて閉じる」で apiWriteRoster が呼ばれる", !!rq);
 ok("戻した編成が届く", rq && rq.args[1]["1"].length === 2, rq && rq.args[1]);
 
+/* **「枠を足す」は、いちばん下の行と同じ教科を足す**（分けるのがふつう）。
+   新しく足した行の教科を直すと、身元（code）も教科に合わせて付け直す ──
+   「教科」列の無い古いシートでも、読み戻しで教科が元に戻らないように。 */
+console.log("\n■ 専科の枠を足すと、下の行と同じ教科が出る・新設行は身元も替わる");
+await p.locator("[data-act='settings']").click();
+await p.locator('#setRoster').click();
+await p.waitForTimeout(250);
+const lastSub = await p.locator("#rsSpRows .sprow:last-child select").inputValue();
+await p.locator("#rsSpAdd").click(); await p.waitForTimeout(250);
+ok("新しい行は、下の行と同じ教科（分けるときの教科）",
+   (await p.locator("#rsSpRows .sprow:last-child select").inputValue()) === lastSub,
+   await p.locator("#rsSpRows .sprow:last-child select").inputValue());
+const newSel = p.locator("#rsSpRows .sprow:last-child select");
+/* 検査の環境には教科が4つしか無いので、ある選択肢の中から別の教科を選ぶ */
+const other = await p.evaluate(() => {
+  const s = document.querySelector("#rsSpRows .sprow:last-child select");
+  const opt = [...s.options].find(o => o.value !== s.value);
+  return opt ? opt.value : "";
+});
+ok("別の教科が選択肢にある", !!other, other);
+await newSel.selectOption(other); await p.waitForTimeout(250);
+ok("新設の行で教科を替えると、身元（data-spsub）も教科に合わせて替わる",
+   (await newSel.getAttribute("data-spsub")).indexOf(other) === 0,
+   await newSel.getAttribute("data-spsub"));
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator("#rosterDlg .dlgx").click(); await p.waitForTimeout(250);
+await p.locator("#okYes").click(); await p.waitForTimeout(300);
+ok("捨てるを選ぶと apiWriteRoster は飛ばない",
+   !(await lastCall("apiWriteRoster")), await lastCall("apiWriteRoster"));
+
 console.log("\n■ 固定時間割の取り込み");
 await p.evaluate(() => { window.__calls.length = 0; });
 await p.locator("[data-act='settings']").click();

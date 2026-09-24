@@ -655,6 +655,19 @@ const Sheets = (function(){
     return out;
   }
 
+  /* **あとから足した列を、古いシートにも見出しごと足す。** opt 扱いの列
+     （専科の「担当学年」「教科」など）は head() を通るが、見出しが無い
+     まま値だけ書くと、読むとき二度とその列を見つけられない ── 専科の
+     「教科」が落ちると、教科を替えた枠は身元の教科に戻ってしまう。
+     週案シート（ensurePlan）と同じく、足りない見出しは右へ足す。
+     列の並びは SPEC どおりが前提（書き込みは位置で入れる）。 */
+  function ensureCols(name){
+    const {sh, at, width} = head(name);
+    const miss = SPEC[name].cols.filter(c => !(c in at));
+    if(miss.length)
+      sh.getRange(1, width + 1, 1, miss.length).setValues([miss]).setFontWeight("bold");
+  }
+
   /* **読むだけの呼び出しの中では、同じシートを二度読まない。**
      起動は「時程」を2回（readSlots・readBase）、週の読みは「たんぽぽ状態」を
      何度も読んでいた。1回の readAll は見出し・行数・本体で約5往復かかる。
@@ -746,7 +759,8 @@ const Sheets = (function(){
           fillAfterRow, fillSubjectCols,
           PLAN_PREFIX, PLAN_ALL, PLAN_COLS, planName, ensurePlan, withMemo, readPlan, writePlan, writePlanRows,
           planNames, planMap,
-          setup, head, readAll, appendRows, toArray, setRow, patchRow, blankRow, sheet};
+          setup, head, readAll, appendRows, toArray, setRow, patchRow, blankRow, sheet,
+          ensureCols};
 })();
 
 /* シートを作る。エディタから1回実行する。 */

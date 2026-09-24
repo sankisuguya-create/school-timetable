@@ -530,9 +530,19 @@ function drawRoster(){
     e.onchange = () => {
       const t = (dr.specials || []).find(x => x.code === e.dataset.spsub);
       if(!t) return;
-      /* **身元は変えない。** 変えると、その枠で入れたコマの持ち主が
-         行方不明になる（週案の棚には身元の字が入っている） */
       t.subject = e.value;
+      /* **まだ誰にも書かれていない行は、身元も教科に合わせる。** 身元は
+         週案の棚に入っている字なので、中身のある行を動かすとコマの持ち主が
+         行方不明になる ── だがこの年の編成にまだ無い行は、どこにも
+         書かれていないので動かせる。動かさないと、教科を直しても身元が
+         前の教科のまま残り、「教科」列の無い古いシートでは保存したあと
+         前の教科に戻ってしまう。 */
+      if(!(Yr.specials || []).some(x => x.code === t.code)){
+        let code = t.subject, n = 2;
+        while((dr.specials || []).some(x => x !== t && x.code === code))
+          code = t.subject + "_" + (n++);
+        t.code = code;
+      }
       spSave();
     };
   for(const b of $("rsSpRows").querySelectorAll("button[data-spdel]"))
