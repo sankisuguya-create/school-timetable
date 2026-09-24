@@ -1815,6 +1815,12 @@ const Store = (function(){
     const p = String(mondayISO).split("-");
     return (+p[1]) + "月" + (Math.floor((+p[2] - 1) / 7) + 1) + "週";
   }
+  /* 列番号をA1の字にする。**26列を超える児童・支援員ぶんまで要る。** */
+  function colLetter_(n){
+    let s = "";
+    while(n > 0){ const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - 1 - m) / 26; }
+    return s;
+  }
   /* 週シートの並び順。**年度の順（4月 → 翌3月）。**
      名前は月と週しか持っていないので、4月を先頭に置き替えて数える。
      週シートでない名前（退避したもの・ほかの用途のシート）は -1 を返す。 */
@@ -1914,8 +1920,15 @@ const Store = (function(){
     }
 
     /* **同じ名前のシートがあれば、消さずに名前を変えて残す。**
-       たんぽぽ担当が担当者・場所に書き足したものを、こちらが消さない */
-    const old = ss.getSheetByName(sheetName);
+       たんぽぽ担当が担当者・場所に書き足したものを、こちらが消さない。
+
+       **全角・半角でも同じ名前とみなす。** 「９月４週」と「9月4週」は、
+       シート側では同じ名前として扱われる（挿すと「もうある」と落ちる）のに、
+       getSheetByName は字どおりしか比べない ── 見つけられずに挿して止まる。
+       正規化して並べて探す */
+    const sameName_ = n => String(n).normalize("NFKC") === String(sheetName).normalize("NFKC");
+    let old = null;
+    for(const sh of ss.getSheets()) if(sameName_(sh.getName())){ old = sh; break; }
     let backup = "";
     if(old){
       backup = Sheets.stash(old, "前の");
@@ -1931,6 +1944,21 @@ const Store = (function(){
     if(width > 1)
       nw.getRange(1, 2, nw.getMaxRows(), width - 1).setNumberFormat("@");
     nw.getRange(1, 1, rows.length, width).setValues(rows);
+    /* **見出しのクラス名は「教師わりあて」への参照で置く。** 参照元には
+       「3-3田中」のように名前まで書いてある。値で写すと児童名がこの画面を
+       通り（個人情報）、参照元を直しても反映されない。参照なら出す先の
+       中だけで結ばれる。参照元が空なら、いままでどおりのクラス名に戻す */
+    for(let d = 0; d < 5 && width > 1; d++){
+      const hr = 2 + d * TP_BUILD_ROWS, refs = [];
+      const names = list.concat(staff);
+      for(let c = 2; c <= width; c++){
+        const a1 = "'教師わりあて'!" + colLetter_(c) + hr;
+        /* クラス名・支援員名に " は入らない想定だが、入っていても式を壊さない */
+        const alt = String(names[c - 2] || "").replace(/"/g, '""');
+        refs.push('=IF(' + a1 + '="","' + alt + '",' + a1 + ')');
+      }
+      nw.getRange(hr, 2, 1, width - 1).setFormulas([refs]);
+    }
     nw.setFrozenColumns(1);
     nw.setFrozenRows(1);
 
@@ -2001,22 +2029,37 @@ const Store = (function(){
 
     nw.setConditionalFormatRules(rules);
     SpreadsheetApp.flush();
-    if(submitted !== undefined){
-      const states = tpStates_(year, mondayISO);
-      const target = ss.getId();
-      for(const c of Object.keys(titles || {})){
-        if(!current[c]) continue;
-        const state = states[c] || {}, exports = current[c].exports || {};
-        exports[target] = current[c].at;
-        state['出力記録'] = JSON.stringify(exports);
-        putTpState_(year, mondayISO, c, state);
+    /* **シートはもう出来ている。** ここから先（提出の記録づけ・読み直し）が
+       失敗しても、出したこと自体を失敗にはしない。「出せませんでした」と
+       出るともう一度押されて、前のぶんの退けシートだけ増える。理由は返す。 */
+    let recordWhy = "", submits = null;
+    try{
+      if(submitted !== undefined){
+        const states = tpStates_(year, mondayISO);
+        const target = ss.getId();
+        for(const c of Object.keys(titles || {})){
+          if(!current[c]) continue;
+          const state = states[c] || {}, exports = current[c].exports || {};
+          exports[target] = current[c].at;
+          state['出力記録'] = JSON.stringify(exports);
+          putTpState_(year, mondayISO, c, state);
+        }
+        SpreadsheetApp.flush();
       }
-      SpreadsheetApp.flush();
+      submits = tpSubmits(year, mondayISO);
+    }catch(e){
+      recordWhy = String((e && e.message) || e);
+      Logger.log("出力記録づけに失敗（シートは出来ている）: " + recordWhy);
     }
-    return {file: ss.getName(), sheet: sheetName, cols: list.length,
+    /* **出来たシートへの直つながりも返す。** ファイル名とシート名だけだと、
+       開いているファイルと別のところに出来ていても気づけない */
+    const fileUrl = ss.getUrl();
+    return {file: ss.getName(), fileUrl: fileUrl, sheet: sheetName,
+            sheetUrl: fileUrl + "#gid=" + nw.getSheetId(), cols: list.length,
             staff: staff.length, rows: rows.length, backup: backup, colW: colW,
             wrote: wrote, empty: empty, days: 5, list: list,
-            groups: plan.map(function(x){ return x.group; }), submits: tpSubmits(year, mondayISO)};
+            groups: plan.map(function(x){ return x.group; }),
+            submits: submits, recordWhy: recordWhy};
   }
   /* ── 新年度の設定 ────────────────────────────
      **4月に開いたとき、何を、どの順でやるかを1画面で出す。**

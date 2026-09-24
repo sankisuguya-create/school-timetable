@@ -124,6 +124,8 @@ function tpSheet(name){
 /* 列の幅。**本物と同じで、読み書きできる。**
    幅を入れているつもりで入っていない形を、検査で見分けられるようにする */
 const WIDTHS = {};
+/* 入れた式（'シート名/行,列' → '=...'）。参照で出したかを検査で見る */
+const FORMS = {};
 function fakeSheetOn(grid0, name){
   const grid = limited(grid0);
   const s0 = {
@@ -165,12 +167,31 @@ function fakeSheetOn(grid0, name){
             FORMATS[name + "/" + (r + i) + "," + (c + j)] = f;
           return this;
         },
+        /* **式は式として入れて、表示される値に解決する。**
+           本物のシートは式をそのまま表示しないので、偽物も見え方に合わせる。
+           分かる形（='シート'!A1 への参照・IF の空欄戻し）だけ解決する */
+        setFormulas(v){ rect_(v, nr, nc);
+          for(let i = 0; i < nr; i++) for(let j = 0; j < nc; j++){
+            const f = String(v[i][j]);
+            FORMS[name + "/" + (r + i) + "," + (c + j)] = f;
+            const m = f.match(/^=IF\('([^']+)'!\$?([A-Z]+)\$?(\d+)="","([^"]*)",'\1'!\$?\2\$?\3\)$/);
+            let val = f;
+            if(m){
+              const src = TPFILE.sheets[m[1]] || [];
+              const ci = m[2].split("").reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0);
+              const rv = (src[+m[3] - 1] || [])[ci - 1];
+              val = (rv === "" || rv == null) ? m[4] : rv;
+            }
+            grid[r - 1 + i][c - 1 + j] = val;
+          }
+          return this; },
         setBorder(){ return this; },
         setBackground(){ return this; }
       };
     },
     setConditionalFormatRules(){},
     setFrozenRows(){}, setFrozenColumns(){},
+    getSheetId(){ let h = 5381; for(const ch of name) h = ((h * 33) ^ ch.charCodeAt(0)) >>> 0; return h; },
     setName(n){
       TPFILE.sheets[n] = grid; delete TPFILE.sheets[name];
       if(TPFILE.order){
@@ -248,6 +269,7 @@ const sandbox = {
       return {
         getId: () => TPID,
         getName: () => TPFILE.name,
+        getUrl: () => "https://docs.google.com/spreadsheets/d/" + TPID + "/edit",
         getSheets: () => tpNames().map(tpSheet),
         getSheetByName: n => (n in TPFILE.sheets) ? tpSheet(n) : null,
         /* **位置を受ける。** 週の順に並べているかを検査で見る */
@@ -1010,6 +1032,45 @@ console.log("\n■ 同じ名前のシートは、消さずに名前を変えて�
      !!TPFILE.sheets[again.sheet] && again.sheet === ex.sheet, Object.keys(TPFILE.sheets));
   ok("再出力は元の名前に戻り、参照元には手入力を戻さない",
      TPFILE.sheets[again.sheet][3][1] === "田中" && TPFILE.sheets["教師わりあて"][3][1] === "田中");
+})();
+
+console.log("\n■ 見出しのクラス名は「教師わりあて」への参照で出る");
+(function(){
+  /* 「3-3田中」のように名前まで書いてある。値を写すと児童名がこの画面を
+     通る（個人情報）ので、参照（='教師わりあて'!B2 という式）で結ぶ */
+  const assignments = tpSheet("教師わりあて");
+  assignments.getRange(2, 2).setValue("3-3田中");
+  const r = ev("Store.exportWeek(2026, '2026-12-07', " + JSON.stringify(titles)
+             + ", " + JSON.stringify(cols2) + ", " + JSON.stringify(SLOT6) + ")");
+  const sh = TPFILE.sheets[r.sheet];
+  ok("参照元の字が見出しに出る（値は式の解決結果）",
+     sh[1][1] === "3-3田中", [sh[1][1]]);
+  ok("入れたのは値ではなく参照の式", (FORMS[r.sheet + "/2,2"] || "")
+     .indexOf("'教師わりあて'!B2") >= 0, FORMS[r.sheet + "/2,2"]);
+  ok("参照元が空の列は、いままでどおりクラス名が出る",
+     sh[1][2] === "5-1", [sh[1][2]]);
+  ok("5日ぶんの見出しに全部入る",
+     [2,18,34,50,66].every(function(hr){
+       return (FORMS[r.sheet + "/" + hr + ",2"] || "").indexOf("教師わりあて") >= 0; }),
+     FORMS[r.sheet + "/34,2"]);
+  assignments.getRange(2, 2).setValue("");
+})();
+
+console.log("\n■ 全角の同名シートがあっても出せる");
+(function(){
+  /* たんぽぽ担任が手で作った「９月４週」（全角）。シート側の重なり判定は
+     正規化されるので全角でも同じ名前 ── 見つけられず挿すと止まる。
+     挿す前に正規化して並べて探す */
+  TPFILE.sheets["９月４週"] = [["手で作った表", ""], ["中身の行", ""]];
+  if(TPFILE.order) TPFILE.order.push("９月４週");
+  const r = ev("Store.exportWeek(2026, '2026-09-28', " + JSON.stringify(titles)
+             + ", " + JSON.stringify(cols2) + ", " + JSON.stringify(SLOT6) + ")");
+  ok("全角の同名は退避されて、半角で出せる",
+     !!TPFILE.sheets["9月4週"] && !!TPFILE.sheets[r.backup]
+     && r.backup.indexOf("前の") >= 0,
+     [r.sheet, r.backup, Object.keys(TPFILE.sheets)]);
+  ok("退避した全角シートには元の中身が残る",
+     TPFILE.sheets[r.backup][0][0] === "手で作った表", r.backup);
 })();
 
 console.log("\n■ 出す先の列は、組ごとに並べる");

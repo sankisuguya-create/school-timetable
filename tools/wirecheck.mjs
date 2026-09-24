@@ -588,6 +588,11 @@ await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(400);
 console.log("\n■ 書いても、押すまで送らない");
 ok("紙は5行ぶん × 月〜土の6列", await p.locator("#sheet .cell").count() === 30,
    await p.locator("#sheet .cell").count());
+/* **右メニューの畳みは最初は全部閉じ（仕様）。** 閉じた面の中身は
+   押せないので、人がやるのと同じく、使う前に開けておく */
+await p.evaluate(() => document.querySelectorAll("details.fold[id] > summary")
+  .forEach(s => { if(!s.parentElement.open) s.click(); }));
+await p.waitForTimeout(200);
 await p.evaluate(() => { window.__calls.length = 0; });
 await p.locator("#sheet .cell[data-d='1'][data-s='p2'] .t").click();
 await p.waitForTimeout(150);
@@ -2499,7 +2504,7 @@ ok("ボタンが出る", await p.evaluate(() => !!$("tlySheet")) === true);
 /* 断りは ？ の中だけにする。ボタンの下に置くと、押す前に読むとは限らない字が
    時数の表の下に積み上がる（畳んだときに見えなくなる場所でもある） */
 ok("？の説明に、時間がかかると書いてある", await p.evaluate(() =>
-   /分/.test(HELP.tally2.b.join("")) ) === true);
+   /読む週が増える|時間がかかる|分/.test(HELP.tally2.b.join("")) ) === true);
 /* **数えるのは開いている面のぶんだけ。** 前は全27クラスを数えていて、
    担任が自分のクラスを見たいだけでも 1〜3分待たされた */
 ok("学級を開いていれば、そのクラス1つだけ数える", await p.evaluate(() => {
