@@ -58,7 +58,7 @@ function drawGate(){
   for(let i = 0; i < cols; i++)
     out.push(sp[i]
       ? "<button class='tile sp' data-go='special' data-s='" + escText(sp[i].code) + "'>"
-        + "<i></i>" + escText(spGridLabel(sp[i])) + "</button>"
+        + "<i></i>" + escText(spLabel(sp[i])) + "</button>"
       : "<span class='tile none'></span>");
   /* いちばん下にたんぽぽ。ここで交流級を選び、ここからだけ出す */
   out.push("<button class='master tp' data-go='tanpopo'><i></i>たんぽぽ</button>");
