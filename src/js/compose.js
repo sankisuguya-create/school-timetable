@@ -1025,6 +1025,10 @@ function overwrittenHere(){
 const UNDO_MAX = 60;
 let undoStack = [], redoStack = [], undoBusy = false, undoLast = 0, undoLastKey = "";
 const canUndo = () => view.kind === "class" || view.kind === "grade" || view.kind === "school";
+/* いま開いている週・層・行き先で、戻せるぶんが残っているか。
+   面が合っていても棚が空なら戻せない ── 「戻せるものがありません」の
+   答えを、押す前からボタンの薄さで教える */
+const undoAvail = () => canUndo() && undoStack.some(e => e.scope === undoScope());
 const undoScope = () => fy() + "/" + wkKey() + "/" + layerOfStore() + "/" + targetOfStore();
 
 function pushUndo(d, s){
