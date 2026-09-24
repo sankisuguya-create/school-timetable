@@ -785,11 +785,30 @@ await p.waitForTimeout(250);
 await p.locator("#rsRows input[data-g='1']").fill("1-1, 1-2, 1-3");
 await p.locator("#rsRows input[data-g='1']").press("Enter");
 await p.waitForTimeout(400);
-const rq = await lastCall("apiWriteRoster");
-ok("apiWriteRoster が呼ばれる", !!rq);
+/* **直しただけでは送らない。** シートへは「保存して閉じる」でまとめて入る */
+let rq = await lastCall("apiWriteRoster");
+ok("直しただけではシートへ書かない", !rq, rq);
+await p.locator("#rsSave").click(); await p.waitForTimeout(400);
+rq = await lastCall("apiWriteRoster");
+ok("「保存して閉じる」で apiWriteRoster が呼ばれる", !!rq);
 ok("直した編成が届く", rq && rq.args[1]["1"].length === 3, rq && rq.args[1]);
+ok("窓が閉じる", (await p.locator("#rosterDlg[open]").count()) === 0);
 
-await p.locator("#rosterDlg .dlgx").click(); await p.waitForTimeout(200);
+/* ✕やEscで閉じると、未反映の直しを「入れる／捨てる」と聞く */
+await p.locator("[data-act='settings']").click();
+await p.locator('#setRoster').click();
+await p.waitForTimeout(250);
+await p.locator("#rsRows input[data-g='1']").fill("1-1, 1-2");
+await p.locator("#rsRows input[data-g='1']").press("Enter");
+await p.waitForTimeout(300);
+await p.evaluate(() => { window.__calls.length = 0; });
+await p.locator("#rosterDlg .dlgx").click(); await p.waitForTimeout(250);
+ok("未反映のまま閉じると確認が出る",
+   (await p.locator("#okDlg[open]").count()) === 1);
+await p.locator("#okNo").click(); await p.waitForTimeout(400);
+rq = await lastCall("apiWriteRoster");
+ok("「入れて閉じる」で apiWriteRoster が呼ばれる", !!rq);
+ok("戻した編成が届く", rq && rq.args[1]["1"].length === 2, rq && rq.args[1]);
 
 console.log("\n■ 固定時間割の取り込み");
 await p.evaluate(() => { window.__calls.length = 0; });

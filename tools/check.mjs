@@ -167,6 +167,12 @@ ok("放課後のほうが週メモより縦に広い（余りは放課後に回�
      return [Math.round(a.height), Math.round(f.height)];
    }));
 ok("放課後を選ぶと、右も備考だけになる", await (async () => {
+  /* **畳みは既定で閉じる**（開閉状態は端末に残る）。右を見る検査は開けてから */
+  await p.evaluate(() => {
+    document.querySelectorAll("details.fold[id] > summary")
+      .forEach(s => { if(!s.parentElement.open) s.click(); });
+  });
+  await p.waitForTimeout(150);
   await p.locator("#sheet .cell[data-d='2'][data-s='after'] .n").click();
   await p.waitForTimeout(150);
   const t = await p.locator("#pTitleWrap").isHidden();
@@ -198,6 +204,12 @@ ok("「ほかの週案を開く」で入口へ戻れる", await (async () => {
 })() === true);
 
 console.log("\n■ 教科を入れる");
+/* **畳みは既定で閉じる**（開閉状態は端末に残る）。検査用に全部開ける */
+await p.evaluate(() => {
+  document.querySelectorAll("details.fold[id] > summary")
+    .forEach(s => { if(!s.parentElement.open) s.click(); });
+});
+await p.waitForTimeout(150);
 await p.locator(".pal[data-v='taiiku']").dragTo(p.locator("#sheet .cell[data-d='2'][data-s='p5']"));
 await p.waitForTimeout(250);
 ok("引っぱって入る",
@@ -338,10 +350,14 @@ await p.locator('#setRoster').click(); await p.waitForTimeout(250);
 await p.locator("#rsRows input[data-g='4']").fill("4-1, 4-2, 4-3, 4-4");
 await p.locator("#rsRows input[data-g='4']").press("Enter");
 await p.waitForTimeout(300);
+/* **直しただけでは本体へ入らない**（下書き）。「保存して閉じる」で入る */
+ok("直しただけでは本体に入らない",
+   await p.evaluate(() => classesOfGrade("4").length) === 3,
+   await p.evaluate(() => classesOfGrade("4")));
+await p.locator("#rsSave").click(); await p.waitForTimeout(300);
 ok("学年ごとのクラス数を表から変えられる",
    await p.evaluate(() => classesOfGrade("4").length) === 4,
    await p.evaluate(() => classesOfGrade("4")));
-await p.locator("#rosterDlg .dlgx").click(); await p.waitForTimeout(250);
 
 console.log("\n■ 上書きの警告（書く側）");
 /* 学年マスターで 3年 の木3校時に「学年体育」を入れる。
@@ -1486,8 +1502,8 @@ ok("左の並びは、どれも1行に収まる（折り返さない）", await 
        .every(n => n.getBoundingClientRect().height <= 40)) === true,
    await p.evaluate(() => [...document.querySelectorAll(".side .nav")]
      .map(n => n.textContent.trim() + ":" + Math.round(n.getBoundingClientRect().height))));
-ok("「ほかの週案を開く」になっている",
-   (await p.locator(".nav[data-act='gate']").first().innerText()).indexOf("週案を開く") >= 0,
+ok("「メニューへ」になっている",
+   (await p.locator(".nav[data-act='gate']").first().innerText()).indexOf("メニューへ") >= 0,
    await p.locator(".nav[data-act='gate']").first().innerText());
 /* **同じものを2か所に置かない。** 行き先の欄がすぐ上で同じことを言っている */
 ok("「いま：◯年◯組」の行は置かない", await p.locator("#navOpen").count() === 0);

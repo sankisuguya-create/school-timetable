@@ -1548,6 +1548,9 @@ body.mob .mobbar .mb{display:inline-flex;align-items:center;gap:6px;
 body.mob .mobbar .mb:hover{background:var(--hover)}
 body.mob .mobwhere{flex:1;min-width:0;text-align:center;font-size:12.5px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 週の往復は週の表示の左右。入口（週の表示が無い面）では出さない */
+body.mob .mobbar .wkn{flex:0 0 auto;padding:8px 10px;font-size:16px;line-height:1}
+body.mob:has(#gate:not([hidden])) .mobbar .wkn{display:none}
 /* 右メニューの無い面（入口・週以外の面）では「入力」の口は出さない */
 body.mob:has(.work.no-panel) #mobPanel,
 body.mob:has(#gate:not([hidden])) #mobPanel{display:none}
@@ -1561,5 +1564,6 @@ body.mob .panel{position:fixed;right:0;top:0;bottom:0;width:min(340px,92vw);z-in
   transform:translateX(105%);transition:transform .16s ease;
   box-shadow:0 0 32px rgba(0,0,0,.28)}
 body.mob .panel.open{transform:none}
-/* 紙の左右の ‹ › は幅を食うので、狭い画面では細くする */
-body.mob .wkarrow{width:24px;height:56px}
+/* 紙の左右の ‹ › は幅を食うので、狭い画面では帯へ移して消す。
+   そのぶん紙を大きく出す */
+body.mob .wkarrow{display:none}

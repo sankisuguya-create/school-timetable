@@ -518,10 +518,12 @@ function wire(){
   });
   MOBILE.addEventListener("change", () => { setMob(); setDrawer(false, false); });
   setMob();
-  /* 紙の左右の ‹ › 。**左メニューの ◀ ▶ と同じことをする**
+  /* 紙の左右・上の帯の ‹ › 。**左メニューの ◀ ▶ と同じことをする**
      （行き先を2つ持たない。片方だけ直した版が出る） */
   on("wkPrev","click", () => goWeek(-7));
   on("wkNext","click", () => goWeek(7));
+  on("mobPrev","click", () => goWeek(-7));
+  on("mobNext","click", () => goWeek(7));
 
   on("abA","click", () => setVariant("A"));
   on("abB","click", () => setVariant("B"));
@@ -924,15 +926,18 @@ function wire(){
   on("rsAddG","click", () => {
     const g = String($("rsNewG").value || "").trim();
     if(!g) return;
-    if(Y().classes[g]) return toast("その学年はもうある");
-    Y().classes[g] = [];
+    if(!rsDraft) return;   /* 窓を開いていないときは来ないが念のため */
+    if(rsDraft.classes[g]) return toast("その学年はもうある");
+    rsDraft.classes[g] = [];
     $("rsNewG").value = "";
-    save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+    rsDirty = true; drawRoster();
   });
   /* 専科の枠を足す。**身元は重ならないように付ける**（週案の棚に入る字）。
-     1人目は教科コードのまま、2人目からは「rika_2」と連番を足す。 */
+     1人目は教科コードのまま、2人目からは「rika_2」と連番を足す。
+     ここも下書きへ ── シートへは「保存して閉じる」でまとめて入る。 */
   on("rsSpAdd","click", () => {
-    const list = Y().specials || (Y().specials = []);
+    if(!rsDraft) return;
+    const list = rsDraft.specials || (rsDraft.specials = []);
     /* **専科らしい教科から、まだ枠のないものを優先する。**
        いつも先頭（国語）を足すと、足すたびに国語専科ができてしまう */
     const have = new Set(list.map(x => x.subject));
@@ -943,21 +948,33 @@ function wire(){
     let code = sub, n = 2;
     while(list.some(x => x.code === code)) code = sub + "_" + (n++);
     list.push({code, subject:sub, grades:[]});
-    save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
+    rsDirty = true; drawRoster();
   });
   on("rsW1","change", e => {
     const v = String(e.target.value).trim();
     if(!parseISO(v)) return toast("日付は 2026-04-06 の形で書く");
-    Y().week1 = v; save(); Backend.saveRoster();
-    if(view.kind === "gate") drawGate(); else refreshWeek();
+    if(!rsDraft) return;
+    rsDraft.week1 = v;
+    rsDirty = true; paintRsSave();
   });
   on("rsPrev","click", () => {
     const prev = db.years[String(fy() - 1)];
     if(!prev) return toast("前年度のデータがまだ無い");
-    Y().classes  = clone(prev.classes);
-    Y().specials = clone(prev.specials);
-    save(); Backend.saveRoster(); drawRoster(); afterRosterChange();
-    toast("前年度の編成を写した");
+    if(!rsDraft) return;
+    rsDraft.classes  = clone(prev.classes);
+    rsDraft.specials = clone(prev.specials);
+    rsDirty = true; drawRoster();
+    toast("前年度の編成を下書きに写した。「保存して閉じる」で入る");
+  });
+  /* 「保存して閉じる」─ 下書きを本体へ入れてシートへ送ってから閉じる。
+     直すところが無ければそのまま閉じる。 */
+  on("rsSave","click", () => {
+    if(rsDirty){
+      applyRosterDraft_(rsDraft);
+      rsDirty = false;
+      toast("編成を保存した");
+    }
+    $("rosterDlg").close();
   });
 
   /* 時数 */
