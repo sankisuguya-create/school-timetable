@@ -11868,8 +11868,9 @@ function upScanTo_(unit, endISO){
 }
 
 /* 未読の週が混ざっていたら裏で読み、届いたら描き直す。
-   **読んでいるあいだは帯を出す** ── 番号が「仮」から確かな番号に
-   入れ替わるとき、何が起きたか分かるようにする */
+   **画面は止めない** ── 読むだけの処理を全面で止めると、番号が出るまで
+   週案も触れなくなる。読んでいるあいだは番号を薄い「仮」で出し、
+   届いたら確かな番号に入れ替わる（印はバッジの薄さが言う） */
 function upEnsureRange_(unit){
   const st = (unit.start || {});
   if(!st.date || UP.loading) return;
@@ -11879,12 +11880,12 @@ function upEnsureRange_(unit){
   if(!want.length) return;
   for(const m of want) UP.asked[m] = true;
   UP.loading = true;
-  const wid = Wait.begin("単元のコマを数えるため、"
-                         + "起点からの週を読んでいます");
+  /* 番号が仮から確かな番号に入れ替わるわけを、一言だけ残す */
+  toast("単元のコマを数えるため、起点からの週を読んでいます。"
+      + "届くまで番号は薄い色の仮です");
   Backend.readWeeks(want, () => {
     UP.loading = false;
     UP.seq = {};                                    /* 数え直す */
-    Wait.end(wid);
     paintSheet();
   });
 }
