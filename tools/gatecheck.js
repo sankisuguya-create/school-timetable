@@ -25,7 +25,7 @@ const sandbox = {
   }
 };
 vm.createContext(sandbox);
-vm.runInContext(fs.readFileSync(path.join(__dirname, "Gate.gs"), "utf8"), sandbox, {filename:"Gate.gs"});
+vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "gas", "Gate.gs"), "utf8"), sandbox, {filename:"Gate.gs"});
 const ev = (s) => vm.runInContext(s, sandbox);
 
 let ng = 0;

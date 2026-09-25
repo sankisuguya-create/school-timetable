@@ -16,8 +16,8 @@
 | [`docs/launch-readiness.md`](docs/launch-readiness.md) | **最大40人で利用開始する前の受入試験・障害対応** |
 | `src/` | **直すのはこちら。** 12節に置き方 |
 | `dist/index.html` | ブラウザで開ける生成物。ダブルクリックで動く |
-| [`gas/`](gas/) | Apps Script 側。関門・シート・読み書きまで |
-| `tools/` | ブラウザで動かして確かめる |
+| [`gas/`](gas/) | **Apps Script に貼る物だけ**（`*.gs`・`appsscript.json`・生成物の `plan.html`） |
+| `tools/` | ブラウザや Node で回す検査（`gas/*.gs` の検査もここ） |
 | `tools/make-ai-bundle.py` | サンドボックスを見られない外部AIへ渡す、コード一式を1ファイルに束ねる |
 
 ```
@@ -27,10 +27,10 @@ python3 build.py --check  生成物が src と一致するか調べる
 
 
 node tools/wirecheck.mjs  本番の口とのやりとりを確かめる（431件）
-node gas/domaincheck.js   副作用のない業務ルールを確かめる
-node gas/storecheck.js    シートの読み書きを確かめる（385件）
-node gas/gatecheck.js     関門を確かめる（27件）
-node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明を見る（79件）
+node tools/domaincheck.js   副作用のない業務ルールを確かめる
+node tools/storecheck.js    シートの読み書きを確かめる（385件）
+node tools/gatecheck.js     関門を確かめる（27件）
+node tools/apicheck.js      関門の呼び忘れ・呼び先の行方不明を見る（79件）
 ```
 
 外部AIへコードを渡し直すときは、`python3 tools/make-ai-bundle.py` を実行する。
@@ -143,7 +143,7 @@ GitHub のこのリポジトリが正本。エディタで直すと、次に誰�
 
 **5. 関門を足したら検査も足さない（自動で見る）。**
 サーバ関数を1つ足したら、1行目に `Gate.check()` を書く。書き忘れは
-`node gas/apicheck.js` が名指しで落とす。画面から呼ぶ名前の綴り違いも同じ。
+`node tools/apicheck.js` が名指しで落とす。画面から呼ぶ名前の綴り違いも同じ。
 
 ## 管理用のシートは、一般の教員に共有しない
 

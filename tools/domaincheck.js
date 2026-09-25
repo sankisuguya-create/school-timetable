@@ -5,7 +5,7 @@
 const fs = require("fs"), path = require("path"), vm = require("vm");
 const sandbox = {};
 vm.createContext(sandbox);
-vm.runInContext(fs.readFileSync(path.join(__dirname, "Domain.gs"), "utf8"),
+vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "gas", "Domain.gs"), "utf8"),
                 sandbox, {filename:"Domain.gs"});
 const D = sandbox.TimetableDomain;
 let ng = 0;
@@ -89,6 +89,7 @@ const client = {};
 vm.createContext(client);
 for(const f of ["../src/js/config.js", "../src/js/tanpopo.js"])
   vm.runInContext(fs.readFileSync(path.join(__dirname, f), "utf8"), client, {filename:f});
+/* __dirname は tools/ ── ../src/js は引き続き src/js を指す */
 /* SLOTS は let なので context のプロパティにならない。式を中で評価して取り出す */
 const LESSON6 = vm.runInContext(
   "SLOTS.filter(x => x.kind === 'lesson').slice(0, 6).map(x => x.id)", client);

@@ -310,7 +310,7 @@ const sandbox = {
 };
 vm.createContext(sandbox);
 for(const f of ["Gate.gs", "Domain.gs", "Sheets.gs", "Store.gs"])
-  vm.runInContext(fs.readFileSync(path.join(__dirname, f), "utf8"), sandbox, {filename: f});
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "gas", f), "utf8"), sandbox, {filename: f});
 const ev = s => vm.runInContext(s, sandbox);
 
 /* ── 道具 ─────────────────────────────────────── */

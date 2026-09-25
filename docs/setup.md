@@ -93,7 +93,8 @@
    | スクリプト | `Store` | `gas/Store.gs` |
    | HTML | `plan` | `gas/plan.html` |
 
-   拡張子は付けない。`domaincheck.js` `gatecheck.js` `storecheck.js` `README.md` は**貼らない**。
+   拡張子は付けない。`gas/` には貼る物しか置いていない（`README.md` だけは貼らない）。
+   検査の `tools/*check.js` は Apps Script に貼らない。
 
 4. `Gate.gs` の先頭のドメインが自校のものか見る
 
@@ -102,7 +103,7 @@
    const STUDENT_LOCAL = /^[0-9]{8}$/;        // 児童は @ の左が8桁の数字
    ```
 
-**確かめる**：手元で `node gas/domaincheck.js`・`node gas/gatecheck.js`（27件）・`node gas/apicheck.js`（52件）・`node gas/storecheck.js`（385件）が通ること。
+**確かめる**：手元で `node tools/domaincheck.js`・`node tools/gatecheck.js`（27件）・`node tools/apicheck.js`（52件）・`node tools/storecheck.js`（385件）が通ること。
 **通らないまま貼らない。**
 
 ---
@@ -306,7 +307,7 @@
 | 「この週案は先生用です。」 | 通っている |
 | 週案が見えた | **そこで止める。** `Gate.check()` を呼んでいないサーバ関数を探す |
 
-呼び忘れは手で探す前に `node gas/apicheck.js` を回す。
+呼び忘れは手で探す前に `node tools/apicheck.js` を回す。
 サーバ関数を1つずつ児童のアドレスで叩いて、止まらないものを名指しする。
 
 `/exec` の URL を使う。エディタの「テスト用デプロイ」で取れる `/dev` は
@@ -573,9 +574,9 @@ python3 build.py          src/ から作り直す
 python3 build.py --check  生成物が src と一致するか
 node tools/check.mjs      画面（Playwright・539件）
 node tools/wirecheck.mjs  本番の口とのやりとり（431件）
-node gas/storecheck.js    シートの読み書き（385件）
-node gas/gatecheck.js     関門（27件）
-node gas/apicheck.js      関門の呼び忘れ・呼び先の行方不明（52件）
+node tools/storecheck.js    シートの読み書き（385件）
+node tools/gatecheck.js     関門（27件）
+node tools/apicheck.js      関門の呼び忘れ・呼び先の行方不明（52件）
 ```
 
 **この6つが通らないものは貼らない。**
