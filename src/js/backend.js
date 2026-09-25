@@ -542,6 +542,11 @@ const Backend = (function(){
   const whenBooted = fn => booted ? fn() : waiters.push(fn);
 
   const loadedYear = {}, loadedWeek = {};
+  /* **いま往復している週×対象。** 先読み・後追い・本読みが重なると、
+     同じシートを2枚・3枚と読みに行く。返事が来るまでの印 */
+  const reading = {};
+  const markRead = (ts, year, mon) => { for(const t of ts) reading[weekTag(t, year, mon)] = true; };
+  const freeRead = (ts, year, mon) => { for(const t of ts) delete reading[weekTag(t, year, mon)]; };
   /* **一度読んだら二度と読み直さない、をやめる。**
      30人が同じ週を触る運用なのに、タブを開いたままの担任には
      その日ほかの誰が何を入れても映らなかった。「次に開いたときに知らせる」
@@ -626,6 +631,12 @@ const Backend = (function(){
     if(!onGas) return after();
     const want = targetsForView().filter(t => !fresh_(weekTag(t)));
     if(!want.length) return after();
+    /* **紙だけ先に出す。** 全学年の面は全校の層だけで紙が描ける。
+       「どのクラスを潰すか」の印に全クラスのシートが要るので、そこは
+       届き次第あとから追いかける。30枚ぶん待つと、開くだけで遅い */
+    const first = view.kind === "school"
+      ? want.filter(t => t.layer === "school") : want;
+    const rest  = want.filter(t => first.indexOf(t) < 0);
     /* **どの年度・どの週に頼んだのかを覚えておく。**
        返事が来るころには、もう別の週を見ているかもしれない。
        いま見ている週へ入れてしまうと、その週の中身が消える。
@@ -637,21 +648,42 @@ const Backend = (function(){
       finished = true;
       clearTimeout(timer);
       after();
+      fetchRest_(rest, year, mon, epoch);
     };
     const timer = setTimeout(() => {
       notify("この週の読み込みに時間がかかっている。<b>端末内の控えデータで開いた</b>");
       finish();
     }, 15000);
+    if(!first.length) return finish();        /* 描くぶんはもう新しい */
+    markRead(first, year, mon);
     google.script.run
       .withSuccessHandler(w => {
-        mergeWeek(want, w, year, mon, epoch);
+        freeRead(first, year, mon);
+        mergeWeek(first, w, year, mon, epoch);
         finish();
       })
       .withFailureHandler(e => {
+        freeRead(first, year, mon);
         notify("この週を読めなかった（" + escText(String(e && e.message))
              + "）。<b>この週はまだ書かない</b>");
         finish();
       })
+      .apiReadWeek(year, mon, first);
+  }
+  /* 印に要るぶんは、紙が出てから追いかける。**先読みと取り合わない** ──
+     既に往復している対象はそちらに任せる（届いたら先読みのほうで描き直す） */
+  function fetchRest_(rest, year, mon, epoch){
+    const want = (rest || []).filter(t => !reading[weekTag(t, year, mon)]);
+    if(!want.length) return;
+    markRead(want, year, mon);
+    google.script.run
+      .withSuccessHandler(w => {
+        freeRead(want, year, mon);
+        mergeWeek(want, w, year, mon, epoch);
+        /* 「潰す」印はあとから届くぶん。届いたら紙を直す */
+        if(typeof paintSheet === "function") paintSheet();
+      })
+      .withFailureHandler(() => freeRead(want, year, mon))
       .apiReadWeek(year, mon, want);
   }
   /* **いくつかの週を、まとめて読む。** 月の面は4週ぶんを一度に出す。
@@ -730,13 +762,20 @@ const Backend = (function(){
       /* 先読みは**一度も読んでいないもの**だけ。古くなっただけのものまで
          先読みすると、開いてもいないクラスのために毎分読みに行くことになる */
       if(sending) return;
-      const want = allTargets().filter(t => !loadedWeek[weekTag(t)]);
+      const want = allTargets().filter(t => !loadedWeek[weekTag(t)] && !reading[weekTag(t)]);
       const year = fy(), mon = wkKey(), epoch = editEpoch;
-      if(want.length)
+      if(want.length){
+        markRead(want, year, mon);
         google.script.run
-          .withSuccessHandler(w => mergeWeek(want, w, year, mon, epoch))
-          .withFailureHandler(() => {})     /* 先読みが失敗しても、開くときに読み直す */
+          .withSuccessHandler(w => {
+            freeRead(want, year, mon);
+            mergeWeek(want, w, year, mon, epoch);
+            /* 全学年の「潰す」印は、この届きで埋まることもある */
+            if(typeof paintSheet === "function") paintSheet();
+          })
+          .withFailureHandler(() => freeRead(want, year, mon)) /* 開くときに読み直す */
           .apiReadWeek(year, mon, want);
+      }
       prefetchNeighbors_(year, epoch);
     }, 1200);
   }
@@ -756,13 +795,14 @@ const Backend = (function(){
     if(!vw.length) return;
     const mons = [-7, 7].map(d => addDays(monday, d))
       .filter(d => String(fyOf(d)) === String(year)).map(iso)
-      .filter(m => vw.some(t => !loadedWeek[weekTag(t, year, m)]));
+      .filter(m => vw.some(t => !loadedWeek[weekTag(t, year, m)] && !reading[weekTag(t, year, m)]));
     if(!mons.length) return;
+    for(const m of mons) markRead(vw, year, m);
     google.script.run
       .withSuccessHandler(res => {
-        for(const m of mons) if(res && res[m]) mergeWeek(vw, res[m], year, m, epoch);
+        for(const m of mons){ freeRead(vw, year, m); if(res && res[m]) mergeWeek(vw, res[m], year, m, epoch); }
       })
-      .withFailureHandler(() => {})
+      .withFailureHandler(() => { for(const m of mons) freeRead(vw, year, m); })
       .apiReadWeeks(year, mons, vw);
   }
   function allTargets(){
