@@ -698,6 +698,28 @@ console.log("\n■ 教科列の無い古いシートでも、保存時に列を�
      && r32.specials[1].subject === "rika", r32.specials);
 })();
 
+/* **見出しが重なったシートでも、書いた値が別の列に入らない。**
+   実際のシートで、右端に「担当学年」が2列ある形（あとから足した列と
+   学校が足した列が重なった）になっていた。位置書きだと教科の値が
+   後ろの「担当学年」の下に入り、読み戻しは教科列を見て空 → 身元の
+   教科に戻る事故になった */
+console.log("\n■ 同じ見出しが2列あるシートでも、教科は見出しの下に入って戻る");
+(function(){
+  /* 「教科」を削り、右端に「担当学年」を重ねた形にする（実シートの再現） */
+  const head0 = SHEETS["専科"][0];
+  const atSub = head0.indexOf("教科");
+  if(atSub >= 0) for(const row of SHEETS["専科"]) row.splice(atSub, 1);
+  const atGr = head0.indexOf("担当学年");
+  for(const row of SHEETS["専科"]) row.push(row[atGr]);
+  ev(`Store.writeRoster(2033, {"3":["3-1"]},
+      [{code:"taiiku", subject:"rika", grades:["3","4"]}], "2033-04-03")`);
+  const r33 = ev("Store.readRoster(2033)");
+  ok("身元と教科が違う枠も、読み戻すと教科は理科のまま",
+     r33.specials.length >= 1 && r33.specials[0].subject === "rika", r33.specials);
+  ok("担当学年は前の列から読む",
+     r33.specials.length >= 1 && String(r33.specials[0].grades) === "3,4", r33.specials);
+})();
+
 /* **「たんぽぽ表記」「出す面」の列が無い古い教科シートにも、書くときに
    列を足す。** patchRow は無い見出しを黙って飛ばすので、足さないと
    表し方を替えたはずが、読み戻すと既定に戻る（専科の教科列と同じ事故） */
