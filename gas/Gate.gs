@@ -34,18 +34,35 @@ const Gate = (function(){
   /* 児童のアドレスは @ の左が8桁の数字。ドメインが万一同じでも止める2枚目。 */
   const STUDENT_LOCAL = /^[0-9]{8}$/;
 
+  /* 設定シートを1回読んで、[キー, 値] の並びにする。
+     **見出しがあれば名前で引く。** 人が列を入れ替えていても
+     「キー」「値」の見出しの下を読む。見出しの無い形は、
+     いままでどおり 1列目=キー・2列目=値 で読む（閉じる側に倒す
+     関門なので、読み違いで緩むことはない） */
+  function settings_(){
+    const sh = SpreadsheetApp.getActive().getSheetByName("設定");
+    if(!sh) return [];
+    const v = sh.getDataRange().getValues();
+    const at = {};
+    (v[0] || []).forEach(function(h, i){
+      const k = String(h).trim(); if(k && at[k] === undefined) at[k] = i;
+    });
+    const kc = at["キー"] !== undefined ? at["キー"] : 0;
+    const vc = at["値"] !== undefined ? at["値"] : 1;
+    const out = [];
+    for(let i = 1; i < v.length; i++) out.push([v[i][kc], v[i][vc]]);
+    return out;
+  }
+
   /* 設定シートに書いた例外。**教職員ドメインの中でしか効かない**
      （8桁の数字が本名のアドレスになっている職員のための逃げ道）。
      ここに書いても、別ドメインのアドレスは絶対に通らない。 */
   function exceptions(){
     try{
-      const sh = SpreadsheetApp.getActive().getSheetByName("設定");
-      if(!sh) return [];
-      const v = sh.getDataRange().getValues();
       const out = [];
-      for(let i = 1; i < v.length; i++){
-        if(String(v[i][0]).trim() !== "例外で通すメール") continue;
-        String(v[i][1]).split(/[,\s]+/).forEach(function(x){
+      for(const row of settings_()){
+        if(String(row[0]).trim() !== "例外で通すメール") continue;
+        String(row[1]).split(/[,\s]+/).forEach(function(x){
           x = norm(x); if(x) out.push(x);
         });
       }
@@ -68,12 +85,10 @@ const Gate = (function(){
   }
   function adminEmails(){
     try{
-      const sh = SpreadsheetApp.getActive().getSheetByName("設定");
-      if(!sh) return [];
-      const v = sh.getDataRange().getValues(), out = [];
-      for(let i = 1; i < v.length; i++){
-        if(String(v[i][0]).trim() !== "管理者メール") continue;
-        String(v[i][1]).split(/[,\s]+/).forEach(function(x){
+      const out = [];
+      for(const row of settings_()){
+        if(String(row[0]).trim() !== "管理者メール") continue;
+        String(row[1]).split(/[,\s]+/).forEach(function(x){
           x = norm(x); if(x && out.indexOf(x) < 0) out.push(x);
         });
       }

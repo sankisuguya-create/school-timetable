@@ -1698,8 +1698,10 @@ const Store = (function(){
       if(on){
         const previous = tpSubmits(year, mondayISO)[c];
         const when = TimetableDomain.nextSubmissionTimestamp(previous, Date.now());
-        const sh = Sheets.sheet('たんぽぽ提出');
-        sh.getRange(row || sh.getLastRow() + 1, 4).setNumberFormat('@');
+        /* **書式は見出しの位置へ。** 「提出日時」の列を位置で決め打ちすると、
+           列を入れ替えたシートで別の列に書式が掛かる */
+        const {sh, at} = Sheets.head('たんぽぽ提出');
+        sh.getRange(row || sh.getLastRow() + 1, at["提出日時"] + 1).setNumberFormat('@');
         const obj = {"年度": +year, "月曜": String(mondayISO), "クラス": c,
                      "提出日時": when, "提出者": me};
         if(row) Sheets.setRow("たんぽぽ提出", row, obj);
@@ -1764,8 +1766,10 @@ const Store = (function(){
         objs[Math.min(i, objs.length - 1)]["既定"] = true;
       }
       const sh = Sheets.sheet("たんぽぽ出力先");
+      /* **見出しの幅で消す。** SPEC の列数だけ消すと、学校が足した列に
+         古い値が残る */
       if(sh && sh.getLastRow() > 1)
-        sh.getRange(2, 1, sh.getLastRow() - 1, Sheets.SPEC["たんぽぽ出力先"].cols.length)
+        sh.getRange(2, 1, sh.getLastRow() - 1, Math.max(1, sh.getLastColumn()))
           .clearContent();
       if(objs.length)
         Sheets.appendObjs("たんぽぽ出力先", objs);
@@ -2559,7 +2563,7 @@ const Store = (function(){
   function replaceYear_(name, year, objs){
     for(const r of Sheets.readAll(name).rows)
       if(String(r["年度"]).trim() === String(year)) Sheets.blankRow(name, r.__row);
-    /* **見出しの位置で書く。** toArray（SPECの並びの位置書き）だと、
+    /* **見出しの位置で書く。** SPEC の並びで位置書きすると、
        学校が足した列や重なった見出しのあるシートで値が別の列に入り、
        読み戻しで見つからなくなる（専科の「教科」が読めず身元の教科に
        戻ったことがある） */

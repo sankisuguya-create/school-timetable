@@ -335,15 +335,71 @@ const Sheets = (function(){
     return out;
   }
 
+  /* 週案シートの見出し行を読んで、列名 → 位置 の対応を作る。
+     **書く側も見出し名で揃える。** 人が途中に列を足した・入れ替えた
+     シートでは、位置書きだと値が別の見出しの下に入り、読みは
+     見出し名で引くので二度と見えない（専科の「教科」と同じ事故）。 */
+  function planHead_(sh){
+    const width = Math.max(1, sh.getLastColumn());
+    const at = {};
+    sh.getRange(1, 1, 1, width).getValues()[0]
+      .forEach((v, i) => { const k = String(v).trim(); if(k && !(k in at)) at[k] = i; });
+    /* 書く幅は、いちばん右にある週案の列まで。途中に列を足された
+       シートで、右にずれた週案の列まで届かせる（PLAN_COLS ぶんでは
+       届かない）。週案の見出しが必ずあることは ensurePlan が保証する */
+    let right = PLAN_COLS.length;
+    for(const c of PLAN_COLS) if(c in at) right = Math.max(right, at[c] + 1);
+    return {at, right, width};
+  }
+
+  /* 週案の行の身元。**並べ替えても同じ行と分かる組。**
+     年度・日付・時程・層・対象・担当で「どのコマか」は決まるので、
+     行の位置に頼らず、週案以外の列を正しい行へ戻せる */
+  function planKey_(o, at){
+    return ["年度","日付","時程","層","対象","担当"]
+      .map(c => String(o[c] === undefined || o[c] === null ? "" : o[c]))
+      .join("\x01");
+  }
+
+  /* 1行ぶんの配列。**週案の列は見出しの位置へ、それ以外の列は
+     いまある値を残す。** 書き込みの範囲に含めると空で上書きして
+     しまうので、人が足した欄は触った行の古い値をそのまま渡す */
+  function planLine_(o, at, right, old){
+    const line = new Array(right).fill(""), used = {};
+    for(const c of PLAN_COLS)
+      if(c in at){ line[at[c]] = (c in o && o[c] != null) ? o[c] : ""; used[at[c]] = true; }
+    if(old) for(let j = 0; j < right; j++)
+      if(!used[j]) line[j] = old[j] === undefined ? "" : old[j];
+    return line;
+  }
+
   /* 並べ替えたものを丸ごと書き戻す。**行番号を覚えない。**
      行番号を覚えて1行ずつ直すやり方は、間に行が入ると別の行を書き換える。 */
   function writePlan(name, rows){
     const sh = ensurePlan(name);
-    const w = PLAN_COLS.length;
-    const body = rows.map(o => PLAN_COLS.map(c => (c in o && o[c] != null) ? o[c] : ""));
-    grow(sh, body.length + 1, w);           /* 足りない行を先に作る（無いと落ちる） */
-    if(body.length) sh.getRange(2, 1, body.length, w).setValues(body);
+    const {at, right, width} = planHead_(sh);
     const last = sh.getLastRow();
+    const w = Math.max(width, right);
+    /* 週案以外の列に人が入れた値を消さないため、いまの行を
+       身元で引けるようにしておく（並べ替えで行が動くので、
+       位置で合わせると別のコマのメモが着く） */
+    const pool = {};
+    if(last > 1){
+      const old = sh.getRange(2, 1, last - 1, w).getValues();
+      old.forEach(row => {
+        const o = {};
+        for(const c of PLAN_COLS) if(c in at) o[c] = row[at[c]];
+        const k = planKey_(o, at);
+        (pool[k] = pool[k] || []).push(row);
+      });
+    }
+    const body = rows.map(o => {
+      const k = planKey_(o, at);
+      const old = pool[k] && pool[k].length ? pool[k].shift() : null;
+      return planLine_(o, at, right, old);
+    });
+    grow(sh, body.length + 1, right);       /* 足りない行を先に作る（無いと落ちる） */
+    if(body.length) sh.getRange(2, 1, body.length, right).setValues(body);
     if(last > body.length + 1)
       sh.getRange(body.length + 2, 1, last - body.length - 1, w).clearContent();
   }
@@ -353,17 +409,22 @@ const Sheets = (function(){
      行の追加・削除は並び順が変わるため、呼ぶ側が writePlan に戻す。 */
   function writePlanRows(name, changes){
     if(!changes || !changes.length) return;
-    const sh = ensurePlan(name), w = PLAN_COLS.length;
+    const sh = ensurePlan(name);
+    const {at, right, width} = planHead_(sh);
+    const w = Math.max(width, right);
     const latest = {};
     for(const x of changes) latest[+x.row] = x.value;
     const nums = Object.keys(latest).map(Number).sort((a, b) => a - b);
+    /* 週案以外の列の値を残すため、触る行のいまの中身を1回で読む */
+    const lo = nums[0], hi = nums[nums.length - 1];
+    const old = sh.getRange(lo, 1, hi - lo + 1, w).getValues();
     let start = 0;
     while(start < nums.length){
       let end = start + 1;
       while(end < nums.length && nums[end] === nums[end - 1] + 1) end++;
       const first = nums[start], body = nums.slice(start, end).map(r =>
-        PLAN_COLS.map(c => (c in latest[r] && latest[r][c] != null) ? latest[r][c] : ""));
-      sh.getRange(first, 1, body.length, w).setValues(body);
+        planLine_(latest[r], at, right, old[r - lo] || null));
+      sh.getRange(first, 1, body.length, right).setValues(body);
       start = end;
     }
   }
@@ -574,9 +635,17 @@ const Sheets = (function(){
     const v = sh.getRange(2, 1, last - 1, Math.max(1, sh.getLastColumn())).getValues();
     for(const row of v)
       if(String(row[at["種別"]] || "").indexOf("備考") >= 0) return "";   /* もうある */
-    const seed = SPEC["時程"].seed.filter(r => String(r[2]).indexOf("備考") >= 0);
+    const spec = SPEC["時程"];
+    const seed = spec.seed.filter(r => String(r[2]).indexOf("備考") >= 0);
     if(!seed.length) return "";
-    appendRows("時程", seed.map(r => r.slice()));
+    /* **見出しの位置で書く。** 時程に列を足した・入れ替えた学校では、
+       位置書きだと「放課後」が別の列に入り、読み戻しは見出し名で
+       引くので二度と見えない（専科の「教科」と同じ事故） */
+    appendObjs("時程", seed.map(r => {
+      const o = {};
+      spec.cols.forEach((c, i) => { o[c] = r[i]; });
+      return o;
+    }));
     return String(seed[0][1]);                   /* 「放課後」 */
   }
 
@@ -720,25 +789,11 @@ const Sheets = (function(){
     return {rows, at};
   }
 
-  const appendRows = (name, arrays) => {
-    if(!arrays.length) return;
-    const {sh} = head(name);
-    const at = sh.getLastRow() + 1;
-    grow(sh, at + arrays.length - 1, arrays[0].length);
-    sh.getRange(at, 1, arrays.length, arrays[0].length).setValues(arrays);
-  };
-  function toArray(name, obj){
-    return SPEC[name].cols.map(c => (c in obj && obj[c] != null) ? obj[c] : "");
-  }
   /* **見出しの位置に合わせた1行ぶんの配列。** SPEC の並びで位置書きする
      と、学校が足した列やあとから足した列で見出しがずれたシートでは、
      値が別の見出しの下に入る ── 読むときは見出し名で読むので、ずれた
      値は二度と見つからない（専科の「教科」が「担当学年」の下に入って
      読めなくなったことがある）。見出しの無い欄は黙って飛ばす */
-  function toRow(name, obj){
-    const {at, width} = head(name);
-    return objRow_(obj, at, width);
-  }
   function objRow_(obj, at, width){
     const line = new Array(width).fill("");
     for(const k in obj)
@@ -804,7 +859,7 @@ const Sheets = (function(){
           fillAfterRow, fillSubjectCols,
           PLAN_PREFIX, PLAN_ALL, PLAN_COLS, planName, ensurePlan, withMemo, readPlan, writePlan, writePlanRows,
           planNames, planMap,
-          setup, head, readAll, appendRows, toArray, toRow, appendObjs, setRow, patchRow, blankRow, sheet,
+          setup, head, readAll, appendObjs, setRow, patchRow, blankRow, sheet,
           ensureCols};
 })();
 
