@@ -2730,7 +2730,8 @@ ok("行は 5日 × 1日の行数", await p.evaluate(() =>
 ok("列は「列のずれ」の設定どおり", await p.evaluate(() =>
    document.querySelectorAll("#ipTable tr:nth-child(2) input").length
    === impTallyCols().width) === true);
-/* **自分の行に印。** 貼るのは塊ごとだが、入るのは自分の行だけ */
+/* **自分の行に印。** 入るのは学年の各クラスの行ぜんぶだが、
+   自分の行がどこかは見て分かるようにしておく */
 ok("いま開いているクラスの行に印が付く", await p.evaluate(() =>
    document.querySelectorAll("#ipTable tr.mine").length === WEEKDAYS) === true,
    await p.evaluate(() => document.querySelectorAll("#ipTable tr.mine").length));
@@ -2758,6 +2759,8 @@ ok("塊ごと貼れる", await p.evaluate(() => {
 await p.evaluate(() => {
   const at = impTallyRow();
   document.querySelector("#ipTable input[data-n='" + at + "'][data-c='3']").value = "むにゃ";
+  /* **学年のほかのクラスの行も入る。** 次の行（同じ学年の別のクラス）にも書く */
+  document.querySelector("#ipTable input[data-n='" + (at + 1) + "'][data-c='3']").value = "理";
 });
 await p.locator("#ipRead").click(); await p.waitForTimeout(300);
 ok("読めない字は、入れずに名指しする", await p.evaluate(() =>
@@ -2765,7 +2768,7 @@ ok("読めない字は、入れずに名指しする", await p.evaluate(() =>
 ok("入れる前に「どの曜日の何校時に何が入るか」を出す", await p.evaluate(() =>
    /月/.test($("ipGrid").innerText)) === true,
    await p.evaluate(() => $("ipGrid").innerText.slice(0, 60)));
-await p.locator("#ipGo").click(); await p.waitForTimeout(700); await closeDlgs();
+await p.locator("#ipGo").click(); await p.waitForTimeout(1200); await closeDlgs();
 ok("開いているクラスの、担任の層に入る", await p.evaluate(() => {
      const les = SLOTS.filter(s => s.kind === "lesson");
      const a = cellFor(0, les[0].id);
@@ -2774,6 +2777,27 @@ ok("開いているクラスの、担任の層に入る", await p.evaluate(() =>
      const les = SLOTS.filter(s => s.kind === "lesson");
      return cellFor(0, les[0].id);
    }));
+/* **学年の各クラスの行が、そのクラスの担任の層に入る**
+   （表は学年ごと。開いているクラスの行だけだと、ほかのクラスのぶんが捨てられる） */
+ok("学年のほかのクラスの行も、そのクラスへ入る", await p.evaluate(() => {
+     const g = impTallyCols(), other = g.list.find(c => c !== view.cls);
+     const les = SLOTS.filter(s => s.kind === "lesson");
+     const e = (week().home[other] || {})["0|" + les[2].id];
+     return !!other && !!e && plain(e.title).trim() === "理科";
+   }) === true,
+   await p.evaluate(() => {
+     const g = impTallyCols(), other = g.list.find(c => c !== view.cls);
+     return (week().home[other] || {});
+   }));
+/* **入るのは未保存の形** ── cellChanged の控えに積まれ、あとの保存・
+   週送りでふだんどおり届く。控えは端末の pending にも乗るので、そこで確かめる */
+await p.waitForTimeout(1200);       /* 控えの書き込み（persistSoon）を待つ */
+ok("他クラスのぶんも未保存の控えに積まれる", await p.evaluate(() => {
+     const g = impTallyCols(), other = g.list.find(c => c !== view.cls);
+     const pend = JSON.parse(window.__pendingJson() || "[]");
+     return pend.some(q => q.layer === "home" && q.target === other);
+   }) === true,
+   await p.evaluate(() => window.__pendingJson()));
 ok("ほかの週には入らない", await p.evaluate(() => {
      const other = Y().weeks[iso(addDays(monday, 7))];
      return !other || !other.home || !other.home[view.cls]
@@ -2797,6 +2821,19 @@ ok("1日の行数が足りないときは、理由を言って止める", await 
      view.cls = keepCls; $("ipBlock").value = keepV;
      return /行の数/.test(r.warn || "");
    }) === true);
+/* **行に乗らないクラスは名指しで言う**（黙って捨てると、入ったと思い込む） */
+ok("1日の行数より下のクラスは、入らないと言う", await p.evaluate(() => {
+     const keepV = $("ipBlock").value;
+     const g = impTallyCols();
+     $("ipBlock").value = "1";
+     const grid = [];
+     for(let i = 0; i < WEEKDAYS; i++) grid.push(["", "国"]);
+     const r = impTallyRead(grid);
+     $("ipBlock").value = keepV;
+     const last = g.list[g.list.length - 1];
+     return g.list.length > 1 && (r.warn || "").indexOf(last) >= 0
+         && /入っていません/.test(r.warn || "");
+   }) === true, await p.evaluate(() => impTallyCols().list));
 /* **貼った途中の空行は行の番号を守る。** その日に何も入っていないクラスの行が
    消えると、そのあとの曜日が全部ずれて入る（時数表の行は位置が意味を持つ） */
 ok("貼った途中の空行は残し、終わりの空行だけ捨てる", await p.evaluate(() => {
