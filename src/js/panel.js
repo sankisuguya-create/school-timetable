@@ -651,8 +651,8 @@ function drawTallyPanel(){
     ? "<div class='tlyhd'><span>教科</span><span>" + (m.getMonth() + 1)
       + "月</span><span>累計</span></div>"
       + subs.map(k => "<div class='tlyrow'><span>" + escText(k) + "</span>"
-        + "<span>" + (now[k] || 0) + "</span>"
-        + "<span>" + (sum[k] || 0) + "</span></div>").join("")
+        + "<span>" + fmtCount(now[k]) + "</span>"
+        + "<span>" + fmtCount(sum[k]) + "</span></div>").join("")
     : "<p class='hint'>時数に数えるコマがありません</p>";
   /* まだ読んでいない週。**数でなく、確かさの話として書く。**
      手元だけで使っているときは読む先が無い（この端末が正本）ので、
@@ -686,7 +686,7 @@ function drawTallyPanel(){
   if(fold){
     if(fold.open !== !!db.settings.tallyOpen) fold.open = !!db.settings.tallyOpen;
     $("tlyPeek").textContent = subs.length
-      ? (m.getMonth() + 1) + "月 " + subs.reduce((n, k) => n + (now[k] || 0), 0) + "コマ"
+      ? (m.getMonth() + 1) + "月 " + fmtCount(subs.reduce((n, k) => n + (now[k] || 0), 0)) + "コマ"
       : "";
   }
 }
@@ -731,10 +731,13 @@ function tallyClassMonth(cls, m){
       const d = Math.round((dt - monday) / 86400000);
       if(d < 0 || d >= DAYS) continue;
       if(isDayOff(d)) continue;
-      for(const s of calCols()){
-        if(!slotShown(d, s)) continue;
+      /* **朝学習は3ぶんで1コマ**（countWeight。授業の行は1、教科を選べる
+         休みの行は1/3、ほかの休みの行は数えない） */
+      for(const s of SLOTS){
+        const w = countWeight(s);
+        if(!w || !slotShown(d, s)) continue;
         const sub = countSub(compose(cls, d, s.id));
-        if(sub) out[sub.short] = (out[sub.short] || 0) + 1;
+        if(sub) out[sub.short] = (out[sub.short] || 0) + w;
       }
     }
   } finally{ monday = keep; }
@@ -809,8 +812,8 @@ function tallyWriteRows(months, classes){
       const n = tallyClassMonth(cls, m);
       let sum = 0;
       const line = [String(fyOf(m)), cls, (m.getMonth() + 1) + "月"];
-      for(const k of subs){ line.push(String(n[k] || 0)); sum += (n[k] || 0); }
-      line.push(String(sum), when, who);
+      for(const k of subs){ line.push(fmtCount(n[k])); sum += (n[k] || 0); }
+      line.push(fmtCount(sum), when, who);
       rows.push(line);
     }
   } finally{ monday = keep; Wait.end(w); }

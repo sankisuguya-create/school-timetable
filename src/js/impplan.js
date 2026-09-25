@@ -58,6 +58,25 @@ function impSubject(v){
 
 const impTallySlots = () => SLOTS.filter(s => s.kind === "lesson");
 
+/* 取り込む表の1日ぶんの行は、**その学年のクラスが上から並んだもの**。
+   時数表は学年ごとに分かれているので、開いているクラスの学年の編成から引く
+   （手で決める並びは「時数をコピー」のほうのもの） */
+function impTallyList_(){
+  const g = view.kind === "class" ? gradeOf(view.cls) : "";
+  const l = g ? classesOfGrade(g) : [];
+  return l.length ? l : tallyClasses();
+}
+
+/* 1日ぶんの行の数。**窓の中で選べる（既定はその学年のクラス数）** ──
+   時数表の日付のセルは、その学年のクラスのぶんだけ縦につながっているのが普通。
+   学年の表で違うので、手で変えたぶんは学年ごとに覚える */
+function impTallyBlock_(){
+  const s = $("ipBlock"), v = s && +s.value;
+  if(v >= 1) return Math.min(7, Math.max(1, v));
+  const g = gradeOf(view.cls), st = db.settings.tally.impBlock || {};
+  return Math.min(7, Math.max(1, +st[g] || classesOfGrade(g).length || 3));
+}
+
 /* 設定の「列のずれ」から、列 → 校時 の対応を作る */
 function impTallyCols(){
   const t = (db.settings.tally || {cols:{}});
@@ -69,11 +88,31 @@ function impTallyCols(){
     const sl = SLOT_BY_ID[id];
     if(sl) bySlot[+cols[id] || 0] = sl;
   }
-  return {width, bySlot, block: Math.max(1, +t.block || 10), list: tallyClasses()};
+  return {width, bySlot, block: impTallyBlock_(), list: impTallyList_()};
 }
 
-/* 雛形。**「時数をコピー」と同じ矩形**をそのまま使う */
-const impTallyTemplate = () => tallyGrid();
+/* 「今の週案を表に入れる」の中身。**窓の形**（1日ぶんの行の数・
+   その学年のクラスの並び）に合わせて出す ──「時数をコピー」の矩形とは
+   組み方が違うので、こちら専用に組む */
+function impTallyTemplate(){
+  const g = impTallyCols(), t = db.settings.tally;
+  const rows = [];
+  for(let d = 0; d < WEEKDAYS; d++) for(let r = 0; r < g.block; r++){
+    const line = new Array(g.width).fill("");
+    /* **休みの日は数えない**（tallyGrid と同じ決まり） */
+    if(r < g.list.length && !isDayOff(d)){
+      for(const s of SLOTS){
+        if(!(s.id in t.cols)) continue;
+        /* 特別校時の日は朝学習が無い。紙に出ていないものを数えない */
+        if(!slotShown(d, s)) continue;
+        const sub = countSub(compose(g.list[r], d, s.id));
+        line[t.cols[s.id]] = sub ? sub.short : "";
+      }
+    }
+    rows.push(line);
+  }
+  return rows;
+}
 
 /* いま開いているクラスが、1日の塊の何行目か。無ければ -1 */
 const impTallyRow = () => impTallyCols().list.indexOf(view.kind === "class" ? view.cls : "");
@@ -85,10 +124,13 @@ function impTallyRead(grid){
   if(view.kind !== "class")
     return {warn:"<b>クラスを開いてから取り込みます。</b>"};
   if(at < 0)
-    return {warn:"<b>" + escText(view.cls) + " が、時数の「クラスの並び」に入っていません。</b>"
+    return {warn:"<b>" + escText(view.cls) + " が学年の編成に入っていません。</b>"
           + "どの行がこのクラスかを決められないので、取り込めません。<br>"
-          + "左メニューの「時数をコピー」の窓で、並びを実物に合わせてください"
-          + (g.list.length ? "（今は " + escText(g.list.join("・")) + "）" : "") + "。"};
+          + "設定の「クラス・専科」で編成を確かめてください。"};
+  if(at >= g.block)
+    return {warn:"<b>このクラスは、1日 " + g.block + " 行の並びに入っていません"
+          + "（" + (at + 1) + " 行目です）。</b>"
+          + "「1日ぶんの行の数」を増やすか、貼る表を確かめてください。"};
   if(grid.length < WEEKDAYS * g.block)
     return {warn:"<b>行が足りません。</b>"
           + (WEEKDAYS * g.block) + " 行（" + WEEKDAYS + "日 × 1日 " + g.block + "行）が要ります。"
@@ -637,7 +679,7 @@ function openImpPlan(kind){
   $("ipTtl").textContent = tally ? "時数表から取り込む" : "年間行事計画表からコマを作る";
   $("ipLead").innerHTML = tally
     ? "<b>今開いている「" + escText(viewName()) + "」の、この週に入ります。</b>"
-      + "下の表は<b>「時数をコピー」と同じ並び</b>です。"
+      + "下の表は<b>時数表と同じ、1日ぶんにこの学年のクラスが上から並んだ形</b>です。"
       + "手元の時数集計表からその週の塊をコピーして、"
       + "<b>左上のマスを選んでそのまま貼る</b>と、1回で入ります。"
       + "マスを直に打ち直しても構いません。"
@@ -660,7 +702,30 @@ function openImpPlan(kind){
   $("ipGrid").innerHTML = "";
   $("ipGo").disabled = true;
   $("ipGo").textContent = tally ? "この週に入れる" : "全校・学年に入れる";
-  if(tally) impTallyTable(impTallyTemplate());
+  if(tally){
+    /* **1日ぶんの行の数** ── 学年の表で結合の行数が違うので、窓の中で選べる。
+       既定はその学年のクラス数（日付セルはクラスのぶんだけ縦につながるのが普通）。
+       手で変えたぶんは学年ごとに覚える */
+    const g = gradeOf(view.cls), st = db.settings.tally.impBlock || {};
+    $("ipBlock").value = Math.min(7, Math.max(1,
+      +st[g] || classesOfGrade(g).length || 3));
+    $("ipBlock").onchange = () => {
+      const t = db.settings.tally;
+      (t.impBlock || (t.impBlock = {}))[g] =
+        Math.min(7, Math.max(1, +$("ipBlock").value || 3));
+      markMine("時数_行の数"); save();
+      /* 入れてある字は残す ── 行の組み方（どの行がどの日か）だけが変わる */
+      const vals = {};
+      for(const e of $("ipTable").querySelectorAll("input"))
+        vals[e.dataset.n + "|" + e.dataset.c] = e.value;
+      impTallyTable(impTallyTemplate());
+      for(const e of $("ipTable").querySelectorAll("input")){
+        const v = vals[e.dataset.n + "|" + e.dataset.c];
+        if(v != null) e.value = v;
+      }
+    };
+    impTallyTable(impTallyTemplate());
+  }
   $("impPlanDlg").showModal();
 }
 

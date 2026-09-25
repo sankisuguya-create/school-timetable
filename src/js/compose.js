@@ -236,6 +236,22 @@ function countSub(c){
   return (sub && sub.count && sub.short) ? sub : null;
 }
 
+/* その行のコマを、時数の何ぶんとして数えるか。**朝学習は3ぶんで1コマ**
+   （15分×3 = 授業45分と同じ決まり）。授業の行は1、
+   教科を選べる休みの行（朝学習）は1/3、ほかの休みの行は数えない。 */
+function countWeight(s){
+  if(!s) return 0;
+  if(s.kind === "lesson") return 1;
+  return s.kind === "brk" && s.chips ? 1/3 : 0;
+}
+
+/* 出す数の書き方。1/3のぶんがあると小数になるので、1/3の刻みにそろえてから
+   整数なら整数で、そうでなければ小数1桁で出す（0.333→0.3、13.5→13.5、4→4） */
+function fmtCount(x){
+  const r = Math.round((x || 0) * 3) / 3;
+  return Number.isInteger(r) ? String(r) : r.toFixed(1);
+}
+
 /* 専科の枠1つ。無ければ null */
 const spOf = code => specials().find(x => x.code === code) || null;
 

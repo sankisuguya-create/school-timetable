@@ -1097,6 +1097,18 @@ function calDay(dt){
       const sub = countSub(c);
       if(sub) out.count[sub.short] = (out.count[sub.short] || 0) + 1;
     }
+    /* **朝学習は3ぶんで1コマとして数える。** 教科を選べる休みの行は
+       授業の列に入らないので紙の格子とは別に、ここでだけ足す（countWeight） */
+    for(const s of SLOTS){
+      const w = countWeight(s);
+      if(!w || s.kind === "lesson") continue;
+      if(off || !slotShown(d, s)) continue;
+      const c = cellFor(d, s.id);
+      const t = plain(c.title).trim();
+      if(sp){ if(t && t !== NO_LESSON) out.count[t] = (out.count[t] || 0) + w; continue; }
+      const sub = countSub(c);
+      if(sub) out.count[sub.short] = (out.count[sub.short] || 0) + w;
+    }
     return out;
   } finally{ monday = keep; }
 }
@@ -1354,7 +1366,7 @@ function calFootEl(m){
   for(const k of subs)
     foot.appendChild(el("span", "ct",
       "<b>" + escText(k) + "</b>"
-      + "<span>" + (now[k] || 0) + "<i>(" + (sum[k] || 0) + ")</i></span>"));
+      + "<span>" + fmtCount(now[k]) + "<i>(" + fmtCount(sum[k]) + ")</i></span>"));
   return foot;
 }
 
