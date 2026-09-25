@@ -970,7 +970,14 @@
       そこへ表をコピー・貼り付けてから、「連携シートから読む」を押してください。</span></div>
   <!-- 時数表はマス目の表。**貼る先をそのまま見せる**ので、
        スプレッドシートを開かずに済む。塊ごと貼れる（左上のマスを選んで Ctrl+V） -->
-  <div id="ipTableWrap" hidden><div id="ipTable" class="iptblwrap"></div></div>
+  <div id="ipTableWrap" hidden>
+    <div class="row"><label for="ipBlock">1日ぶんの行の数</label>
+      <select id="ipBlock"><option>1</option><option>2</option>
+        <option selected>3</option><option>4</option><option>5</option>
+        <option>6</option><option>7</option></select>
+      <span class="hint">時数表で、日付が縦につながっている行の数
+        （学年の表で違います。ずれて読めたら直してください）</span></div>
+    <div id="ipTable" class="iptblwrap"></div></div>
   <div class="row"><button class="btn" id="ipRead">読む</button>
     <span class="hint" id="ipStat"></span></div>
   <div id="ipWarn" class="tpwarn"></div>

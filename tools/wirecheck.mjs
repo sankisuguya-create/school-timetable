@@ -2746,13 +2746,23 @@ ok("ほかの週には入らない", await p.evaluate(() => {
      return !other || !other.home || !other.home[view.cls]
          || Object.keys(other.home[view.cls]).length === 0;
    }) === true);
-/* **クラスの並びに入っていなければ、行が決められないので取り込まない** */
-ok("並びに無いクラスでは、理由を言って止める", await p.evaluate(() => {
-     const keep = db.settings.tally.classes;
-     db.settings.tally.classes = "9-9";
+/* **学年の編成に入っていないクラスでは、行が決められないので取り込まない** */
+ok("編成に無いクラスでは、理由を言って止める", await p.evaluate(() => {
+     const keep = view.cls;
+     view.cls = "9-9";
      const r = impTallyRead([]);
-     db.settings.tally.classes = keep;
-     return /クラスの並び/.test(r.warn || "");
+     view.cls = keep;
+     return /編成に入っていません/.test(r.warn || "");
+   }) === true);
+/* **1日ぶんの行の数が足りないと、自分の行が表の外になるので取り込まない** */
+ok("1日の行数が足りないときは、理由を言って止める", await p.evaluate(() => {
+     const keepCls = view.cls, keepV = $("ipBlock").value;
+     const g = impTallyCols();
+     view.cls = g.list[g.list.length - 1];   /* 並びのいちばん下のクラス */
+     $("ipBlock").value = "1";
+     const r = impTallyRead([]);
+     view.cls = keepCls; $("ipBlock").value = keepV;
+     return /行の数/.test(r.warn || "");
    }) === true);
 
 /* ── 年間行事。**全校・学年へ。日付は週をまたぐ** ── */

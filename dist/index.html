@@ -3221,7 +3221,14 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
       そこへ表をコピー・貼り付けてから、「連携シートから読む」を押してください。</span></div>
   <!-- 時数表はマス目の表。**貼る先をそのまま見せる**ので、
        スプレッドシートを開かずに済む。塊ごと貼れる（左上のマスを選んで Ctrl+V） -->
-  <div id="ipTableWrap" hidden><div id="ipTable" class="iptblwrap"></div></div>
+  <div id="ipTableWrap" hidden>
+    <div class="row"><label for="ipBlock">1日ぶんの行の数</label>
+      <select id="ipBlock"><option>1</option><option>2</option>
+        <option selected>3</option><option>4</option><option>5</option>
+        <option>6</option><option>7</option></select>
+      <span class="hint">時数表で、日付が縦につながっている行の数
+        （学年の表で違います。ずれて読めたら直してください）</span></div>
+    <div id="ipTable" class="iptblwrap"></div></div>
   <div class="row"><button class="btn" id="ipRead">読む</button>
     <span class="hint" id="ipStat"></span></div>
   <div id="ipWarn" class="tpwarn"></div>
@@ -4141,6 +4148,9 @@ function save(){
   dataTick++;
   saveDirty[String(fy())] = 1;             /* いま開いている年度を書き直す */
   if(!saveT) saveT = setTimeout(saveNow, SAVE_WAIT);
+  /* **中身が変わったので、時数も数え直す。** 書いた直後に右の欄が古いままだと、
+     「入ったのに増えない」ように見える（面の切り替えでしか組み直していなかった） */
+  if(typeof drawTallyPanel === "function") drawTallyPanel();
   return !storeBroken;
 }
 
@@ -6091,6 +6101,25 @@ function impSubject(v){
 
 const impTallySlots = () => SLOTS.filter(s => s.kind === "lesson");
 
+/* 取り込む表の1日ぶんの行は、**その学年のクラスが上から並んだもの**。
+   時数表は学年ごとに分かれているので、開いているクラスの学年の編成から引く
+   （手で決める並びは「時数をコピー」のほうのもの） */
+function impTallyList_(){
+  const g = view.kind === "class" ? gradeOf(view.cls) : "";
+  const l = g ? classesOfGrade(g) : [];
+  return l.length ? l : tallyClasses();
+}
+
+/* 1日ぶんの行の数。**窓の中で選べる（既定はその学年のクラス数）** ──
+   時数表の日付のセルは、その学年のクラスのぶんだけ縦につながっているのが普通。
+   学年の表で違うので、手で変えたぶんは学年ごとに覚える */
+function impTallyBlock_(){
+  const s = $("ipBlock"), v = s && +s.value;
+  if(v >= 1) return Math.min(7, Math.max(1, v));
+  const g = gradeOf(view.cls), st = db.settings.tally.impBlock || {};
+  return Math.min(7, Math.max(1, +st[g] || classesOfGrade(g).length || 3));
+}
+
 /* 設定の「列のずれ」から、列 → 校時 の対応を作る */
 function impTallyCols(){
   const t = (db.settings.tally || {cols:{}});
@@ -6102,11 +6131,31 @@ function impTallyCols(){
     const sl = SLOT_BY_ID[id];
     if(sl) bySlot[+cols[id] || 0] = sl;
   }
-  return {width, bySlot, block: Math.max(1, +t.block || 10), list: tallyClasses()};
+  return {width, bySlot, block: impTallyBlock_(), list: impTallyList_()};
 }
 
-/* 雛形。**「時数をコピー」と同じ矩形**をそのまま使う */
-const impTallyTemplate = () => tallyGrid();
+/* 「今の週案を表に入れる」の中身。**窓の形**（1日ぶんの行の数・
+   その学年のクラスの並び）に合わせて出す ──「時数をコピー」の矩形とは
+   組み方が違うので、こちら専用に組む */
+function impTallyTemplate(){
+  const g = impTallyCols(), t = db.settings.tally;
+  const rows = [];
+  for(let d = 0; d < WEEKDAYS; d++) for(let r = 0; r < g.block; r++){
+    const line = new Array(g.width).fill("");
+    /* **休みの日は数えない**（tallyGrid と同じ決まり） */
+    if(r < g.list.length && !isDayOff(d)){
+      for(const s of SLOTS){
+        if(!(s.id in t.cols)) continue;
+        /* 特別校時の日は朝学習が無い。紙に出ていないものを数えない */
+        if(!slotShown(d, s)) continue;
+        const sub = countSub(compose(g.list[r], d, s.id));
+        line[t.cols[s.id]] = sub ? sub.short : "";
+      }
+    }
+    rows.push(line);
+  }
+  return rows;
+}
 
 /* いま開いているクラスが、1日の塊の何行目か。無ければ -1 */
 const impTallyRow = () => impTallyCols().list.indexOf(view.kind === "class" ? view.cls : "");
@@ -6118,10 +6167,13 @@ function impTallyRead(grid){
   if(view.kind !== "class")
     return {warn:"<b>クラスを開いてから取り込みます。</b>"};
   if(at < 0)
-    return {warn:"<b>" + escText(view.cls) + " が、時数の「クラスの並び」に入っていません。</b>"
+    return {warn:"<b>" + escText(view.cls) + " が学年の編成に入っていません。</b>"
           + "どの行がこのクラスかを決められないので、取り込めません。<br>"
-          + "左メニューの「時数をコピー」の窓で、並びを実物に合わせてください"
-          + (g.list.length ? "（今は " + escText(g.list.join("・")) + "）" : "") + "。"};
+          + "設定の「クラス・専科」で編成を確かめてください。"};
+  if(at >= g.block)
+    return {warn:"<b>このクラスは、1日 " + g.block + " 行の並びに入っていません"
+          + "（" + (at + 1) + " 行目です）。</b>"
+          + "「1日ぶんの行の数」を増やすか、貼る表を確かめてください。"};
   if(grid.length < WEEKDAYS * g.block)
     return {warn:"<b>行が足りません。</b>"
           + (WEEKDAYS * g.block) + " 行（" + WEEKDAYS + "日 × 1日 " + g.block + "行）が要ります。"
@@ -6670,7 +6722,7 @@ function openImpPlan(kind){
   $("ipTtl").textContent = tally ? "時数表から取り込む" : "年間行事計画表からコマを作る";
   $("ipLead").innerHTML = tally
     ? "<b>今開いている「" + escText(viewName()) + "」の、この週に入ります。</b>"
-      + "下の表は<b>「時数をコピー」と同じ並び</b>です。"
+      + "下の表は<b>時数表と同じ、1日ぶんにこの学年のクラスが上から並んだ形</b>です。"
       + "手元の時数集計表からその週の塊をコピーして、"
       + "<b>左上のマスを選んでそのまま貼る</b>と、1回で入ります。"
       + "マスを直に打ち直しても構いません。"
@@ -6693,7 +6745,33 @@ function openImpPlan(kind){
   $("ipGrid").innerHTML = "";
   $("ipGo").disabled = true;
   $("ipGo").textContent = tally ? "この週に入れる" : "全校・学年に入れる";
-  if(tally) impTallyTable(impTallyTemplate());
+  if(tally){
+    /* **1日ぶんの行の数** ── 学年の表で結合の行数が違うので、窓の中で選べる。
+       既定はその学年のクラス数（日付セルはクラスのぶんだけ縦につながるのが普通）。
+       手で変えたぶんは学年ごとに覚える */
+    const g = gradeOf(view.cls), st = db.settings.tally.impBlock || {};
+    $("ipBlock").value = Math.min(7, Math.max(1,
+      +st[g] || classesOfGrade(g).length || 3));
+    $("ipBlock").onchange = () => {
+      const t = db.settings.tally;
+      (t.impBlock || (t.impBlock = {}))[g] =
+        Math.min(7, Math.max(1, +$("ipBlock").value || 3));
+      markMine("時数_行の数"); save();
+      /* 入れてある字は残す ── 行の組み方（どの行がどの日か）だけが変わる */
+      const vals = {};
+      for(const e of $("ipTable").querySelectorAll("input"))
+        vals[e.dataset.n + "|" + e.dataset.c] = e.value;
+      impTallyTable(impTallyTemplate());
+      for(const e of $("ipTable").querySelectorAll("input")){
+        const v = vals[e.dataset.n + "|" + e.dataset.c];
+        if(v != null) e.value = v;
+      }
+      /* **変えたぶんでもう一度読み直す。** 行の数が足りない警告が残ったままだと、
+         増やしたのにまだ止まっているように見える */
+      impPlanRead();
+    };
+    impTallyTable(impTallyTemplate());
+  }
   $("impPlanDlg").showModal();
 }
 
@@ -7126,6 +7204,22 @@ function countSub(c){
   const t = plain(c.title).trim();
   const sub = c.subject ? SUB_BY_CODE[c.subject] : SUB_BY_NAME[t];
   return (sub && sub.count && sub.short) ? sub : null;
+}
+
+/* その行のコマを、時数の何ぶんとして数えるか。**朝学習は3ぶんで1コマ**
+   （15分×3 = 授業45分と同じ決まり）。授業の行は1、
+   教科を選べる休みの行（朝学習）は1/3、ほかの休みの行は数えない。 */
+function countWeight(s){
+  if(!s) return 0;
+  if(s.kind === "lesson") return 1;
+  return s.kind === "brk" && s.chips ? 1/3 : 0;
+}
+
+/* 出す数の書き方。1/3のぶんがあると小数になるので、1/3の刻みにそろえてから
+   整数なら整数で、そうでなければ小数1桁で出す（0.333→0.3、13.5→13.5、4→4） */
+function fmtCount(x){
+  const r = Math.round((x || 0) * 3) / 3;
+  return Number.isInteger(r) ? String(r) : r.toFixed(1);
 }
 
 /* 専科の枠1つ。無ければ null */
@@ -10512,6 +10606,18 @@ function calDay(dt){
       const sub = countSub(c);
       if(sub) out.count[sub.short] = (out.count[sub.short] || 0) + 1;
     }
+    /* **朝学習は3ぶんで1コマとして数える。** 教科を選べる休みの行は
+       授業の列に入らないので紙の格子とは別に、ここでだけ足す（countWeight） */
+    for(const s of SLOTS){
+      const w = countWeight(s);
+      if(!w || s.kind === "lesson") continue;
+      if(off || !slotShown(d, s)) continue;
+      const c = cellFor(d, s.id);
+      const t = plain(c.title).trim();
+      if(sp){ if(t && t !== NO_LESSON) out.count[t] = (out.count[t] || 0) + w; continue; }
+      const sub = countSub(c);
+      if(sub) out.count[sub.short] = (out.count[sub.short] || 0) + w;
+    }
     return out;
   } finally{ monday = keep; }
 }
@@ -10769,7 +10875,7 @@ function calFootEl(m){
   for(const k of subs)
     foot.appendChild(el("span", "ct",
       "<b>" + escText(k) + "</b>"
-      + "<span>" + (now[k] || 0) + "<i>(" + (sum[k] || 0) + ")</i></span>"));
+      + "<span>" + fmtCount(now[k]) + "<i>(" + fmtCount(sum[k]) + ")</i></span>"));
   return foot;
 }
 
@@ -11458,8 +11564,8 @@ function drawTallyPanel(){
     ? "<div class='tlyhd'><span>教科</span><span>" + (m.getMonth() + 1)
       + "月</span><span>累計</span></div>"
       + subs.map(k => "<div class='tlyrow'><span>" + escText(k) + "</span>"
-        + "<span>" + (now[k] || 0) + "</span>"
-        + "<span>" + (sum[k] || 0) + "</span></div>").join("")
+        + "<span>" + fmtCount(now[k]) + "</span>"
+        + "<span>" + fmtCount(sum[k]) + "</span></div>").join("")
     : "<p class='hint'>時数に数えるコマがありません</p>";
   /* まだ読んでいない週。**数でなく、確かさの話として書く。**
      手元だけで使っているときは読む先が無い（この端末が正本）ので、
@@ -11493,7 +11599,7 @@ function drawTallyPanel(){
   if(fold){
     if(fold.open !== !!db.settings.tallyOpen) fold.open = !!db.settings.tallyOpen;
     $("tlyPeek").textContent = subs.length
-      ? (m.getMonth() + 1) + "月 " + subs.reduce((n, k) => n + (now[k] || 0), 0) + "コマ"
+      ? (m.getMonth() + 1) + "月 " + fmtCount(subs.reduce((n, k) => n + (now[k] || 0), 0)) + "コマ"
       : "";
   }
 }
@@ -11538,10 +11644,13 @@ function tallyClassMonth(cls, m){
       const d = Math.round((dt - monday) / 86400000);
       if(d < 0 || d >= DAYS) continue;
       if(isDayOff(d)) continue;
-      for(const s of calCols()){
-        if(!slotShown(d, s)) continue;
+      /* **朝学習は3ぶんで1コマ**（countWeight。授業の行は1、教科を選べる
+         休みの行は1/3、ほかの休みの行は数えない） */
+      for(const s of SLOTS){
+        const w = countWeight(s);
+        if(!w || !slotShown(d, s)) continue;
         const sub = countSub(compose(cls, d, s.id));
-        if(sub) out[sub.short] = (out[sub.short] || 0) + 1;
+        if(sub) out[sub.short] = (out[sub.short] || 0) + w;
       }
     }
   } finally{ monday = keep; }
@@ -11616,8 +11725,8 @@ function tallyWriteRows(months, classes){
       const n = tallyClassMonth(cls, m);
       let sum = 0;
       const line = [String(fyOf(m)), cls, (m.getMonth() + 1) + "月"];
-      for(const k of subs){ line.push(String(n[k] || 0)); sum += (n[k] || 0); }
-      line.push(String(sum), when, who);
+      for(const k of subs){ line.push(fmtCount(n[k])); sum += (n[k] || 0); }
+      line.push(fmtCount(sum), when, who);
       rows.push(line);
     }
   } finally{ monday = keep; Wait.end(w); }
@@ -14840,6 +14949,7 @@ const HELP = {
     b:["<b>設定の「印刷と文字」と同じものです。</b>"]},
   tally3: {t:"時数",
     b:["<b>書いていない日は基本時間割どおりとして数えます。</b>",
+       "朝学習は3回ぶんで1コマとして数えます。",
        "「年度始めから読み直す」で、確かな数に直せます。"]},
   imptally: {t:"時数表から取り込む",
     b:["<b>時数表の1週ぶんを、今のクラスの週案に入れます。</b>",
