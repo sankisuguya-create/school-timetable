@@ -972,6 +972,39 @@ await p.waitForTimeout(500);
 ok("一度読んだ週は読み直さない（同じ週で往復しない）",
    (await calls()).indexOf("apiReadWeek") < 0, await calls());
 
+console.log("\n■ 単元を仮置きする → 番号を備考欄に移して終わる");
+/* 起点はいま開いている週。番号のぶんだけ印を付けてから焼き付ける */
+await p.evaluate(() => {
+  const u = {id:"ub1", layer:"home", target:view.cls, subject:"kokugo",
+             name:"漢字単元", lessonCount:2, hasTest:false,
+             start:{date:iso(monday), slot:"p1"}, updatedAt:"1"};
+  UP.units.push(u);
+  upMark_(u, 0, "p1", "ub1", wkKey());   /* → 番号1 */
+  upMark_(u, 0, "p2", "ub1", wkKey());   /* → 番号2 */
+  upMark_(u, 1, "p1", "-",   wkKey());   /* 外す印（番号なし）。焼き付けで消える */
+  week().home[view.cls]["0|p1"].note = escText("持ち物あり");
+});
+const bk = await p.evaluate(() => new Promise(res => {
+  const u = UP.units.find(x => x.id === "ub1");
+  upBakeOne_(u, () => {
+    const b = week().home[view.cls] || {};
+    res({
+      n1: plain(((b["0|p1"] || {}).note) || ""), u1: (b["0|p1"] || {}).u,
+      n2: plain(((b["0|p2"] || {}).note) || ""), u2: (b["0|p2"] || {}).u,
+      mx: (b["1|p1"] || {}).u,
+      del: !(window.__units || []).some(x => x.id === "ub1")});
+  });
+}));
+ok("番号の字が各コマの備考欄に入る",
+   !!bk && bk.n1.indexOf("漢字単元 1/2") >= 0
+        && bk.n2.indexOf("漢字単元 2/2") >= 0, bk);
+ok("いまある備考の後ろに追記する", !!bk && bk.n1.indexOf("持ち物あり") >= 0, bk);
+ok("番号になったコマの印は外れる", !!bk && bk.u1 == null && bk.u2 == null, bk);
+ok("番号の無い印も外れる", !!bk && bk.mx == null, bk);
+ok("単元は消える（apiDeleteUnit が届く）",
+   !!bk && bk.del && (await calls()).indexOf("apiDeleteUnit") >= 0,
+   await calls());
+
 console.log("\n■ 送れないまま閉じても、次に開いたときに送る");
 /* 送らずに書いたコマを作り、その場で控えができているかを見る */
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);

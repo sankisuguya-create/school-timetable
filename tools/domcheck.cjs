@@ -11,6 +11,11 @@ async function check(gas, failure=false, guide='new'){
   const dom=new JSDOM(html,{url:'https://school.test/',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:vc,
     beforeParse(w){
       if(guide==='done') w.localStorage.setItem('school-timetable/guide-v2','done');
+      /* jsdom は matchMedia を持たない。狭い画面の判定は画面のことだけに
+         効くので、検査では「広い」と答えるだけの受けを置く */
+      w.matchMedia = () => ({matches:false, media:"", onchange:null,
+        addEventListener(){}, removeEventListener(){},
+        addListener(){}, removeListener(){}, dispatchEvent(){return false;}});
       w.HTMLDialogElement.prototype.showModal=function(){
         if(guide==='broken' && this.id==='guideDlg') throw new Error('test dialog unavailable');
         this.open=true;
