@@ -25,10 +25,15 @@
 function impNorm(v){
   return String(v == null ? "" : v).normalize("NFKC").replace(/[\s　]+/g, "").trim();
 }
-/* 貼られた字を表に直す。**タブ区切り**（Excel もスプレッドシートもこれで出る） */
+/* 貼られた字を表に直す。**タブ区切り**（Excel もスプレッドシートもこれで出る）。
+   **途中の空行は残す** ── 表では「何行目か」が意味を持つので、空の行を
+   捨てると、そのあとの行が全部ずれる（時数表で、その日に何も入っていない
+   クラスの行が消えて木曜以降がずれる、という形で出た）。
+   終わりの空行だけは捨てる（貼った字の終わりの改行が、空の1行に見えることがある） */
 function impSplit(text){
-  return String(text || "").replace(/\r/g, "").split("\n")
-    .filter(ln => ln.trim() !== "").map(ln => ln.split("\t"));
+  const ls = String(text || "").replace(/\r/g, "").split("\n");
+  while(ls.length && ls[ls.length-1].trim() === "") ls.pop();
+  return ls.map(ln => ln.split("\t"));
 }
 /* 1文字（または教科名）から教科を引く。**時数表に入っている字を正本にする。**
    時数表は1文字で書く決まりなので、まず1文字で引き、見つからなければ名前で引く

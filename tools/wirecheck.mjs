@@ -2764,6 +2764,20 @@ ok("1日の行数が足りないときは、理由を言って止める", await 
      view.cls = keepCls; $("ipBlock").value = keepV;
      return /行の数/.test(r.warn || "");
    }) === true);
+/* **貼った途中の空行は行の番号を守る。** その日に何も入っていないクラスの行が
+   消えると、そのあとの曜日が全部ずれて入る（時数表の行は位置が意味を持つ） */
+ok("貼った途中の空行は残し、終わりの空行だけ捨てる", await p.evaluate(() => {
+     const rows = impSplit("国\t算\n\n\n体\t音\n");
+     return rows.length === 4 && rows[1].join("") === ""
+         && rows[3][0] === "体";
+   }) === true);
+ok("途中の空行を残したまま貼っても、次の行の番号がずれない", await p.evaluate(() => {
+     const at = impTallyRow();
+     impTallyPaste(at, 1, impSplit("道\n\n図\n"));
+     const a = document.querySelector("#ipTable input[data-n='" + at + "'][data-c='1']").value;
+     const b = document.querySelector("#ipTable input[data-n='" + (at + 2) + "'][data-c='1']").value;
+     return a === "道" && b === "図";
+   }) === true);
 
 /* ── 年間行事。**全校・学年へ。日付は週をまたぐ** ── */
 await p.evaluate(() => {
