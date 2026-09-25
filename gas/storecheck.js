@@ -2168,6 +2168,66 @@ console.log("\n■ A週B週が、年間行事と合っているかを見る");
   ev('Store.writeVariantOrigin("2026-09-07")');
 })();
 
+console.log("\n■ 時程に学校の列が混ざっていても、放課後は見出しの下に入る");
+(function(){
+  /* **位置書きだと「放課後」が別の見出しの下に入り、読みは見出し名なので
+     放課後の欄そのものが消える**（専科の「教科」と同じ事故）。「表示名」の
+     後ろに学校の列を差し込んで、備考の行だけ消した形にする */
+  const bak = SHEETS["時程"];
+  const atName = bak[0].indexOf("表示名");
+  SHEETS["時程"] = bak
+    .filter(r => String(r[bak[0].indexOf("種別")]).indexOf("備考") < 0)
+    .map(r => { const row = r.slice(); row.splice(atName + 1, 0, row === bak[0] ? "" : ""); return row; });
+  SHEETS["時程"][0][atName + 1] = "学校メモ";
+  const added = ev("Sheets.fillAfterRow()");
+  ok("放課後を足したと返す", added === "放課後", added);
+  const g = SHEETS["時程"], head0 = g[0];
+  const last = g[g.length - 1];
+  ok("表示名の下に「放課後」が入る",
+     last[head0.indexOf("表示名")] === "放課後", [head0, last]);
+  ok("学校の列の下には入らない", last[head0.indexOf("学校メモ")] === "", last);
+  ok("種別の下に「備考」が入る",
+     String(last[head0.indexOf("種別")]).indexOf("備考") >= 0, last);
+  SHEETS["時程"] = bak;
+})();
+
+console.log("\n■ 週案に学校の列が混ざっていても、書き戻しで消えない");
+(function(){
+  /* **書く側も見出し名で揃える。** 週案シートの途中に学校の列を
+     差し込んだ形で、書き戻し（追加）と上書きの両方を確かめる。
+     週案以外の列は、身元の合う行の値を残す */
+  const cols = ev("Sheets.PLAN_COLS").slice();
+  const atMemo = cols.indexOf("日付") + 1;
+  cols.splice(atMemo, 0, "学校メモ");
+  const mk = o => cols.map(c => (c in o && o[c] != null) ? o[c] : "");
+  SHEETS["週案 8-8"] = [cols,
+    mk({"年度":2026, "日付":"2026-11-16", "学校メモ":"手書き", "曜日":"月",
+        "時程":"p1", "題名":"国語", "教科コード":"kokugo",
+        "層":"home", "対象":"8-8"})];
+  const at = {}; cols.forEach((c, i) => at[c] = i);
+  const find = d => SHEETS["週案 8-8"].find(r => String(r[at["日付"]]) === d);
+
+  /* 前の日のコマを足す → 並べ替えで既存の行がずれる書き戻し */
+  ev(`Store.writeCells(2026, [{date:"2026-11-12", slot:"p1", layer:"home",
+     target:"8-8", title:"道徳"}])`);
+  const r16 = find("2026-11-16");
+  ok("並べ替えのあとも学校の列は同じコマに残る",
+     r16 && r16[at["学校メモ"]] === "手書き" && r16[at["題名"]] === "国語", r16);
+  const r12 = find("2026-11-12");
+  ok("新しいコマは見出しの下に入り、学校の列は空",
+     r12 && r12[at["題名"]] === "道徳" && r12[at["学校メモ"]] === "", r12);
+
+  /* 同じコマの書き直し → 行だけ書く経路でも学校の列は残る */
+  ev(`Store.writeCells(2026, [{date:"2026-11-16", slot:"p1", layer:"home",
+     target:"8-8", title:"国語2"}])`);
+  const r16b = find("2026-11-16");
+  ok("上書きでも学校の列は残る",
+     r16b && r16b[at["学校メモ"]] === "手書き" && r16b[at["題名"]] === "国語2", r16b);
+  const w88 = ev('Store.readWeek(2026, "2026-11-16")');
+  ok("読み戻しは見出し名で引ける",
+     w88.home["8-8"] && w88.home["8-8"]["0|p1"].title === "国語2", w88.home);
+})();
+
 console.log("\n■ ロック");
 ok("書き込みのあとロックは残らない", locks.held === 0, locks.held);
 
