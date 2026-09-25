@@ -122,7 +122,9 @@ function impTallyTemplate(){
 /* いま開いているクラスが、1日の塊の何行目か。無ければ -1 */
 const impTallyRow = () => impTallyCols().list.indexOf(view.kind === "class" ? view.cls : "");
 
-/* 読む。戻すのは {rows, warn}。rows は [{d, slot, sub, mark}] */
+/* 読む。戻すのは {rows, warn}。rows は [{cls, d, slot, sub, mark}]。
+   **学年の各クラスの行を全部読む**（時数表は学年ごとの表なので、
+   開いているクラスの行だけだと、ほかのクラスのぶんが捨てられる） */
 function impTallyRead(grid){
   const g = impTallyCols();
   const at = impTallyRow();
@@ -141,59 +143,114 @@ function impTallyRead(grid){
           + (WEEKDAYS * g.block) + " 行（" + WEEKDAYS + "日 × 1日 " + g.block + "行）が要ります。"
           + "今 " + grid.length + " 行です。"};
 
-  const out = [], unknown = {};
-  for(let d = 0; d < WEEKDAYS; d++){
-    const line = grid[d * g.block + at] || [];
-    for(let col = 0; col < g.width; col++){
-      const sl = g.bySlot[col];
-      if(!sl || sl.kind !== "lesson") continue;      /* 授業の列だけ入れる */
-      if(!slotShown(d, sl)) continue;                /* 紙に出ていない校時 */
-      const v = impNorm(line[col]);
-      if(v === "" || v === "－" || v === "-") continue;   /* 空欄は触らない */
-      /* **変わっていない欄は入れない。**
-         雛形はいまの中身を入れて出すので、貼り戻すと全欄が「書いた」ことになる。
-         そのまま入れると、学年や全校から降りてきたコマにも担任の層で
-         同じ字を書き込み、**降りてきたはずのコマが担任のものに化ける**
-         （紙の見た目は同じなので、書いた本人には気づけない）。 */
-      const now = cellFor(d, sl.id);
-      const nowT = plain(now.title).trim();
-      const nowMark = !nowT ? "" : nowT === NO_LESSON ? "／"
-                                 : shortOf(now.subject, now.title, now.short);
-      if(impNorm(nowMark) === v) continue;               /* すでに同じ */
-      if(v === "／" || v === "/"){
-        out.push({d, slot:sl.id, sub:null, mark:NO_LESSON});
-        continue;
+  const out = [], unknown = {}, noread = [];
+  /* 1日の塊の、上から r 行目がその学年の r 番目のクラス。
+     行の数を超えたクラスは表に乗らないので、名指しで言う */
+  for(let r = 0; r < g.list.length; r++){
+    if(r >= g.block){ noread.push(g.list[r]); continue; }
+    const cls = g.list[r];
+    for(let d = 0; d < WEEKDAYS; d++){
+      const line = grid[d * g.block + r] || [];
+      for(let col = 0; col < g.width; col++){
+        const sl = g.bySlot[col];
+        if(!sl || sl.kind !== "lesson") continue;      /* 授業の列だけ入れる */
+        if(!slotShown(d, sl)) continue;                /* 紙に出ていない校時 */
+        const v = impNorm(line[col]);
+        if(v === "" || v === "－" || v === "-") continue;   /* 空欄は触らない */
+        /* **変わっていない欄は入れない。**
+           雛形はいまの中身を入れて出すので、貼り戻すと全欄が「書いた」ことになる。
+           そのまま入れると、学年や全校から降りてきたコマにも担任の層で
+           同じ字を書き込み、**降りてきたはずのコマが担任のものに化ける**
+           （紙の見た目は同じなので、書いた本人には気づけない）。 */
+        const now = compose(cls, d, sl.id);
+        const nowT = plain(now.title).trim();
+        const nowMark = !nowT ? "" : nowT === NO_LESSON ? "／"
+                                   : shortOf(now.subject, now.title, now.short);
+        if(impNorm(nowMark) === v) continue;               /* すでに同じ */
+        if(v === "／" || v === "/"){
+          out.push({cls, d, slot:sl.id, sub:null, mark:NO_LESSON});
+          continue;
+        }
+        const sub = impSubject(v);
+        if(!sub){ unknown[v] = (unknown[v] || 0) + 1; continue; }
+        out.push({cls, d, slot:sl.id, sub, mark:sub.name});
       }
-      const sub = impSubject(v);
-      if(!sub){ unknown[v] = (unknown[v] || 0) + 1; continue; }
-      out.push({d, slot:sl.id, sub, mark:sub.name});
     }
   }
   const un = Object.keys(unknown);
   /* **変わっていなければ、何も入れないと言う。** 0件のまま黙って閉じると、
      「入ったのか、入らなかったのか」が分からない */
-  if(!out.length && !un.length)
+  if(!out.length && !un.length && !noread.length)
     return {rows:out, warn:"<b>今の週案と同じでした。</b>変わった欄がありません。"};
-  return {rows:out,
-    warn: un.length ? "<b>読めない字がありました：</b>" + escText(un.join("・"))
-                    + "<br>その欄は入れません。教科の1文字か教科名で書いてください"
-                    + "（設定の「教科の表し方」で、どの1文字を使うかみられます）。" : ""};
+  const warn = [];
+  if(un.length)
+    warn.push("<b>読めない字がありました：</b>" + escText(un.join("・"))
+            + "<br>その欄は入れません。教科の1文字か教科名で書いてください"
+            + "（設定の「教科の表し方」で、どの1文字を使うかみられます）。");
+  if(noread.length)
+    warn.push("<b>" + escText(noread.join("・")) + " の行は表に入っていません</b>"
+            + "（1日 " + g.block + " 行まで）。"
+            + "「1日ぶんの行の数」を増やすと入ります。");
+  return {rows:out, warn: warn.join("<br>")};
 }
 
-/* 入れる。**いま開いているクラスの、担任の層**。
+/* **他クラスのぶんも、ふだんの書き込みと同じ形で入れる。**
+   writeCell は開いているクラスしか書かないので、学年のほかのクラスへは
+   ここで同じ決まりを回す（いま出ているものを引き継いでから直す・
+   消えたなら行を消す・サーバには cellChanged で届ける） */
+function impWriteCls_(cls, d, s, patch){
+  const w = week(), key = ck(d, s);
+  const st = w.home[cls] || (w.home[cls] = {});
+  const cur = compose(cls, d, s);
+  const was = (st[key] || {}).sat || 0;
+  const wasT = plain((st[key] || {}).title);
+  const e = st[key] || {
+    title:   cur.title || "",
+    note:    cur.note  || "",
+    subject: cur.subject || null,
+    short:   cur.short || "",
+    u:       cur.u || ""
+  };
+  if("title"   in patch) e.title   = clean(patch.title);
+  if("subject" in patch) e.subject = patch.subject;
+  e.by = myEmail();
+  e.at = Date.now();
+  if(isEmptyCell(e)) delete st[key]; else { e.sat = was; st[key] = e; }
+  Backend.cellChanged("home", cls, d, s, was, undefined, wasT);
+  return save();
+}
+
+/* **学年の各クラスの週を読んでおく。** 他クラスのコマと照合するので、
+   読んでいないと「いまと同じ」の区別が付かず、物差し（sat）も 0 で送って
+   競合してしまう。読みずみのぶんはもう一度読みに行かない */
+function impTallyEnsureGrade_(after){
+  if(!Backend.isGas()) return after();
+  const g = impTallyCols();
+  const want = targetsForView()
+    .concat(g.list.map(c => ({layer:"home", target:c})));
+  Backend.readWeeks([wkKey()], after, want);
+}
+
+/* 入れる。**学年の各クラスの、担任の層**。
    書き込みは writeCell の1本道を通す ── ロック・休みの日・undo・
-   サーバへの知らせが、ふだんの打鍵とまったく同じになる。 */
+   サーバへの知らせが、ふだんの打鍵とまったく同じになる。
+   開いているクラスは writeCell（undo が効く）、ほかのクラスは
+   impWriteCls_ で同じ決まりを回す。
+   **入るのは未保存の形** ── cellChanged で控えに入り、あとの保存・
+   週送りでふだんどおり届く（競合もふだんどおりに聞く） */
 function impTallyApply(rows){
   if(view.kind !== "class") return toast("クラスを開いてから取り込む");
   const keep = scope;
   let n = 0, skip = 0;
   try{
-    scope = "self";                 /* 入れる先は、このクラス自身 */
+    scope = "self";                 /* 入れる先は、各クラスの担任の層 */
     for(const r of rows){
       if(whyCantWrite(r.d, r.slot)){ skip++; continue; }
-      const ok = writeCell(r.d, r.slot,
-        r.sub ? {title:escText(r.sub.name), subject:r.sub.code}
-              : {title:escText(NO_LESSON), subject:null});
+      const patch = r.sub ? {title:escText(r.sub.name), subject:r.sub.code}
+                          : {title:escText(NO_LESSON), subject:null};
+      const ok = r.cls === view.cls
+        ? writeCell(r.d, r.slot, patch)
+        : impWriteCls_(r.cls, r.d, r.slot, patch);
       if(ok) n++; else skip++;
     }
   } finally{ scope = keep; }
@@ -683,10 +740,11 @@ function openImpPlan(kind){
     return toast("時数表は<b>クラスを開いてから</b>取り込む");
   $("ipTtl").textContent = tally ? "時数表から取り込む" : "年間行事計画表からコマを作る";
   $("ipLead").innerHTML = tally
-    ? "<b>今開いている「" + escText(viewName()) + "」の、この週に入ります。</b>"
+    ? "<b>今開いている「" + escText(viewName()) + "」の学年の<b>各クラス</b>へ、この週に入ります。</b>"
       + "下の表は<b>時数表と同じ、1日ぶんにこの学年のクラスが上から並んだ形</b>です。"
       + "手元の時数集計表からその週の塊をコピーして、"
-      + "<b>左上のマスを選んでそのまま貼る</b>と、1回で入ります。"
+      + "<b>左上のマスを選んでそのまま貼る</b>と、クラスごとの行が1回で入ります。"
+      + "入るのはふだんの書き込みと同じ未保存の形です（あとの保存で届きます）。"
       + "マスを直に打ち直しても構いません。"
     : "<b>全校・学年の層に入ります。</b>"
       + "行事計画は<b>連携シートに貼ってから読みます</b>"
@@ -706,7 +764,7 @@ function openImpPlan(kind){
   $("ipWarn").innerHTML = "";
   $("ipGrid").innerHTML = "";
   $("ipGo").disabled = true;
-  $("ipGo").textContent = tally ? "この週に入れる" : "全校・学年に入れる";
+  $("ipGo").textContent = tally ? "学年の各クラスに入れる" : "全校・学年に入れる";
   if(tally){
     /* **1日ぶんの行の数** ── 学年の表で結合の行数が違うので、窓の中で選べる。
        既定はその学年のクラス数（日付セルはクラスのぶんだけ縦につながるのが普通）。
@@ -773,9 +831,8 @@ function impSheetRead(){
    **貼る先をそのまま見せる。** スプレッドシートを開かずに済む。
 
    左の2列は目じるし（曜日・クラス）。触れない。
-   右のマスが中身で、1マスが1校時ぶん。**いま開いているクラスの行に印**を付け、
-   ほかのクラスの行は薄くする ── 貼るのは塊ごとなので消させないが、
-   入るのは自分の行だけだと、見て分かるようにしておく。 */
+   右のマスが中身で、1マスが1校時ぶん。**いま開いているクラスの行に印**を付ける
+   ── 入るのは学年の各クラスの行ぜんぶだが、自分の行がどこかは見て分かるように。 */
 function impTallyTable(grid){
   const g = impTallyCols(), at = impTallyRow();
   const head = ["<tr><th></th><th></th>"
@@ -853,6 +910,13 @@ function impPlanCount_(){
 }
 
 function impPlanRead(text){
+  /* **学年の各クラスの週が要る。** 他クラスの行を読むので、
+     まだ読んでいないクラスぶんは先に読んでから照合する */
+  if(impPlanKind === "tally")
+    return impTallyEnsureGrade_(() => impPlanRead_(text));
+  impPlanRead_(text);
+}
+function impPlanRead_(text){
   let r;
   if(impPlanKind === "tally") r = impTallyRead(impTallyGrid());
   else{
@@ -877,10 +941,10 @@ function impPlanRead(text){
      「どの日の何校時に、何が入るか」に直して出す ── 読み違えはここで分かる。
      件数が多くても表ごとスクロールして全部見える。
      先頭のチェックを外すと、その行は入れない（迷う行をあとから残せる） */
-  const head = impPlanKind === "tally" ? ["曜日", "校時", "入るもの"]
+  const head = impPlanKind === "tally" ? ["クラス", "曜日", "校時", "入るもの"]
                                        : ["日付", "校時", "対象", "行事名"];
   const line = x => impPlanKind === "tally"
-    ? [DOW[x.d], (SLOT_BY_ID[x.slot] || {}).name || x.slot, x.mark]
+    ? [x.cls, DOW[x.d], (SLOT_BY_ID[x.slot] || {}).name || x.slot, x.mark]
     : [iso(x.dt), (SLOT_BY_ID[x.slot] || {}).name || x.slot,
        x.to.layer === "school" ? "全校" : x.to.target + "年", x.title];
   $("ipGrid").innerHTML = "<table class='tp'><tr><th title='入れるかどうか'>入</th>"
@@ -914,7 +978,8 @@ function impPlanGo(){
         + (impSkip.size ? "（" + impSkip.size + "件は除いた）" : ""));
     if(typeof redrawCenter === "function") redrawCenter(true);
   };
-  if(impPlanKind === "tally") return done(impTallyApply(rows));
+  if(impPlanKind === "tally")
+    return impTallyEnsureGrade_(() => done(impTallyApply(rows)));
   /* 全校・学年は、ほかの先生の紙にも出る。**押す前に、範囲を言う** */
   askOk({
     title: rows.length + "件を全校・学年に入れますか",
