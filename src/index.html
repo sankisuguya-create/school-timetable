@@ -531,11 +531,11 @@
            学年・全校の面には置かない）。チップはこの中 ── 作る・直す・消すは
            「単元進捗管理」の窓。既定は開く（引っぱって落とす毎回の操作）。 -->
       <details class="fold" id="unitEntry" hidden>
-        <summary><span>単元管理</span></summary>
+        <summary><span>単元を仮置きする</span></summary>
         <div class="foldin">
           <div class="pals" id="unitPals"></div>
           <button class="unitopen" id="unitOpen" type="button">
-            <span><b>単元進捗管理</b><small id="unitOpenSub"></small></span><i>›</i>
+            <span><b>単元の登録</b><small id="unitOpenSub"></small></span><i>›</i>
           </button>
         </div>
       </details>
@@ -606,15 +606,15 @@
 
 <div class="toast" id="toast" hidden></div>
 <dialog id="unitDlg" aria-labelledby="unitTitle"><div class="dlg unitdlg">
-  <h2 id="unitTitle">単元進捗管理 <span class="subttl" id="unitFy"></span></h2>
-  <p class="unitintro">単元名と授業数を登録します。配置は時間割の単元チップから行います。</p>
+  <h2 id="unitTitle">単元の登録 <span class="subttl" id="unitFy"></span></h2>
+  <p class="unitintro">単元名と授業数を登録します。仮置きは時間割の単元チップから行います。<br>置いた番号をただの字として残すときは、単元を編集して「番号を備考欄に移して終わる」です。</p>
   <div class="unitctx">
     <label><span id="unitClsLbl">クラス</span><select id="unitCls"></select></label>
     <label>教科<select id="unitSub"></select></label>
   </div>
   <div class="unitterm" id="unitTermInfo"></div>
   <div class="unitbar"><b>単元</b><div class="unitbaracts">
-    <button class="btn" id="unitResetAll" type="button">配置を全リセット</button>
+    <button class="btn" id="unitResetAll" type="button">仮置きを全て外す</button>
     <button class="btn go" id="unitNew" type="button">新しい単元</button>
   </div></div>
   <div class="unitlist" id="unitList"></div>
@@ -638,7 +638,8 @@
       <button class="btn go" id="unitSave" type="button">保存</button>
     </div>
     <div class="unitdanger" id="unitDanger" hidden>
-      <button class="btn" id="unitReset" type="button">配置をリセット</button>
+      <button class="btn" id="unitBake" type="button">番号を備考欄に移して終わる</button>
+      <button class="btn" id="unitReset" type="button">仮置きを外す</button>
       <button class="btn danger" id="unitDelete" type="button">単元を削除</button>
     </div>
   </section>
@@ -646,7 +647,7 @@
 </div></dialog>
 
 <dialog id="termDlg" aria-labelledby="termTitle"><div class="dlg wide termdlg">
-  <h2 id="termTitle">学期の期間 <span class="subttl">単元進捗用</span></h2>
+  <h2 id="termTitle">学期の期間 <span class="subttl">仮置きの単元用</span></h2>
   <p>学期末までに単元が入りきるかを判断する期間です。<b>3学期制・2学期制を決め打ちしません。</b></p>
   <div class="termrows" id="termRows"></div>
   <div class="unitactions">

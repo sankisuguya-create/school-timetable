@@ -389,6 +389,44 @@ function upMark_(unit, d, s, v, monISO){
   }finally{ monday = keep; }
 }
 
+/* **番号の字を備考欄に入れる（焼き付け）。** いま出ている番号をただの字に
+   変えて残すので、終わった単元はもうコマを数えなくてよい。
+   行が無いコマは、紙に出ているものを引き継いで備考だけの行を作る
+   （upMark_ と同じ決まり）。専科で新しく足す行は sp を持たせない ──
+   持たせると「明示の割付」扱いで、別のクラスの表示を変えてしまう */
+function upBakeNote_(unit, d, s, label, monISO){
+  const keep = monday;
+  try{
+    if(monISO) monday = mondayOf(parseISO(monISO));
+    const w = week(), key = ck(d, s);
+    const bank = unit.layer === "special" ? (w.special[unit.target] || (w.special[unit.target] = {}))
+                                          : (w.home[unit.target]    || (w.home[unit.target] = {}));
+    const e = bank[key];
+    const was = (e || {}).sat || 0, wasT = plain((e || {}).title);
+    if(!e){
+      if(unit.layer === "special"){
+        const sub = SUB_BY_CODE[spSubjectOf(unit.sp)];
+        bank[key] = {title: escText(sub ? sub.name : unit.subject || ""),
+                     subject: spSubjectOf(unit.sp) || unit.subject || null,
+                     sp:"", note:escText(label), by:myEmail(), at:Date.now()};
+      }else{
+        const cur = compose(unit.target, d, s);
+        bank[key] = {title: cur.title || "", note:escText(label),
+                     subject: cur.subject || null,
+                     by:myEmail(), at:Date.now()};
+      }
+    }else{
+      e.note = clean((e.note ? e.note + " " : "") + escText(label));
+      delete e.u;                         /* 番号が字になったので印は要らない */
+    }
+    Backend.cellChanged(
+      unit.layer === "special" ? "special" : "home",
+      unit.target, d, s, was,
+      monISO ? {year:fy(), monday:monISO} : undefined, wasT);
+    return save();
+  }finally{ monday = keep; }
+}
+
 /* ── 割付・移動・リセット ────────────────────── */
 
 /* 落とせる場所か。入らないときは理由を返す（toast 用の文） */
@@ -813,7 +851,7 @@ function unitDefaultGrade_(){
 
 function openUnitManager(){
   const ctx = unitContext_();
-  if(!ctx) return toast("単元進捗管理は<b>学級または専科の週案</b>で使います");
+  if(!ctx) return toast("「単元を仮置きする」は<b>学級または専科の週案</b>で使います");
   unitState.cls = unitDefaultClass_();
   unitState.gr = unitDefaultGrade_();
   unitState.subject = unitDefaultSubject_();
@@ -878,7 +916,7 @@ function renderUnitTerm_(){
   const box = $("unitTermInfo");
   if(!UP.terms.length){
     box.className = "unitterm warn";
-    box.innerHTML = "<span><b>学期の期間が未設定</b><small>単元登録はできます。自動配置と学期末警告には期間が必要です。</small></span>"
+    box.innerHTML = "<span><b>学期の期間が未設定</b><small>単元登録はできます。番号づけと学期末警告には期間が必要です。</small></span>"
       + "<button class='btn' id='unitTermOpen'>学期を設定</button>";
   }else{
     box.className = "unitterm";
@@ -889,11 +927,11 @@ function renderUnitTerm_(){
   $("unitTermOpen").onclick = openUnitTerms;
 }
 function unitStatus_(u){
-  if(!(u.start || {}).date) return "未配置";
+  if(!(u.start || {}).date) return "置いていない";
   const seq = upSeqFor_(u);
   const cap = u.lessonCount + (u.hasTest ? 1 : 0);
-  if(seq.count > cap) return "配置 " + cap + "（はみ出し " + (seq.count - cap) + "）";
-  return "配置 " + seq.count + "/" + cap;
+  if(seq.count > cap) return "仮置き " + cap + "（はみ出し " + (seq.count - cap) + "）";
+  return "仮置き " + seq.count + "/" + cap;
 }
 function renderUnitList_(){
   const box = $("unitList");
@@ -919,7 +957,7 @@ function renderUnitList_(){
       const per = unitGradeClasses_().map(cls => {
         const u = g.find(x => x.target === cls);
         return "<small>" + escText(cls) + " "
-          + escText(u ? unitStatus_(u) : "未配置") + "</small>";
+          + escText(u ? unitStatus_(u) : "置いていない") + "</small>";
       }).join("");
       return "<button class='unitrow' data-unit='" + escText(rep.id) + "'>"
         + "<span><b>" + escText(name) + "</b><small>"
@@ -1084,18 +1122,18 @@ function resetUnit_(){
     : [u];
   if(!targets.length) return;
   askOk({
-    title:"「" + u.name + "」の配置をリセットしますか",
+    title:"「" + u.name + "」の仮置きを外しますか",
     lines:[(targets.length > 1
               ? "学年の各クラス分（" + targets.length + "クラス）まとめて外します。"
               : "") + "<b>単元そのものは残します。</b>",
-           "時間割に置いた進捗だけを全部外し、後で起点から置き直せる状態に戻します。"],
-    goLabel:"配置をリセット",
+           "時間割に仮置きした進捗だけを全部外し、後で起点から置き直せる状態に戻します。"],
+    goLabel:"仮置きを外す",
     onYes:() => {
       const seq = i => {
         if(i >= targets.length){
           renderUnitList_();
           if(unitState.editing) editUnit_(unitState.editing);
-          $("unitStat").textContent = "配置をリセットしました。";
+          $("unitStat").textContent = "仮置きを外しました。";
           UP.seq = {}; paintSheet();
           return;
         }
@@ -1116,22 +1154,101 @@ function resetAllUnits_(){
     ? unitState.gr + "年・" + sub
     : unitState.cls + "・" + sub;
   askOk({
-    title:scope + " の配置を全てリセットしますか",
-    lines:["<b>この画面に並んで入る単元全て</b>の進捗配置を外します。",
+    title:scope + " の仮置きを全て外しますか",
+    lines:["<b>この画面に並んで入る単元全て</b>の仮置きを外します。",
            "単元名・授業数・テスト設定は残ります。"],
-    goLabel:"配置を全リセット",
+    goLabel:"全て外す",
     onYes:() => {
       let left = list.length;
       for(const u of list) upResetAll_(u, () => {
         if(--left <= 0){
           renderUnitList_();
-          $("unitStat").textContent = "この教科の単元配置を全てリセットしました。";
+          $("unitStat").textContent = "この教科の単元の仮置きを全て外しました。";
           UP.seq = {}; paintSheet();
         }
       });
     }
   });
 }
+/* **いま出ている番号を備考欄に移して、単元を終わらせる（焼き付け）。**
+   終わった単元はもう起点以降の週を読みに行かないので、コマ読みの待ちが
+   消える。番号は場所で決まるので、まず週を全部読んでから数える
+   （仮の番号のまま字にすると、ずれた番号が残ってしまう） */
+function upBakeOne_(unit, done){
+  const st = unit.start || {};
+  if(!st.date){ if(done) done(); return; }
+  const mons = upMons_(st.date, upRangeEnd_(unit));
+  const wid = Wait.begin("「" + unit.name + "」の番号を備考欄に移しています");
+  Backend.readWeeks(mons, () => {
+    const r = upScan_(unit, upRangeEnd_(unit));
+    const name4 = (unit.name || "").slice(0, 4) || "単元";
+    const keep = monday;
+    try{
+      for(const m of mons){
+        monday = mondayOf(parseISO(m));
+        const w = week();
+        for(let d = 0; d < DAYS; d++) for(const sl of SLOTS){
+          if(sl.kind !== "lesson") continue;
+          const dt = iso(addDays(monday, d));
+          const n = r.map[dt + "|" + sl.id];
+          if(n) upBakeNote_(unit, d, sl.id,
+            unit.hasTest && n === unit.lessonCount + 1
+              ? name4 + "テスト" : name4 + " " + n + "/" + unit.lessonCount, m);
+          else if(upCellMark_(w, unit, d, sl.id))
+            upMark_(unit, d, sl.id, "", m);      /* 番号の無い印は外すだけ */
+        }
+      }
+    }finally{ monday = keep; }
+    Backend.deleteUnit(unit.id, unit.updatedAt, () => {
+      delete UP.warns[unit.id];
+      UP.seq = {};
+      Wait.end(wid);
+      paintSheet();
+      if(done) done();
+    }, why => { Wait.end(wid); toast(why); });
+  });
+}
+
+function upBakeUnit_(){
+  const u = (unitState.units || []).find(x => x.id === unitState.editing);
+  if(!u) return;
+  /* 専科の学年の単元は、各クラスのぶんをまとめて移す */
+  const targets = view.kind === "special"
+    ? (unitState.editIds || []).map(id => UP.units.find(x => x.id === id)).filter(Boolean)
+    : [u];
+  if(!targets.length) return;
+  if(!(u.start || {}).date)
+    return toast("まだ置いていない単元は、移す番号がありません");
+  askOk({
+    title:"「" + u.name + "」の番号を備考欄に移しますか",
+    lines:[(targets.length > 1
+              ? "学年の各クラス分（" + targets.length + "クラス）まとめて行います。"
+              : "")
+           + "<b>いま出ている番号を、各コマの備考欄に字として入れます</b>"
+           + "（「" + escText(u.name.slice(0, 4)) + " 3/" + u.lessonCount + "」のように）。",
+           "仮置きの印は外れ、単元そのものも消えます。<b>この単元のコマ読みは、もう要りません。</b>",
+           "戻せません。番号を数え続けたいときは、この操作をしないでください。"],
+    goLabel:"備考欄に移す",
+    onYes:() => {
+      const ids = targets.map(x => x.id);
+      const seq = i => {
+        if(i >= targets.length){
+          unitState.units = (unitState.units || []).filter(x => ids.indexOf(x.id) < 0);
+          UP.units = UP.units.filter(x => ids.indexOf(x.id) < 0);
+          unitState.editing = ""; unitState.editIds = [];
+          $("unitForm").hidden = true; renderUnitList_();
+          UP.seq = {}; paintSheet();
+          if(typeof drawPalette === "function") drawPalette();
+          $("unitStat").textContent = "番号を備考欄に移して、「" + u.name + "」を終わらせました。";
+          return;
+        }
+        upBakeOne_(targets[i], () => seq(i + 1));
+      };
+      seq(0);
+    }
+  });
+}
+
 function deleteUnit_(){
   const u = (unitState.units || []).find(x => x.id === unitState.editing);
   if(!u) return;
@@ -1142,10 +1259,10 @@ function deleteUnit_(){
   if(!targets.length) return;
   askOk({
     title:"「" + u.name + "」を削除しますか",
-    lines:["<b>単元の登録そのものを削除します。</b>時間割への配置情報も消えます。"
+    lines:["<b>単元の登録そのものを削除します。</b>時間割への仮置きの印も消えます。"
            + (targets.length > 1
               ? "学年の各クラス分（" + targets.length + "クラス）をまとめて消します。" : ""),
-           "配置だけを外したい場合は「配置をリセット」を使ってください。"],
+           "仮置きの印だけを外したい場合は「仮置きを外す」を使ってください。"],
     goLabel:"単元を削除",
     onYes:() => {
       const ids = targets.map(x => x.id);
@@ -1271,6 +1388,7 @@ function wireUnitProgress(){
   on("unitMinus","click",() => unitCountStep_(-1));
   on("unitPlus","click",() => unitCountStep_(1));
   on("unitSave","click",saveUnitForm_);
+  on("unitBake","click",upBakeUnit_);
   on("unitReset","click",resetUnit_);
   on("unitDelete","click",deleteUnit_);
   on("termAdd","click",() => { termDraft.push({name:"",start:"",end:""}); drawTermRows_(); });
