@@ -35,7 +35,7 @@ Sheets.gs（Google Sheetsへの読み書き）
 - `Domain.gs`からGoogle Apps ScriptやGoogle Sheetsを直接呼ばない。
 - 既存のシート列・シート名・API引数・戻り値の形を変えない。
 - 学級名の日付化など、保存先固有の変換は`Sheets.asClass`を引数で渡す。
-- 新しい業務ルールを追加したら、まず`gas/domaincheck.js`に単体検査を追加する。
+- 新しい業務ルールを追加したら、まず`tools/domaincheck.js`に単体検査を追加する。
 - 画面の色・表示・印刷版面だけの変更は、Domain.gsへ入れない。
 - 新しいルールの追加でStoreの処理が読みにくくなった場合だけ、別のユースケース分離を検討する。
 
@@ -48,7 +48,7 @@ Sheets.gs（Google Sheetsへの読み書き）
 ## 検査
 
 ```text
-node gas/domaincheck.js
+node tools/domaincheck.js
 npm test
 ```
 

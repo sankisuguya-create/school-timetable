@@ -408,7 +408,7 @@ function wire(){
   on('guideDlg', 'close', finishGuide);
 
 
-  /* 単元進捗の窓と学期設定の結線（→ unitprogress.js） */
+  /* 単元の窓と学期設定の結線（→ unitmanage.js） */
   if(typeof wireUnitProgress === "function") wireUnitProgress();
 
   on("prevWk","click", () => goWeek(-7));
@@ -776,7 +776,7 @@ function wire(){
      案とは別のもの（触っていなければ1コマも書かない） */
   on("spmDlg","close", () => { if(spmSaveWish()) toast("<b>専科の希望を端末内の控えデータに置いた。</b>保存を押す"); });
   /* 新年度の設定。**ふだんは管理・システムの中だけ。**
-     未了のあいだだけ、左メニューにも出る（結線は dialogs.js） */
+     未了のあいだだけ、左メニューにも出る（結線は admindlg.js） */
   on("nyOpen","click", () => { $("adminDlg").close(); openNewYearDlg(); });
   on("rsAb","click", openAbDlg);
   on("abSave","click", saveAb);

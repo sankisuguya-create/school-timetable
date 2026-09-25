@@ -18,7 +18,7 @@
 ================================================================== */
 const fs = require("fs"), path = require("path"), vm = require("vm");
 
-const GAS = __dirname;
+const GAS = path.join(__dirname, "..", "gas");
 const SRC = path.join(__dirname, "..", "src", "js");
 const GS  = ["Gate.gs", "Domain.gs", "Sheets.gs", "Store.gs"];
 

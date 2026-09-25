@@ -8,10 +8,11 @@
 | `Domain.gs` | 時間割・提出状態の副作用のない業務ルール |
 | `Sheets.gs` | シートの形と、読み書きの道具。`setupSheets` でシート8枚を作る |
 | `Store.gs` | 週案・基本時間割・学級編成の読み書き。画面から呼ぶ口（`api…`） |
-| `gatecheck.js` | 手元で関門を試す（`node gas/gatecheck.js`）。貼らない |
-| `storecheck.js` | 手元でシートの読み書きを試す（`node gas/storecheck.js`）。貼らない |
 | `appsscript.json` | タイムゾーンとデプロイ設定 |
 | `plan.html` | 画面（**生成物**。`python3 build.py` が `src/` から作る） |
+
+**このフォルダの中身はすべて Apps Script に貼る物**（README.md を除く）。
+手元で回す検査は `tools/` にあります（`node tools/gatecheck.js` など）。
 
 Step 6 以降で `Tally.gs`・`Tanpopo.gs`・`Events.gs` が増える。
 
@@ -33,7 +34,7 @@ email.indexOf("edu.nishi.or.jp") >= 0    ← 児童も通る
 2枚目として、`@` の左が8桁の数字なら（ドメインが万一同じでも）止める。
 
 ```
-node gas/gatecheck.js
+node tools/gatecheck.js
 ```
 
 で28件を確かめられる。**関門を直したら必ずこれを通してから貼る。**
@@ -73,7 +74,7 @@ node gas/gatecheck.js
 3. 拡張機能 → Apps Script
 4. ⚙ プロジェクトの設定 →「`appsscript.json` マニフェスト ファイルをエディタで表示する」
 5. スクリプトを作って貼る：`Gate` `Domain` `Sheets` `Store`
-   （`domaincheck.js` `gatecheck.js` `storecheck.js` `README.md` は貼らない）
+   （このフォルダには貼る物しか置いていない。README.md だけは貼らない）
 6. HTML を作って貼る：`plan`（`plan.html` の中身）
 7. `setupSheets` を実行 → シートが8枚できる。**何度走らせても同じ**
 8. 「クラス」「専科」「時程」「教科」「設定」を実物に合わせて直す

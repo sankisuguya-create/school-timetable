@@ -4580,7 +4580,7 @@ const Backend = (function(){
      手元（localStorage）はそのつど丸ごと書き出しているので、
      ここで覚えるのは本番のシートへ送るぶん。 */
   /* baseAt ＝ **直す前に、そのコマがサーバで持っていた時刻。**
-     呼ぶ側（compose.js の writeCell）が、書き替える前に読んで渡す。
+     呼ぶ側（writecell.js の writeCell）が、書き替える前に読んで渡す。
      ここで読むのでは遅い。空にする操作では、もうコマが消えている。
 
      いちど覚えたら、同じコマを続けて直しても**上書きしない**。
@@ -6145,6 +6145,187 @@ function impSubject(v){
    貼ったまま置いておける（消させない ── 消させると、次に貼るとき
    また塊ごと持ってくることになる）。 */
 
+/* ══ 窓 ══════════════════════════════════════════════ */
+
+let impPlanKind = "tally", impPlanRows = null;
+
+function openImpPlan(kind){
+  impPlanKind = kind;
+  impPlanRows = null;
+  const tally = kind === "tally";
+  if(tally && view.kind !== "class")
+    return toast("時数表は<b>クラスを開いてから</b>取り込む");
+  $("ipTtl").textContent = tally ? "時数表から取り込む" : "年間行事計画表からコマを作る";
+  $("ipLead").innerHTML = tally
+    ? "<b>今開いている「" + escText(viewName()) + "」の学年の<b>各クラス</b>へ、この週に入ります。</b>"
+      + "下の表は<b>時数表と同じ、1日ぶんにこの学年のクラスが上から並んだ形</b>です。"
+      + "手元の時数集計表からその週の塊をコピーして、"
+      + "<b>左上のマスを選んでそのまま貼る</b>と、クラスごとの行が1回で入ります。"
+      + "入るのはふだんの書き込みと同じ未保存の形です（あとの保存で届きます）。"
+      + "マスを直に打ち直しても構いません。"
+    : "<b>全校・学年の層に入ります。</b>"
+      + "行事計画は<b>連携シートに貼ってから読みます</b>"
+      + "（「連携シートを開く」で出てくるシートに表を貼って、"
+      + "「連携シートから読む」を押す）。"
+      + "「3h」「34h」「AM」「特4h」「12時台／13:40下校」「2-6年」の字を拾って、"
+      + "校時と対象に直します。";
+  /* 時数表はマス目の表、年間行事は字の欄。**運び方は同じでも、形が違う。**
+     時数表は矩形なので、表のほうが貼りやすい（列のずれを目で合わせられる）。
+     年間行事は1行1件で、行を足し引きするので、字の欄のほうが直しやすい */
+  $("ipTableWrap").hidden = !tally;
+  $("ipSheetRow").hidden  = tally;   /* 連携シートは行事計画だけの口 */
+  $("ipTplRow").hidden    = !tally;   /* 雛形の出し方は連携シートに統合 */
+  $("ipRead").hidden      = !tally;   /* 「読む」は時数表（マス目）だけの口 */
+  $("ipTpl").textContent  = tally ? "今の週案を表に入れる" : "雛形を出す（コピー）";
+  $("ipStat").textContent = "";
+  $("ipWarn").innerHTML = "";
+  $("ipGrid").innerHTML = "";
+  $("ipGo").disabled = true;
+  $("ipGo").textContent = tally ? "学年の各クラスに入れる" : "全校・学年に入れる";
+  if(tally){
+    /* **1日ぶんの行の数** ── 学年の表で結合の行数が違うので、窓の中で選べる。
+       既定はその学年のクラス数（日付セルはクラスのぶんだけ縦につながるのが普通）。
+       手で変えたぶんは学年ごとに覚える */
+    const g = gradeOf(view.cls), st = db.settings.tally.impBlock || {};
+    $("ipBlock").value = Math.min(7, Math.max(1,
+      +st[g] || classesOfGrade(g).length || 3));
+    $("ipBlock").onchange = () => {
+      const t = db.settings.tally;
+      (t.impBlock || (t.impBlock = {}))[g] =
+        Math.min(7, Math.max(1, +$("ipBlock").value || 3));
+      markMine("時数_行の数"); save();
+      /* 入れてある字は残す ── 行の組み方（どの行がどの日か）だけが変わる */
+      const vals = {};
+      for(const e of $("ipTable").querySelectorAll("input"))
+        vals[e.dataset.n + "|" + e.dataset.c] = e.value;
+      impTallyTable(impTallyTemplate());
+      for(const e of $("ipTable").querySelectorAll("input")){
+        const v = vals[e.dataset.n + "|" + e.dataset.c];
+        if(v != null) e.value = v;
+      }
+      /* **変えたぶんでもう一度読み直す。** 行の数が足りない警告が残ったままだと、
+         増やしたのにまだ止まっているように見える */
+      impPlanRead();
+    };
+    impTallyTable(impTallyTemplate());
+  }
+  $("impPlanDlg").showModal();
+}
+
+function impPlanTemplate(){
+  /* 「今の週案を表に入れる」は時数表だけの口
+     （行事の雛形の出し方は連携シートに統合した） */
+  impTallyTable(impTallyTemplate());
+  $("ipStat").textContent = "今の週案を表に入れた";
+}
+
+/* 取り込まない行。**確認表の先頭のチェックを外した行は入れない。**
+   読み直すたびに空に戻す（同じ表を読み直しても、外した覚えは残さない） */
+let impSkip = new Set();
+
+/* 確認表の数字とボタンを、チェックの状態に合わせる */
+function impPlanCount_(){
+  const total = (impPlanRows || []).length, n = total - impSkip.size;
+  $("ipStat").textContent = n + " 件を入れます"
+    + (impSkip.size ? "（" + impSkip.size + " 件は入れません）" : "");
+  $("ipGo").disabled = !n;
+}
+
+function impPlanRead(text){
+  /* **学年の各クラスの週が要る。** 他クラスの行を読むので、
+     まだ読んでいないクラスぶんは先に読んでから照合する */
+  if(impPlanKind === "tally")
+    return impTallyEnsureGrade_(() => impPlanRead_(text));
+  impPlanRead_(text);
+}
+function impPlanRead_(text){
+  let r;
+  if(impPlanKind === "tally") r = impTallyRead(impTallyGrid());
+  else{
+    r = impEvRead(text);
+    /* **雛形の形で貼っていなければ、行事計画の書き方として読む。**
+       貼る手間は、雛形に直させるより、そのまま読むほうが軽い */
+    if(!r.rows || !r.rows.length){
+      const alt = impDocRead(text);
+      if(alt.rows && alt.rows.length) r = alt;
+      else if(!r.rows) r = {rows:[], warn:(r.warn || "")
+        + (alt.warn ? "<br>" + alt.warn : "")};
+    }
+  }
+  impPlanRows = null; impSkip = new Set();
+  $("ipGrid").innerHTML = "";
+  $("ipGo").disabled = true;
+  $("ipWarn").innerHTML = r.warn ? "<div class='box'>" + r.warn + "</div>" : "";
+  if(!r.rows) return void ($("ipStat").textContent = "");
+  impPlanRows = r.rows;
+  impPlanCount_();
+  /* **入れる前に、入るものをぜんぶ見せる。** 貼った表そのままではなく、
+     「どの日の何校時に、何が入るか」に直して出す ── 読み違えはここで分かる。
+     件数が多くても表ごとスクロールして全部見える。
+     先頭のチェックを外すと、その行は入れない（迷う行をあとから残せる） */
+  const head = impPlanKind === "tally" ? ["クラス", "曜日", "校時", "入るもの"]
+                                       : ["日付", "校時", "対象", "行事名"];
+  const line = x => impPlanKind === "tally"
+    ? [x.cls, DOW[x.d], (SLOT_BY_ID[x.slot] || {}).name || x.slot, x.mark]
+    : [iso(x.dt), (SLOT_BY_ID[x.slot] || {}).name || x.slot,
+       x.to.layer === "school" ? "全校" : x.to.target + "年", x.title];
+  $("ipGrid").innerHTML = "<table class='tp'><tr><th title='入れるかどうか'>入</th>"
+    + head.map(h => "<th>" + escText(h) + "</th>").join("") + "</tr>"
+    + r.rows.map((x, i) => "<tr>"
+        + "<td class='ck'><input type='checkbox' data-i='" + i + "' checked"
+        + " aria-label='この行を入れる'></td>"
+        + line(x).map(c => "<td>" + escText(c) + "</td>").join("") + "</tr>").join("")
+    + "</table>";
+  /* チェックの付け外しを1か所で受ける（行ごとに付けない） */
+  $("ipGrid").onchange = ev => {
+    const cb = ev.target.closest("input[data-i]");
+    if(!cb) return;
+    const i = +cb.dataset.i;
+    if(cb.checked) impSkip.delete(i); else impSkip.add(i);
+    cb.closest("tr").classList.toggle("skip", !cb.checked);
+    impPlanCount_();
+  };
+}
+
+function impPlanGo(){
+  /* チェックを外した行を除いたぶんだけ入れる */
+  const rows = (impPlanRows || []).filter((x, i) => !impSkip.has(i));
+  if(!rows.length) return;
+  if(typeof isLocked === "function" && isLocked())
+    return toast("この面はロックしてある。<b>直すには、上のロックを押す</b>");
+  const done = r => {
+    $("impPlanDlg").close();
+    toast("<b>" + r.n + "件</b>を入れた"
+        + (r.skip ? "（" + r.skip + "件は入れられなかった）" : "")
+        + (impSkip.size ? "（" + impSkip.size + "件は除いた）" : ""));
+    if(typeof redrawCenter === "function") redrawCenter(true);
+  };
+  if(impPlanKind === "tally")
+    return impTallyEnsureGrade_(() => done(impTallyApply(rows)));
+  /* 全校・学年は、ほかの先生の紙にも出る。**押す前に、範囲を言う** */
+  askOk({
+    title: rows.length + "件を全校・学年に入れますか",
+    lines: ["<b>ここで入れたものは、当たるクラス全部の紙に出ます。</b>",
+            "同じ日・同じ校時に予定が入っているコマは、<b>これで上書きされます</b>"
+            + "（前のものは、書いた人の画面に「上書きされました」と出ます）。",
+            "入る先は、雛形の「対象」列のとおりです。"
+            + (impSkip.size ? "<br>チェックを外した " + impSkip.size
+                            + " 件は入りません。" : "")],
+    goLabel: "入れる",
+    onYes: () => impEvApply(rows, done)
+  });
+}
+/* ▲ src/js/impplan.js ▲ */
+/* ▼ src/js/imptally.js ▼ */
+/* ==================================================================
+   imptally.js — 時数表の取り込み（表 → 学年の各クラスのコマへ）
+
+   週案の型に合わせた時数表を貼って、その週のコマに入れる。
+   貼った表に載っている学年のクラスぜんぶの行が、そのクラスの担任の層へ
+   ふだんの書き込みと同じ「未保存」の形で入る。
+   （窓と取り込みの切り替えは impplan.js、行事計画は impevent.js に）
+================================================================== */
+
 const impTallySlots = () => SLOTS.filter(s => s.kind === "lesson");
 
 /* 取り込む表の1日ぶんの行は、**その学年のクラスが上から並んだもの**。
@@ -6341,6 +6522,77 @@ function impTallyApply(rows){
   buildSheet();
   return {n, skip};
 }
+
+/* ── 窓の中のマス目の表（時数表のほう）────────────────
+   **貼る先をそのまま見せる。** スプレッドシートを開かずに済む。
+
+   左の2列は目じるし（曜日・クラス）。触れない。
+   右のマスが中身で、1マスが1校時ぶん。**いま開いているクラスの行に印**を付ける
+   ── 入るのは学年の各クラスの行ぜんぶだが、自分の行がどこかは見て分かるように。 */
+function impTallyTable(grid){
+  const g = impTallyCols(), at = impTallyRow();
+  const head = ["<tr><th></th><th></th>"
+    + g.bySlot.map((sl, i) => "<th>" + escText(sl ? sl.name : String(i)) + "</th>").join("")
+    + "</tr>"];
+  const body = [];
+  for(let d = 0; d < WEEKDAYS; d++) for(let r = 0; r < g.block; r++){
+    const n = d * g.block + r;
+    const line = grid[n] || [];
+    const mine = r === at;
+    body.push("<tr" + (mine ? " class='mine'" : "") + (r === 0 ? " data-top='1'" : "") + ">"
+      + "<th class='dow'>" + (r === 0 ? escText(DOW[d]) : "") + "</th>"
+      + "<th class='cls'>" + escText(g.list[r] || "") + "</th>"
+      + g.bySlot.map((sl, i) =>
+          "<td" + (sl && sl.kind === "lesson" ? "" : " class='off'") + ">"
+          + "<input data-n='" + n + "' data-c='" + i + "' value='"
+          + escText(line[i] == null ? "" : line[i]) + "'"
+          + (sl && sl.kind === "lesson" ? "" : " tabindex='-1'") + "></td>").join("")
+      + "</tr>");
+  }
+  $("ipTable").innerHTML = "<table class='iptbl'>" + head.join("") + body.join("") + "</table>";
+  /* **塊ごと貼れるようにする。** 1マスずつ打ち直させない ──
+     時数集計表からコピーしてくるのが、この口のそもそもの目的 */
+  for(const e of $("ipTable").querySelectorAll("input"))
+    e.addEventListener("paste", ev => {
+      const txt = (ev.clipboardData || window.clipboardData).getData("text");
+      if(!txt || txt.indexOf("\t") < 0 && txt.indexOf("\n") < 0) return;  /* 1マスぶんはそのまま */
+      ev.preventDefault();
+      impTallyPaste(+e.dataset.n, +e.dataset.c, impSplit(txt));
+    });
+}
+
+/* 貼られた塊を、選んだマスを左上にして流し込む */
+function impTallyPaste(n0, c0, rows){
+  const g = impTallyCols();
+  for(let r = 0; r < rows.length; r++) for(let c = 0; c < rows[r].length; c++){
+    const box = $("ipTable").querySelector(
+      "input[data-n='" + (n0 + r) + "'][data-c='" + (c0 + c) + "']");
+    if(box) box.value = rows[r][c];
+  }
+  $("ipStat").textContent = rows.length + " 行を貼った。「読む」で確かめる";
+}
+
+/* 表を読み出して矩形に戻す */
+function impTallyGrid(){
+  const g = impTallyCols(), out = [];
+  for(let n = 0; n < WEEKDAYS * g.block; n++){
+    const line = new Array(g.width).fill("");
+    for(let c = 0; c < g.width; c++){
+      const box = $("ipTable").querySelector("input[data-n='" + n + "'][data-c='" + c + "']");
+      if(box) line[c] = box.value;
+    }
+    out.push(line);
+  }
+  return out;
+}
+/* ▲ src/js/imptally.js ▲ */
+/* ▼ src/js/impevent.js ▼ */
+/* ==================================================================
+   impevent.js — ��間行事計画表の取り込み（行事 → 全校・学年の層）
+
+   行事計画の字をそのまま貼って読む（日付・曜日・h/AM/下校・学年）か、
+   連携シートの表から読んで、全校・学年の層へ入れる。
+================================================================== */
 
 /* ══ ② 年間行事計画表 → 全校・学年 ══════════════════════
 
@@ -6812,73 +7064,6 @@ function impEvWrite(rows){
   return {n, skip};
 }
 
-/* ══ 窓 ══════════════════════════════════════════════ */
-
-let impPlanKind = "tally", impPlanRows = null;
-
-function openImpPlan(kind){
-  impPlanKind = kind;
-  impPlanRows = null;
-  const tally = kind === "tally";
-  if(tally && view.kind !== "class")
-    return toast("時数表は<b>クラスを開いてから</b>取り込む");
-  $("ipTtl").textContent = tally ? "時数表から取り込む" : "年間行事計画表からコマを作る";
-  $("ipLead").innerHTML = tally
-    ? "<b>今開いている「" + escText(viewName()) + "」の学年の<b>各クラス</b>へ、この週に入ります。</b>"
-      + "下の表は<b>時数表と同じ、1日ぶんにこの学年のクラスが上から並んだ形</b>です。"
-      + "手元の時数集計表からその週の塊をコピーして、"
-      + "<b>左上のマスを選んでそのまま貼る</b>と、クラスごとの行が1回で入ります。"
-      + "入るのはふだんの書き込みと同じ未保存の形です（あとの保存で届きます）。"
-      + "マスを直に打ち直しても構いません。"
-    : "<b>全校・学年の層に入ります。</b>"
-      + "行事計画は<b>連携シートに貼ってから読みます</b>"
-      + "（「連携シートを開く」で出てくるシートに表を貼って、"
-      + "「連携シートから読む」を押す）。"
-      + "「3h」「34h」「AM」「特4h」「12時台／13:40下校」「2-6年」の字を拾って、"
-      + "校時と対象に直します。";
-  /* 時数表はマス目の表、年間行事は字の欄。**運び方は同じでも、形が違う。**
-     時数表は矩形なので、表のほうが貼りやすい（列のずれを目で合わせられる）。
-     年間行事は1行1件で、行を足し引きするので、字の欄のほうが直しやすい */
-  $("ipTableWrap").hidden = !tally;
-  $("ipSheetRow").hidden  = tally;   /* 連携シートは行事計画だけの口 */
-  $("ipTplRow").hidden    = !tally;   /* 雛形の出し方は連携シートに統合 */
-  $("ipRead").hidden      = !tally;   /* 「読む」は時数表（マス目）だけの口 */
-  $("ipTpl").textContent  = tally ? "今の週案を表に入れる" : "雛形を出す（コピー）";
-  $("ipStat").textContent = "";
-  $("ipWarn").innerHTML = "";
-  $("ipGrid").innerHTML = "";
-  $("ipGo").disabled = true;
-  $("ipGo").textContent = tally ? "学年の各クラスに入れる" : "全校・学年に入れる";
-  if(tally){
-    /* **1日ぶんの行の数** ── 学年の表で結合の行数が違うので、窓の中で選べる。
-       既定はその学年のクラス数（日付セルはクラスのぶんだけ縦につながるのが普通）。
-       手で変えたぶんは学年ごとに覚える */
-    const g = gradeOf(view.cls), st = db.settings.tally.impBlock || {};
-    $("ipBlock").value = Math.min(7, Math.max(1,
-      +st[g] || classesOfGrade(g).length || 3));
-    $("ipBlock").onchange = () => {
-      const t = db.settings.tally;
-      (t.impBlock || (t.impBlock = {}))[g] =
-        Math.min(7, Math.max(1, +$("ipBlock").value || 3));
-      markMine("時数_行の数"); save();
-      /* 入れてある字は残す ── 行の組み方（どの行がどの日か）だけが変わる */
-      const vals = {};
-      for(const e of $("ipTable").querySelectorAll("input"))
-        vals[e.dataset.n + "|" + e.dataset.c] = e.value;
-      impTallyTable(impTallyTemplate());
-      for(const e of $("ipTable").querySelectorAll("input")){
-        const v = vals[e.dataset.n + "|" + e.dataset.c];
-        if(v != null) e.value = v;
-      }
-      /* **変えたぶんでもう一度読み直す。** 行の数が足りない警告が残ったままだと、
-         増やしたのにまだ止まっているように見える */
-      impPlanRead();
-    };
-    impTallyTable(impTallyTemplate());
-  }
-  $("impPlanDlg").showModal();
-}
-
 /* ── 連携シート ──────────────────────────────
    行事計画を貼るスプレッドシートを、**サイトが作って紐づける**。
    担当者はそこへ表をセルごと貼り付け、こちらはセルの字を読む。
@@ -6910,174 +7095,7 @@ function impSheetRead(){
     if(impPlanRows) $("ipStat").textContent = "連携シートから読みました" + (st ? "（" + st + "）" : "");
   }, e => { Wait.end(w); toast("<b>連携シートを読めません</b>　" + escText(String(e))); });
 }
-
-/* ── 窓の中のマス目の表（時数表のほう）────────────────
-   **貼る先をそのまま見せる。** スプレッドシートを開かずに済む。
-
-   左の2列は目じるし（曜日・クラス）。触れない。
-   右のマスが中身で、1マスが1校時ぶん。**いま開いているクラスの行に印**を付ける
-   ── 入るのは学年の各クラスの行ぜんぶだが、自分の行がどこかは見て分かるように。 */
-function impTallyTable(grid){
-  const g = impTallyCols(), at = impTallyRow();
-  const head = ["<tr><th></th><th></th>"
-    + g.bySlot.map((sl, i) => "<th>" + escText(sl ? sl.name : String(i)) + "</th>").join("")
-    + "</tr>"];
-  const body = [];
-  for(let d = 0; d < WEEKDAYS; d++) for(let r = 0; r < g.block; r++){
-    const n = d * g.block + r;
-    const line = grid[n] || [];
-    const mine = r === at;
-    body.push("<tr" + (mine ? " class='mine'" : "") + (r === 0 ? " data-top='1'" : "") + ">"
-      + "<th class='dow'>" + (r === 0 ? escText(DOW[d]) : "") + "</th>"
-      + "<th class='cls'>" + escText(g.list[r] || "") + "</th>"
-      + g.bySlot.map((sl, i) =>
-          "<td" + (sl && sl.kind === "lesson" ? "" : " class='off'") + ">"
-          + "<input data-n='" + n + "' data-c='" + i + "' value='"
-          + escText(line[i] == null ? "" : line[i]) + "'"
-          + (sl && sl.kind === "lesson" ? "" : " tabindex='-1'") + "></td>").join("")
-      + "</tr>");
-  }
-  $("ipTable").innerHTML = "<table class='iptbl'>" + head.join("") + body.join("") + "</table>";
-  /* **塊ごと貼れるようにする。** 1マスずつ打ち直させない ──
-     時数集計表からコピーしてくるのが、この口のそもそもの目的 */
-  for(const e of $("ipTable").querySelectorAll("input"))
-    e.addEventListener("paste", ev => {
-      const txt = (ev.clipboardData || window.clipboardData).getData("text");
-      if(!txt || txt.indexOf("\t") < 0 && txt.indexOf("\n") < 0) return;  /* 1マスぶんはそのまま */
-      ev.preventDefault();
-      impTallyPaste(+e.dataset.n, +e.dataset.c, impSplit(txt));
-    });
-}
-
-/* 貼られた塊を、選んだマスを左上にして流し込む */
-function impTallyPaste(n0, c0, rows){
-  const g = impTallyCols();
-  for(let r = 0; r < rows.length; r++) for(let c = 0; c < rows[r].length; c++){
-    const box = $("ipTable").querySelector(
-      "input[data-n='" + (n0 + r) + "'][data-c='" + (c0 + c) + "']");
-    if(box) box.value = rows[r][c];
-  }
-  $("ipStat").textContent = rows.length + " 行を貼った。「読む」で確かめる";
-}
-
-/* 表を読み出して矩形に戻す */
-function impTallyGrid(){
-  const g = impTallyCols(), out = [];
-  for(let n = 0; n < WEEKDAYS * g.block; n++){
-    const line = new Array(g.width).fill("");
-    for(let c = 0; c < g.width; c++){
-      const box = $("ipTable").querySelector("input[data-n='" + n + "'][data-c='" + c + "']");
-      if(box) line[c] = box.value;
-    }
-    out.push(line);
-  }
-  return out;
-}
-
-function impPlanTemplate(){
-  /* 「今の週案を表に入れる」は時数表だけの口
-     （行事の雛形の出し方は連携シートに統合した） */
-  impTallyTable(impTallyTemplate());
-  $("ipStat").textContent = "今の週案を表に入れた";
-}
-
-/* 取り込まない行。**確認表の先頭のチェックを外した行は入れない。**
-   読み直すたびに空に戻す（同じ表を読み直しても、外した覚えは残さない） */
-let impSkip = new Set();
-
-/* 確認表の数字とボタンを、チェックの状態に合わせる */
-function impPlanCount_(){
-  const total = (impPlanRows || []).length, n = total - impSkip.size;
-  $("ipStat").textContent = n + " 件を入れます"
-    + (impSkip.size ? "（" + impSkip.size + " 件は入れません）" : "");
-  $("ipGo").disabled = !n;
-}
-
-function impPlanRead(text){
-  /* **学年の各クラスの週が要る。** 他クラスの行を読むので、
-     まだ読んでいないクラスぶんは先に読んでから照合する */
-  if(impPlanKind === "tally")
-    return impTallyEnsureGrade_(() => impPlanRead_(text));
-  impPlanRead_(text);
-}
-function impPlanRead_(text){
-  let r;
-  if(impPlanKind === "tally") r = impTallyRead(impTallyGrid());
-  else{
-    r = impEvRead(text);
-    /* **雛形の形で貼っていなければ、行事計画の書き方として読む。**
-       貼る手間は、雛形に直させるより、そのまま読むほうが軽い */
-    if(!r.rows || !r.rows.length){
-      const alt = impDocRead(text);
-      if(alt.rows && alt.rows.length) r = alt;
-      else if(!r.rows) r = {rows:[], warn:(r.warn || "")
-        + (alt.warn ? "<br>" + alt.warn : "")};
-    }
-  }
-  impPlanRows = null; impSkip = new Set();
-  $("ipGrid").innerHTML = "";
-  $("ipGo").disabled = true;
-  $("ipWarn").innerHTML = r.warn ? "<div class='box'>" + r.warn + "</div>" : "";
-  if(!r.rows) return void ($("ipStat").textContent = "");
-  impPlanRows = r.rows;
-  impPlanCount_();
-  /* **入れる前に、入るものをぜんぶ見せる。** 貼った表そのままではなく、
-     「どの日の何校時に、何が入るか」に直して出す ── 読み違えはここで分かる。
-     件数が多くても表ごとスクロールして全部見える。
-     先頭のチェックを外すと、その行は入れない（迷う行をあとから残せる） */
-  const head = impPlanKind === "tally" ? ["クラス", "曜日", "校時", "入るもの"]
-                                       : ["日付", "校時", "対象", "行事名"];
-  const line = x => impPlanKind === "tally"
-    ? [x.cls, DOW[x.d], (SLOT_BY_ID[x.slot] || {}).name || x.slot, x.mark]
-    : [iso(x.dt), (SLOT_BY_ID[x.slot] || {}).name || x.slot,
-       x.to.layer === "school" ? "全校" : x.to.target + "年", x.title];
-  $("ipGrid").innerHTML = "<table class='tp'><tr><th title='入れるかどうか'>入</th>"
-    + head.map(h => "<th>" + escText(h) + "</th>").join("") + "</tr>"
-    + r.rows.map((x, i) => "<tr>"
-        + "<td class='ck'><input type='checkbox' data-i='" + i + "' checked"
-        + " aria-label='この行を入れる'></td>"
-        + line(x).map(c => "<td>" + escText(c) + "</td>").join("") + "</tr>").join("")
-    + "</table>";
-  /* チェックの付け外しを1か所で受ける（行ごとに付けない） */
-  $("ipGrid").onchange = ev => {
-    const cb = ev.target.closest("input[data-i]");
-    if(!cb) return;
-    const i = +cb.dataset.i;
-    if(cb.checked) impSkip.delete(i); else impSkip.add(i);
-    cb.closest("tr").classList.toggle("skip", !cb.checked);
-    impPlanCount_();
-  };
-}
-
-function impPlanGo(){
-  /* チェックを外した行を除いたぶんだけ入れる */
-  const rows = (impPlanRows || []).filter((x, i) => !impSkip.has(i));
-  if(!rows.length) return;
-  if(typeof isLocked === "function" && isLocked())
-    return toast("この面はロックしてある。<b>直すには、上のロックを押す</b>");
-  const done = r => {
-    $("impPlanDlg").close();
-    toast("<b>" + r.n + "件</b>を入れた"
-        + (r.skip ? "（" + r.skip + "件は入れられなかった）" : "")
-        + (impSkip.size ? "（" + impSkip.size + "件は除いた）" : ""));
-    if(typeof redrawCenter === "function") redrawCenter(true);
-  };
-  if(impPlanKind === "tally")
-    return impTallyEnsureGrade_(() => done(impTallyApply(rows)));
-  /* 全校・学年は、ほかの先生の紙にも出る。**押す前に、範囲を言う** */
-  askOk({
-    title: rows.length + "件を全校・学年に入れますか",
-    lines: ["<b>ここで入れたものは、当たるクラス全部の紙に出ます。</b>",
-            "同じ日・同じ校時に予定が入っているコマは、<b>これで上書きされます</b>"
-            + "（前のものは、書いた人の画面に「上書きされました」と出ます）。",
-            "入る先は、雛形の「対象」列のとおりです。"
-            + (impSkip.size ? "<br>チェックを外した " + impSkip.size
-                            + " 件は入りません。" : "")],
-    goLabel: "入れる",
-    onYes: () => impEvApply(rows, done)
-  });
-}
-/* ▲ src/js/impplan.js ▲ */
+/* ▲ src/js/impevent.js ▲ */
 /* ▼ src/js/compose.js ▼ */
 /* 層の合成と書き込み。**この画面のいちばん大事な決まりがここにある。**
 
@@ -7986,6 +8004,14 @@ function setNoLesson(d, slot, on){
   writeCell(d, slot, {title: on ? escText(NO_LESSON) : "", subject: null});
   return "";
 }
+/* ▲ src/js/compose.js ▲ */
+/* ▼ src/js/writecell.js ▼ */
+/* ==================================================================
+   writecell.js — コマへの書き込み（writeCell・上書きの見張り・1手戻す）
+
+   compose.js が「出す面」を組み立てるのに対し、こちらは「入れる」側。
+   どの層のどの枠に書くか・入っていい場所か・元に戻すための覚え書き。
+================================================================== */
 
 /* ── 書く ────────────────────────────────────── */
 
@@ -8318,7 +8344,7 @@ function targetOfStore(){
   if(view.kind === "grade")  return view.grade;
   return scope === "school" ? "" : scope === "grade" ? gradeOf(view.cls) : view.cls;
 }
-/* ▲ src/js/compose.js ▲ */
+/* ▲ src/js/writecell.js ▲ */
 /* ▼ src/js/spmonth.js ▼ */
 /* 専科どうしの月予定（仮）。
 
@@ -12610,6 +12636,15 @@ function upViewChanged_(){
     if(typeof drawPalette === "function") drawPalette();
   });
 }
+/* ▲ src/js/unitprogress.js ▲ */
+/* ▼ src/js/unitmanage.js ▼ */
+/* ==================================================================
+   unitmanage.js — 単元の管理画面（作る・直す・消す・学期設定）
+
+   単元の登録・名まえと教科の直し・消去・焼き付け（番号を備考欄へ）と、
+   学期の区切り（学期設定）の窓を持つ。
+   番号を数える・割り付ける側は unitprogress.js に。
+================================================================== */
 
 /* ── 管理画面（作る・直す・消す・学期設定） ── */
 
@@ -13247,7 +13282,7 @@ function wireUnitProgress(){
   on("termAdd","click",() => { termDraft.push({name:"",start:"",end:""}); drawTermRows_(); });
   on("termSave","click",saveTermRows_);
 }
-/* ▲ src/js/unitprogress.js ▲ */
+/* ▲ src/js/unitmanage.js ▲ */
 /* ▼ src/js/tanpopo.js ▼ */
 /* たんぽぽ時間割に書き入れるところ。
 
@@ -14132,485 +14167,6 @@ function okAnswer(yes){
   (yes ? a.yes : a.no)();
 }
 
-/* ── 基本時間割（A週・B週） ─────────────────────
-   ここに入れたものが、週案を開いた時点で全部のコマに出る。
-   担任は毎週30コマ埋めるのではなく、変えたところだけ直す。 */
-
-let baseVar = "A";
-/* 基本時間割を直す範囲。**既定は「今週以降のみ」。**
-   「今年度全体」は過ぎた週の紙・時数・たんぽぽまで変えるので、選んだときだけ */
-let baseScope = "week";
-
-function openSettings(){
-  $("settingsFy").textContent = fy() + "年度";
-  $("setPaperNow").textContent = db.settings.paper + "・タイトル"
-    + (+db.settings.titlePt || 16) + "pt・詳細" + (+db.settings.notePt || 12) + "pt";
-  $("settingsDlg").showModal();
-}
-
-/* 「教務必携用（B5）」。**印刷・画像・Sheet は窓を挟まない。**
-   4週・学年・カレンダーと同じく、紙のとなりの帯（#weekBar）から直に押す。
-   ここでは週の紙そのものへ戻るだけでよい。 */
-function openWeekView(){
-  if(view.kind === "gate" || view.kind === "tanpopo") return toast("先に週案を開いてください");
-  if(centerOk()) setCenter("week");
-}
-
-function planValues(mon){
-  const keep = monday; monday = mon;
-  try{
-    const out = [[viewName(), md(mon) + " → " + md(addDays(mon, 4))]
-      .concat(DOW.slice(0, WEEKDAYS))];
-    for(const s of SLOTS){
-      const row = [s.name, s.time || ""];
-      for(let d=0; d<WEEKDAYS; d++){
-        const c = cellFor(d, s.id), title = plain(c.title || ""), note = plain(c.note || "");
-        row.push(title + (note ? "\n" + note : ""));
-      }
-      out.push(row);
-    }
-    return out;
-  } finally { monday = keep; }
-}
-function planParts(start, count){
-  const out = [];
-  for(let i=0; i<count; i++){
-    const mon = addDays(start, i*7);
-    out.push({name:(mon.getMonth()+1) + "月" + Math.ceil(mon.getDate()/7) + "週", values:planValues(mon)});
-  }
-  return out;
-}
-function downloadBlob(blob, name){
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
-  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-}
-/* 紙面をそのままPNGへする。外部サービスへ週案を送らない。 */
-async function nodePngBlob(node){
-  /* **縮めて見せている紙は、元の大きさで測る。** 画面に合わせる zoom は
-     .paper に掛かっていて、getBoundingClientRect は縮んだ大きさを返す。
-     一方、画像の中の紙は zoom を引き継がず元の大きさで組まれる ──
-     幅が足りず右が見切れる（実測：教務必携用を狭い窓で画像に出すと、
-     右の列が途中で切れた）。測るあいだだけ zoom を 1 に戻す。 */
-  const pa = node.closest(".paper"), z = pa && pa.style.zoom;
-  if(pa && z) pa.style.zoom = 1;
-  const r = node.getBoundingClientRect();
-  if(pa && z) pa.style.zoom = z;
-  /* **見えていない面は画像にできない。** 隠れた要素は幅も高さも 0 になり、
-     0×0 の canvas は toBlob が null を返す ── これをそのまま downloadBlob へ
-     渡すと "createObjectURL: Overload resolution failed" という、原因の
-     分からない失敗になる（実測：中央のかたちを切り替えたまま「教務必携用」の
-     画像を押むと、ここで空の PNG を作ろうとしていた）。
-     ここで止めて、分かる理由を返す。 */
-  if(r.width < 1 || r.height < 1)
-    throw new Error("今見えていない面は画像にできない。その面を開いてから押す");
-  const css = [...document.styleSheets].map(s => {
-    try{return [...s.cssRules].map(x => x.cssText).join("\n");}catch(_){return "";}
-  }).join("\n");
-  const xml = new XMLSerializer().serializeToString(node.cloneNode(true));
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${r.width}" height="${r.height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml"><style>${css}</style>${xml}</div></foreignObject></svg>`;
-  /* Blob URL の SVG は Chrome で canvas を汚染し、PNG にできない。data URL なら同一生成元として描画できる。 */
-  const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-  const img = new Image(); await new Promise((ok, ng) => { img.onload=ok; img.onerror=ng; img.src=url; });
-  const scale=2, cv=document.createElement("canvas"); cv.width=Math.ceil(r.width*scale); cv.height=Math.ceil(r.height*scale);
-  const cx=cv.getContext("2d"); cx.scale(scale,scale); cx.fillStyle="#fff"; cx.fillRect(0,0,r.width,r.height); cx.drawImage(img,0,0);
-  return await new Promise(ok => cv.toBlob(ok,"image/png"));
-}
-async function nodePng(node, name){
-  downloadBlob(await nodePngBlob(node), name);
-}
-/* 別窓・別タブに結果を出すときの共通の窓。
-   **窓は押した瞬間に開く** ── 生成を待ってから開くと、クリックから遅れた
-   window.open をブラウザがポップアップとして弾く。先に開いておき、
-   中身ができたら中を差し替える（location を移す）。
-   窓が弾かれたときは null で返るので、呼び元はその場合だけ従来どおりの
-   報せ（リンクや保存）に退ける。 */
-function openOutWindow(kind){
-  const w = window.open("", "_blank");
-  if(w){
-    w.document.write("<body style='font-family:sans-serif;color:#666;padding:2em'>"
-      + (kind || "作っています") + "…</body>");
-    w.document.close();
-  }
-  return w;
-}
-const outputName = suffix => viewName().replace(/[^\w\-ぁ-んァ-ヶ一-龠]/g,"_") + "_" + iso(monday) + "_" + suffix;
-/* 別窓が開けなかったときの退避（ポップアップをブロックされたとき）。
-   帯に字を書くと版面がずれるので、いつもの確認窓にリンクだけを出す ──
-   自分で閉じるまで残る。トーストは数秒で消えるのでリンクには向かない */
-function showOutLink(title, url, label){
-  askOk({title:title,
-    lines:["<a target='_blank' rel='noopener' href='" + escText(url) + "'>" + escText(label) + "</a>"],
-    noLabel:"閉じる", goLabel:"開く", onYes(){ window.open(url, "_blank"); }});
-}
-function exportWeekSheet(){
-  const w = openOutWindow("Google Sheetを作っています");
-  Backend.exportPlanSheet(outputName("週案"), planParts(monday,1), r => {
-    if(w){ w.location.href = r.url; return; }
-    showOutLink("Sheetを作りました", r.url, "Google Sheetを開く");
-  }, why => { if(w) w.close(); toast(escText(why)); });
-}
-function exportMonthSheet(){
-  const w = openOutWindow("Google Sheetを作っています");
-  Backend.exportPlanSheet(outputName("4週"), planParts(mMonday,4), r => {
-    if(w){ w.location.href = r.url; return; }
-    showOutLink("Sheetを作りました", r.url, "4週のGoogle Sheetを開く");
-  }, why => { if(w) w.close(); toast(escText(why)); });
-}
-/* カレンダーの面。**見えている2ヶ月を、週ごとの週案で出す。**
-   カレンダー形の表は Sheet では潰れる（1コマ数行を2ヶ月分並べられない）ので、
-   範囲内の週案を1週1シートで出す ── 中身は週案と同じ、枚数だけ違う */
-function exportCalSheet(){
-  if(!calFrom) return toast("先に2ヶ月の面を開いてください");
-  const start = mondayOf(calFrom);
-  const lastM = new Date(calFrom.getFullYear(), calFrom.getMonth() + CAL_MONTHS, 0);
-  const count = Math.ceil((addDays(lastM, 1) - start) / (7 * 864e5));
-  const w = openOutWindow("Google Sheetを作っています");
-  Backend.exportPlanSheet(outputName("2ヶ月"), planParts(start, count), r => {
-    if(w){ w.location.href = r.url; return; }
-    showOutLink("Sheetを作りました", r.url, "2ヶ月のGoogle Sheetを開く");
-  }, why => { if(w) w.close(); toast(escText(why)); });
-}
-/* 学年の面。**開いている学年のクラスぶんを、クラスごとに1シートずつ。**
-   planValues が読む「いまの面」をクラスに差し替えて組み立て、終わったら戻す */
-function exportGradeSheet(){
-  const list = gClasses();
-  if(!list.length) return toast("この学年にクラスがありません");
-  const keep = view, sheets = [];
-  try{
-    for(const c of list){
-      view = {kind:"class", cls:c};
-      sheets.push({name:c, values:planValues(monday)});
-    }
-  }finally{ view = keep; }
-  /* 名づけに outputName は使わない ── 先頭に「いま開いている面の名前」が
-     入るので、学年のまとめが「1-1 の学年ごと」になってしまう */
-  const w = openOutWindow("Google Sheetを作っています");
-  Backend.exportPlanSheet(escText(gGrade) + "年_学年ごと_" + iso(monday), sheets, r => {
-    if(w){ w.location.href = r.url; return; }
-    showOutLink("Sheetを作りました", r.url, gGrade + "年のGoogle Sheetを開く");
-  }, why => { if(w) w.close(); toast(escText(why)); });
-}
-
-function openBaseDlg(){
-  const list = allClasses();
-  fillSelect($("baseCls"), list.map(c => ({v:c, t:c})),
-             view.kind === "class" ? view.cls : list[0]);
-  baseVar = week().variant;
-  baseScope = "week";
-  drawBaseGrid();
-  $("baseDlg").showModal();
-}
-
-/* ── 基本時間割を直す範囲 ────────────────────────
-   **今年度全体を変更**：年度はじめの版と、途中からの版の全部を同じに直す。
-                         過ぎた週の紙・時数も変わる。
-   **今週以降のみ変更**：開いている週の月曜から使う版を作って（無ければ、
-                         いま効いている版の写しから）、その版とそれより後の版を直す。
-                         それより前の週は1コマも変わらない。
-   開いている週が年度はじめの週なら、2つは同じ（年度はじめの版を直す）。
-   **コマ単位で直す。** 「今年度全体」で1コマ直しても、途中からの版の
-   ほかのコマは残る（2学期に改めたところまで年度はじめに戻さない）。 */
-const baseStartMon = () => Y().week1 || firstMonday(fy());
-/* 「今週以降」の起点。年度はじめの週（とそれより前）なら ""＝年度はじめの版 */
-function baseFromHere(){
-  const m = wkKey();
-  return m <= baseStartMon() ? "" : m;
-}
-/* 直す先の版を返す。**「今週以降」の版が無ければ、ここで作る。** */
-function baseTargets(c){
-  const Yr = Y();
-  if(!Yr.base[c]) Yr.base[c] = {};
-  const vers = Yr.baseFrom[c] || (Yr.baseFrom[c] = []);
-  const from = baseScope === "week" ? baseFromHere() : "";
-  if(!from) return [Yr.base[c]].concat(vers);
-  if(!vers.some(v => v.from === from)){
-    const cur = baseSetAt(c, from) || {};
-    let at = vers.findIndex(v => v.from > from);
-    if(at < 0) at = vers.length;
-    vers.splice(at, 0, {from, A:clone(cur.A || {}), B:clone(cur.B || {})});
-  }
-  return vers.filter(v => v.from >= from);
-}
-/* 1週種の中身が同じか。**キーの並びに依らずに比べる。** */
-function baseBankEq(a, b){
-  a = a || {}; b = b || {};
-  const ka = Object.keys(a), kb = Object.keys(b);
-  if(ka.length !== kb.length) return false;
-  for(const k of ka){
-    const x = a[k], y = b[k];
-    if(!y || String(x.title || "") !== String(y.title || "")
-       || String(x.subject || "") !== String(y.subject || "")) return false;
-  }
-  return true;
-}
-/* **前の版と同じになった版は捨てる。** 「今週以降」で直して元へ戻したとき、
-   中身の同じ版が残ると、どこで時間割が変わったのかが一覧で読めなくなる */
-function baseCompact(c){
-  const Yr = Y();
-  let prev = Yr.base[c] || {};
-  const keep = [];
-  for(const v of (Yr.baseFrom[c] || [])){
-    if(baseBankEq(v.A, prev.A) && baseBankEq(v.B, prev.B)) continue;
-    keep.push(v); prev = v;
-  }
-  if(keep.length) Yr.baseFrom[c] = keep; else delete Yr.baseFrom[c];
-}
-/* 基本時間割を直す入口。**直す・版を片づける・提出を戻す・保存 を1本で。**
-   send=false は、呼ぶ側がまとめて送るとき（固定時間割の取り込み） */
-function baseEdit(c, fn, send){
-  const before = {base: clone(Y().base[c] || {}), from: clone(baseVersions(c))};
-  for(const t of baseTargets(c)) fn(t);
-  baseCompact(c);
-  baseMarkTp(c, before);
-  save();
-  if(send !== false) Backend.saveBase(c);
-}
-/* **提出ずみの週で、たんぽぽへ渡る字が変わったら「未」に戻す。**
-   基本時間割は、担任が書いていないコマにそのまま出る。直しても「済」の
-   ままだと、たんぽぽ担当は古い時間割のまま支援員を組む。
-   ここで見るのは**この端末にある週**だけ。正本はサーバ（gas/Store.gs markTpBase_）で、
-   ほかの週は開いたときにサーバの印で「未」になる */
-function baseMarkTp(c, before){
-  const Yr = Y(), slots = typeof tpSlots === "function" ? tpSlots()
-        : SLOTS.filter(s => s.kind === "lesson").slice(0, 6).map(s => s.id);
-  const setOf = (snap, mon) => {
-    let set = snap.base || {};
-    for(const v of (snap.from || [])) if(v.from <= mon) set = v;
-    return set;
-  };
-  const now = {base: Yr.base[c] || {}, from: baseVersions(c)};
-  let hit = false;
-  for(const k in (Yr.weeks || {})){
-    const w = Yr.weeks[k];
-    if(!w || !w.tpSub || !w.tpSub[c] || w.tpSub[c].dirty) continue;
-    const v = autoVariant(k);
-    const a = setOf(before, k)[v] || {}, b = setOf(now, k)[v] || {};
-    let diff = false;
-    for(let d = 0; d < WEEKDAYS && !diff; d++)
-      for(const sl of slots){
-        const x = a[ck(d, sl)], y = b[ck(d, sl)];
-        if(String((x || {}).title || "") !== String((y || {}).title || "")
-           || String((x || {}).subject || "") !== String((y || {}).subject || "")){ diff = true; break; }
-      }
-    if(!diff) continue;
-    w.tpSub[c].dirty = true;
-    (w.tpEdited || (w.tpEdited = {}))[c] = true;
-    const seq = w.tpEditSeq || (w.tpEditSeq = {});
-    seq[c] = (seq[c] || 0) + 1;
-    hit = true;
-  }
-  if(hit && typeof paintTpSub === "function") paintTpSub();
-}
-/* 範囲の選び方と、いまどの版を見ているかを出す */
-function paintBaseScope(c){
-  const from = baseFromHere(), mon = wkKey();
-  $("bsWeek").textContent = "今週以降のみ変更（" + md(monday) + "の週から）";
-  $("bsWeek").setAttribute("aria-pressed", String(baseScope === "week"));
-  $("bsYear").setAttribute("aria-pressed", String(baseScope === "year"));
-  const vers = baseVersions(c);
-  const lines = [];
-  if(baseScope === "year")
-    lines.push("<b>4月からの全部の週が変わります。</b>過ぎた週の紙と時数も変わり、"
-             + "提出ずみの週は「未」に戻ることがあります。");
-  else if(!from)
-    lines.push("<b>年度はじめの週なので、今年度全体と同じです。</b>");
-  else
-    lines.push("<b>" + md(monday) + "の週から先だけが変わります。</b>"
-             + md(addDays(monday, -7)) + "の週までの紙・時数・たんぽぽはそのままです。");
-  if(vers.length){
-    const cur = baseSetAt(c, mon);
-    const names = ["年度はじめ"].concat(vers.map(v => md(parseISO(v.from)) + "の週から"));
-    const at = cur && cur.from ? names[vers.indexOf(cur) + 1] : names[0];
-    lines.push(escText(c) + " の基本時間割は <b>" + names.length + " 通り</b>（"
-             + names.join("／") + "）。いま出しているのは「" + at + "」のもの。");
-  }
-  $("baseScopeHint").innerHTML = lines.join("<br>");
-}
-function drawBaseGrid(){
-  const c = $("baseCls").value;
-  /* **その週に効いている版を出す。** 描くだけで版を作らない（作るのは直したとき） */
-  const bank = ((baseSetAt(c, wkKey()) || {})[baseVar]) || {};
-
-  const rows = ["<table class='grid2'><tr><th></th>"
-    + DOW.slice(0, WEEKDAYS).map(d => "<th>" + d + "</th>").join("") + "</tr>"];
-  for(const s of SLOTS){
-    rows.push("<tr><th>" + s.name + "</th>");
-    for(let d = 0; d < WEEKDAYS; d++){
-      const v = bank[ck(d, s.id)] || {};
-      rows.push("<td>" + (s.kind === "lesson"
-        ? "<select class='basesub' data-subject='" + escText(v.subject || "") + "' data-k='" + ck(d, s.id) + "'><option value=''>—</option>"
-          + SUBJECTS.map(x => "<option value='" + x.code + "'"
-            + (v.subject === x.code ? " selected" : "") + ">" + x.name + "</option>").join("")
-          + "</select>"
-        : "<input data-k='" + ck(d, s.id) + "' value='" + escText(v.title || "") + "'>")
-        + "</td>");
-    }
-    rows.push("</tr>");
-  }
-  $("baseGrid").innerHTML = rows.join("") + "</table>";
-
-  const put = (k, cell) => baseEdit(c, t => {
-    const b = t[baseVar] || (t[baseVar] = {});
-    if(cell) b[k] = clone(cell); else delete b[k];
-  });
-  for(const e of $("baseGrid").querySelectorAll("select")) e.onchange = () => {
-    const s = SUB_BY_CODE[e.value];
-    e.dataset.subject = s ? s.code : "";
-    put(e.dataset.k, s ? {title:s.name, subject:s.code} : null);
-    paintBaseScope(c);
-  };
-  for(const e of $("baseGrid").querySelectorAll("input")) e.onchange = () => {
-    put(e.dataset.k, e.value.trim() ? {title:e.value.trim(), subject:null} : null);
-    paintBaseScope(c);
-  };
-  $("bvA").setAttribute("aria-pressed", String(baseVar === "A"));
-  $("bvB").setAttribute("aria-pressed", String(baseVar === "B"));
-  $("baseFy").textContent = fy() + "年度";
-  paintBaseScope(c);
-}
-
-/* ── 固定時間割の取り込み ─────────────────────
-   学校の固定時間割表を、そのままの形で読んで基本時間割にする。
-   **読んですぐ入れない。** 何クラス読めたか・読めない字はどれかを先に見せる。
-   入れ違いに気づかないまま20クラスぶんを入れ替えると、戻す手立てが無い。 */
-
-let impRes = null;              /* いま読めている表 */
-let impSrc = "paste";
-
-function openImpDlg(){
-  impRes = null;
-  $("impText").value = "";
-  drawImp();
-  $("impDlg").showModal();
-}
-function setImpSrc(v){
-  impSrc = v;
-  for(const b of $("impSrc").querySelectorAll("button"))
-    b.setAttribute("aria-pressed", String(b.dataset.s === v));
-  $("impPasteBox").hidden = v !== "paste";
-  $("impSrcNote").innerHTML =
-      v === "paste"   ? "学校の表を選んで写し、ここに貼る"
-    : v === "sheet"   ? "<b>固定時間割取り込み</b>シートに貼ってあるものを読む（本番のみ）"
-                      : escText(FIXED_NAME) + " を読む";
-  impRes = null;
-  drawImp();
-}
-
-/* 貼り付けた字を表にする。エクセルから写すと、
-   タブ区切りで1行1行が改行になっている。 */
-function tsvGrid(text){
-  return String(text).replace(/\r/g, "").split("\n").map(line => line.split("\t"));
-}
-
-function readImp(){
-  if(impSrc === "builtin"){ impRes = fixedBuiltin(); return drawImp(); }
-  if(impSrc === "paste"){
-    const t = $("impText").value;
-    if(!t.trim()){ impRes = {error:"まだ何も貼っていない"}; return drawImp(); }
-    impRes = parseFixed(tsvGrid(t));
-    return drawImp();
-  }
-  $("impStat").textContent = "シートを読んで入る…";
-  Backend.readPaste(
-    g => { impRes = g.length ? parseFixed(g) : {error:"シートが空だった"}; drawImp(); },
-    why => { impRes = {error:why}; drawImp(); });
-}
-
-function drawImp(){
-  const boxes = [], r = impRes;
-  const known = r && r.order ? r.order.filter(c => allClasses().indexOf(c) >= 0) : [];
-  const miss  = r && r.order ? r.order.filter(c => allClasses().indexOf(c) < 0)  : [];
-  const none  = r && r.order ? allClasses().filter(c => r.order.indexOf(c) < 0)   : [];
-
-  if(!r){
-    boxes.push("<div class='box ok'>まだ読んでいない。上で選んで「読む」を押す。</div>");
-  } else if(r.error){
-    boxes.push("<div class='box'><b>読めなかった。</b>" + escText(r.error) + "</div>");
-  } else {
-    if(r.unknown && r.unknown.length)
-      boxes.push("<div class='box'><b>教科として読めない字：" + r.unknown.map(escText).join("・")
-        + "</b><br>そのまま題名としている。教科として数えたいときは、"
-        + "「教科」シートに足してから読み直す。</div>");
-    if(miss.length)
-      boxes.push("<div class='box'><b>" + miss.map(escText).join("・")
-        + "</b> は<b>今の学級編成に無い</b>ので入れない。"
-        + "編成が古いなら「学級編成」で直してから読み直す。</div>");
-    if(none.length)
-      boxes.push("<div class='box'><b>" + none.map(escText).join("・")
-        + "</b> は表に無かった。<b>今の基本時間割のまま</b>にする。</div>");
-    for(const n of (r.notes || [])) boxes.push("<div class='box'>" + escText(n) + "</div>");
-    if(!boxes.length)
-      boxes.push("<div class='box ok'>" + known.length
-        + " クラスぶんを読めた。気になるところは無い。</div>");
-  }
-  $("impWarn").innerHTML = boxes.join("");
-  $("impStat").textContent = r && !r.error
-    ? (r.name ? r.name + "／" : "") + known.length + " クラス・"
-      + (r.periods || 0) + " 校時ぶん"
-    : "";
-  $("impGo").disabled = !known.length;
-  /* **どこから入れ替わるかも言う**（基本時間割の窓で選んだ範囲） */
-  $("impCount").innerHTML = known.length
-    ? "<b>" + known.length + " クラス</b>の A週・B週を"
-      + (baseScope === "week" && baseFromHere()
-          ? "<b>" + md(monday) + "の週から</b>" : "<b>今年度全体で</b>")
-      + "入れ替える" : "";
-
-  /* 入れる前に、1クラスだけ表のとおりに見せる */
-  $("impPickRow").hidden = !known.length;
-  if(!known.length){ $("impGrid").innerHTML = ""; return; }
-  const cur = known.indexOf($("impCls").value) >= 0 ? $("impCls").value : known[0];
-  fillSelect($("impCls"), known.map(c => ({v:c, t:c})), cur);
-  drawImpGrid(cur);
-}
-
-function drawImpGrid(cls){
-  const got = impRes.classes[cls] || {A:{}, B:{}};
-  const slots = lessonSlots();
-  const head = "<tr><th></th><th></th>"
-    + slots.map(s => "<th>" + escText(s.name) + "</th>").join("") + "</tr>";
-  const body = [];
-  for(let d = 0; d < WEEKDAYS; d++)
-    for(const v of ["A", "B"]){
-      const bank = got[v] || {};
-      body.push("<tr" + (v === "B" ? " class='b'" : "") + ">"
-        + (v === "A" ? "<th rowspan='2'>" + DOW[d] + "</th>" : "")
-        + "<th>" + v + "週</th>"
-        + slots.map(s => {
-            const e = bank[ck(d, s.id)];
-            const same = (got.A || {})[ck(d, s.id)], other = (got.B || {})[ck(d, s.id)];
-            const diff = (same ? same.title : "") !== (other ? other.title : "");
-            return "<td" + (diff ? " class='diff'" : "") + ">"
-                 + (e ? escText(e.title) : "<i>—</i>") + "</td>";
-          }).join("") + "</tr>");
-    }
-  $("impGrid").innerHTML = "<table class='tp imp'>" + head + body.join("") + "</table>";
-}
-
-/* 入れる。**いまの基本時間割は消える**ので、そこを先に言う。 */
-function goImp(){
-  if(!impRes || impRes.error) return;
-  const known = impRes.order.filter(c => allClasses().indexOf(c) >= 0);
-  if(!known.length) return;
-  askOk({
-    title: fy() + "年度の基本時間割を、読んだ表で入れ替えますか",
-    lines: [
-      "入れ替えるのは <b>" + known.length + " クラス</b>（"
-        + escText(known.join("、")) + "）。<b>A週とB週の両方</b>が入れ替わります。",
-      "<b>今入っている基本時間割は消えます。</b>"
-        + "戻すには、もとの表をもう一度読ませることになります。",
-      "週案に手で書いたものは消えません。"],
-    goLabel: "入れ替える",
-    onYes: () => {
-      const done = applyFixed(impRes);
-      toast("基本時間割に入れた（<b>" + done.length + " クラス</b>）");
-      $("impDlg").close();
-      if($("baseDlg").open) drawBaseGrid();
-      refreshWeek();
-    }
-  });
-}
-
 /* ── 学級編成 ───────────────────────────────────
    本番では「クラス」シートが正本。ここはその写し。
    **年度ごとに持つ。** 直しても前の年度は変わらない。
@@ -15251,7 +14807,527 @@ function openGuide(automatic){
 function finishGuide(){
   try{ localStorage.setItem(GUIDE_KEY, 'done'); }catch(_){}
 }
+/* ▲ src/js/dialogs.js ▲ */
+/* ▼ src/js/basedlg.js ▼ */
+/* ==================================================================
+   basedlg.js — 基本時間割まわりの窓（A週・B週・直す範囲・取り込み・A週の起点）
 
+   基本時間割を直す窓と、その中身を固定時間割から取り込む口、
+   A週の起点の月曜を決める窓。
+================================================================== */
+
+/* ── 基本時間割（A週・B週） ─────────────────────
+   ここに入れたものが、週案を開いた時点で全部のコマに出る。
+   担任は毎週30コマ埋めるのではなく、変えたところだけ直す。 */
+
+let baseVar = "A";
+/* 基本時間割を直す範囲。**既定は「今週以降のみ」。**
+   「今年度全体」は過ぎた週の紙・時数・たんぽぽまで変えるので、選んだときだけ */
+let baseScope = "week";
+
+function openSettings(){
+  $("settingsFy").textContent = fy() + "年度";
+  $("setPaperNow").textContent = db.settings.paper + "・タイトル"
+    + (+db.settings.titlePt || 16) + "pt・詳細" + (+db.settings.notePt || 12) + "pt";
+  $("settingsDlg").showModal();
+}
+
+/* 「教務必携用（B5）」。**印刷・画像・Sheet は窓を挟まない。**
+   4週・学年・カレンダーと同じく、紙のとなりの帯（#weekBar）から直に押す。
+   ここでは週の紙そのものへ戻るだけでよい。 */
+function openWeekView(){
+  if(view.kind === "gate" || view.kind === "tanpopo") return toast("先に週案を開いてください");
+  if(centerOk()) setCenter("week");
+}
+
+function planValues(mon){
+  const keep = monday; monday = mon;
+  try{
+    const out = [[viewName(), md(mon) + " → " + md(addDays(mon, 4))]
+      .concat(DOW.slice(0, WEEKDAYS))];
+    for(const s of SLOTS){
+      const row = [s.name, s.time || ""];
+      for(let d=0; d<WEEKDAYS; d++){
+        const c = cellFor(d, s.id), title = plain(c.title || ""), note = plain(c.note || "");
+        row.push(title + (note ? "\n" + note : ""));
+      }
+      out.push(row);
+    }
+    return out;
+  } finally { monday = keep; }
+}
+function planParts(start, count){
+  const out = [];
+  for(let i=0; i<count; i++){
+    const mon = addDays(start, i*7);
+    out.push({name:(mon.getMonth()+1) + "月" + Math.ceil(mon.getDate()/7) + "週", values:planValues(mon)});
+  }
+  return out;
+}
+function downloadBlob(blob, name){
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+/* 紙面をそのままPNGへする。外部サービスへ週案を送らない。 */
+async function nodePngBlob(node){
+  /* **縮めて見せている紙は、元の大きさで測る。** 画面に合わせる zoom は
+     .paper に掛かっていて、getBoundingClientRect は縮んだ大きさを返す。
+     一方、画像の中の紙は zoom を引き継がず元の大きさで組まれる ──
+     幅が足りず右が見切れる（実測：教務必携用を狭い窓で画像に出すと、
+     右の列が途中で切れた）。測るあいだだけ zoom を 1 に戻す。 */
+  const pa = node.closest(".paper"), z = pa && pa.style.zoom;
+  if(pa && z) pa.style.zoom = 1;
+  const r = node.getBoundingClientRect();
+  if(pa && z) pa.style.zoom = z;
+  /* **見えていない面は画像にできない。** 隠れた要素は幅も高さも 0 になり、
+     0×0 の canvas は toBlob が null を返す ── これをそのまま downloadBlob へ
+     渡すと "createObjectURL: Overload resolution failed" という、原因の
+     分からない失敗になる（実測：中央のかたちを切り替えたまま「教務必携用」の
+     画像を押むと、ここで空の PNG を作ろうとしていた）。
+     ここで止めて、分かる理由を返す。 */
+  if(r.width < 1 || r.height < 1)
+    throw new Error("今見えていない面は画像にできない。その面を開いてから押す");
+  const css = [...document.styleSheets].map(s => {
+    try{return [...s.cssRules].map(x => x.cssText).join("\n");}catch(_){return "";}
+  }).join("\n");
+  const xml = new XMLSerializer().serializeToString(node.cloneNode(true));
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${r.width}" height="${r.height}"><foreignObject width="100%" height="100%"><div xmlns="http://www.w3.org/1999/xhtml"><style>${css}</style>${xml}</div></foreignObject></svg>`;
+  /* Blob URL の SVG は Chrome で canvas を汚染し、PNG にできない。data URL なら同一生成元として描画できる。 */
+  const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  const img = new Image(); await new Promise((ok, ng) => { img.onload=ok; img.onerror=ng; img.src=url; });
+  const scale=2, cv=document.createElement("canvas"); cv.width=Math.ceil(r.width*scale); cv.height=Math.ceil(r.height*scale);
+  const cx=cv.getContext("2d"); cx.scale(scale,scale); cx.fillStyle="#fff"; cx.fillRect(0,0,r.width,r.height); cx.drawImage(img,0,0);
+  return await new Promise(ok => cv.toBlob(ok,"image/png"));
+}
+async function nodePng(node, name){
+  downloadBlob(await nodePngBlob(node), name);
+}
+/* 別窓・別タブに結果を出すときの共通の窓。
+   **窓は押した瞬間に開く** ── 生成を待ってから開くと、クリックから遅れた
+   window.open をブラウザがポップアップとして弾く。先に開いておき、
+   中身ができたら中を差し替える（location を移す）。
+   窓が弾かれたときは null で返るので、呼び元はその場合だけ従来どおりの
+   報せ（リンクや保存）に退ける。 */
+function openOutWindow(kind){
+  const w = window.open("", "_blank");
+  if(w){
+    w.document.write("<body style='font-family:sans-serif;color:#666;padding:2em'>"
+      + (kind || "作っています") + "…</body>");
+    w.document.close();
+  }
+  return w;
+}
+const outputName = suffix => viewName().replace(/[^\w\-ぁ-んァ-ヶ一-龠]/g,"_") + "_" + iso(monday) + "_" + suffix;
+/* 別窓が開けなかったときの退避（ポップアップをブロックされたとき）。
+   帯に字を書くと版面がずれるので、いつもの確認窓にリンクだけを出す ──
+   自分で閉じるまで残る。トーストは数秒で消えるのでリンクには向かない */
+function showOutLink(title, url, label){
+  askOk({title:title,
+    lines:["<a target='_blank' rel='noopener' href='" + escText(url) + "'>" + escText(label) + "</a>"],
+    noLabel:"閉じる", goLabel:"開く", onYes(){ window.open(url, "_blank"); }});
+}
+function exportWeekSheet(){
+  const w = openOutWindow("Google Sheetを作っています");
+  Backend.exportPlanSheet(outputName("週案"), planParts(monday,1), r => {
+    if(w){ w.location.href = r.url; return; }
+    showOutLink("Sheetを作りました", r.url, "Google Sheetを開く");
+  }, why => { if(w) w.close(); toast(escText(why)); });
+}
+function exportMonthSheet(){
+  const w = openOutWindow("Google Sheetを作っています");
+  Backend.exportPlanSheet(outputName("4週"), planParts(mMonday,4), r => {
+    if(w){ w.location.href = r.url; return; }
+    showOutLink("Sheetを作りました", r.url, "4週のGoogle Sheetを開く");
+  }, why => { if(w) w.close(); toast(escText(why)); });
+}
+/* カレンダーの面。**見えている2ヶ月を、週ごとの週案で出す。**
+   カレンダー形の表は Sheet では潰れる（1コマ数行を2ヶ月分並べられない）ので、
+   範囲内の週案を1週1シートで出す ── 中身は週案と同じ、枚数だけ違う */
+function exportCalSheet(){
+  if(!calFrom) return toast("先に2ヶ月の面を開いてください");
+  const start = mondayOf(calFrom);
+  const lastM = new Date(calFrom.getFullYear(), calFrom.getMonth() + CAL_MONTHS, 0);
+  const count = Math.ceil((addDays(lastM, 1) - start) / (7 * 864e5));
+  const w = openOutWindow("Google Sheetを作っています");
+  Backend.exportPlanSheet(outputName("2ヶ月"), planParts(start, count), r => {
+    if(w){ w.location.href = r.url; return; }
+    showOutLink("Sheetを作りました", r.url, "2ヶ月のGoogle Sheetを開く");
+  }, why => { if(w) w.close(); toast(escText(why)); });
+}
+/* 学年の面。**開いている学年のクラスぶんを、クラスごとに1シートずつ。**
+   planValues が読む「いまの面」をクラスに差し替えて組み立て、終わったら戻す */
+function exportGradeSheet(){
+  const list = gClasses();
+  if(!list.length) return toast("この学年にクラスがありません");
+  const keep = view, sheets = [];
+  try{
+    for(const c of list){
+      view = {kind:"class", cls:c};
+      sheets.push({name:c, values:planValues(monday)});
+    }
+  }finally{ view = keep; }
+  /* 名づけに outputName は使わない ── 先頭に「いま開いている面の名前」が
+     入るので、学年のまとめが「1-1 の学年ごと」になってしまう */
+  const w = openOutWindow("Google Sheetを作っています");
+  Backend.exportPlanSheet(escText(gGrade) + "年_学年ごと_" + iso(monday), sheets, r => {
+    if(w){ w.location.href = r.url; return; }
+    showOutLink("Sheetを作りました", r.url, gGrade + "年のGoogle Sheetを開く");
+  }, why => { if(w) w.close(); toast(escText(why)); });
+}
+
+function openBaseDlg(){
+  const list = allClasses();
+  fillSelect($("baseCls"), list.map(c => ({v:c, t:c})),
+             view.kind === "class" ? view.cls : list[0]);
+  baseVar = week().variant;
+  baseScope = "week";
+  drawBaseGrid();
+  $("baseDlg").showModal();
+}
+
+/* ── 基本時間割を直す範囲 ────────────────────────
+   **今年度全体を変更**：年度はじめの版と、途中からの版の全部を同じに直す。
+                         過ぎた週の紙・時数も変わる。
+   **今週以降のみ変更**：開いている週の月曜から使う版を作って（無ければ、
+                         いま効いている版の写しから）、その版とそれより後の版を直す。
+                         それより前の週は1コマも変わらない。
+   開いている週が年度はじめの週なら、2つは同じ（年度はじめの版を直す）。
+   **コマ単位で直す。** 「今年度全体」で1コマ直しても、途中からの版の
+   ほかのコマは残る（2学期に改めたところまで年度はじめに戻さない）。 */
+const baseStartMon = () => Y().week1 || firstMonday(fy());
+/* 「今週以降」の起点。年度はじめの週（とそれより前）なら ""＝年度はじめの版 */
+function baseFromHere(){
+  const m = wkKey();
+  return m <= baseStartMon() ? "" : m;
+}
+/* 直す先の版を返す。**「今週以降」の版が無ければ、ここで作る。** */
+function baseTargets(c){
+  const Yr = Y();
+  if(!Yr.base[c]) Yr.base[c] = {};
+  const vers = Yr.baseFrom[c] || (Yr.baseFrom[c] = []);
+  const from = baseScope === "week" ? baseFromHere() : "";
+  if(!from) return [Yr.base[c]].concat(vers);
+  if(!vers.some(v => v.from === from)){
+    const cur = baseSetAt(c, from) || {};
+    let at = vers.findIndex(v => v.from > from);
+    if(at < 0) at = vers.length;
+    vers.splice(at, 0, {from, A:clone(cur.A || {}), B:clone(cur.B || {})});
+  }
+  return vers.filter(v => v.from >= from);
+}
+/* 1週種の中身が同じか。**キーの並びに依らずに比べる。** */
+function baseBankEq(a, b){
+  a = a || {}; b = b || {};
+  const ka = Object.keys(a), kb = Object.keys(b);
+  if(ka.length !== kb.length) return false;
+  for(const k of ka){
+    const x = a[k], y = b[k];
+    if(!y || String(x.title || "") !== String(y.title || "")
+       || String(x.subject || "") !== String(y.subject || "")) return false;
+  }
+  return true;
+}
+/* **前の版と同じになった版は捨てる。** 「今週以降」で直して元へ戻したとき、
+   中身の同じ版が残ると、どこで時間割が変わったのかが一覧で読めなくなる */
+function baseCompact(c){
+  const Yr = Y();
+  let prev = Yr.base[c] || {};
+  const keep = [];
+  for(const v of (Yr.baseFrom[c] || [])){
+    if(baseBankEq(v.A, prev.A) && baseBankEq(v.B, prev.B)) continue;
+    keep.push(v); prev = v;
+  }
+  if(keep.length) Yr.baseFrom[c] = keep; else delete Yr.baseFrom[c];
+}
+/* 基本時間割を直す入口。**直す・版を片づける・提出を戻す・保存 を1本で。**
+   send=false は、呼ぶ側がまとめて送るとき（固定時間割の取り込み） */
+function baseEdit(c, fn, send){
+  const before = {base: clone(Y().base[c] || {}), from: clone(baseVersions(c))};
+  for(const t of baseTargets(c)) fn(t);
+  baseCompact(c);
+  baseMarkTp(c, before);
+  save();
+  if(send !== false) Backend.saveBase(c);
+}
+/* **提出ずみの週で、たんぽぽへ渡る字が変わったら「未」に戻す。**
+   基本時間割は、担任が書いていないコマにそのまま出る。直しても「済」の
+   ままだと、たんぽぽ担当は古い時間割のまま支援員を組む。
+   ここで見るのは**この端末にある週**だけ。正本はサーバ（gas/Store.gs markTpBase_）で、
+   ほかの週は開いたときにサーバの印で「未」になる */
+function baseMarkTp(c, before){
+  const Yr = Y(), slots = typeof tpSlots === "function" ? tpSlots()
+        : SLOTS.filter(s => s.kind === "lesson").slice(0, 6).map(s => s.id);
+  const setOf = (snap, mon) => {
+    let set = snap.base || {};
+    for(const v of (snap.from || [])) if(v.from <= mon) set = v;
+    return set;
+  };
+  const now = {base: Yr.base[c] || {}, from: baseVersions(c)};
+  let hit = false;
+  for(const k in (Yr.weeks || {})){
+    const w = Yr.weeks[k];
+    if(!w || !w.tpSub || !w.tpSub[c] || w.tpSub[c].dirty) continue;
+    const v = autoVariant(k);
+    const a = setOf(before, k)[v] || {}, b = setOf(now, k)[v] || {};
+    let diff = false;
+    for(let d = 0; d < WEEKDAYS && !diff; d++)
+      for(const sl of slots){
+        const x = a[ck(d, sl)], y = b[ck(d, sl)];
+        if(String((x || {}).title || "") !== String((y || {}).title || "")
+           || String((x || {}).subject || "") !== String((y || {}).subject || "")){ diff = true; break; }
+      }
+    if(!diff) continue;
+    w.tpSub[c].dirty = true;
+    (w.tpEdited || (w.tpEdited = {}))[c] = true;
+    const seq = w.tpEditSeq || (w.tpEditSeq = {});
+    seq[c] = (seq[c] || 0) + 1;
+    hit = true;
+  }
+  if(hit && typeof paintTpSub === "function") paintTpSub();
+}
+/* 範囲の選び方と、いまどの版を見ているかを出す */
+function paintBaseScope(c){
+  const from = baseFromHere(), mon = wkKey();
+  $("bsWeek").textContent = "今週以降のみ変更（" + md(monday) + "の週から）";
+  $("bsWeek").setAttribute("aria-pressed", String(baseScope === "week"));
+  $("bsYear").setAttribute("aria-pressed", String(baseScope === "year"));
+  const vers = baseVersions(c);
+  const lines = [];
+  if(baseScope === "year")
+    lines.push("<b>4月からの全部の週が変わります。</b>過ぎた週の紙と時数も変わり、"
+             + "提出ずみの週は「未」に戻ることがあります。");
+  else if(!from)
+    lines.push("<b>年度はじめの週なので、今年度全体と同じです。</b>");
+  else
+    lines.push("<b>" + md(monday) + "の週から先だけが変わります。</b>"
+             + md(addDays(monday, -7)) + "の週までの紙・時数・たんぽぽはそのままです。");
+  if(vers.length){
+    const cur = baseSetAt(c, mon);
+    const names = ["年度はじめ"].concat(vers.map(v => md(parseISO(v.from)) + "の週から"));
+    const at = cur && cur.from ? names[vers.indexOf(cur) + 1] : names[0];
+    lines.push(escText(c) + " の基本時間割は <b>" + names.length + " 通り</b>（"
+             + names.join("／") + "）。いま出しているのは「" + at + "」のもの。");
+  }
+  $("baseScopeHint").innerHTML = lines.join("<br>");
+}
+function drawBaseGrid(){
+  const c = $("baseCls").value;
+  /* **その週に効いている版を出す。** 描くだけで版を作らない（作るのは直したとき） */
+  const bank = ((baseSetAt(c, wkKey()) || {})[baseVar]) || {};
+
+  const rows = ["<table class='grid2'><tr><th></th>"
+    + DOW.slice(0, WEEKDAYS).map(d => "<th>" + d + "</th>").join("") + "</tr>"];
+  for(const s of SLOTS){
+    rows.push("<tr><th>" + s.name + "</th>");
+    for(let d = 0; d < WEEKDAYS; d++){
+      const v = bank[ck(d, s.id)] || {};
+      rows.push("<td>" + (s.kind === "lesson"
+        ? "<select class='basesub' data-subject='" + escText(v.subject || "") + "' data-k='" + ck(d, s.id) + "'><option value=''>—</option>"
+          + SUBJECTS.map(x => "<option value='" + x.code + "'"
+            + (v.subject === x.code ? " selected" : "") + ">" + x.name + "</option>").join("")
+          + "</select>"
+        : "<input data-k='" + ck(d, s.id) + "' value='" + escText(v.title || "") + "'>")
+        + "</td>");
+    }
+    rows.push("</tr>");
+  }
+  $("baseGrid").innerHTML = rows.join("") + "</table>";
+
+  const put = (k, cell) => baseEdit(c, t => {
+    const b = t[baseVar] || (t[baseVar] = {});
+    if(cell) b[k] = clone(cell); else delete b[k];
+  });
+  for(const e of $("baseGrid").querySelectorAll("select")) e.onchange = () => {
+    const s = SUB_BY_CODE[e.value];
+    e.dataset.subject = s ? s.code : "";
+    put(e.dataset.k, s ? {title:s.name, subject:s.code} : null);
+    paintBaseScope(c);
+  };
+  for(const e of $("baseGrid").querySelectorAll("input")) e.onchange = () => {
+    put(e.dataset.k, e.value.trim() ? {title:e.value.trim(), subject:null} : null);
+    paintBaseScope(c);
+  };
+  $("bvA").setAttribute("aria-pressed", String(baseVar === "A"));
+  $("bvB").setAttribute("aria-pressed", String(baseVar === "B"));
+  $("baseFy").textContent = fy() + "年度";
+  paintBaseScope(c);
+}
+
+/* ── 固定時間割の取り込み ─────────────────────
+   学校の固定時間割表を、そのままの形で読んで基本時間割にする。
+   **読んですぐ入れない。** 何クラス読めたか・読めない字はどれかを先に見せる。
+   入れ違いに気づかないまま20クラスぶんを入れ替えると、戻す手立てが無い。 */
+
+let impRes = null;              /* いま読めている表 */
+let impSrc = "paste";
+
+function openImpDlg(){
+  impRes = null;
+  $("impText").value = "";
+  drawImp();
+  $("impDlg").showModal();
+}
+function setImpSrc(v){
+  impSrc = v;
+  for(const b of $("impSrc").querySelectorAll("button"))
+    b.setAttribute("aria-pressed", String(b.dataset.s === v));
+  $("impPasteBox").hidden = v !== "paste";
+  $("impSrcNote").innerHTML =
+      v === "paste"   ? "学校の表を選んで写し、ここに貼る"
+    : v === "sheet"   ? "<b>固定時間割取り込み</b>シートに貼ってあるものを読む（本番のみ）"
+                      : escText(FIXED_NAME) + " を読む";
+  impRes = null;
+  drawImp();
+}
+
+/* 貼り付けた字を表にする。エクセルから写すと、
+   タブ区切りで1行1行が改行になっている。 */
+function tsvGrid(text){
+  return String(text).replace(/\r/g, "").split("\n").map(line => line.split("\t"));
+}
+
+function readImp(){
+  if(impSrc === "builtin"){ impRes = fixedBuiltin(); return drawImp(); }
+  if(impSrc === "paste"){
+    const t = $("impText").value;
+    if(!t.trim()){ impRes = {error:"まだ何も貼っていない"}; return drawImp(); }
+    impRes = parseFixed(tsvGrid(t));
+    return drawImp();
+  }
+  $("impStat").textContent = "シートを読んで入る…";
+  Backend.readPaste(
+    g => { impRes = g.length ? parseFixed(g) : {error:"シートが空だった"}; drawImp(); },
+    why => { impRes = {error:why}; drawImp(); });
+}
+
+function drawImp(){
+  const boxes = [], r = impRes;
+  const known = r && r.order ? r.order.filter(c => allClasses().indexOf(c) >= 0) : [];
+  const miss  = r && r.order ? r.order.filter(c => allClasses().indexOf(c) < 0)  : [];
+  const none  = r && r.order ? allClasses().filter(c => r.order.indexOf(c) < 0)   : [];
+
+  if(!r){
+    boxes.push("<div class='box ok'>まだ読んでいない。上で選んで「読む」を押す。</div>");
+  } else if(r.error){
+    boxes.push("<div class='box'><b>読めなかった。</b>" + escText(r.error) + "</div>");
+  } else {
+    if(r.unknown && r.unknown.length)
+      boxes.push("<div class='box'><b>教科として読めない字：" + r.unknown.map(escText).join("・")
+        + "</b><br>そのまま題名としている。教科として数えたいときは、"
+        + "「教科」シートに足してから読み直す。</div>");
+    if(miss.length)
+      boxes.push("<div class='box'><b>" + miss.map(escText).join("・")
+        + "</b> は<b>今の学級編成に無い</b>ので入れない。"
+        + "編成が古いなら「学級編成」で直してから読み直す。</div>");
+    if(none.length)
+      boxes.push("<div class='box'><b>" + none.map(escText).join("・")
+        + "</b> は表に無かった。<b>今の基本時間割のまま</b>にする。</div>");
+    for(const n of (r.notes || [])) boxes.push("<div class='box'>" + escText(n) + "</div>");
+    if(!boxes.length)
+      boxes.push("<div class='box ok'>" + known.length
+        + " クラスぶんを読めた。気になるところは無い。</div>");
+  }
+  $("impWarn").innerHTML = boxes.join("");
+  $("impStat").textContent = r && !r.error
+    ? (r.name ? r.name + "／" : "") + known.length + " クラス・"
+      + (r.periods || 0) + " 校時ぶん"
+    : "";
+  $("impGo").disabled = !known.length;
+  /* **どこから入れ替わるかも言う**（基本時間割の窓で選んだ範囲） */
+  $("impCount").innerHTML = known.length
+    ? "<b>" + known.length + " クラス</b>の A週・B週を"
+      + (baseScope === "week" && baseFromHere()
+          ? "<b>" + md(monday) + "の週から</b>" : "<b>今年度全体で</b>")
+      + "入れ替える" : "";
+
+  /* 入れる前に、1クラスだけ表のとおりに見せる */
+  $("impPickRow").hidden = !known.length;
+  if(!known.length){ $("impGrid").innerHTML = ""; return; }
+  const cur = known.indexOf($("impCls").value) >= 0 ? $("impCls").value : known[0];
+  fillSelect($("impCls"), known.map(c => ({v:c, t:c})), cur);
+  drawImpGrid(cur);
+}
+
+function drawImpGrid(cls){
+  const got = impRes.classes[cls] || {A:{}, B:{}};
+  const slots = lessonSlots();
+  const head = "<tr><th></th><th></th>"
+    + slots.map(s => "<th>" + escText(s.name) + "</th>").join("") + "</tr>";
+  const body = [];
+  for(let d = 0; d < WEEKDAYS; d++)
+    for(const v of ["A", "B"]){
+      const bank = got[v] || {};
+      body.push("<tr" + (v === "B" ? " class='b'" : "") + ">"
+        + (v === "A" ? "<th rowspan='2'>" + DOW[d] + "</th>" : "")
+        + "<th>" + v + "週</th>"
+        + slots.map(s => {
+            const e = bank[ck(d, s.id)];
+            const same = (got.A || {})[ck(d, s.id)], other = (got.B || {})[ck(d, s.id)];
+            const diff = (same ? same.title : "") !== (other ? other.title : "");
+            return "<td" + (diff ? " class='diff'" : "") + ">"
+                 + (e ? escText(e.title) : "<i>—</i>") + "</td>";
+          }).join("") + "</tr>");
+    }
+  $("impGrid").innerHTML = "<table class='tp imp'>" + head + body.join("") + "</table>";
+}
+
+/* 入れる。**いまの基本時間割は消える**ので、そこを先に言う。 */
+function goImp(){
+  if(!impRes || impRes.error) return;
+  const known = impRes.order.filter(c => allClasses().indexOf(c) >= 0);
+  if(!known.length) return;
+  askOk({
+    title: fy() + "年度の基本時間割を、読んだ表で入れ替えますか",
+    lines: [
+      "入れ替えるのは <b>" + known.length + " クラス</b>（"
+        + escText(known.join("、")) + "）。<b>A週とB週の両方</b>が入れ替わります。",
+      "<b>今入っている基本時間割は消えます。</b>"
+        + "戻すには、もとの表をもう一度読ませることになります。",
+      "週案に手で書いたものは消えません。"],
+    goLabel: "入れ替える",
+    onYes: () => {
+      const done = applyFixed(impRes);
+      toast("基本時間割に入れた（<b>" + done.length + " クラス</b>）");
+      $("impDlg").close();
+      if($("baseDlg").open) drawBaseGrid();
+      refreshWeek();
+    }
+  });
+}
+
+/* ── A週の起点の月曜 ─────────────────────────
+   **設定シートのこの1行だけを画面から直す。** 画面から設定を全部いじれる
+   ようにすると、関門の例外リストまで画面から書けることになる。 */
+function openAbDlg(){
+  const now = db.settings.abAnchor || AB_ANCHOR;
+  $("abDate").value = now;
+  $("abNow").textContent = "今は " + now;
+  $("abWhy").innerHTML = "";
+  $("abDlg").showModal();
+}
+function saveAb(){
+  const v = $("abDate").value;
+  const d = parseISO(v);
+  if(!d) return void ($("abWhy").innerHTML = "<div class='box'>日付を入れてください</div>");
+  if(d.getDay() !== 1) return void ($("abWhy").innerHTML =
+    "<div class='box'><b>月曜を入れてください。</b>月曜でない日を入れると、"
+    + "以後の週が全て半週ずれます。</div>");
+  if(!Wait.guard()) return;
+  const w = Wait.begin("起点を入れています", true);
+  Backend.saveVariantOrigin(v, () => {
+    Wait.end(w); $("abDlg").close();
+    refreshWeek();
+    toast("A週の起点を " + v + " にした");
+    if($("nyDlg").open) loadNewYear(); else pollNewYear();
+  }, why => { Wait.end(w); $("abWhy").innerHTML = "<div class='box'>" + escText(why) + "</div>"; });
+}
+/* ▲ src/js/basedlg.js ▲ */
+/* ▼ src/js/admindlg.js ▼ */
+/* ==================================================================
+   admindlg.js — 管理まわりの窓（新年度・年間行事の貼り替え・年度の退避・保存の競合）
+
+   年度の変わり目の段取りと、管理・システムの設定、保存が競合したときの窓。
+================================================================== */
 
 /* ── 新年度の設定 ────────────────────────────
    **4月に開いたとき、何を、どの順でやるかを1画面で出す。**
@@ -15418,33 +15494,6 @@ function makePlanSheets(){
     toast("週案シートを " + ((r && r.made && r.made.length) || 0) + " 枚作った");
     loadNewYear();
   }, why => { Wait.end(w); toast(why); });
-}
-
-/* ── A週の起点の月曜 ─────────────────────────
-   **設定シートのこの1行だけを画面から直す。** 画面から設定を全部いじれる
-   ようにすると、関門の例外リストまで画面から書けることになる。 */
-function openAbDlg(){
-  const now = db.settings.abAnchor || AB_ANCHOR;
-  $("abDate").value = now;
-  $("abNow").textContent = "今は " + now;
-  $("abWhy").innerHTML = "";
-  $("abDlg").showModal();
-}
-function saveAb(){
-  const v = $("abDate").value;
-  const d = parseISO(v);
-  if(!d) return void ($("abWhy").innerHTML = "<div class='box'>日付を入れてください</div>");
-  if(d.getDay() !== 1) return void ($("abWhy").innerHTML =
-    "<div class='box'><b>月曜を入れてください。</b>月曜でない日を入れると、"
-    + "以後の週が全て半週ずれます。</div>");
-  if(!Wait.guard()) return;
-  const w = Wait.begin("起点を入れています", true);
-  Backend.saveVariantOrigin(v, () => {
-    Wait.end(w); $("abDlg").close();
-    refreshWeek();
-    toast("A週の起点を " + v + " にした");
-    if($("nyDlg").open) loadNewYear(); else pollNewYear();
-  }, why => { Wait.end(w); $("abWhy").innerHTML = "<div class='box'>" + escText(why) + "</div>"; });
 }
 
 /* ── 年間行事計画表を貼り替える ───────────────── */
@@ -15811,7 +15860,7 @@ function restoreConflicted(h){
                       {year:h.loc.year, monday:h.loc.monday});
   return true;
 }
-/* ▲ src/js/dialogs.js ▲ */
+/* ▲ src/js/admindlg.js ▲ */
 /* ▼ src/js/renraku.js ▼ */
 "use strict";
 /* ── 連絡帳（A4よこ）────────────────────────────────
@@ -16489,7 +16538,7 @@ function wire(){
   on('guideDlg', 'close', finishGuide);
 
 
-  /* 単元進捗の窓と学期設定の結線（→ unitprogress.js） */
+  /* 単元の窓と学期設定の結線（→ unitmanage.js） */
   if(typeof wireUnitProgress === "function") wireUnitProgress();
 
   on("prevWk","click", () => goWeek(-7));
@@ -16857,7 +16906,7 @@ function wire(){
      案とは別のもの（触っていなければ1コマも書かない） */
   on("spmDlg","close", () => { if(spmSaveWish()) toast("<b>専科の希望を端末内の控えデータに置いた。</b>保存を押す"); });
   /* 新年度の設定。**ふだんは管理・システムの中だけ。**
-     未了のあいだだけ、左メニューにも出る（結線は dialogs.js） */
+     未了のあいだだけ、左メニューにも出る（結線は admindlg.js） */
   on("nyOpen","click", () => { $("adminDlg").close(); openNewYearDlg(); });
   on("rsAb","click", openAbDlg);
   on("abSave","click", saveAb);
