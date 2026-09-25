@@ -204,6 +204,9 @@ function save(){
   dataTick++;
   saveDirty[String(fy())] = 1;             /* いま開いている年度を書き直す */
   if(!saveT) saveT = setTimeout(saveNow, SAVE_WAIT);
+  /* **中身が変わったので、時数も数え直す。** 書いた直後に右の欄が古いままだと、
+     「入ったのに増えない」ように見える（面の切り替えでしか組み直していなかった） */
+  if(typeof drawTallyPanel === "function") drawTallyPanel();
   return !storeBroken;
 }
 

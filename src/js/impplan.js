@@ -723,6 +723,9 @@ function openImpPlan(kind){
         const v = vals[e.dataset.n + "|" + e.dataset.c];
         if(v != null) e.value = v;
       }
+      /* **変えたぶんでもう一度読み直す。** 行の数が足りない警告が残ったままだと、
+         増やしたのにまだ止まっているように見える */
+      impPlanRead();
     };
     impTallyTable(impTallyTemplate());
   }
