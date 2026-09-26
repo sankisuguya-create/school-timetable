@@ -6,6 +6,23 @@
 
 let lastTarget = null;   /* 直前に開いていたもの。「今週の週案」で戻る先 */
 
+/* **次に開いたときも、直前の面から始める。**
+   毎回入口へ戻すと、自分のクラスを開く1クリックが毎日起きる。
+   控えと同じく端末にだけ覚えさせる（人ではなく端末が覚える）。 */
+const LASTKEY = KEY + "/last";
+/* 起動時に読む。**いなくなった面には戻さない**
+   （学級編成・専科の枠が変わっているかもしれない）。 */
+function loadLastTarget(){
+  let v = null;
+  try{ v = JSON.parse(localStorage.getItem(LASTKEY) || "null"); }catch(_){}
+  if(!v || typeof v !== "object") return null;
+  if(v.kind === "class"   && allClasses().indexOf(v.cls) >= 0)              return v;
+  if(v.kind === "grade"   && grades().indexOf(String(v.grade)) >= 0)        return v;
+  if(v.kind === "special" && specials().some(s => s.code === v.sp))         return v;
+  if(v.kind === "school" || v.kind === "tanpopo")                         return v;
+  return null;
+}
+
 /* 出力操作の表示はここだけで管理する。HTML側は同じ data-plan-output を持つ。 */
 function showPlanOutputs(on){
   for(const button of document.querySelectorAll('[data-plan-output]')) button.hidden = !on;
@@ -97,6 +114,7 @@ function openView(v){
      （読むものは view から決まるので、読む前に決まっていないといけない） */
   view = v;
   lastTarget = v;
+  try{ localStorage.setItem(LASTKEY, JSON.stringify(v)); }catch(_){}
   selCell = null;
   pickSub = "";          /* 持っていた教科チップは、面を出ると手放す */
   /* 単元は「どの面の単元か」で読むものが変わる。面が決まった時点で読みに行く */

@@ -404,8 +404,7 @@ function wire(){
      beforeunload は Chromebook の蓋を閉じたときなど、来ないことがある。 */
   addEventListener("pagehide", saveNow);
   addEventListener("visibilitychange", () => { if(document.hidden) saveNow(); });
-  on('guideOpen', 'click', () => openGuide(false));
-  on('guideDlg', 'close', finishGuide);
+  on('guideOpen', 'click', () => openGuide());
 
 
   /* 単元の窓と学期設定の結線（→ unitmanage.js） */
@@ -1136,7 +1135,10 @@ function start(){
   if(!Backend.isGas() && !Object.keys(Y().base).length) seedBase();
   if(!Backend.isGas()) saveNow();
   applyPaper();
-  showGate();
+  /* **直前に開いていた面へそのまま戻す。** 毎回入口へ戻すと、
+     自分のクラスを開く1クリックが毎日起きる。面が消えていれば入口。 */
+  const lt = (typeof loadLastTarget === "function") ? loadLastTarget() : null;
+  if(lt) openView(lt); else showGate();
 
   /* 設定・時程・教科・その年度は、立ち上がりの1回でまとめてもらう。
      別々に取りに行くと、その回数だけ待つことになる。 */
@@ -1155,8 +1157,9 @@ function start(){
        立ち上がりの1回だけみに行く（週を繰るたびにみに行かない） */
     if(!Backend.isGas() || Backend.info().isAdmin) pollNewYear();
   });
-  // 案内の有無でデータ初期化の成否を変えない。
-  setTimeout(() => openGuide(true), 250);
+  /* **初回案内は自動で開かない。** 端末の「見た」印（localStorage）は
+     スマホで揮発するため、見覚えのある人にも毎回出てしまう。
+     読みたい人は左メニューの「使い方」からいつでも開ける。 */
 }
 
 /* 手元で見せる基本時間割。**同梱の固定時間割の写しを入れる。**
