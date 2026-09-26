@@ -258,7 +258,9 @@ function applyFixed(res){
     baseEdit(cls, t => { t.A = clone(got.A || {}); t.B = clone(got.B || {}); }, false);
     done.push(cls);
   }
-  save();
-  Backend.saveBaseAll(done);
+  /* **窓が開いているあいだは下書きに入る。** 送るのは窓の
+     「保存して閉じる」に委ねる（下書きのないときは従来どおり直送） */
+  if(bsDraft){ for(const c of done) bsDirtyCls.add(c); paintBaseSave(); }
+  else { save(); Backend.saveBaseAll(done); }
   return done;
 }

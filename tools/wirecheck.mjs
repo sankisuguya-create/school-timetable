@@ -855,13 +855,24 @@ await p.evaluate(() => { window.__calls.length = 0; });
 /* 入れる前の確認は専用の窓（ブラウザの confirm は使わない） */
 await p.locator("#impGo").click(); await p.waitForTimeout(250);
 await p.locator("#okYes").click(); await p.waitForTimeout(500);
+/* **窓が開いているあいだ、表の取り込みも下書きに入る。**
+   送るのは窓の「保存して閉じる」に委ねる */
+ok("まだシートには送っていない（下書きに入る）",
+   !(await lastCall("apiWriteBaseAll")), await calls());
+ok("「まだ入れていません」と出る",
+   (await p.locator("#baseStat").innerText()).indexOf("まだ入れていません") >= 0);
+await p.locator("#baseSave").click(); await p.waitForTimeout(500);
 const ba = await lastCall("apiWriteBaseAll");
-ok("入れるときは1回でまとめて送る（クラスごとに送らない）",
+ok("「保存して閉じる」で1回でまとめて送る（クラスごとに送らない）",
    !!ba && (await p.evaluate(() =>
      window.__calls.filter(c => c.name === "apiWriteBase").length)) === 0, ba);
 ok("A週とB週の両方が届く",
    !!ba && !!ba.args[1]["5-1"].A && !!ba.args[1]["5-1"].B, ba && Object.keys(ba.args[1]));
-await p.locator("#baseDlg .dlgx").click(); await p.waitForTimeout(250);
+ok("保存で窓は閉じる", !(await p.evaluate(() => $("baseDlg").open)));
+/* 入った中身は「いま効いている版」に入る（「今週以降」の版として
+   baseFrom に載ることもある）ので、見え方どおりの版で確かめる */
+ok("本体に入っている（その週に効く版）", !!(await p.evaluate(() =>
+     ((baseSetAt("5-1", wkKey()) || {}).B || {})["0|p2"])));
 
 console.log("\n■ たんぽぽの組もシートで持つ");
 ok("シートの組がそのまま画面の組になる",
