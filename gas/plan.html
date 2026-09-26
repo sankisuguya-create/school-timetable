@@ -587,8 +587,10 @@ body.is-unsaved[data-scope="school"] .stage{
 button.tpin:hover{border-color:var(--cat-clash);color:var(--cat-clash)}
 .tpin u{text-decoration:none;font-size:11px;color:var(--tx-sub)}
 button.tpin:hover u{color:var(--cat-clash)}
-/* 面では読むだけなので、押せるように見せない（× も出さない） */
-span.tpin{cursor:default}
+/* 面では読むだけだが、押すとそのクラスの面を開く。**開けることが分かる
+   色（リンクの青）に寄せる** ── 窓の中の「外す」（赤系）とは別の色にする */
+button.tpin.go:hover{border-color:var(--ink-link);color:var(--ink-link)}
+.tpleg .hint{margin-left:8px}
 
 /* 交流級の着手／未着手。**組の中のチップそのものが言う。**
    下に字でまとめて出していたころは、組の並びと読み合わせないと
@@ -13757,13 +13759,18 @@ function tpGroupList(edit){
            /* **どのクラスが今週まだ書いていないかを、その場で見せる。**
               下に字でまとめて出していたころは、組の並びと読み合わせる必要があった */
            const st = tpState(c);
-           return "<" + (edit ? "button" : "span") + " class='tpin st-" + st + "'"
+           /* **面では、押すとそのクラスの画面へ飛ぶ。** まだ出していない
+              クラスが見えても、そこから声をかけに行く（開いて確認する）までが
+              遠かったので、状況のチップそのものを行き口にする。
+              窓の中（edit）では従来どおり「この1人を外す」 */
+           return "<button class='tpin st-" + st + (edit ? "'" : " go'")
              + " data-g='" + escText(g) + "' data-i='" + i + "'"
+             + (edit ? "" : " data-c='" + escText(c) + "'")
              + " title='" + escText(c + "：" + TP_ST[st].why)
-             + (edit ? "。押すと、この1人を外す" : "") + "'>"
+             + (edit ? "。押すと、この1人を外す" : "。押すと " + c + " の面を開く") + "'>"
              + escText(c) + "<em>" + TP_ST[st].mark + "</em>"
              + (edit ? "<u>×</u>" : "")
-             + "</" + (edit ? "button" : "span") + ">";
+             + "</button>";
          }).join("")
        : "<i>" + (edit ? "ここへ引っぱって入れる" : "まだ入れていない") + "</i>")
     + "</div></div>").join("");
@@ -13859,7 +13866,10 @@ function drawTanpopoView(){
     "<div class='tpleg'><b>今週の提出</b>"
     + ["ok","base","changed"].map(k =>
         "<span class='st-" + k + "'><i></i>" + TP_ST[k].mark + "</span>").join("")
+    + "<span class='hint'>チップを押すと、そのクラスの面を開く</span>"
     + "</div><div class='tponly'>" + tpGroupList(false) + "</div>";
+  for(const x of $("tpSel").querySelectorAll(".tpin.go"))
+    x.onclick = () => openView({kind:"class", cls:x.dataset.c});
 
   $("tpWarn").innerHTML = tpWarnBoxes().join("");
   /* 出す先が1つも無いあいだ、直している最中は出させない。
@@ -14857,7 +14867,7 @@ const HELP = {
        "元に戻せない操作は ⚠ が付いた1つだけで、押す前に必ず確認が入ります。"]},
   tanpopo: {t:"たんぽぽ",
     b:["<b>組の並びや人数は右上の「組分けを直す」で変えます</b>（年度の初めと転入出のときだけ）。",
-       "クラスの「済／未」は、その担任が「たんぽぽに提出」を押したかどうかです。",
+       "クラスの「済／未」は、その担任が「たんぽぽに提出」を押したかどうかです。<b>チップを押すと、そのクラスの面を開きます。</b>",
        "書き入れると「◯月◯週」のシートができます。同じ名前があれば名前を変えて残します。"]},
   specials: {t:"専科の枠",
     b:["<b>1行が1人ぶんです。</b>同じ教科を学年で分けても構いません（理科3・4年と理科5・6年 など）。",
