@@ -156,13 +156,15 @@ function upIsMine_(w, unit, others, d, s, dt){
    （compose・isDayOff・slotShown が全部その週を見るようになる）
    読み終えていない週は空の棚で数える（基本時間割のコマは見えるので、
    印だけが抜ける = 仮の番号） */
-function upScan_(unit, endISO){
+function upScan_(unit, endISO, allWeeks){
   const st = unit.start || {};
   const map = {};                                   /* "date|slot" -> 番号 */
   const out = {map, count:0, partial:false};
   if(!st.date || !st.slot) return out;
   const now = wkKey();
-  const to = endISO < now ? endISO : now;           /* 画面に出すのは今の週まで */
+  /* 画面に出すのは今の週まで。**確定（焼き付け）は範囲の終わりまで振る** ──
+     翌週以降に置いたぶんも番号が無いと備考欄へ移せない */
+  const to = allWeeks ? endISO : (endISO < now ? endISO : now);
   const mons = upMons_(st.date, to);
   out.partial = Backend.unread(mons, fy()) > 0;     /* まだ読んでいない週がある */
   const others = upOthers_(unit);                   /* 争いの相手 */

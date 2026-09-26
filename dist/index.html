@@ -12147,13 +12147,15 @@ function upIsMine_(w, unit, others, d, s, dt){
    （compose・isDayOff・slotShown が全部その週を見るようになる）
    読み終えていない週は空の棚で数える（基本時間割のコマは見えるので、
    印だけが抜ける = 仮の番号） */
-function upScan_(unit, endISO){
+function upScan_(unit, endISO, allWeeks){
   const st = unit.start || {};
   const map = {};                                   /* "date|slot" -> 番号 */
   const out = {map, count:0, partial:false};
   if(!st.date || !st.slot) return out;
   const now = wkKey();
-  const to = endISO < now ? endISO : now;           /* 画面に出すのは今の週まで */
+  /* 画面に出すのは今の週まで。**確定（焼き付け）は範囲の終わりまで振る** ──
+     翌週以降に置いたぶんも番号が無いと備考欄へ移せない */
+  const to = allWeeks ? endISO : (endISO < now ? endISO : now);
   const mons = upMons_(st.date, to);
   out.partial = Backend.unread(mons, fy()) > 0;     /* まだ読んでいない週がある */
   const others = upOthers_(unit);                   /* 争いの相手 */
@@ -13184,7 +13186,9 @@ function upBakeOne_(unit, done){
   const mons = upMons_(st.date, upRangeEnd_(unit));
   const wid = Wait.begin("「" + unit.name + "」の仮番号を備考欄に転記しています");
   Backend.readWeeks(mons, () => {
-    const r = upScan_(unit, upRangeEnd_(unit));
+    /* **確定は範囲の終わりまで番号を振る**（画面は今の週までしか振らない。
+       翌週以降に置いた仮置きも、番号を付けて備考欄へ移す） */
+    const r = upScan_(unit, upRangeEnd_(unit), true);
     const name4 = (unit.name || "").slice(0, 4) || "単元";
     const keep = monday;
     try{
@@ -13208,6 +13212,9 @@ function upBakeOne_(unit, done){
       UP.seq = {};
       Wait.end(wid);
       paintSheet();
+      /* **備考欄への転記は、この場で送る。** 別の週のコマへも書いているので、
+         週を移るまで送られないままだと「確定したのに残っていない」になる */
+      Backend.flush();
       if(done) done();
     }, why => { Wait.end(wid); toast(why); });
   });

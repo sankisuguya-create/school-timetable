@@ -975,31 +975,47 @@ console.log("\n■ 単元管理 → 番号を備考欄に移して終わる");
 /* 起点はいま開いている週。番号のぶんだけ印を付けてから焼き付ける */
 await p.evaluate(() => {
   const u = {id:"ub1", layer:"home", target:view.cls, subject:"kokugo",
-             name:"漢字単元", lessonCount:2, hasTest:false,
+             name:"漢字単元", lessonCount:3, hasTest:false,
              start:{date:iso(monday), slot:"p1"}, updatedAt:"1"};
   UP.units.push(u);
   upMark_(u, 0, "p1", "ub1", wkKey());   /* → 番号1 */
   upMark_(u, 0, "p2", "ub1", wkKey());   /* → 番号2 */
   upMark_(u, 1, "p1", "-",   wkKey());   /* 外す印（番号なし）。焼き付けで消える */
+  /* **翌週ぶんにも仮置きがある。** 確定は「いまの週まで」で打ち止めず、
+     範囲の終わりまで番号を振って備考欄へ移す（週またぎの回帰） */
+  const nw = iso(addDays(monday, 7));
+  week();
+  upMark_(u, 0, "p1", "ub1", nw);        /* → 翌週の番号1 */
+  const nwW = week();
+  /* week() はいまの週を返すので、翌週の棚は db から直接引く */
+  const nb = (db.years[String(fy())].weeks[nw].home[view.cls] =
+              db.years[String(fy())].weeks[nw].home[view.cls] || {});
+  nb["0|p1"] = {title:"国語", subject:"kokugo", u:"ub1", by:"t", at:1};
   week().home[view.cls]["0|p1"].note = escText("持ち物あり");
 });
 const bk = await p.evaluate(() => new Promise(res => {
   const u = UP.units.find(x => x.id === "ub1");
   upBakeOne_(u, () => {
     const b = week().home[view.cls] || {};
+    const nw = iso(addDays(monday, 7));
+    const nb = (db.years[String(fy())].weeks[nw].home[view.cls] || {});
     res({
       n1: plain(((b["0|p1"] || {}).note) || ""), u1: (b["0|p1"] || {}).u,
       n2: plain(((b["0|p2"] || {}).note) || ""), u2: (b["0|p2"] || {}).u,
       mx: (b["1|p1"] || {}).u,
+      nn: plain((nb["0|p1"] || {}).note || ""), nu: (nb["0|p1"] || {}).u,
       del: !(window.__units || []).some(x => x.id === "ub1")});
   });
 }));
 ok("番号の字が各コマの備考欄に入る",
-   !!bk && bk.n1.indexOf("漢字単元 1/2") >= 0
-        && bk.n2.indexOf("漢字単元 2/2") >= 0, bk);
+   !!bk && bk.n1.indexOf("漢字単元 1/3") >= 0
+        && bk.n2.indexOf("漢字単元 2/3") >= 0, bk);
 ok("いまある備考の後ろに追記する", !!bk && bk.n1.indexOf("持ち物あり") >= 0, bk);
 ok("番号になったコマの印は外れる", !!bk && bk.u1 == null && bk.u2 == null, bk);
 ok("番号の無い印も外れる", !!bk && bk.mx == null, bk);
+/* 翌週に置いた仮置きも、番号を付けて備考欄へ移る（前は今の週しか見なかった） */
+ok("翌週ぶんの番号も備考欄に入る", !!bk && bk.nn.indexOf("漢字単元 3/3") >= 0, bk);
+ok("翌週ぶんの印も外れる", !!bk && bk.nu == null, bk);
 ok("単元は消える（apiDeleteUnit が届く）",
    !!bk && bk.del && (await calls()).indexOf("apiDeleteUnit") >= 0,
    await calls());
