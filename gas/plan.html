@@ -2226,6 +2226,19 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
      そのままだと 2×2 の枠が中身の幅まで縮み、紙の右半分が空く */
   body.printing-month .sheet.mini{width:calc(var(--pw) - var(--pm)*2)}
   body:not(.printing-month) .mview{display:none!important}
+  /* 専科の月予定を刷るとき。**週の数だけ頁を割る**（4〜6枚を2列で）。
+     まわりの操作は出さないが、紙の下の一覧（置けなかったコマ等）は
+     刷る ── 担任へ渡すための字だから */
+  body.printing-spm .stage{display:none!important}
+  body.printing-spm .spmview .mbar{display:none!important}
+  body.printing-spm .spmview{padding:0;gap:0;grid-template-rows:auto;display:block}
+  body.printing-spm .spmbody{overflow:visible}
+  body.printing-spm .spmpaper{gap:6mm;align-items:start;justify-items:start}
+  /* **週のまとまりは割らない。** 見出しと紙が頁をまたぐと読めない */
+  body.printing-spm .spmwk{break-inside:avoid}
+  body.printing-spm .sheet.spmsheet{width:calc(var(--pw) - var(--pm)*2);
+    box-shadow:none;border-radius:0;border-color:#000}
+  body:not(.printing-spm) .spmview{display:none!important}
   .app::before{display:none!important}   /* 待っている印は刷らない */
   /* 選んでいる印・打ち込み中の色も刷らない */
   .cell.sel{box-shadow:none}
@@ -2589,7 +2602,8 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
            「音楽 2-2 ／ 理科 4-1」と並び、それぞれが教科の色で塗られる。
            全校の予定・休み・校外行事は全学年の紙がそのまま持っているので、
            専科がそこへ行けない理由が同じ紙の上に見える。
-           **画面だけ。刷らない**（週が4〜6枚あり、B4 の 2×2 に収まらない） -->
+           **印刷は B4よこに週を2枚ずつ**（週が4〜6枚あり、2×2 の1枚には
+           収まらないのでページを送る）。画像は紙と下の一覧をまとめてPNGへ -->
       <div class="spmview" id="spmView" hidden>
         <div class="mbar" data-help="spmonth">
           <button class="btn" id="spmFPrev">◀ 前の月</button>
@@ -2601,6 +2615,10 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
                仮採用は基本時間割と同じ薄さ・同じ低さで入る -->
           <button class="btn go" id="spmTake" disabled>採用</button>
           <button class="btn" id="spmTakeTent" disabled>仮採用</button>
+          <!-- 紙・画像。**組んだ案を担任へ渡す口。** 印刷は B4よこに
+               週を2枚ずつ（週が4〜6枚あるので 2×2 の1枚には収めない） -->
+          <button class="btn" id="spmPrint">印刷</button>
+          <button class="btn" id="spmImage">画像</button>
           <button class="btn" id="spmClose">週の紙へ戻る</button>
         </div>
         <div class="spmbody">
@@ -3429,10 +3447,8 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
   <div class="end"><button class="btn go" data-close="warnDlg">確かめた</button></div>
 </div></dialog>
 
-<!-- 専科どうしの月予定。**画面だけのもの。紙には出さない。**
-     枠を決めている最中の作業であって、刷って残す情報ではない
-     （空き枠さがし・年間行事の印と同じ扱い）。
-     「くむ」を押すまで、そして「入れる」を押すまで、週案には1文字も書かない -->
+<!-- 専科どうしの月予定。**押すまで週案には1文字も書かない。**
+     組んだ案は面の帯から印刷・画像に出せる（担任へ渡す口）。 -->
 <dialog id="spmDlg"><div class="dlg wide">
   <h2>専科の月予定を組む</h2>
   <p><b>1ヶ月ぶんの専科の巡りを、干渉が起きないように計算して出す。</b>
@@ -9709,13 +9725,45 @@ function drawSpMonthView(){
 
 /* 紙の大きさ。**2列に並べ、列の幅に合わせて縮める。**
    4週の面（fitMonth）は B4 に刷るので1画面へ収めるが、こちらは画面だけで
-   週が6枚になることもあるので、**縦は転がす**（無理に収めると字が読めない）。 */
+   週が6枚になることもあるので、**縦は転がす**（無理に収めると字が読めない）。
+   刷るときも同じ2列 ── B4よこに週を2枚ずつ置いて、ページを送る。 */
 const SPM_COLS = 2;
-function fitSpm(){
+/* B4 よこ。**4週の面の M_PAGE と同じ寸法だが別に書く** ──
+   このファイルは sheet.js より先に読まれるので、`const X = M_PAGE` は
+   まだ無い名前を読んで全体を止める（TDZ） */
+const SPM_PAGE = {w:364, h:257, mg:6};
+function spmCellMM(){
+  /* **横幅は高さから逆算する。** 紙は横幅≈1.41倍の高さになるので、
+     余白と週の見出しを引いた高さに収まる幅を取る ── 1まとまりが
+     1頁を越えると、刷りで紙の途中が切れる */
+  const w = Math.min((SPM_PAGE.w - SPM_PAGE.mg * 2 - M_GAP) / 2,
+                     (SPM_PAGE.h - SPM_PAGE.mg * 2 - 7) / 1.42);
+  return {w: w.toFixed(1) + "mm"};
+}
+function fitSpm(cell){
   const box = $("spmPaper");
   if(!box) return;
   const sheets = [...box.querySelectorAll(".sheet")];
   if(!sheets.length) return;
+  /* **刷るときは枠の大きさを mm で入れる**（fitMonth と同じ仕組み。
+     画面の広さで組んだまま刷ると、紙からはみ出す） */
+  if(cell){
+    box.style.gridTemplateColumns = "repeat(2," + cell.w + ")";
+    box.style.width = "calc(" + cell.w + "*2 + " + M_GAP + "mm)";
+    const k = parseFloat(cell.w) / 182;
+    for(const sh of sheets){
+      sh.style.setProperty("--pw", cell.w);
+      sh.style.setProperty("--pm", "0mm");
+      sh.style.setProperty("--k", String(k));
+    }
+    return;
+  }
+  box.style.removeProperty("grid-template-columns");
+  box.style.removeProperty("width");
+  /* **刷っているあいだは画面の採寸をしない。** プレビューの開閉で resize が
+     走ると、.stage を隠したままの全幅を測って過大な --pw が残る
+     （実測: 641px の紙が 755px に）。戻るのは printSpread の back() だけ */
+  if(document.body.classList.contains("printing-spm")) return;
   const w = (box.clientWidth - M_GAP * (SPM_COLS - 1)) / SPM_COLS - 2;
   if(w < 40) return;
   /* 1mm が何 px か。**測って出す**（決め打ちにすると、拡大表示でずれる） */
@@ -14716,6 +14764,11 @@ function printSpread(page, mark, fit, cellMM){
     document.body.classList.remove(mark);
     if(st) st.textContent = had;
     fit();
+    /* **戻しの採寸は、紙の形が元に戻ってからもう一度。** プレビューの開閉で
+       mob が一瞬残ることがあり、その間に測ると過大な幅が焼き付く
+       （実測: 月予定の紙が 641px→755px で横スクロールが出る）。mob を外す
+       経路は fit を呼ばないので、ここで落ち着きを待って測り直す */
+    setTimeout(() => { if(!document.body.classList.contains(mark)) fit(); }, 200);
   };
   const once = () => { removeEventListener("afterprint", once); back(); };
   addEventListener("afterprint", once);
@@ -14728,6 +14781,9 @@ const printCal   = () => printSpread(CAL_PAGE, "printing-cal",   fitCal,   calCe
    刷るとき用の組み方（fitGradePrint）へ切り替えるだけ */
 const printGrade = () => printSpread(GV_PAGE, "printing-grade",
                                      c => (c ? fitGradePrint() : fitGrade()), () => 1);
+/* 専科の月予定。**週の数だけ頁を割る**（4〜6枚 → 2列で2〜3頁）。
+   2×2 の1枚には収まらないので、月の面とは別の印にする */
+const printSpm   = () => printSpread(SPM_PAGE, "printing-spm", fitSpm, spmCellMM);
 
 function applyPaper(){
   const s = db.settings, sh = $("sheet");
@@ -14898,7 +14954,8 @@ const HELP = {
        + "日付を押すと「その日は避ける」のチェックも入ります。",
        "<b>採用</b>＝ふつうのコマとして入ります。<b>仮採用</b>＝薄い仮のコマとして入り、"
        + "本物の予定が来ると引っ込みます。",
-       "基本から動いたコマは元の場所に字が残ります。窓の下の一覧を担任へ渡してください。"]},
+       "基本から動いたコマは元の場所に字が残ります。窓の下の一覧を担任へ渡してください。",
+       "<b>印刷</b>はB4よこに週を2枚ずつ、<b>画像</b>は紙と一覧をまとめてPNGにします。"]},
   dayform: {t:"この週の日の形",
     b:["<b>全学年の面からだけ直せます。</b>",
        "特別校時＝朝学習の行が消えて、下が上へ詰まります。",
@@ -17180,6 +17237,30 @@ function wire(){
   on("spmWishOpen","click", () => $("spmDlg").showModal());
   on("spmTake","click",     () => spmAdopt(false));
   on("spmTakeTent","click", () => spmAdopt(true));
+  /* 紙・画像。**組んだ案を担任へ渡す口。** 一覧（置けなかったコマ等）は
+     紙にも画像にも一緒に入る */
+  on("spmPrint","click", printSpm);
+  on("spmImage","click", async () => {
+    const w = openOutWindow("画像を作っています");
+    /* **紙と一覧を1枚に。** 中身は転がる箱（.spmbody）の中なので、
+       見えているぶんだけを撮ると週の後ろ半分と一覧が欠ける（実測）。
+       紙と一覧を写した仮の縦並びを作って、その全体を撮る。
+       **画面外へ逃がす left:-10000px は外側の箱に付ける** ── 中身に付けると
+       nodePngBlob が写しごとシリアライズして、絵が枠の外へ出て白紙になる */
+    const off = el("div");
+    off.style.cssText = "position:absolute;left:-10000px;top:0";
+    const cap = el("div");
+    cap.style.width = $("spmPaper").clientWidth + "px";
+    cap.appendChild($("spmPaper").cloneNode(true));
+    cap.appendChild($("spmOut").cloneNode(true));
+    off.appendChild(cap);
+    document.body.appendChild(off);
+    try{ const b = await nodePngBlob(cap);
+         if(w){ w.location.href = URL.createObjectURL(b); return; }
+         downloadBlob(b, outputName("専科の月予定") + ".png"); }
+    catch(e){ if(w) w.close(); toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
+    finally{ off.remove(); }
+  });
   on("spmClose","click", () => setCenter("week"));
   addEventListener("resize", () => { if(!$("spmView").hidden) fitSpm(); });
   /* **案を入れずに閉じても、希望は残す。** 希望はその人の持ちもので、

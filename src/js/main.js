@@ -771,6 +771,30 @@ function wire(){
   on("spmWishOpen","click", () => $("spmDlg").showModal());
   on("spmTake","click",     () => spmAdopt(false));
   on("spmTakeTent","click", () => spmAdopt(true));
+  /* 紙・画像。**組んだ案を担任へ渡す口。** 一覧（置けなかったコマ等）は
+     紙にも画像にも一緒に入る */
+  on("spmPrint","click", printSpm);
+  on("spmImage","click", async () => {
+    const w = openOutWindow("画像を作っています");
+    /* **紙と一覧を1枚に。** 中身は転がる箱（.spmbody）の中なので、
+       見えているぶんだけを撮ると週の後ろ半分と一覧が欠ける（実測）。
+       紙と一覧を写した仮の縦並びを作って、その全体を撮る。
+       **画面外へ逃がす left:-10000px は外側の箱に付ける** ── 中身に付けると
+       nodePngBlob が写しごとシリアライズして、絵が枠の外へ出て白紙になる */
+    const off = el("div");
+    off.style.cssText = "position:absolute;left:-10000px;top:0";
+    const cap = el("div");
+    cap.style.width = $("spmPaper").clientWidth + "px";
+    cap.appendChild($("spmPaper").cloneNode(true));
+    cap.appendChild($("spmOut").cloneNode(true));
+    off.appendChild(cap);
+    document.body.appendChild(off);
+    try{ const b = await nodePngBlob(cap);
+         if(w){ w.location.href = URL.createObjectURL(b); return; }
+         downloadBlob(b, outputName("専科の月予定") + ".png"); }
+    catch(e){ if(w) w.close(); toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
+    finally{ off.remove(); }
+  });
   on("spmClose","click", () => setCenter("week"));
   addEventListener("resize", () => { if(!$("spmView").hidden) fitSpm(); });
   /* **案を入れずに閉じても、希望は残す。** 希望はその人の持ちもので、

@@ -384,6 +384,11 @@ function printSpread(page, mark, fit, cellMM){
     document.body.classList.remove(mark);
     if(st) st.textContent = had;
     fit();
+    /* **戻しの採寸は、紙の形が元に戻ってからもう一度。** プレビューの開閉で
+       mob が一瞬残ることがあり、その間に測ると過大な幅が焼き付く
+       （実測: 月予定の紙が 641px→755px で横スクロールが出る）。mob を外す
+       経路は fit を呼ばないので、ここで落ち着きを待って測り直す */
+    setTimeout(() => { if(!document.body.classList.contains(mark)) fit(); }, 200);
   };
   const once = () => { removeEventListener("afterprint", once); back(); };
   addEventListener("afterprint", once);
@@ -396,6 +401,9 @@ const printCal   = () => printSpread(CAL_PAGE, "printing-cal",   fitCal,   calCe
    刷るとき用の組み方（fitGradePrint）へ切り替えるだけ */
 const printGrade = () => printSpread(GV_PAGE, "printing-grade",
                                      c => (c ? fitGradePrint() : fitGrade()), () => 1);
+/* 専科の月予定。**週の数だけ頁を割る**（4〜6枚 → 2列で2〜3頁）。
+   2×2 の1枚には収まらないので、月の面とは別の印にする */
+const printSpm   = () => printSpread(SPM_PAGE, "printing-spm", fitSpm, spmCellMM);
 
 function applyPaper(){
   const s = db.settings, sh = $("sheet");
@@ -566,7 +574,8 @@ const HELP = {
        + "日付を押すと「その日は避ける」のチェックも入ります。",
        "<b>採用</b>＝ふつうのコマとして入ります。<b>仮採用</b>＝薄い仮のコマとして入り、"
        + "本物の予定が来ると引っ込みます。",
-       "基本から動いたコマは元の場所に字が残ります。窓の下の一覧を担任へ渡してください。"]},
+       "基本から動いたコマは元の場所に字が残ります。窓の下の一覧を担任へ渡してください。",
+       "<b>印刷</b>はB4よこに週を2枚ずつ、<b>画像</b>は紙と一覧をまとめてPNGにします。"]},
   dayform: {t:"この週の日の形",
     b:["<b>全学年の面からだけ直せます。</b>",
        "特別校時＝朝学習の行が消えて、下が上へ詰まります。",

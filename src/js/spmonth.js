@@ -1264,13 +1264,45 @@ function drawSpMonthView(){
 
 /* 紙の大きさ。**2列に並べ、列の幅に合わせて縮める。**
    4週の面（fitMonth）は B4 に刷るので1画面へ収めるが、こちらは画面だけで
-   週が6枚になることもあるので、**縦は転がす**（無理に収めると字が読めない）。 */
+   週が6枚になることもあるので、**縦は転がす**（無理に収めると字が読めない）。
+   刷るときも同じ2列 ── B4よこに週を2枚ずつ置いて、ページを送る。 */
 const SPM_COLS = 2;
-function fitSpm(){
+/* B4 よこ。**4週の面の M_PAGE と同じ寸法だが別に書く** ──
+   このファイルは sheet.js より先に読まれるので、`const X = M_PAGE` は
+   まだ無い名前を読んで全体を止める（TDZ） */
+const SPM_PAGE = {w:364, h:257, mg:6};
+function spmCellMM(){
+  /* **横幅は高さから逆算する。** 紙は横幅≈1.41倍の高さになるので、
+     余白と週の見出しを引いた高さに収まる幅を取る ── 1まとまりが
+     1頁を越えると、刷りで紙の途中が切れる */
+  const w = Math.min((SPM_PAGE.w - SPM_PAGE.mg * 2 - M_GAP) / 2,
+                     (SPM_PAGE.h - SPM_PAGE.mg * 2 - 7) / 1.42);
+  return {w: w.toFixed(1) + "mm"};
+}
+function fitSpm(cell){
   const box = $("spmPaper");
   if(!box) return;
   const sheets = [...box.querySelectorAll(".sheet")];
   if(!sheets.length) return;
+  /* **刷るときは枠の大きさを mm で入れる**（fitMonth と同じ仕組み。
+     画面の広さで組んだまま刷ると、紙からはみ出す） */
+  if(cell){
+    box.style.gridTemplateColumns = "repeat(2," + cell.w + ")";
+    box.style.width = "calc(" + cell.w + "*2 + " + M_GAP + "mm)";
+    const k = parseFloat(cell.w) / 182;
+    for(const sh of sheets){
+      sh.style.setProperty("--pw", cell.w);
+      sh.style.setProperty("--pm", "0mm");
+      sh.style.setProperty("--k", String(k));
+    }
+    return;
+  }
+  box.style.removeProperty("grid-template-columns");
+  box.style.removeProperty("width");
+  /* **刷っているあいだは画面の採寸をしない。** プレビューの開閉で resize が
+     走ると、.stage を隠したままの全幅を測って過大な --pw が残る
+     （実測: 641px の紙が 755px に）。戻るのは printSpread の back() だけ */
+  if(document.body.classList.contains("printing-spm")) return;
   const w = (box.clientWidth - M_GAP * (SPM_COLS - 1)) / SPM_COLS - 2;
   if(w < 40) return;
   /* 1mm が何 px か。**測って出す**（決め打ちにすると、拡大表示でずれる） */
