@@ -759,14 +759,28 @@ body.is-unsaved #discardBtn{color:var(--cat-clash);border-color:#ecc0b8}
    **いまどちらかを字で言う。** 押せる／押されているを色だけに持たせない */
 .btn.tgl[aria-pressed=true]{border-color:var(--ink-link);color:var(--ink-link);
   font-weight:700}
-/* 畳みの見出しの右に置く小さいスイッチ（時数欄の出す／出さない）。
-   畳み自体のスイッチ（左のつまみ）と見分けるため字で状態を言う */
-.fold>summary .tlsw{margin-left:auto;flex:none;font-size:11px;font-weight:400;
-  padding:1px 8px;min-height:22px;border-radius:11px}
+/* 畳みの見出しの右に置く時数欄のスイッチ。**畳み自体のつまみ（左）と同じ形**に
+   揃える ── 「開くか」と「出すか」は同じ触り方で通じる。ラベルの「時数」で
+   何を切り替えるかは字で言う */
+.fold>summary .tlsw{margin-left:auto;flex:none;display:inline-flex;align-items:center;
+  gap:5px;font-size:11px;font-weight:400;padding:0;border:0;background:transparent;
+  color:var(--tx-sub);min-height:22px;cursor:pointer}
+/* トラック・つまみは畳みのスイッチ（::before/::after）と同じ寸法 */
+.tlsw .sw{position:relative;width:26px;height:15px;border-radius:8px;flex:none;
+  background:var(--line);transition:background .15s}
+.tlsw .sw::after{content:"";position:absolute;left:2px;top:2px;width:11px;height:11px;
+  border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.28);
+  transition:left .15s}
+.tlsw[aria-pressed=true] .sw{background:var(--ink-link)}
+.tlsw[aria-pressed=true] .sw::after{left:13px}
+.tlsw:hover .sw{background:var(--tx-sub)}
+.tlsw[aria-pressed=true]:hover .sw{background:var(--ink-link);filter:brightness(1.1)}
 /* 時数欄を消す ── 出ないだけでなく、そのぶん題名が広く使えるよう
-   予約していた右の余白も返す。印刷にも同じく効く */
+   予約していた右の余白も返す。印刷にも同じく効く。
+   校外行事のコマは除く ── あれの右余白は時数欄ではなく、
+   縦のチップに字をよけるためのもの（9.2mm）なので消さない */
 body.notl .cell .tl{display:none}
-body.notl .cell .t{padding-right:0}
+body.notl .cell:not(.trip) .t{padding-right:0}
 
 .fsz{display:flex;align-items:center;gap:3px;font-size:12px;color:var(--tx-sub)}
 .fsz>span{margin-right:2px}

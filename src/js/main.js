@@ -855,18 +855,18 @@ function wire(){
 
   /* 時数欄の出す／出さない。**この端末の好み**なので年度の棚ではなく
      端末の控えに入れる（人によって見たいものが違う）。描き直しは要らない
-     ── body の印を CSS が見ている */
+     ── body の印を CSS が見ている。**既定は消す**（紙がすっきり見える状態を
+     いつもの形にし、要る人だけ出す） */
   const tlSw = $("tlShow");
   const tlShowKey = KEY + "/ui/tlShow";
   const paintTlSw = () => {
-    const on = localStorage.getItem(tlShowKey) !== "0";
+    const on = localStorage.getItem(tlShowKey) === "1";
     document.body.classList.toggle("notl", !on);
     tlSw.setAttribute("aria-pressed", on ? "true" : "false");
-    tlSw.textContent = on ? "時数：出す" : "時数：消す";
   };
   tlSw.addEventListener("click", ev => {
     ev.preventDefault(); ev.stopPropagation();   /* 畳みを開き閉じさせない */
-    localStorage.setItem(tlShowKey, localStorage.getItem(tlShowKey) === "0" ? "1" : "0");
+    localStorage.setItem(tlShowKey, localStorage.getItem(tlShowKey) === "1" ? "0" : "1");
     paintTlSw();
   });
   paintTlSw();
