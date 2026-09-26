@@ -971,7 +971,7 @@ await p.waitForTimeout(500);
 ok("一度読んだ週は読み直さない（同じ週で往復しない）",
    (await calls()).indexOf("apiReadWeek") < 0, await calls());
 
-console.log("\n■ 単元を仮置きする → 番号を備考欄に移して終わる");
+console.log("\n■ 単元管理 → 番号を備考欄に移して終わる");
 /* 起点はいま開いている週。番号のぶんだけ印を付けてから焼き付ける */
 await p.evaluate(() => {
   const u = {id:"ub1", layer:"home", target:view.cls, subject:"kokugo",
@@ -1082,6 +1082,8 @@ ok("送れていないことを画面に出す",
 
 /* 回線が戻れば、控えていたぶんもそのまま出ていく */
 await p.evaluate(() => { window.__failWrite = false; });
+/* リロードで「前に開いていた面」へ戻るので、入口へ出てからタイルを押す */
+await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
 await p.locator(".tile[data-c='5-1']").click(); await p.waitForTimeout(400);
 await p.locator("#saveBtn").click(); await p.waitForTimeout(900);
 ok("回線が戻れば、控えていたぶんも送れる",
