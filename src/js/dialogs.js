@@ -672,18 +672,13 @@ function openHelp(k){
   $("helpDlg").showModal();
 }
 
-/* 案内は画面切替・通信・データ編集を一切行わない。失敗しても起動を止めない。 */
-const GUIDE_KEY = 'school-timetable/guide-v2';
-function openGuide(automatic){
+/* 案内は「使い方」を押したときだけ開く。自動では開かない（→ main.js start）。
+   画面切替・通信・データ編集を一切行わない。失敗しても起動を止めない。 */
+function openGuide(){
   try{
-    if(automatic && localStorage.getItem(GUIDE_KEY) === 'done') return;
-    if(automatic && document.querySelector('dialog[open]')) return;
     const d = $('guideDlg');
     if(d && !d.open) d.showModal();
   }catch(e){ console.warn('案内を開けませんでした', e); }
-}
-function finishGuide(){
-  try{ localStorage.setItem(GUIDE_KEY, 'done'); }catch(_){}
 }
 
 

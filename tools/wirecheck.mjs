@@ -44,7 +44,6 @@ p.on("console", m => { if(m.type() === "error") errs.push("console: " + m.text()
 
 /* 偽のサーバ。呼ばれたことと引数を覚え、シートらしい形を返す。 */
 await p.addInitScript(() => {
-  localStorage.setItem('school-timetable/guide-v2', 'done');
   window.__calls = [];
   /* たんぽぽの出す先。**版を上げただけの学校の形**から始める
      ＝出す先シートは空で、設定の たんぽぽファイルID が1本返る（legacy） */
@@ -1188,6 +1187,8 @@ ok("シートの側からも消えている", await p.evaluate(() => {
    }) === false, await p.evaluate(() => window.__sheet()));
 /* **開き直しても空いたまま。** 手元だけで消していたころは、シートに行が
    残っていたので開き直すと戻ってきた（→「空にする」もそこを直してある） */
+/* 入口から始める形にする（直前の面へ復帰する印を落とす） */
+await p.evaluate(() => localStorage.removeItem("school-timetable/v3/last"));
 await p.reload(); await p.waitForTimeout(1400);
 await p.locator(".tile[data-c='5-3']").click(); await p.waitForTimeout(500);
 ok("開き直しても、担任のコマは戻ってこない",
@@ -1238,6 +1239,7 @@ ok("メモがシートへ送られる",
 ok("月曜の行として送る（週にひとつ）",
    memoSent.some(q => q.slot === "memo" && q.date === "2026-09-07"), memoSent);
 ok("開き直しても残っている", await (async () => {
+     await p.evaluate(() => localStorage.removeItem("school-timetable/v3/last"));
      await p.reload(); await p.waitForTimeout(1400);
      await p.locator(".tile[data-c='5-2']").click(); await p.waitForTimeout(500);
      return (await p.locator("#sheet .foot .t").innerText()).indexOf("下校時刻") >= 0;
@@ -1307,6 +1309,7 @@ const thisMon = await p.evaluate(() => wkKey());
 /* この端末の控えを捨てて、シートから読み直させる。今週ぶんの返事だけ遅らせる */
 await p.evaluate(m => {
   localStorage.removeItem("school-timetable/v3");
+  localStorage.removeItem("school-timetable/v3/last");
   window.__lagNext = m;
 }, thisMon);
 await p.reload();
@@ -1343,7 +1346,8 @@ ok("送ったコマがシート側に入る",
    }) === true, await p.evaluate(() => window.__sheet()));
 
 /* この端末の控えを捨てて、シートから読み直させる */
-await p.evaluate(() => { localStorage.removeItem("school-timetable/v3"); });
+await p.evaluate(() => { localStorage.removeItem("school-timetable/v3");
+                         localStorage.removeItem("school-timetable/v3/last"); });
 await p.reload();
 await p.waitForTimeout(900);
 await p.locator(".tile[data-c='5-3']").click(); await p.waitForTimeout(900);

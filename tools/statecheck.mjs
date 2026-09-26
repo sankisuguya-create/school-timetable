@@ -6,7 +6,6 @@ const b=await chromium.launch(process.env.PLAYWRIGHT_CHROMIUM ? {executablePath:
 try{
   const p=await b.newPage({viewport:{width:1500,height:950}}),errors=[];
   p.on('pageerror',e=>errors.push(e.message));
-  await p.addInitScript(()=>localStorage.setItem('school-timetable/guide-v2','done'));
   await p.goto(new URL('../dist/index.html',import.meta.url).href);
   await p.evaluate(()=>{monday=parseISO('2026-09-14');Y().tanpopo={'1':['5-1']};openView({kind:'class',cls:'5-1'});});
   await p.locator('#saveBtn').click();

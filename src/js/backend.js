@@ -502,7 +502,8 @@ const Backend = (function(){
      それを黙って出すと「週案が全部消えた」と言われる。 */
   const archivedYear = y => (bootInfo.archived || {})[String(y)] || null;
   function boot(after){
-    if(!onGas){ booted = true; return after(); }
+    /* 手元でも、立ち上がりを待っていた仕事は最後に流す。順番はGASと同じ */
+    if(!onGas){ booted = true; after(); while(waiters.length) waiters.shift()(); return; }
     held = savedList(HELD, LEGACY_HELD);
     if(held.length){ onConflict(held.slice()); onDirty(unsaved(), lastErr); }
     let finished = false;

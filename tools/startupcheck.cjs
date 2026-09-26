@@ -30,6 +30,7 @@ const context = vm.createContext({
        ここで見たいのは起動順序で、関門そのものは gatecheck が見る */
     info(){ return {me:'a@edu.nishi.or.jp', isAdmin:true}; },
     boot(fn){bootCount++; fn();}, watch(){}, readyYear(fn){fn();}},
+  KEY:'school-timetable/v3',
   view:{kind:'gate'}, selCell:null, storeBroken:'', onStoreError:null,
   loadDb(){}, applyPaper(){}, paintArchive(){}, pollNewYear(){},
   pruneWeeks(){return 0;}, KEEP_WEEKS:60, save(){}, saveNow(){}, showConflicts(){},

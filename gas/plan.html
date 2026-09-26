@@ -3494,8 +3494,8 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
 /* 版と日付。**ここの値は build.py が VERSION の中身に差し替える。**
    src を直接ブラウザで開いたときだけ dev のまま見える。
    直すのは VERSION のほう（版を上げるのは人の手。ビルド日は埋めない）。 */
-let APP_VERSION = "1.38.0";
-let BUILD_DATE  = "2026-09-24";
+let APP_VERSION = "1.39.0";
+let BUILD_DATE  = "2026-09-26";
 
 /* 時程。行を固定しない（学校ごとに違う）。
    tally = 時数集計表のどの列に当たるか。chips = 教科を選べるか。
@@ -5096,7 +5096,8 @@ const Backend = (function(){
      それを黙って出すと「週案が全部消えた」と言われる。 */
   const archivedYear = y => (bootInfo.archived || {})[String(y)] || null;
   function boot(after){
-    if(!onGas){ booted = true; return after(); }
+    /* 手元でも、立ち上がりを待っていた仕事は最後に流す。順番はGASと同じ */
+    if(!onGas){ booted = true; after(); while(waiters.length) waiters.shift()(); return; }
     held = savedList(HELD, LEGACY_HELD);
     if(held.length){ onConflict(held.slice()); onDirty(unsaved(), lastErr); }
     let finished = false;
@@ -14086,6 +14087,23 @@ function showTanpopoResult(r){
 
 let lastTarget = null;   /* 直前に開いていたもの。「今週の週案」で戻る先 */
 
+/* **次に開いたときも、直前の面から始める。**
+   毎回入口へ戻すと、自分のクラスを開く1クリックが毎日起きる。
+   控えと同じく端末にだけ覚えさせる（人ではなく端末が覚える）。 */
+const LASTKEY = KEY + "/last";
+/* 起動時に読む。**いなくなった面には戻さない**
+   （学級編成・専科の枠が変わっているかもしれない）。 */
+function loadLastTarget(){
+  let v = null;
+  try{ v = JSON.parse(localStorage.getItem(LASTKEY) || "null"); }catch(_){}
+  if(!v || typeof v !== "object") return null;
+  if(v.kind === "class"   && allClasses().indexOf(v.cls) >= 0)              return v;
+  if(v.kind === "grade"   && grades().indexOf(String(v.grade)) >= 0)        return v;
+  if(v.kind === "special" && specials().some(s => s.code === v.sp))         return v;
+  if(v.kind === "school" || v.kind === "tanpopo")                         return v;
+  return null;
+}
+
 /* 出力操作の表示はここだけで管理する。HTML側は同じ data-plan-output を持つ。 */
 function showPlanOutputs(on){
   for(const button of document.querySelectorAll('[data-plan-output]')) button.hidden = !on;
@@ -14177,6 +14195,7 @@ function openView(v){
      （読むものは view から決まるので、読む前に決まっていないといけない） */
   view = v;
   lastTarget = v;
+  try{ localStorage.setItem(LASTKEY, JSON.stringify(v)); }catch(_){}
   selCell = null;
   pickSub = "";          /* 持っていた教科チップは、面を出ると手放す */
   /* 単元は「どの面の単元か」で読むものが変わる。面が決まった時点で読みに行く */
@@ -14957,18 +14976,13 @@ function openHelp(k){
   $("helpDlg").showModal();
 }
 
-/* 案内は画面切替・通信・データ編集を一切行わない。失敗しても起動を止めない。 */
-const GUIDE_KEY = 'school-timetable/guide-v2';
-function openGuide(automatic){
+/* 案内は「使い方」を押したときだけ開く。自動では開かない（→ main.js start）。
+   画面切替・通信・データ編集を一切行わない。失敗しても起動を止めない。 */
+function openGuide(){
   try{
-    if(automatic && localStorage.getItem(GUIDE_KEY) === 'done') return;
-    if(automatic && document.querySelector('dialog[open]')) return;
     const d = $('guideDlg');
     if(d && !d.open) d.showModal();
   }catch(e){ console.warn('案内を開けませんでした', e); }
-}
-function finishGuide(){
-  try{ localStorage.setItem(GUIDE_KEY, 'done'); }catch(_){}
 }
 /* ▲ src/js/dialogs.js ▲ */
 /* ▼ src/js/basedlg.js ▼ */
@@ -16697,8 +16711,7 @@ function wire(){
      beforeunload は Chromebook の蓋を閉じたときなど、来ないことがある。 */
   addEventListener("pagehide", saveNow);
   addEventListener("visibilitychange", () => { if(document.hidden) saveNow(); });
-  on('guideOpen', 'click', () => openGuide(false));
-  on('guideDlg', 'close', finishGuide);
+  on('guideOpen', 'click', () => openGuide());
 
 
   /* 単元の窓と学期設定の結線（→ unitmanage.js） */
@@ -17429,7 +17442,10 @@ function start(){
   if(!Backend.isGas() && !Object.keys(Y().base).length) seedBase();
   if(!Backend.isGas()) saveNow();
   applyPaper();
-  showGate();
+  /* **直前に開いていた面へそのまま戻す。** 毎回入口へ戻すと、
+     自分のクラスを開く1クリックが毎日起きる。面が消えていれば入口。 */
+  const lt = (typeof loadLastTarget === "function") ? loadLastTarget() : null;
+  if(lt) openView(lt); else showGate();
 
   /* 設定・時程・教科・その年度は、立ち上がりの1回でまとめてもらう。
      別々に取りに行くと、その回数だけ待つことになる。 */
@@ -17448,8 +17464,9 @@ function start(){
        立ち上がりの1回だけみに行く（週を繰るたびにみに行かない） */
     if(!Backend.isGas() || Backend.info().isAdmin) pollNewYear();
   });
-  // 案内の有無でデータ初期化の成否を変えない。
-  setTimeout(() => openGuide(true), 250);
+  /* **初回案内は自動で開かない。** 端末の「見た」印（localStorage）は
+     スマホで揮発するため、見覚えのある人にも毎回出てしまう。
+     読みたい人は左メニューの「使い方」からいつでも開ける。 */
 }
 
 /* 手元で見せる基本時間割。**同梱の固定時間割の写しを入れる。**

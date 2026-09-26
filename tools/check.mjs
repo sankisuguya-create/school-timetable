@@ -21,10 +21,6 @@ const b = await chromium.launch(exe ? {executablePath: exe} : {});
 const ctx = await b.newContext({viewport:{width:1500, height:950}});
 const p = await ctx.newPage();
 await schoolWeek(p);
-/* 通常の検査中は初回案内を重ねない。案内自体は末尾で明示的に検査する。 */
-await p.addInitScript(() => {
-  try{ localStorage.setItem("school-timetable/guide-v2", "done"); }catch(_){}
-});
 const errs = [];
 p.on("pageerror", e => errs.push("pageerror: " + e.message));
 p.on("console", m => { if(m.type() === "error") errs.push("console: " + m.text()); });
@@ -2719,15 +2715,11 @@ await shut();
 await p.locator(".tile[data-c='1-1']").click(); await p.waitForTimeout(400);
 await shut();
 
-console.log("\n■ 初回案内は閉じて再表示でき、画面を勝手に移動しない");
-await p.evaluate(() => {localStorage.removeItem('school-timetable/guide-v2');openGuide(true);});
-ok("初回案内が開く", await p.locator('#guideDlg').isVisible());
+console.log("\n■ 案内は「使い方」からだけ開き、画面を勝手に移動しない");
+await p.evaluate(() => openGuide());
+ok("案内が開く", await p.locator('#guideDlg').isVisible());
 await p.keyboard.press('Escape');
-await p.waitForFunction(() => localStorage.getItem('school-timetable/guide-v2') === 'done');
 ok("Escapeで閉じる", await p.locator('#guideDlg').isVisible() === false);
-ok("案内完了を保存", await p.evaluate(() => localStorage.getItem('school-timetable/guide-v2')) === 'done');
-await p.evaluate(() => openGuide(true));
-ok("既読なら自動表示しない", await p.locator('#guideDlg').isVisible() === false);
 await p.locator('#guideOpen').click();
 ok("使い方から再表示", await p.locator('#guideDlg').isVisible());
 await p.locator('[data-close="guideDlg"]').click();
