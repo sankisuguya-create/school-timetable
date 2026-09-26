@@ -776,10 +776,20 @@ function wire(){
   on("spmPrint","click", printSpm);
   on("spmImage","click", async () => {
     const w = openOutWindow("画像を作っています");
-    try{ const b = await nodePngBlob($("spmView"));
+    /* **紙と一覧を1枚に。** 中身は転がる箱（.spmbody）の中なので、
+       見えているぶんだけを撮ると週の後ろ半分と一覧が欠ける（実測）。
+       紙と一覧を写した仮の縦並びを作って、その全体を撮る */
+    const cap = el("div");
+    cap.style.cssText = "position:absolute;left:-10000px;top:0;width:"
+      + $("spmPaper").clientWidth + "px";
+    cap.appendChild($("spmPaper").cloneNode(true));
+    cap.appendChild($("spmOut").cloneNode(true));
+    document.body.appendChild(cap);
+    try{ const b = await nodePngBlob(cap);
          if(w){ w.location.href = URL.createObjectURL(b); return; }
          downloadBlob(b, outputName("専科の月予定") + ".png"); }
     catch(e){ if(w) w.close(); toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
+    finally{ cap.remove(); }
   });
   on("spmClose","click", () => setCenter("week"));
   addEventListener("resize", () => { if(!$("spmView").hidden) fitSpm(); });

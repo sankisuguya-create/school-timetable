@@ -9760,6 +9760,10 @@ function fitSpm(cell){
   }
   box.style.removeProperty("grid-template-columns");
   box.style.removeProperty("width");
+  /* **刷っているあいだは画面の採寸をしない。** プレビューの開閉で resize が
+     走ると、.stage を隠したままの全幅を測って過大な --pw が残る
+     （実測: 641px の紙が 755px に）。戻るのは printSpread の back() だけ */
+  if(document.body.classList.contains("printing-spm")) return;
   const w = (box.clientWidth - M_GAP * (SPM_COLS - 1)) / SPM_COLS - 2;
   if(w < 40) return;
   /* 1mm が何 px か。**測って出す**（決め打ちにすると、拡大表示でずれる） */
@@ -17233,10 +17237,20 @@ function wire(){
   on("spmPrint","click", printSpm);
   on("spmImage","click", async () => {
     const w = openOutWindow("画像を作っています");
-    try{ const b = await nodePngBlob($("spmView"));
+    /* **紙と一覧を1枚に。** 中身は転がる箱（.spmbody）の中なので、
+       見えているぶんだけを撮ると週の後ろ半分と一覧が欠ける（実測）。
+       紙と一覧を写した仮の縦並びを作って、その全体を撮る */
+    const cap = el("div");
+    cap.style.cssText = "position:absolute;left:-10000px;top:0;width:"
+      + $("spmPaper").clientWidth + "px";
+    cap.appendChild($("spmPaper").cloneNode(true));
+    cap.appendChild($("spmOut").cloneNode(true));
+    document.body.appendChild(cap);
+    try{ const b = await nodePngBlob(cap);
          if(w){ w.location.href = URL.createObjectURL(b); return; }
          downloadBlob(b, outputName("専科の月予定") + ".png"); }
     catch(e){ if(w) w.close(); toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
+    finally{ cap.remove(); }
   });
   on("spmClose","click", () => setCenter("week"));
   addEventListener("resize", () => { if(!$("spmView").hidden) fitSpm(); });

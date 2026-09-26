@@ -1299,6 +1299,10 @@ function fitSpm(cell){
   }
   box.style.removeProperty("grid-template-columns");
   box.style.removeProperty("width");
+  /* **刷っているあいだは画面の採寸をしない。** プレビューの開閉で resize が
+     走ると、.stage を隠したままの全幅を測って過大な --pw が残る
+     （実測: 641px の紙が 755px に）。戻るのは printSpread の back() だけ */
+  if(document.body.classList.contains("printing-spm")) return;
   const w = (box.clientWidth - M_GAP * (SPM_COLS - 1)) / SPM_COLS - 2;
   if(w < 40) return;
   /* 1mm が何 px か。**測って出す**（決め打ちにすると、拡大表示でずれる） */
