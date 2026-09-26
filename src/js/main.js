@@ -778,18 +778,22 @@ function wire(){
     const w = openOutWindow("画像を作っています");
     /* **紙と一覧を1枚に。** 中身は転がる箱（.spmbody）の中なので、
        見えているぶんだけを撮ると週の後ろ半分と一覧が欠ける（実測）。
-       紙と一覧を写した仮の縦並びを作って、その全体を撮る */
+       紙と一覧を写した仮の縦並びを作って、その全体を撮る。
+       **画面外へ逃がす left:-10000px は外側の箱に付ける** ── 中身に付けると
+       nodePngBlob が写しごとシリアライズして、絵が枠の外へ出て白紙になる */
+    const off = el("div");
+    off.style.cssText = "position:absolute;left:-10000px;top:0";
     const cap = el("div");
-    cap.style.cssText = "position:absolute;left:-10000px;top:0;width:"
-      + $("spmPaper").clientWidth + "px";
+    cap.style.width = $("spmPaper").clientWidth + "px";
     cap.appendChild($("spmPaper").cloneNode(true));
     cap.appendChild($("spmOut").cloneNode(true));
-    document.body.appendChild(cap);
+    off.appendChild(cap);
+    document.body.appendChild(off);
     try{ const b = await nodePngBlob(cap);
          if(w){ w.location.href = URL.createObjectURL(b); return; }
          downloadBlob(b, outputName("専科の月予定") + ".png"); }
     catch(e){ if(w) w.close(); toast("画像を作れなかった（" + escText(e.message || e) + "）"); }
-    finally{ cap.remove(); }
+    finally{ off.remove(); }
   });
   on("spmClose","click", () => setCenter("week"));
   addEventListener("resize", () => { if(!$("spmView").hidden) fitSpm(); });

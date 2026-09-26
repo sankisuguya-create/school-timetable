@@ -384,6 +384,11 @@ function printSpread(page, mark, fit, cellMM){
     document.body.classList.remove(mark);
     if(st) st.textContent = had;
     fit();
+    /* **戻しの採寸は、紙の形が元に戻ってからもう一度。** プレビューの開閉で
+       mob が一瞬残ることがあり、その間に測ると過大な幅が焼き付く
+       （実測: 月予定の紙が 641px→755px で横スクロールが出る）。mob を外す
+       経路は fit を呼ばないので、ここで落ち着きを待って測り直す */
+    setTimeout(() => { if(!document.body.classList.contains(mark)) fit(); }, 200);
   };
   const once = () => { removeEventListener("afterprint", once); back(); };
   addEventListener("afterprint", once);
