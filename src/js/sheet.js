@@ -203,7 +203,8 @@ function cellEl(d, s){
   const ce = sheetRO ? "" : " contenteditable role='textbox'";
   const e = el("div", "cell " + kls,
     "<span class='tag' hidden></span>"
-    + (s.kind === "note" ? "" : "<div class='t'" + ce + "></div>")
+    + (s.kind === "note" ? "" : "<div class='t'" + ce + "></div>"
+                            + "<div class='tl'" + ce + "></div>")
     + (s.kind === "lesson" || s.kind === "note"
          ? "<div class='n'" + ce + (ce ? " aria-multiline='true'" : "") + "></div>" : ""));
   e.dataset.d = d; e.dataset.s = s.id;
@@ -211,7 +212,7 @@ function cellEl(d, s){
      刷った紙で「休みなのか、授業があるのか」が読めなくなる。
      校外が覆っていれば書ける（時数のために教科を入れる必要がある） */
   if(isDayOff(d) && s.kind === "lesson" && !tripHere(d, s.id)) e.classList.add("off");
-  const t = e.querySelector(".t"), n = e.querySelector(".n");
+  const t = e.querySelector(".t"), n = e.querySelector(".n"), tl = e.querySelector(".tl");
   /* **見るだけの紙には、書く仕掛けを付けない。**（月の面・学年の面）
      ここで返さずに CSS だけで止めると、キーボードの移動で欄に入れてしまい、
      打った字が別のクラス・別の週へ入る */
@@ -265,6 +266,21 @@ function cellEl(d, s){
     writeCell(d, s.id, {note:n.innerHTML});
     paintSheet(e); fillPanel(); typing = null;
   });
+
+  /* 題名の右の時数欄。**時数集計表に出る字を、書きながら直せる。**
+     空にすると教科（または題名からの「特」）に戻る。1文字だけ */
+  if(tl){
+    tl.setAttribute("aria-label", where + " 時数の字");
+    tl.addEventListener("focus", focus);
+    tl.addEventListener("input", () => {
+      typing = tl;
+      writeCell(d, s.id, {short: plain(tl.innerHTML).trim().slice(0, 1)});
+      paintSheet(e); fillPanel(); typing = null;
+    });
+    tl.addEventListener("keydown", ev => {
+      if(ev.key === "Enter"){ ev.preventDefault(); tl.blur(); }
+    });
+  }
 
   /* 教科を引っぱって入れる */
   e.addEventListener("dragover", ev => { ev.preventDefault(); e.classList.add("drop"); });
@@ -391,6 +407,12 @@ function paintCell(e, c, d, s, mine){
   const wantN = c.note || "";
   if(t && t !== typing && t.innerHTML !== wantT) t.innerHTML = wantT;
   if(n && n !== typing && n.innerHTML !== wantN) n.innerHTML = wantN;
+  /* 題名の右の時数欄（専科の面では出さない ── あっちはクラスごとに数える） */
+  const tl = e.querySelector(".tl");
+  if(tl && tl !== typing){
+    const wantH = view.kind === "special" ? "" : tallyCharOf(c);
+    if(tl.textContent !== wantH) tl.textContent = wantH;
+  }
 
   /* **授業なしのコマは、題名の欄を斜め線で消す。** 備考は書ける。
      ここで付け外しするのは、**他の端末から降りてきたときにも効かせる**ため。

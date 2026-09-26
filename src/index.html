@@ -535,7 +535,7 @@
         <div class="foldin">
           <div class="pals" id="unitPals"></div>
           <button class="unitopen unitact" id="unitBakeFold" type="button">
-            <span><b>単元を確定する</b><small>番号を備考欄に移して、その単元を終わらせる</small></span><i>✓</i>
+            <span><b>単元を確定する</b><small><b class="sq">仮番号</b>を備考欄に転記して、単元の配置を確定する</small></span><i>✓</i>
           </button>
           <button class="unitopen" id="unitOpen" type="button">
             <span><b>単元の登録</b><small id="unitOpenSub"></small></span><i>›</i>
@@ -610,7 +610,7 @@
 <div class="toast" id="toast" hidden></div>
 <dialog id="unitDlg" aria-labelledby="unitTitle"><div class="dlg unitdlg">
   <h2 id="unitTitle">単元の登録 <span class="subttl" id="unitFy"></span></h2>
-  <p class="unitintro">単元名と授業数を登録します。仮置きは時間割の単元チップから行います。<br>置いた番号をただの字として残す（確定する）は、右メニュー「単元を仮置きする」の中の「単元を確定する」ボタンです。</p>
+  <p class="unitintro">単元名と授業数を登録します。仮置きは時間割の単元チップから行います。<br>置いた仮番号をただの字にして確定するのは、右メニュー「単元を仮置きする」の中の「単元を確定する」ボタンです。</p>
   <div class="unitctx">
     <label><span id="unitClsLbl">クラス</span><select id="unitCls"></select></label>
     <label>教科<select id="unitSub"></select></label>
@@ -652,7 +652,7 @@
      ── 登録の窓まで戻させないための、ここだけの小さな窓 -->
 <dialog id="unitPickDlg"><div class="dlg">
   <h2>どの単元を確定しますか</h2>
-  <p class="hint">いま出ている番号を備考欄に字として移して、その単元を終わらせます。<b>戻せません。</b></p>
+  <p class="hint">いま出ている仮番号を備考欄に転記して、その単元の配置を確定します。<b>戻せません。</b></p>
   <div class="unitlist" id="unitPickList"></div>
   <div class="unitactions">
     <button class="btn" id="unitPickCancel" type="button">やめる</button>

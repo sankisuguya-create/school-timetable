@@ -1469,6 +1469,8 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .unitopen i{font-style:normal;font-size:22px;line-height:1;color:var(--tx-sub)}
 /* 畳みの中の「確定する」── ✓ は緑にして、窓を開く › と見分ける */
 .unitact i{color:var(--ok,#2F6E4E);font-size:16px;font-weight:700}
+/* 「仮番号」の字は、紙に出ている仮置きの番号と同じ色 ── 同じものだと見た目で言う */
+.unitopen small .sq{color:var(--ink-link);font-weight:700}
 
 .unitdlg{width:min(720px,92vw)}
 .unitintro{margin-top:-4px;color:var(--tx-sub)}
