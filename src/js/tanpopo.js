@@ -310,13 +310,18 @@ function tpGroupList(edit){
            /* **どのクラスが今週まだ書いていないかを、その場で見せる。**
               下に字でまとめて出していたころは、組の並びと読み合わせる必要があった */
            const st = tpState(c);
-           return "<" + (edit ? "button" : "span") + " class='tpin st-" + st + "'"
+           /* **面では、押すとそのクラスの画面へ飛ぶ。** まだ出していない
+              クラスが見えても、そこから声をかけに行く（開いて確認する）までが
+              遠かったので、状況のチップそのものを行き口にする。
+              窓の中（edit）では従来どおり「この1人を外す」 */
+           return "<button class='tpin st-" + st + (edit ? "'" : " go'")
              + " data-g='" + escText(g) + "' data-i='" + i + "'"
+             + (edit ? "" : " data-c='" + escText(c) + "'")
              + " title='" + escText(c + "：" + TP_ST[st].why)
-             + (edit ? "。押すと、この1人を外す" : "") + "'>"
+             + (edit ? "。押すと、この1人を外す" : "。押すと " + c + " の面を開く") + "'>"
              + escText(c) + "<em>" + TP_ST[st].mark + "</em>"
              + (edit ? "<u>×</u>" : "")
-             + "</" + (edit ? "button" : "span") + ">";
+             + "</button>";
          }).join("")
        : "<i>" + (edit ? "ここへ引っぱって入れる" : "まだ入れていない") + "</i>")
     + "</div></div>").join("");
@@ -412,7 +417,10 @@ function drawTanpopoView(){
     "<div class='tpleg'><b>今週の提出</b>"
     + ["ok","base","changed"].map(k =>
         "<span class='st-" + k + "'><i></i>" + TP_ST[k].mark + "</span>").join("")
+    + "<span class='hint'>チップを押すと、そのクラスの面を開く</span>"
     + "</div><div class='tponly'>" + tpGroupList(false) + "</div>";
+  for(const x of $("tpSel").querySelectorAll(".tpin.go"))
+    x.onclick = () => openView({kind:"class", cls:x.dataset.c});
 
   $("tpWarn").innerHTML = tpWarnBoxes().join("");
   /* 出す先が1つも無いあいだ、直している最中は出させない。

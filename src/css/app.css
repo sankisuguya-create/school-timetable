@@ -456,8 +456,10 @@ body.is-unsaved[data-scope="school"] .stage{
 button.tpin:hover{border-color:var(--cat-clash);color:var(--cat-clash)}
 .tpin u{text-decoration:none;font-size:11px;color:var(--tx-sub)}
 button.tpin:hover u{color:var(--cat-clash)}
-/* 面では読むだけなので、押せるように見せない（× も出さない） */
-span.tpin{cursor:default}
+/* 面では読むだけだが、押すとそのクラスの面を開く。**開けることが分かる
+   色（リンクの青）に寄せる** ── 窓の中の「外す」（赤系）とは別の色にする */
+button.tpin.go:hover{border-color:var(--ink-link);color:var(--ink-link)}
+.tpleg .hint{margin-left:8px}
 
 /* 交流級の着手／未着手。**組の中のチップそのものが言う。**
    下に字でまとめて出していたころは、組の並びと読み合わせないと
