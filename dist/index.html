@@ -890,6 +890,14 @@ body.is-unsaved #discardBtn{color:var(--cat-clash);border-color:#ecc0b8}
    **いまどちらかを字で言う。** 押せる／押されているを色だけに持たせない */
 .btn.tgl[aria-pressed=true]{border-color:var(--ink-link);color:var(--ink-link);
   font-weight:700}
+/* 畳みの見出しの右に置く小さいスイッチ（時数欄の出す／出さない）。
+   畳み自体のスイッチ（左のつまみ）と見分けるため字で状態を言う */
+.fold>summary .tlsw{margin-left:auto;flex:none;font-size:11px;font-weight:400;
+  padding:1px 8px;min-height:22px;border-radius:11px}
+/* 時数欄を消す ── 出ないだけでなく、そのぶん題名が広く使えるよう
+   予約していた右の余白も返す。印刷にも同じく効く */
+body.notl .cell .tl{display:none}
+body.notl .cell .t{padding-right:0}
 
 .fsz{display:flex;align-items:center;gap:3px;font-size:12px;color:var(--tx-sub)}
 .fsz>span{margin-right:2px}
@@ -2680,7 +2688,7 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
            毎回の操作なので、畳んだままだと開く手が増える。畳めるようには
            しておく（.fold）。 -->
       <details class="fold" id="palFold">
-        <summary data-help="pals"><span>教科・行事</span></summary>
+        <summary data-help="pals"><span>教科・行事</span><button class="btn tgl tlsw" id="tlShow" type="button" aria-pressed="true">時数：出す</button></summary>
         <div class="foldin">
         <div class="pals" id="pals"></div>
         <!-- 教科の色。**紙の上では、題名の欄の地だけを変える。**
@@ -14853,7 +14861,9 @@ const HELP = {
        "リセット＝そのコマのこの面からの予定を消します（学年・全学年の面だけ）。",
        "専科の面では、行き先のクラスを選びます。",
        "教科の色はこの下で切り替えます（切り替えられるのはクラスの面だけです）。"
-       + "1文字の字は「時数名」で決め直せます。"]},
+       + "1文字の字は「時数名」で決め直せます。",
+       "見出し右の「時数：出す／消す」は、題名の右の小さい時数欄をまとめて消します"
+       + "（消しても集計は変わりません。印刷にも効きます）。"]},
   trip: {t:"この校外行事の名前",
     b:["<b>続けて置いた1本ぶんに同じ字が入ります。</b>紙では12文字まで、たんぽぽでは2文字までです。"]},
   events: {t:"この日の行事",
@@ -17121,6 +17131,24 @@ function wire(){
       (Y().chipModes || (Y().chipModes = {}))[view.cls] = b.dataset.chip;
       save(); paintChipSeg(); redrawCenter(true);
     });
+
+  /* 時数欄の出す／出さない。**この端末の好み**なので年度の棚ではなく
+     端末の控えに入れる（人によって見たいものが違う）。描き直しは要らない
+     ── body の印を CSS が見ている */
+  const tlSw = $("tlShow");
+  const tlShowKey = KEY + "/ui/tlShow";
+  const paintTlSw = () => {
+    const on = localStorage.getItem(tlShowKey) !== "0";
+    document.body.classList.toggle("notl", !on);
+    tlSw.setAttribute("aria-pressed", on ? "true" : "false");
+    tlSw.textContent = on ? "時数：出す" : "時数：消す";
+  };
+  tlSw.addEventListener("click", ev => {
+    ev.preventDefault(); ev.stopPropagation();   /* 畳みを開き閉じさせない */
+    localStorage.setItem(tlShowKey, localStorage.getItem(tlShowKey) === "0" ? "1" : "0");
+    paintTlSw();
+  });
+  paintTlSw();
 
   /* 紙の字の大きさ。**設定と同じ棚を直す**（db.settings.titlePt / notePt）。
      窓の中のスライダーと、ここの ＋− は、同じ値の別の触り方。 */

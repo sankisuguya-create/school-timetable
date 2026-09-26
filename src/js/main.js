@@ -853,6 +853,24 @@ function wire(){
       save(); paintChipSeg(); redrawCenter(true);
     });
 
+  /* 時数欄の出す／出さない。**この端末の好み**なので年度の棚ではなく
+     端末の控えに入れる（人によって見たいものが違う）。描き直しは要らない
+     ── body の印を CSS が見ている */
+  const tlSw = $("tlShow");
+  const tlShowKey = KEY + "/ui/tlShow";
+  const paintTlSw = () => {
+    const on = localStorage.getItem(tlShowKey) !== "0";
+    document.body.classList.toggle("notl", !on);
+    tlSw.setAttribute("aria-pressed", on ? "true" : "false");
+    tlSw.textContent = on ? "時数：出す" : "時数：消す";
+  };
+  tlSw.addEventListener("click", ev => {
+    ev.preventDefault(); ev.stopPropagation();   /* 畳みを開き閉じさせない */
+    localStorage.setItem(tlShowKey, localStorage.getItem(tlShowKey) === "0" ? "1" : "0");
+    paintTlSw();
+  });
+  paintTlSw();
+
   /* 紙の字の大きさ。**設定と同じ棚を直す**（db.settings.titlePt / notePt）。
      窓の中のスライダーと、ここの ＋− は、同じ値の別の触り方。 */
   for(const b of document.querySelectorAll("#fontWrap .fsb"))
