@@ -103,7 +103,7 @@ function unitDefaultGrade_(){
 
 function openUnitManager(){
   const ctx = unitContext_();
-  if(!ctx) return toast("「単元を仮置きする」は<b>学級または専科の週案</b>で使います");
+  if(!ctx) return toast("「単元管理」は<b>学級または専科の週案</b>で使います");
   unitState.cls = unitDefaultClass_();
   unitState.gr = unitDefaultGrade_();
   unitState.subject = unitDefaultSubject_();

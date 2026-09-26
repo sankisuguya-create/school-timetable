@@ -1624,6 +1624,10 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .unitact i{color:var(--ok,#2F6E4E);font-size:16px;font-weight:700}
 /* 「仮番号」の字は、紙に出ている仮置きの番号と同じ色 ── 同じものだと見た目で言う */
 .unitopen small .sq{color:var(--ink-link);font-weight:700}
+/* 仮置きの小見出し。畳み名が「単元管理」なので、チップが何のための
+   ものかをここで言う */
+.unitlbl{font-size:11.5px;font-weight:700;color:var(--tx-sub);margin:8px 2px 4px}
+.unitlbl span{font-weight:400;margin-left:4px}
 
 .unitdlg{width:min(720px,92vw)}
 .unitintro{margin-top:-4px;color:var(--tx-sub)}
@@ -2818,17 +2822,19 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
 
       <!-- 単元進捗。**教科・行事の下・時数の上に置く畳み口。**
            学級・専科の面だけに出す（単元は「クラス×教科」の持ちものなので、
-           学年・全校の面には置かない）。チップはこの中 ── 作る・直す・消すは
-           「単元進捗管理」の窓。既定は開く（引っぱって落とす毎回の操作）。 -->
+           学年・全校の面には置かない）。並びは 作る・消す（窓）→ 仮置き
+           （チップ）→ 確定 ── 上から順にたどると一通りの操作になる。
+           既定は開く（引っぱって落とす毎回の操作）。 -->
       <details class="fold" id="unitEntry" hidden>
-        <summary><span>単元を仮置きする</span></summary>
+        <summary><span>単元管理</span></summary>
         <div class="foldin">
+          <button class="unitopen" id="unitOpen" type="button">
+            <span><b>単元作成/削除</b><small id="unitOpenSub"></small></span><i>›</i>
+          </button>
+          <div class="unitlbl">単元を仮置きする<span>（チップを引っぱってコマへ）</span></div>
           <div class="pals" id="unitPals"></div>
           <button class="unitopen unitact" id="unitBakeFold" type="button">
             <span><b>単元を確定する</b><small><b class="sq">仮番号</b>を備考欄に転記して、単元の配置を確定する</small></span><i>✓</i>
-          </button>
-          <button class="unitopen" id="unitOpen" type="button">
-            <span><b>単元の登録</b><small id="unitOpenSub"></small></span><i>›</i>
           </button>
         </div>
       </details>
@@ -2900,7 +2906,7 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
 <div class="toast" id="toast" hidden></div>
 <dialog id="unitDlg" aria-labelledby="unitTitle"><div class="dlg unitdlg">
   <h2 id="unitTitle">単元の登録 <span class="subttl" id="unitFy"></span></h2>
-  <p class="unitintro">単元名と授業数を登録します。仮置きは時間割の単元チップから行います。<br>置いた仮番号をただの字にして確定するのは、右メニュー「単元を仮置きする」の中の「単元を確定する」ボタンです。</p>
+  <p class="unitintro">単元名と授業数を登録します。仮置きは時間割の単元チップから行います。<br>置いた仮番号をただの字にして確定するのは、右メニュー「単元管理」の中の「単元を確定する」ボタンです。</p>
   <div class="unitctx">
     <label><span id="unitClsLbl">クラス</span><select id="unitCls"></select></label>
     <label>教科<select id="unitSub"></select></label>
@@ -12849,7 +12855,7 @@ function unitDefaultGrade_(){
 
 function openUnitManager(){
   const ctx = unitContext_();
-  if(!ctx) return toast("「単元を仮置きする」は<b>学級または専科の週案</b>で使います");
+  if(!ctx) return toast("「単元管理」は<b>学級または専科の週案</b>で使います");
   unitState.cls = unitDefaultClass_();
   unitState.gr = unitDefaultGrade_();
   unitState.subject = unitDefaultSubject_();
