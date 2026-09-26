@@ -461,6 +461,19 @@
      そのままだと 2×2 の枠が中身の幅まで縮み、紙の右半分が空く */
   body.printing-month .sheet.mini{width:calc(var(--pw) - var(--pm)*2)}
   body:not(.printing-month) .mview{display:none!important}
+  /* 専科の月予定を刷るとき。**週の数だけ頁を割る**（4〜6枚を2列で）。
+     まわりの操作は出さないが、紙の下の一覧（置けなかったコマ等）は
+     刷る ── 担任へ渡すための字だから */
+  body.printing-spm .stage{display:none!important}
+  body.printing-spm .spmview .mbar{display:none!important}
+  body.printing-spm .spmview{padding:0;gap:0;grid-template-rows:auto;display:block}
+  body.printing-spm .spmbody{overflow:visible}
+  body.printing-spm .spmpaper{gap:6mm;align-items:start;justify-items:start}
+  /* **週のまとまりは割らない。** 見出しと紙が頁をまたぐと読めない */
+  body.printing-spm .spmwk{break-inside:avoid}
+  body.printing-spm .sheet.spmsheet{width:calc(var(--pw) - var(--pm)*2);
+    box-shadow:none;border-radius:0;border-color:#000}
+  body:not(.printing-spm) .spmview{display:none!important}
   .app::before{display:none!important}   /* 待っている印は刷らない */
   /* 選んでいる印・打ち込み中の色も刷らない */
   .cell.sel{box-shadow:none}

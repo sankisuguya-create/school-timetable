@@ -293,7 +293,8 @@
            「音楽 2-2 ／ 理科 4-1」と並び、それぞれが教科の色で塗られる。
            全校の予定・休み・校外行事は全学年の紙がそのまま持っているので、
            専科がそこへ行けない理由が同じ紙の上に見える。
-           **画面だけ。刷らない**（週が4〜6枚あり、B4 の 2×2 に収まらない） -->
+           **印刷は B4よこに週を2枚ずつ**（週が4〜6枚あり、2×2 の1枚には
+           収まらないのでページを送る）。画像は紙と下の一覧をまとめてPNGへ -->
       <div class="spmview" id="spmView" hidden>
         <div class="mbar" data-help="spmonth">
           <button class="btn" id="spmFPrev">◀ 前の月</button>
@@ -305,6 +306,10 @@
                仮採用は基本時間割と同じ薄さ・同じ低さで入る -->
           <button class="btn go" id="spmTake" disabled>採用</button>
           <button class="btn" id="spmTakeTent" disabled>仮採用</button>
+          <!-- 紙・画像。**組んだ案を担任へ渡す口。** 印刷は B4よこに
+               週を2枚ずつ（週が4〜6枚あるので 2×2 の1枚には収めない） -->
+          <button class="btn" id="spmPrint">印刷</button>
+          <button class="btn" id="spmImage">画像</button>
           <button class="btn" id="spmClose">週の紙へ戻る</button>
         </div>
         <div class="spmbody">
@@ -1133,10 +1138,8 @@
   <div class="end"><button class="btn go" data-close="warnDlg">確かめた</button></div>
 </div></dialog>
 
-<!-- 専科どうしの月予定。**画面だけのもの。紙には出さない。**
-     枠を決めている最中の作業であって、刷って残す情報ではない
-     （空き枠さがし・年間行事の印と同じ扱い）。
-     「くむ」を押すまで、そして「入れる」を押すまで、週案には1文字も書かない -->
+<!-- 専科どうしの月予定。**押すまで週案には1文字も書かない。**
+     組んだ案は面の帯から印刷・画像に出せる（担任へ渡す口）。 -->
 <dialog id="spmDlg"><div class="dlg wide">
   <h2>専科の月予定を組む</h2>
   <p><b>1ヶ月ぶんの専科の巡りを、干渉が起きないように計算して出す。</b>
