@@ -432,7 +432,9 @@ function upBakeOne_(unit, done){
   const mons = upMons_(st.date, upRangeEnd_(unit));
   const wid = Wait.begin("「" + unit.name + "」の仮番号を備考欄に転記しています");
   Backend.readWeeks(mons, () => {
-    const r = upScan_(unit, upRangeEnd_(unit));
+    /* **確定は範囲の終わりまで番号を振る**（画面は今の週までしか振らない。
+       翌週以降に置いた仮置きも、番号を付けて備考欄へ移す） */
+    const r = upScan_(unit, upRangeEnd_(unit), true);
     const name4 = (unit.name || "").slice(0, 4) || "単元";
     const keep = monday;
     try{
@@ -456,6 +458,9 @@ function upBakeOne_(unit, done){
       UP.seq = {};
       Wait.end(wid);
       paintSheet();
+      /* **備考欄への転記は、この場で送る。** 別の週のコマへも書いているので、
+         週を移るまで送られないままだと「確定したのに残っていない」になる */
+      Backend.flush();
       if(done) done();
     }, why => { Wait.end(wid); toast(why); });
   });
