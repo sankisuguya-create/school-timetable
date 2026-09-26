@@ -1598,6 +1598,8 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .unitopen small{font-size:11px;color:var(--tx-sub);font-weight:400;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
 .unitopen i{font-style:normal;font-size:22px;line-height:1;color:var(--tx-sub)}
+/* 畳みの中の「確定する」── ✓ は緑にして、窓を開く › と見分ける */
+.unitact i{color:var(--ok,#2F6E4E);font-size:16px;font-weight:700}
 
 .unitdlg{width:min(720px,92vw)}
 .unitintro{margin-top:-4px;color:var(--tx-sub)}
@@ -2785,6 +2787,9 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
         <summary><span>単元を仮置きする</span></summary>
         <div class="foldin">
           <div class="pals" id="unitPals"></div>
+          <button class="unitopen unitact" id="unitBakeFold" type="button">
+            <span><b>単元を確定する</b><small>番号を備考欄に移して、その単元を終わらせる</small></span><i>✓</i>
+          </button>
           <button class="unitopen" id="unitOpen" type="button">
             <span><b>単元の登録</b><small id="unitOpenSub"></small></span><i>›</i>
           </button>
@@ -2858,7 +2863,7 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
 <div class="toast" id="toast" hidden></div>
 <dialog id="unitDlg" aria-labelledby="unitTitle"><div class="dlg unitdlg">
   <h2 id="unitTitle">単元の登録 <span class="subttl" id="unitFy"></span></h2>
-  <p class="unitintro">単元名と授業数を登録します。仮置きは時間割の単元チップから行います。<br>置いた番号をただの字として残すときは、単元を編集して「番号を備考欄に移して終わる」です。</p>
+  <p class="unitintro">単元名と授業数を登録します。仮置きは時間割の単元チップから行います。<br>置いた番号をただの字として残す（確定する）は、右メニュー「単元を仮置きする」の中の「単元を確定する」ボタンです。</p>
   <div class="unitctx">
     <label><span id="unitClsLbl">クラス</span><select id="unitCls"></select></label>
     <label>教科<select id="unitSub"></select></label>
@@ -2889,12 +2894,22 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
       <button class="btn go" id="unitSave" type="button">保存</button>
     </div>
     <div class="unitdanger" id="unitDanger" hidden>
-      <button class="btn" id="unitBake" type="button">番号を備考欄に移して終わる</button>
       <button class="btn" id="unitReset" type="button">仮置きを外す</button>
       <button class="btn danger" id="unitDelete" type="button">単元を削除</button>
     </div>
   </section>
   <p class="hint unitstat" id="unitStat" aria-live="polite"></p>
+</div></dialog>
+
+<!-- 確定する単元が2つ以上あるときの選ぶ窓。**右メニューの「確定する」から来る**
+     ── 登録の窓まで戻させないための、ここだけの小さな窓 -->
+<dialog id="unitPickDlg"><div class="dlg">
+  <h2>どの単元を確定しますか</h2>
+  <p class="hint">いま出ている番号を備考欄に字として移して、その単元を終わらせます。<b>戻せません。</b></p>
+  <div class="unitlist" id="unitPickList"></div>
+  <div class="unitactions">
+    <button class="btn" id="unitPickCancel" type="button">やめる</button>
+  </div>
 </div></dialog>
 
 <dialog id="termDlg" aria-labelledby="termTitle"><div class="dlg wide termdlg">
@@ -12689,6 +12704,10 @@ function paintUnitManagerButton(){
   if(!ctx) return;
   $("unitOpenSub").textContent = ctx.kind === "special"
     ? "学年ごとの単元" : "教科ごとの単元と授業数";
+  /* 「確定する」は畳みに単元のチップがあるときだけ出す。
+     単元が無い面で終わらせるボタンを置いても、押せるものが無い */
+  const bf = $("unitBakeFold");
+  if(bf) bf.hidden = !(typeof upPaletteUnits_ === "function" && upPaletteUnits_().length);
 }
 
 function unitSelectHtml_(list, value, valueOf, labelOf){
@@ -13097,13 +13116,14 @@ function upBakeOne_(unit, done){
   });
 }
 
-function upBakeUnit_(){
-  const u = (unitState.units || []).find(x => x.id === unitState.editing);
-  if(!u) return;
-  /* 専科の学年の単元は、各クラスのぶんをまとめて移す */
-  const targets = view.kind === "special"
-    ? (unitState.editIds || []).map(id => UP.units.find(x => x.id === id)).filter(Boolean)
-    : [u];
+/* 確定の対象。**専科の面では、同じ名前の学年の単元が各クラスに1つずつある**
+   ── 代表の1つを選ぶと、その学年のぶんをまとめて移す */
+function bakeTargetsOf_(u){
+  if(view.kind !== "special") return [u];
+  return UP.units.filter(x => x.layer === "special" && x.sp === view.sp
+    && x.name === u.name && gradeOf(x.target) === gradeOf(u.target));
+}
+function bakeConfirm_(u, targets){
   if(!targets.length) return;
   if(!(u.start || {}).date)
     return toast("まだ置いていない単元は、移す番号がありません");
@@ -13123,11 +13143,19 @@ function upBakeUnit_(){
         if(i >= targets.length){
           unitState.units = (unitState.units || []).filter(x => ids.indexOf(x.id) < 0);
           UP.units = UP.units.filter(x => ids.indexOf(x.id) < 0);
-          unitState.editing = ""; unitState.editIds = [];
-          $("unitForm").hidden = true; renderUnitList_();
+          /* 開いている編集フォームがこの単元なら閉じる */
+          if(ids.indexOf(unitState.editing) >= 0){
+            unitState.editing = ""; unitState.editIds = [];
+            $("unitForm").hidden = true;
+          }
+          if($("unitDlg").open){
+            renderUnitList_();
+            $("unitStat").textContent =
+              "番号を備考欄に移して、「" + u.name + "」を終わらせました。";
+          }
           UP.seq = {}; paintSheet();
           if(typeof drawPalette === "function") drawPalette();
-          $("unitStat").textContent = "番号を備考欄に移して、「" + u.name + "」を終わらせました。";
+          toast("番号を備考欄に移して、<b>「" + escText(u.name) + "」</b>を終わらせました。");
           return;
         }
         upBakeOne_(targets[i], () => seq(i + 1));
@@ -13135,6 +13163,39 @@ function upBakeUnit_(){
       seq(0);
     }
   });
+}
+
+/* 右メニューの畳みにある「単元を確定する」。**登録の窓まで戻らせない**
+   ── 畳みに出ている単元の中から選んで、ここで確定まで済ませる */
+function bakeFromFold_(){
+  const seen = {}, list = [];
+  for(const x of (typeof upPaletteUnits_ === "function" ? upPaletteUnits_() : [])){
+    const u = x.unit;
+    if(!u || seen[u.id] || !(u.start || {}).date) continue;
+    seen[u.id] = 1; list.push(u);
+  }
+  if(!list.length)
+    return toast("まだ置いていない単元は、確定する番号がありません");
+  if(list.length === 1)
+    return bakeConfirm_(list[0], bakeTargetsOf_(list[0]));
+  /* **2つ以上あるときは名指しで選ばせる。** どれを終わらせるか黙って
+     決めると、数え続けたい単元まで終わらせる間違いになる */
+  const box = $("unitPickList");
+  box.innerHTML = "";
+  for(const u of list){
+    const b = el("button", "unitopen");
+    b.type = "button";
+    b.innerHTML = "<span><b>" + escText(u.name || "単元") + "</b><small>"
+      + escText((view.kind === "special" ? gradeOf(u.target) + "年・" : "")
+                + "全部で" + u.lessonCount + "コマ" + (u.hasTest ? "・テストあり" : ""))
+      + "</small></span><i>✓</i>";
+    b.addEventListener("click", () => {
+      $("unitPickDlg").close();
+      bakeConfirm_(u, bakeTargetsOf_(u));
+    });
+    box.appendChild(b);
+  }
+  $("unitPickDlg").showModal();
 }
 
 function deleteUnit_(){
@@ -13276,7 +13337,10 @@ function wireUnitProgress(){
   on("unitMinus","click",() => unitCountStep_(-1));
   on("unitPlus","click",() => unitCountStep_(1));
   on("unitSave","click",saveUnitForm_);
-  on("unitBake","click",upBakeUnit_);
+  /* 確定（番号を備考欄へ移す）は畳みのボタンだけに ── 確定のために
+     登録の窓まで戻らせるのは分かりにくい */
+  on("unitBakeFold","click",bakeFromFold_);
+  on("unitPickCancel","click",() => $("unitPickDlg").close());
   on("unitReset","click",resetUnit_);
   on("unitDelete","click",deleteUnit_);
   on("termAdd","click",() => { termDraft.push({name:"",start:"",end:""}); drawTermRows_(); });

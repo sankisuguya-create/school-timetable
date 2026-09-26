@@ -49,6 +49,10 @@ function paintUnitManagerButton(){
   if(!ctx) return;
   $("unitOpenSub").textContent = ctx.kind === "special"
     ? "学年ごとの単元" : "教科ごとの単元と授業数";
+  /* 「確定する」は畳みに単元のチップがあるときだけ出す。
+     単元が無い面で終わらせるボタンを置いても、押せるものが無い */
+  const bf = $("unitBakeFold");
+  if(bf) bf.hidden = !(typeof upPaletteUnits_ === "function" && upPaletteUnits_().length);
 }
 
 function unitSelectHtml_(list, value, valueOf, labelOf){
@@ -457,13 +461,14 @@ function upBakeOne_(unit, done){
   });
 }
 
-function upBakeUnit_(){
-  const u = (unitState.units || []).find(x => x.id === unitState.editing);
-  if(!u) return;
-  /* 専科の学年の単元は、各クラスのぶんをまとめて移す */
-  const targets = view.kind === "special"
-    ? (unitState.editIds || []).map(id => UP.units.find(x => x.id === id)).filter(Boolean)
-    : [u];
+/* 確定の対象。**専科の面では、同じ名前の学年の単元が各クラスに1つずつある**
+   ── 代表の1つを選ぶと、その学年のぶんをまとめて移す */
+function bakeTargetsOf_(u){
+  if(view.kind !== "special") return [u];
+  return UP.units.filter(x => x.layer === "special" && x.sp === view.sp
+    && x.name === u.name && gradeOf(x.target) === gradeOf(u.target));
+}
+function bakeConfirm_(u, targets){
   if(!targets.length) return;
   if(!(u.start || {}).date)
     return toast("まだ置いていない単元は、移す番号がありません");
@@ -483,11 +488,19 @@ function upBakeUnit_(){
         if(i >= targets.length){
           unitState.units = (unitState.units || []).filter(x => ids.indexOf(x.id) < 0);
           UP.units = UP.units.filter(x => ids.indexOf(x.id) < 0);
-          unitState.editing = ""; unitState.editIds = [];
-          $("unitForm").hidden = true; renderUnitList_();
+          /* 開いている編集フォームがこの単元なら閉じる */
+          if(ids.indexOf(unitState.editing) >= 0){
+            unitState.editing = ""; unitState.editIds = [];
+            $("unitForm").hidden = true;
+          }
+          if($("unitDlg").open){
+            renderUnitList_();
+            $("unitStat").textContent =
+              "番号を備考欄に移して、「" + u.name + "」を終わらせました。";
+          }
           UP.seq = {}; paintSheet();
           if(typeof drawPalette === "function") drawPalette();
-          $("unitStat").textContent = "番号を備考欄に移して、「" + u.name + "」を終わらせました。";
+          toast("番号を備考欄に移して、<b>「" + escText(u.name) + "」</b>を終わらせました。");
           return;
         }
         upBakeOne_(targets[i], () => seq(i + 1));
@@ -495,6 +508,39 @@ function upBakeUnit_(){
       seq(0);
     }
   });
+}
+
+/* 右メニューの畳みにある「単元を確定する」。**登録の窓まで戻らせない**
+   ── 畳みに出ている単元の中から選んで、ここで確定まで済ませる */
+function bakeFromFold_(){
+  const seen = {}, list = [];
+  for(const x of (typeof upPaletteUnits_ === "function" ? upPaletteUnits_() : [])){
+    const u = x.unit;
+    if(!u || seen[u.id] || !(u.start || {}).date) continue;
+    seen[u.id] = 1; list.push(u);
+  }
+  if(!list.length)
+    return toast("まだ置いていない単元は、確定する番号がありません");
+  if(list.length === 1)
+    return bakeConfirm_(list[0], bakeTargetsOf_(list[0]));
+  /* **2つ以上あるときは名指しで選ばせる。** どれを終わらせるか黙って
+     決めると、数え続けたい単元まで終わらせる間違いになる */
+  const box = $("unitPickList");
+  box.innerHTML = "";
+  for(const u of list){
+    const b = el("button", "unitopen");
+    b.type = "button";
+    b.innerHTML = "<span><b>" + escText(u.name || "単元") + "</b><small>"
+      + escText((view.kind === "special" ? gradeOf(u.target) + "年・" : "")
+                + "全部で" + u.lessonCount + "コマ" + (u.hasTest ? "・テストあり" : ""))
+      + "</small></span><i>✓</i>";
+    b.addEventListener("click", () => {
+      $("unitPickDlg").close();
+      bakeConfirm_(u, bakeTargetsOf_(u));
+    });
+    box.appendChild(b);
+  }
+  $("unitPickDlg").showModal();
 }
 
 function deleteUnit_(){
@@ -636,7 +682,10 @@ function wireUnitProgress(){
   on("unitMinus","click",() => unitCountStep_(-1));
   on("unitPlus","click",() => unitCountStep_(1));
   on("unitSave","click",saveUnitForm_);
-  on("unitBake","click",upBakeUnit_);
+  /* 確定（番号を備考欄へ移す）は畳みのボタンだけに ── 確定のために
+     登録の窓まで戻らせるのは分かりにくい */
+  on("unitBakeFold","click",bakeFromFold_);
+  on("unitPickCancel","click",() => $("unitPickDlg").close());
   on("unitReset","click",resetUnit_);
   on("unitDelete","click",deleteUnit_);
   on("termAdd","click",() => { termDraft.push({name:"",start:"",end:""}); drawTermRows_(); });
