@@ -3006,6 +3006,9 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
     </div></div>
   <p class="hint" id="baseScopeHint"></p>
   <div id="baseGrid"></div>
+  <!-- 直しは下書きに溜まる。**ここを押すまでシートには入らない** -->
+  <div class="end"><span class="hint" id="baseStat"></span>
+    <button class="btn" id="baseSave">保存して閉じる</button></div>
 </div></dialog>
 
 <!-- 日常の左メニューを増やさず、年に数回の設定をここへ集める -->
@@ -6151,8 +6154,10 @@ function applyFixed(res){
     baseEdit(cls, t => { t.A = clone(got.A || {}); t.B = clone(got.B || {}); }, false);
     done.push(cls);
   }
-  save();
-  Backend.saveBaseAll(done);
+  /* **窓が開いているあいだは下書きに入る。** 送るのは窓の
+     「保存して閉じる」に委ねる（下書きのないときは従来どおり直送） */
+  if(bsDraft){ for(const c of done) bsDirtyCls.add(c); paintBaseSave(); }
+  else { save(); Backend.saveBaseAll(done); }
   return done;
 }
 /* ▲ src/js/fixed.js ▲ */
@@ -15008,6 +15013,29 @@ let baseVar = "A";
    「今年度全体」は過ぎた週の紙・時数・たんぽぽまで変えるので、選んだときだけ */
 let baseScope = "week";
 
+/* **直す途中は下書き（bsDraft）に入れ、「保存して閉じる」で一括して送る。**
+   コマを変えるたびにシートへ書いていたころは、迷って元へ戻しただけでも
+   全部が流れ、提出ずみの週のたんぽぽが「未」に戻っていた。
+   閉じるとき直しが残っていれば「入れる／捨てる」を聞く（学級編成と同じ型） */
+let bsDraft = null;         /* {base, baseFrom} 下書き。null = 窓を開いていない */
+let bsBefore = null;        /* 開いた時点の控え（たんぽぽ差分の照合に使う） */
+let bsDirtyCls = new Set(); /* 下書きで直したクラス */
+let bsCloseWired = false;
+/* 下書きがあれば下書き、無ければ本体。表の取り込みなど窓の外からの
+   baseEdit もこの口を通れば「開いているあいだは下書きへ」が貫ける */
+function bsStore(){
+  const Yr = Y();
+  return bsDraft || {base: Yr.base || (Yr.base = {}), baseFrom: Yr.baseFrom || (Yr.baseFrom = {})};
+}
+const bsVersions = c => (bsStore().baseFrom[c]) || [];
+/* 下書きを含めて「その週に効いている版」を返す（compose.baseSetAt の下書き版） */
+function bsSetAt(c, monISO){
+  const st = bsStore();
+  let set = st.base[c] || {};
+  for(const v of (st.baseFrom[c] || [])) if(v.from <= monISO) set = v;
+  return set;
+}
+
 function openSettings(){
   $("settingsFy").textContent = fy() + "年度";
   $("setPaperNow").textContent = db.settings.paper + "・タイトル"
@@ -15164,8 +15192,52 @@ function openBaseDlg(){
              view.kind === "class" ? view.cls : list[0]);
   baseVar = week().variant;
   baseScope = "week";
+  bsDraft  = {base: clone(Y().base || {}), baseFrom: clone(Y().baseFrom || {})};
+  bsBefore = {base: clone(Y().base || {}), baseFrom: clone(Y().baseFrom || {})};
+  bsDirtyCls = new Set();
+  if(!bsCloseWired){
+    bsCloseWired = true;
+    /* 閉じ方が何であれ（✕・Esc・外側）ここへ来る。
+       残っていれば聞く。既定は安全側（入れて閉じる） */
+    $("baseDlg").addEventListener("close", () => {
+      if(!bsDirtyCls.size){ bsDraft = null; return; }
+      const cs = [...bsDirtyCls], d = bsDraft, b = bsBefore;
+      bsDraft = null; bsDirtyCls = new Set();
+      askOk({title:"基本時間割の直しを入れますか",
+        lines:["閉じるだけでは、直したぶんはシートに入りません。",
+               "入れないで閉じると、直したぶんは捨てられます。"],
+        noLabel:"入れて閉じる", goLabel:"捨てる",
+        onNo: () => applyBaseDraft_(d, b, cs)});
+    });
+  }
   drawBaseGrid();
   $("baseDlg").showModal();
+}
+/* 下書きを本体へ入れてシートへ送る */
+function applyBaseDraft_(d, before, classes){
+  if(!d) return;
+  const Yr = Y();
+  Yr.base = d.base; Yr.baseFrom = d.baseFrom;
+  for(const c of classes)
+    baseMarkTp(c, {base:(before.base || {})[c] || {},
+                   from:(before.baseFrom || {})[c] || []});
+  save();
+  Backend.saveBaseAll(classes);
+  if(view.kind !== "gate") buildSheet();
+}
+/* 「保存して閉じる」。直しが無ければ閉じるだけ */
+function commitBaseDraft(){
+  const cs = [...bsDirtyCls], d = bsDraft, b = bsBefore;
+  bsDirtyCls = new Set();
+  if(d && cs.length) applyBaseDraft_(d, b, cs);
+  bsDraft = null;
+  $("baseDlg").close();
+}
+/* 「まだ入れていません」を出す。未反映のときだけ保存を強調する */
+function paintBaseSave(){
+  if(!$("baseSave")) return;
+  $("baseStat").textContent = bsDirtyCls.size ? "まだ入れていません" : "";
+  $("baseSave").classList.toggle("go", bsDirtyCls.size > 0);
 }
 
 /* ── 基本時間割を直す範囲 ────────────────────────
@@ -15185,13 +15257,13 @@ function baseFromHere(){
 }
 /* 直す先の版を返す。**「今週以降」の版が無ければ、ここで作る。** */
 function baseTargets(c){
-  const Yr = Y();
-  if(!Yr.base[c]) Yr.base[c] = {};
-  const vers = Yr.baseFrom[c] || (Yr.baseFrom[c] = []);
+  const st = bsStore();
+  if(!st.base[c]) st.base[c] = {};
+  const vers = st.baseFrom[c] || (st.baseFrom[c] = []);
   const from = baseScope === "week" ? baseFromHere() : "";
-  if(!from) return [Yr.base[c]].concat(vers);
+  if(!from) return [st.base[c]].concat(vers);
   if(!vers.some(v => v.from === from)){
-    const cur = baseSetAt(c, from) || {};
+    const cur = bsSetAt(c, from) || {};
     let at = vers.findIndex(v => v.from > from);
     if(at < 0) at = vers.length;
     vers.splice(at, 0, {from, A:clone(cur.A || {}), B:clone(cur.B || {})});
@@ -15213,21 +15285,26 @@ function baseBankEq(a, b){
 /* **前の版と同じになった版は捨てる。** 「今週以降」で直して元へ戻したとき、
    中身の同じ版が残ると、どこで時間割が変わったのかが一覧で読めなくなる */
 function baseCompact(c){
-  const Yr = Y();
-  let prev = Yr.base[c] || {};
+  const st = bsStore();
+  let prev = st.base[c] || {};
   const keep = [];
-  for(const v of (Yr.baseFrom[c] || [])){
+  for(const v of (st.baseFrom[c] || [])){
     if(baseBankEq(v.A, prev.A) && baseBankEq(v.B, prev.B)) continue;
     keep.push(v); prev = v;
   }
-  if(keep.length) Yr.baseFrom[c] = keep; else delete Yr.baseFrom[c];
+  if(keep.length) st.baseFrom[c] = keep; else delete st.baseFrom[c];
 }
 /* 基本時間割を直す入口。**直す・版を片づける・提出を戻す・保存 を1本で。**
+   下書きのあいだは本体を触らず、直したクラスだけ覚える ──
+   本体へ入れて送るのは applyBaseDraft_（保存して閉じる／入れて閉じる）。
+   たんぽぽ差分もそのとき、開いた時点の控え（bsBefore）と照らす。
    send=false は、呼ぶ側がまとめて送るとき（固定時間割の取り込み） */
 function baseEdit(c, fn, send){
-  const before = {base: clone(Y().base[c] || {}), from: clone(baseVersions(c))};
+  const before = bsDraft ? null
+    : {base: clone(Y().base[c] || {}), from: clone(baseVersions(c))};
   for(const t of baseTargets(c)) fn(t);
   baseCompact(c);
+  if(bsDraft){ bsDirtyCls.add(c); paintBaseSave(); return; }
   baseMarkTp(c, before);
   save();
   if(send !== false) Backend.saveBase(c);
@@ -15274,7 +15351,7 @@ function paintBaseScope(c){
   $("bsWeek").textContent = "今週以降のみ変更（" + md(monday) + "の週から）";
   $("bsWeek").setAttribute("aria-pressed", String(baseScope === "week"));
   $("bsYear").setAttribute("aria-pressed", String(baseScope === "year"));
-  const vers = baseVersions(c);
+  const vers = bsVersions(c);
   const lines = [];
   if(baseScope === "year")
     lines.push("<b>4月からの全部の週が変わります。</b>過ぎた週の紙と時数も変わり、"
@@ -15285,7 +15362,7 @@ function paintBaseScope(c){
     lines.push("<b>" + md(monday) + "の週から先だけが変わります。</b>"
              + md(addDays(monday, -7)) + "の週までの紙・時数・たんぽぽはそのままです。");
   if(vers.length){
-    const cur = baseSetAt(c, mon);
+    const cur = bsSetAt(c, mon);
     const names = ["年度はじめ"].concat(vers.map(v => md(parseISO(v.from)) + "の週から"));
     const at = cur && cur.from ? names[vers.indexOf(cur) + 1] : names[0];
     lines.push(escText(c) + " の基本時間割は <b>" + names.length + " 通り</b>（"
@@ -15296,7 +15373,7 @@ function paintBaseScope(c){
 function drawBaseGrid(){
   const c = $("baseCls").value;
   /* **その週に効いている版を出す。** 描くだけで版を作らない（作るのは直したとき） */
-  const bank = ((baseSetAt(c, wkKey()) || {})[baseVar]) || {};
+  const bank = ((bsSetAt(c, wkKey()) || {})[baseVar]) || {};
 
   const rows = ["<table class='grid2'><tr><th></th>"
     + DOW.slice(0, WEEKDAYS).map(d => "<th>" + d + "</th>").join("") + "</tr>"];
@@ -15334,6 +15411,7 @@ function drawBaseGrid(){
   $("bvB").setAttribute("aria-pressed", String(baseVar === "B"));
   $("baseFy").textContent = fy() + "年度";
   paintBaseScope(c);
+  paintBaseSave();
 }
 
 /* ── 固定時間割の取り込み ─────────────────────
@@ -15470,7 +15548,8 @@ function goImp(){
     goLabel: "入れ替える",
     onYes: () => {
       const done = applyFixed(impRes);
-      toast("基本時間割に入れた（<b>" + done.length + " クラス</b>）");
+      toast("基本時間割に入れた（<b>" + done.length + " クラス</b>）"
+        + (bsDraft ? "。<b>まだシートには入っていない</b> ── 「保存して閉じる」で送る" : ""));
       $("impDlg").close();
       if($("baseDlg").open) drawBaseGrid();
       refreshWeek();
@@ -16980,6 +17059,8 @@ function wire(){
   /* 窓を閉じたら紙を組み直す。**ボタンではなく窓の close に付ける。**
      ✕ で閉じても、Esc で閉じても、同じことが起きないと直したものが紙に出ない */
   on("baseDlg","close", () => { if(view.kind !== "gate") buildSheet(); });
+  /* **直しは下書きに溜まる。** ここを押すまでシートには入らない（basedlg.js） */
+  on("baseSave","click", commitBaseDraft);
 
   /* 保存。**打つたびには送らない。** ここで1コマ1件にまとめて送る */
   /* 押した瞬間から2回目を受けない。窓が出る 200ms のあいだも、ここが受ける。

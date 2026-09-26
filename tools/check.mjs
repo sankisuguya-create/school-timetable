@@ -920,6 +920,20 @@ await p.evaluate(() => {                                /* 提出ずみの週を
 });
 await p.locator("#baseGrid select[data-k='0|p1']").selectOption(pick);
 await p.waitForTimeout(150);
+/* **直しただけでは本体に入らない。** 下書き（bsDraft）に溜まり、
+   「保存して閉じる」でまとめてシートへ入る（学級編成と同じ型） */
+ok("直しただけでは本体に入らない（下書き）",
+   await p.evaluate(() => (Y().baseFrom["3-1"] || []).length) === 0,
+   await p.evaluate(() => Y().baseFrom["3-1"]));
+ok("窓の中では直した値が出る（下書きを見る）", await p.evaluate(
+   () => (((bsSetAt("3-1", "2026-09-28") || {}).B || {})["0|p1"] || {}).title) === pickName);
+ok("直しがあるあいだは「まだ入れていません」", await p.evaluate(
+   () => $("baseStat").textContent.indexOf("まだ入れていません") >= 0));
+ok("いまどの版を出しているかを言う（下書きの中でも）",
+   (await p.locator("#baseScopeHint").innerText()).indexOf("9/28の週から") >= 0,
+   await p.locator("#baseScopeHint").innerText());
+await p.locator("#baseSave").click(); await p.waitForTimeout(400);
+ok("「保存して閉じる」で窓が閉じる", !(await p.evaluate(() => $("baseDlg").open)));
 ok("今週以降：開いている週から変わる", await baseAt("2026-09-28", "0|p1") === pickName,
    await baseAt("2026-09-28", "0|p1"));
 ok("今週以降：先の週（同じB週）も変わる", await baseAt("2026-10-12", "0|p1") === pickName);
@@ -928,9 +942,6 @@ ok("今週以降：前の週は変わらない", await baseAt("2026-09-14", "0|p
 ok("今週以降：9/28 から使う版ができる",
    await p.evaluate(() => (Y().baseFrom["3-1"] || []).map(v => v.from).join()) === "2026-09-28",
    await p.evaluate(() => Y().baseFrom["3-1"]));
-ok("いまどの版を出しているかを言う",
-   (await p.locator("#baseScopeHint").innerText()).indexOf("9/28の週から") >= 0,
-   await p.locator("#baseScopeHint").innerText());
 ok("提出ずみの週で字が変わった週（10/12・B週）は「未」に戻る",
    await p.evaluate(() => Y().weeks["2026-10-12"].tpSub["3-1"].dirty) === true);
 ok("変わっていない週（9/14・前の週）は戻さない",
@@ -938,6 +949,7 @@ ok("変わっていない週（9/14・前の週）は戻さない",
 ok("変わっていない週（10/5・A週）は戻さない",
    await p.evaluate(() => Y().weeks["2026-10-05"].tpSub["3-1"].dirty) === false);
 
+await p.evaluate(() => { openBaseDlg(); $("baseCls").value = "3-1"; drawBaseGrid(); });
 await p.locator("#bsYear").click(); await p.waitForTimeout(100);
 ok("「今年度全体」を選ぶと、過ぎた週も変わると言う",
    (await p.locator("#baseScopeHint").innerText()).indexOf("4月からの全部の週") >= 0,
@@ -946,6 +958,7 @@ const p2old = await baseAt("2026-09-14", "0|p2");
 const pick2 = p2old === "体育" ? "ongaku" : "taiiku", pick2Name = p2old === "体育" ? "音楽" : "体育";
 await p.locator("#baseGrid select[data-k='0|p2']").selectOption(pick2);
 await p.waitForTimeout(150);
+await p.locator("#baseSave").click(); await p.waitForTimeout(400);
 ok("今年度全体：前の週も変わる", await baseAt("2026-09-14", "0|p2") === pick2Name);
 ok("今年度全体：途中からの版も変わる", await baseAt("2026-10-12", "0|p2") === pick2Name);
 ok("今年度全体：途中からの版のほかのコマは残る", await baseAt("2026-10-12", "0|p1") === pickName);
@@ -953,10 +966,12 @@ ok("今年度全体：提出ずみの前の週（9/14）も「未」に戻る",
    await p.evaluate(() => Y().weeks["2026-09-14"].tpSub["3-1"].dirty) === true);
 
 /* 戻したら、同じ中身の版は残さない */
+await p.evaluate(() => { openBaseDlg(); $("baseCls").value = "3-1"; drawBaseGrid(); });
 await p.locator("#bsWeek").click(); await p.waitForTimeout(100);
 await p.locator("#baseGrid select[data-k='0|p1']").selectOption(
   await p.evaluate(n => (SUB_BY_NAME[n] || {}).code || "", v0914));
 await p.waitForTimeout(150);
+await p.locator("#baseSave").click(); await p.waitForTimeout(400);
 ok("元へ戻すと、途中からの版は片づく",
    await p.evaluate(() => !Y().baseFrom["3-1"]) === true,
    await p.evaluate(() => Y().baseFrom["3-1"]));
@@ -1123,11 +1138,15 @@ ok("進む側のボタンに、何が起きるかを書く",
    !!impAsked && impAsked.go === "入れ替える", impAsked);
 await p.locator("#okYes").click(); await p.waitForTimeout(400);
 p.off("dialog", onImpDialog);
-ok("入れると基本時間割になる",
+ok("入れたら窓は閉じる", await p.locator("#impDlg").evaluate(d => d.open) === false);
+/* **開いている基本時間割の窓の下書きに入る** ── 本体は「保存して閉じる」で。
+   （写した表と手元が同じ字のコマもあるので、下書き側に溜まったことを見る） */
+ok("入れただけでは下書きに溜まる（まだ入れていません）", await p.evaluate(
+   () => bsDirtyCls.has("3-1") && $("baseStat").textContent.indexOf("まだ入れていません") >= 0));
+await p.locator("#baseSave").click(); await p.waitForTimeout(400);
+ok("「保存して閉じる」で基本時間割になる",
    await p.evaluate(() => (Y().base["3-1"].B["3|p3"] || {}).title) === "音楽",
    await p.evaluate(() => Y().base["3-1"].B["3|p3"]));
-ok("入れたら窓は閉じる", await p.locator("#impDlg").evaluate(d => d.open) === false);
-await p.locator("#baseDlg .dlgx").click(); await p.waitForTimeout(250);
 
 console.log("\n■ 学年・全学年には「リセット」を出す");
 await p.locator(".nav[data-act='gate']").click(); await p.waitForTimeout(200);
