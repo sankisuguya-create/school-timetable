@@ -207,9 +207,10 @@ function srcLabel(c, mine){
    学年の面とカレンダーの面が同じ字を出すので、設定でそこを直せば両方が変わる。
    別に持つと、片方だけ直した版が出る。
 
-   **空のときは表示名の1文字目に落とす。** 時数に数えない教科（図書・行事・給食・
+   **空のときは表示名の1文字目に落とす。** 時数に数えない教科（行事・給食・
    クラブ・委員会）は1文字を空にしてある ── あれは「時数表に書くな」の意味で、
-   「画面にも出すな」ではない。空のまま出すと、予定が入っているコマが空欄に見える。 */
+   「画面にも出すな」ではない。空のまま出すと、予定が入っているコマが空欄に見える。
+   図書は「と」を出す（時数は国語に入る）。 */
 /* own ＝ そのコマに手で決めた1文字（パネルの「時数名」欄）。**あれば最優先。**
    教科コードに無い自由記述の行事名は題名の頭文字が出るが、同じ頭文字の
    行事が並ぶと学年の面・カレンダーで見分けがつかない。そのときだけ人が決める。 */
@@ -222,18 +223,32 @@ function shortOf(code, title, own){
   return t ? t.slice(0, 1) : "";
 }
 
+/* そのコマの時数の字。**時数集計表に出る字で、題名の右の欄に出る字。**
+   手で決めた字（コマの時数欄・パネルの「時数名」）があれば最優先。
+   教科の字が無ければ、教科に載っていない自由記述は「特」にする ──
+   特別活動の枠なので、運動会や読み聞かせがどこにも数えられないまま消えない。
+   「授業なし」と空欄は字を出さない。 */
+function tallyCharOf(c){
+  if(!c) return "";
+  const own = plain(c.short || "").trim();
+  if(own) return own.slice(0, 1);
+  const t = plain(c.title || "").trim();
+  const sub = c.subject ? SUB_BY_CODE[c.subject] : SUB_BY_NAME[t];
+  if(sub) return sub.short || "";
+  return t && t !== NO_LESSON ? "特" : "";
+}
+
 /* そのコマを時数に数えるか。数えるなら教科を返す。**数え方はここ1か所。**
    時数集計表へのコピー（dialogs.js tallyGrid）と、カレンダーの月ごとの集計が、
    同じ決まりで数える。別々に書くと、Excel に貼った数と紙の数が食い違う。
 
-   教科コードが入っていればそれで、無ければ題名の字で引く（手で書いた「算数」も
-   数える）。`count:false` の教科（図書・行事・給食・クラブ・委員会）と
-   「授業なし」と空欄は数えない。 */
+   **字から教科を引く** ── コマの時数欄で書き替えた字も、その字の教科として
+   数える。「と」は図書だが国語として数える（教科シートの countAs）。
+   どの教科の字にもならない字と空欄は数えない。 */
 function countSub(c){
-  if(!c) return null;
-  const t = plain(c.title).trim();
-  const sub = c.subject ? SUB_BY_CODE[c.subject] : SUB_BY_NAME[t];
-  return (sub && sub.count && sub.short) ? sub : null;
+  const sub = SUB_BY_SHORT[tallyCharOf(c)];
+  if(!sub) return null;
+  return sub.countAs ? SUB_BY_CODE[sub.countAs] : sub;
 }
 
 /* その行のコマを、時数の何ぶんとして数えるか。**朝学習は3ぶんで1コマ**

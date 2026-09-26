@@ -55,9 +55,9 @@ let SUBJECTS = [
   {code:"goudo_taiiku",  name:"合同体育", short:"体", count:true, tp:"合体",   only:"学年"},
   {code:"goudo_ongaku",  name:"合同音楽", short:"音", count:true, tp:"合音",   only:"学年"},
   {code:"gakunen_shukai",name:"学年集会", short:"特", count:true, tp:"学年集", only:"学年"},
-  /* 図書（固定時間割の「と」）。**時数に数えるかは学校が決める。**
-     数えるなら「時数表の1文字」を入れて count:true にする */
-  {code:"tosho",   name:"図書",  short:"",   count:false},
+  /* 図書（固定時間割の「と」）。**時数は国語として数える**（countAs）。
+     紙に出る字は「と」のまま、数える先だけ国語へ向ける */
+  {code:"tosho",   name:"図書",  short:"と", count:false, countAs:"kokugo"},
   {code:"gyoji",   name:"行事",  short:"",   count:false},
   {code:"kyushoku",name:"給食",  short:"",   count:false},
   {code:"club",    name:"クラブ",short:"",   count:false},
@@ -65,6 +65,21 @@ let SUBJECTS = [
 ];
 let SUB_BY_NAME = Object.fromEntries(SUBJECTS.map(s => [s.name, s]));
 let SUB_BY_CODE = Object.fromEntries(SUBJECTS.map(s => [s.code, s]));
+
+/* 時数の字 → 数える教科。**字で引く。** コマの時数欄（題名の右）で人が
+   書き替えた字も、その字の教科として数える。同じ字が2つあるときは
+   学年専用（only）でないほうを残す（「体」は合同体育ではなく体育）。
+   countAs は「字はこれ、数える先は別の教科」── 図書の「と」は国語に入る。 */
+function subByShort_(list){
+  const m = {};
+  for(const s of list){
+    if(!s.short || !(s.count || s.countAs)) continue;
+    if(m[s.short] && !m[s.short].only) continue;
+    m[s.short] = s;
+  }
+  return m;
+}
+let SUB_BY_SHORT = subByShort_(SUBJECTS);
 
 /* 本番では「時程」「教科」シートが正本。ここの値は、シートが空のときだけ使う。 */
 function setSlots(list){
@@ -75,6 +90,7 @@ function setSubjects(list){
   SUBJECTS = list;
   SUB_BY_NAME = Object.fromEntries(SUBJECTS.map(s => [s.name, s]));
   SUB_BY_CODE = Object.fromEntries(SUBJECTS.map(s => [s.code, s]));
+  SUB_BY_SHORT = subByShort_(SUBJECTS);
 }
 /* **この端末で直した設定。** 「設定」シートの値は学校の既定で、
    画面の「印刷と文字」「時数」で直した値はこの端末の持ちもの。

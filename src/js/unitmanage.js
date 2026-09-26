@@ -1,7 +1,7 @@
 /* ==================================================================
    unitmanage.js — 単元の管理画面（作る・直す・消す・学期設定）
 
-   単元の登録・名まえと教科の直し・消去・焼き付け（番号を備考欄へ）と、
+   単元の登録・名まえと教科の直し・消去・確定（仮番号を備考欄へ転記）と、
    学期の区切り（学期設定）の窓を持つ。
    番号を数える・割り付ける側は unitprogress.js に。
 ================================================================== */
@@ -48,7 +48,7 @@ function paintUnitManagerButton(){
   wrap.hidden = !ctx;
   if(!ctx) return;
   $("unitOpenSub").textContent = ctx.kind === "special"
-    ? "学年ごとの単元" : "教科ごとの単元と授業数";
+    ? "学年ごとの単元を作成/削除する" : "教科ごとの単元を作成/削除する";
   /* 「確定する」は畳みに単元のチップがあるときだけ出す。
      単元が無い面で終わらせるボタンを置いても、押せるものが無い */
   const bf = $("unitBakeFold");
@@ -430,7 +430,7 @@ function upBakeOne_(unit, done){
   const st = unit.start || {};
   if(!st.date){ if(done) done(); return; }
   const mons = upMons_(st.date, upRangeEnd_(unit));
-  const wid = Wait.begin("「" + unit.name + "」の番号を備考欄に移しています");
+  const wid = Wait.begin("「" + unit.name + "」の仮番号を備考欄に転記しています");
   Backend.readWeeks(mons, () => {
     const r = upScan_(unit, upRangeEnd_(unit));
     const name4 = (unit.name || "").slice(0, 4) || "単元";
@@ -473,11 +473,11 @@ function bakeConfirm_(u, targets){
   if(!(u.start || {}).date)
     return toast("まだ置いていない単元は、移す番号がありません");
   askOk({
-    title:"「" + u.name + "」の番号を備考欄に移しますか",
+    title:"「" + u.name + "」の仮番号を備考欄に転記しますか",
     lines:[(targets.length > 1
               ? "学年の各クラス分（" + targets.length + "クラス）まとめて行います。"
               : "")
-           + "<b>いま出ている番号を、各コマの備考欄に字として入れます</b>"
+           + "<b>いま出ている仮番号を、各コマの備考欄に字として入れます</b>"
            + "（「" + escText(u.name.slice(0, 4)) + " 3/" + u.lessonCount + "」のように）。",
            "仮置きの印は外れ、単元そのものも消えます。<b>この単元のコマ読みは、もう要りません。</b>",
            "戻せません。番号を数え続けたいときは、この操作をしないでください。"],
@@ -496,11 +496,11 @@ function bakeConfirm_(u, targets){
           if($("unitDlg").open){
             renderUnitList_();
             $("unitStat").textContent =
-              "番号を備考欄に移して、「" + u.name + "」を終わらせました。";
+              "仮番号を備考欄に転記して、「" + u.name + "」を確定しました。";
           }
           UP.seq = {}; paintSheet();
           if(typeof drawPalette === "function") drawPalette();
-          toast("番号を備考欄に移して、<b>「" + escText(u.name) + "」</b>を終わらせました。");
+          toast("仮番号を備考欄に転記して、<b>「" + escText(u.name) + "」</b>を確定しました。");
           return;
         }
         upBakeOne_(targets[i], () => seq(i + 1));

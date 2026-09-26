@@ -1600,6 +1600,8 @@ table.grid2 select,table.grid2 input{padding:2px 5px;font-size:12px;min-width:6.
 .unitopen i{font-style:normal;font-size:22px;line-height:1;color:var(--tx-sub)}
 /* 畳みの中の「確定する」── ✓ は緑にして、窓を開く › と見分ける */
 .unitact i{color:var(--ok,#2F6E4E);font-size:16px;font-weight:700}
+/* 「仮番号」の字は、紙に出ている仮置きの番号と同じ色 ── 同じものだと見た目で言う */
+.unitopen small .sq{color:var(--ink-link);font-weight:700}
 
 .unitdlg{width:min(720px,92vw)}
 .unitintro{margin-top:-4px;color:var(--tx-sub)}
@@ -1883,9 +1885,13 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
   border-bottom:1.2px solid var(--rule-week)}
 .hd .dow{font-size:calc(var(--fs-s)*var(--k));color:var(--ink-sub);font-weight:400}
 .hd.sat .dow{color:var(--ink-link)}
-/* 今日の列は地色で示す。**画面だけの印**（紙には「今日」は要らない） */
-@media screen{.hd.istoday{background:var(--tint);border-radius:6px 6px 0 0}}
-.hd.istoday .dow{color:var(--ink-link);font-weight:700}
+/* 今日の列は地色と日付左の✓で示す。**画面だけの印**（紙には「今日」は要らない）。
+   黄色は修正・採点の印の色 ── 青はリンクや選択と混ざるので使わない */
+@media screen{
+  .hd.istoday{background:#FFE28A;border-radius:6px 6px 0 0}
+  .hd.istoday::before{content:"✓";color:#8A5A00;font-weight:700}
+}
+.hd.istoday .dow{color:var(--ink);font-weight:700}
 
 /* 時程の列。**時刻は置かない**（画面でも紙でも同じ ── 教務必携に刷ってある）。
    校時の数字だけが立つので、離れた位置からでも拾える大きさにしてある。 */
@@ -1910,7 +1916,16 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
 .cell .t{height:calc(var(--h-title)*var(--k));display:flex;
   align-items:center;justify-content:center;text-align:center;
   font-weight:600;line-height:1.15;
-  font-size:calc(var(--fs-t)*var(--k)*var(--fit,1))}
+  font-size:calc(var(--fs-t)*var(--k)*var(--fit,1));
+  padding-right:calc(3.6mm*var(--k))}
+/* 題名の右の時数欄。**時数集計表に出る字を、書きながら見せて直せるようにする。**
+   1文字ぶんだけ取る ── 大きいと題名を食う。空でも薄い枠を残す（書けることが分かる） */
+.cell .tl{position:absolute;top:0;right:0;box-sizing:border-box;
+  width:calc(3.4mm*var(--k));height:calc(var(--h-title)*var(--k));
+  border-left:1px solid var(--rule-week);border-bottom:1px solid var(--rule-week);
+  display:flex;align-items:center;justify-content:center;
+  font-size:calc(var(--fs-s)*var(--k));color:var(--ink);line-height:1;overflow:hidden}
+.cell .tl:empty{opacity:.4}
 /* ── 教科の色 ────────────────────────────────
    **題名の欄の地だけを変える。** 前は丸い枠のチップを紙に埋め込んでいたが、
    枠と地の2つで同じことを言うぶんコマの中が混み、長い教科名は枠に入らなかった。
@@ -2003,7 +2018,7 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
 /* 授業なしの斜め線は、題名の欄のぶんだけ。**備考の上には引かない** */
 .sheet.mini .daycol:not(.lastcol) .cell.lesson .noneslash{right:auto;width:45%;height:100%}
 
-.cell .t:focus,.cell .n:focus{background:#FFFBEA;
+.cell .t:focus,.cell .n:focus,.cell .tl:focus{background:#FFFBEA;
   box-shadow:inset 0 0 0 1.6px var(--ink-link)}
 .cell.sel{box-shadow:inset 0 0 0 1.6px var(--ink-link)}
 .cell.drop{outline:2px dashed var(--ink-link);outline-offset:-3px;background:var(--fill-a)}
@@ -2788,7 +2803,7 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
         <div class="foldin">
           <div class="pals" id="unitPals"></div>
           <button class="unitopen unitact" id="unitBakeFold" type="button">
-            <span><b>単元を確定する</b><small>番号を備考欄に移して、その単元を終わらせる</small></span><i>✓</i>
+            <span><b>単元を確定する</b><small><b class="sq">仮番号</b>を備考欄に転記して、単元の配置を確定する</small></span><i>✓</i>
           </button>
           <button class="unitopen" id="unitOpen" type="button">
             <span><b>単元の登録</b><small id="unitOpenSub"></small></span><i>›</i>
@@ -2863,7 +2878,7 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
 <div class="toast" id="toast" hidden></div>
 <dialog id="unitDlg" aria-labelledby="unitTitle"><div class="dlg unitdlg">
   <h2 id="unitTitle">単元の登録 <span class="subttl" id="unitFy"></span></h2>
-  <p class="unitintro">単元名と授業数を登録します。仮置きは時間割の単元チップから行います。<br>置いた番号をただの字として残す（確定する）は、右メニュー「単元を仮置きする」の中の「単元を確定する」ボタンです。</p>
+  <p class="unitintro">単元名と授業数を登録します。仮置きは時間割の単元チップから行います。<br>置いた仮番号をただの字にして確定するのは、右メニュー「単元を仮置きする」の中の「単元を確定する」ボタンです。</p>
   <div class="unitctx">
     <label><span id="unitClsLbl">クラス</span><select id="unitCls"></select></label>
     <label>教科<select id="unitSub"></select></label>
@@ -2905,7 +2920,7 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
      ── 登録の窓まで戻させないための、ここだけの小さな窓 -->
 <dialog id="unitPickDlg"><div class="dlg">
   <h2>どの単元を確定しますか</h2>
-  <p class="hint">いま出ている番号を備考欄に字として移して、その単元を終わらせます。<b>戻せません。</b></p>
+  <p class="hint">いま出ている仮番号を備考欄に転記して、その単元の配置を確定します。<b>戻せません。</b></p>
   <div class="unitlist" id="unitPickList"></div>
   <div class="unitactions">
     <button class="btn" id="unitPickCancel" type="button">やめる</button>
@@ -3508,9 +3523,9 @@ let SUBJECTS = [
   {code:"goudo_taiiku",  name:"合同体育", short:"体", count:true, tp:"合体",   only:"学年"},
   {code:"goudo_ongaku",  name:"合同音楽", short:"音", count:true, tp:"合音",   only:"学年"},
   {code:"gakunen_shukai",name:"学年集会", short:"特", count:true, tp:"学年集", only:"学年"},
-  /* 図書（固定時間割の「と」）。**時数に数えるかは学校が決める。**
-     数えるなら「時数表の1文字」を入れて count:true にする */
-  {code:"tosho",   name:"図書",  short:"",   count:false},
+  /* 図書（固定時間割の「と」）。**時数は国語として数える**（countAs）。
+     紙に出る字は「と」のまま、数える先だけ国語へ向ける */
+  {code:"tosho",   name:"図書",  short:"と", count:false, countAs:"kokugo"},
   {code:"gyoji",   name:"行事",  short:"",   count:false},
   {code:"kyushoku",name:"給食",  short:"",   count:false},
   {code:"club",    name:"クラブ",short:"",   count:false},
@@ -3518,6 +3533,21 @@ let SUBJECTS = [
 ];
 let SUB_BY_NAME = Object.fromEntries(SUBJECTS.map(s => [s.name, s]));
 let SUB_BY_CODE = Object.fromEntries(SUBJECTS.map(s => [s.code, s]));
+
+/* 時数の字 → 数える教科。**字で引く。** コマの時数欄（題名の右）で人が
+   書き替えた字も、その字の教科として数える。同じ字が2つあるときは
+   学年専用（only）でないほうを残す（「体」は合同体育ではなく体育）。
+   countAs は「字はこれ、数える先は別の教科」── 図書の「と」は国語に入る。 */
+function subByShort_(list){
+  const m = {};
+  for(const s of list){
+    if(!s.short || !(s.count || s.countAs)) continue;
+    if(m[s.short] && !m[s.short].only) continue;
+    m[s.short] = s;
+  }
+  return m;
+}
+let SUB_BY_SHORT = subByShort_(SUBJECTS);
 
 /* 本番では「時程」「教科」シートが正本。ここの値は、シートが空のときだけ使う。 */
 function setSlots(list){
@@ -3528,6 +3558,7 @@ function setSubjects(list){
   SUBJECTS = list;
   SUB_BY_NAME = Object.fromEntries(SUBJECTS.map(s => [s.name, s]));
   SUB_BY_CODE = Object.fromEntries(SUBJECTS.map(s => [s.code, s]));
+  SUB_BY_SHORT = subByShort_(SUBJECTS);
 }
 /* **この端末で直した設定。** 「設定」シートの値は学校の既定で、
    画面の「印刷と文字」「時数」で直した値はこの端末の持ちもの。
@@ -7321,9 +7352,10 @@ function srcLabel(c, mine){
    学年の面とカレンダーの面が同じ字を出すので、設定でそこを直せば両方が変わる。
    別に持つと、片方だけ直した版が出る。
 
-   **空のときは表示名の1文字目に落とす。** 時数に数えない教科（図書・行事・給食・
+   **空のときは表示名の1文字目に落とす。** 時数に数えない教科（行事・給食・
    クラブ・委員会）は1文字を空にしてある ── あれは「時数表に書くな」の意味で、
-   「画面にも出すな」ではない。空のまま出すと、予定が入っているコマが空欄に見える。 */
+   「画面にも出すな」ではない。空のまま出すと、予定が入っているコマが空欄に見える。
+   図書は「と」を出す（時数は国語に入る）。 */
 /* own ＝ そのコマに手で決めた1文字（パネルの「時数名」欄）。**あれば最優先。**
    教科コードに無い自由記述の行事名は題名の頭文字が出るが、同じ頭文字の
    行事が並ぶと学年の面・カレンダーで見分けがつかない。そのときだけ人が決める。 */
@@ -7336,18 +7368,32 @@ function shortOf(code, title, own){
   return t ? t.slice(0, 1) : "";
 }
 
+/* そのコマの時数の字。**時数集計表に出る字で、題名の右の欄に出る字。**
+   手で決めた字（コマの時数欄・パネルの「時数名」）があれば最優先。
+   教科の字が無ければ、教科に載っていない自由記述は「特」にする ──
+   特別活動の枠なので、運動会や読み聞かせがどこにも数えられないまま消えない。
+   「授業なし」と空欄は字を出さない。 */
+function tallyCharOf(c){
+  if(!c) return "";
+  const own = plain(c.short || "").trim();
+  if(own) return own.slice(0, 1);
+  const t = plain(c.title || "").trim();
+  const sub = c.subject ? SUB_BY_CODE[c.subject] : SUB_BY_NAME[t];
+  if(sub) return sub.short || "";
+  return t && t !== NO_LESSON ? "特" : "";
+}
+
 /* そのコマを時数に数えるか。数えるなら教科を返す。**数え方はここ1か所。**
    時数集計表へのコピー（dialogs.js tallyGrid）と、カレンダーの月ごとの集計が、
    同じ決まりで数える。別々に書くと、Excel に貼った数と紙の数が食い違う。
 
-   教科コードが入っていればそれで、無ければ題名の字で引く（手で書いた「算数」も
-   数える）。`count:false` の教科（図書・行事・給食・クラブ・委員会）と
-   「授業なし」と空欄は数えない。 */
+   **字から教科を引く** ── コマの時数欄で書き替えた字も、その字の教科として
+   数える。「と」は図書だが国語として数える（教科シートの countAs）。
+   どの教科の字にもならない字と空欄は数えない。 */
 function countSub(c){
-  if(!c) return null;
-  const t = plain(c.title).trim();
-  const sub = c.subject ? SUB_BY_CODE[c.subject] : SUB_BY_NAME[t];
-  return (sub && sub.count && sub.short) ? sub : null;
+  const sub = SUB_BY_SHORT[tallyCharOf(c)];
+  if(!sub) return null;
+  return sub.countAs ? SUB_BY_CODE[sub.countAs] : sub;
 }
 
 /* その行のコマを、時数の何ぶんとして数えるか。**朝学習は3ぶんで1コマ**
@@ -9864,7 +9910,8 @@ function cellEl(d, s){
   const ce = sheetRO ? "" : " contenteditable role='textbox'";
   const e = el("div", "cell " + kls,
     "<span class='tag' hidden></span>"
-    + (s.kind === "note" ? "" : "<div class='t'" + ce + "></div>")
+    + (s.kind === "note" ? "" : "<div class='t'" + ce + "></div>"
+                            + "<div class='tl'" + ce + "></div>")
     + (s.kind === "lesson" || s.kind === "note"
          ? "<div class='n'" + ce + (ce ? " aria-multiline='true'" : "") + "></div>" : ""));
   e.dataset.d = d; e.dataset.s = s.id;
@@ -9872,7 +9919,7 @@ function cellEl(d, s){
      刷った紙で「休みなのか、授業があるのか」が読めなくなる。
      校外が覆っていれば書ける（時数のために教科を入れる必要がある） */
   if(isDayOff(d) && s.kind === "lesson" && !tripHere(d, s.id)) e.classList.add("off");
-  const t = e.querySelector(".t"), n = e.querySelector(".n");
+  const t = e.querySelector(".t"), n = e.querySelector(".n"), tl = e.querySelector(".tl");
   /* **見るだけの紙には、書く仕掛けを付けない。**（月の面・学年の面）
      ここで返さずに CSS だけで止めると、キーボードの移動で欄に入れてしまい、
      打った字が別のクラス・別の週へ入る */
@@ -9926,6 +9973,21 @@ function cellEl(d, s){
     writeCell(d, s.id, {note:n.innerHTML});
     paintSheet(e); fillPanel(); typing = null;
   });
+
+  /* 題名の右の時数欄。**時数集計表に出る字を、書きながら直せる。**
+     空にすると教科（または題名からの「特」）に戻る。1文字だけ */
+  if(tl){
+    tl.setAttribute("aria-label", where + " 時数の字");
+    tl.addEventListener("focus", focus);
+    tl.addEventListener("input", () => {
+      typing = tl;
+      writeCell(d, s.id, {short: plain(tl.innerHTML).trim().slice(0, 1)});
+      paintSheet(e); fillPanel(); typing = null;
+    });
+    tl.addEventListener("keydown", ev => {
+      if(ev.key === "Enter"){ ev.preventDefault(); tl.blur(); }
+    });
+  }
 
   /* 教科を引っぱって入れる */
   e.addEventListener("dragover", ev => { ev.preventDefault(); e.classList.add("drop"); });
@@ -10052,6 +10114,12 @@ function paintCell(e, c, d, s, mine){
   const wantN = c.note || "";
   if(t && t !== typing && t.innerHTML !== wantT) t.innerHTML = wantT;
   if(n && n !== typing && n.innerHTML !== wantN) n.innerHTML = wantN;
+  /* 題名の右の時数欄（専科の面では出さない ── あっちはクラスごとに数える） */
+  const tl = e.querySelector(".tl");
+  if(tl && tl !== typing){
+    const wantH = view.kind === "special" ? "" : tallyCharOf(c);
+    if(tl.textContent !== wantH) tl.textContent = wantH;
+  }
 
   /* **授業なしのコマは、題名の欄を斜め線で消す。** 備考は書ける。
      ここで付け外しするのは、**他の端末から降りてきたときにも効かせる**ため。
@@ -12656,7 +12724,7 @@ function upViewChanged_(){
 /* ==================================================================
    unitmanage.js — 単元の管理画面（作る・直す・消す・学期設定）
 
-   単元の登録・名まえと教科の直し・消去・焼き付け（番号を備考欄へ）と、
+   単元の登録・名まえと教科の直し・消去・確定（仮番号を備考欄へ転記）と、
    学期の区切り（学期設定）の窓を持つ。
    番号を数える・割り付ける側は unitprogress.js に。
 ================================================================== */
@@ -12703,7 +12771,7 @@ function paintUnitManagerButton(){
   wrap.hidden = !ctx;
   if(!ctx) return;
   $("unitOpenSub").textContent = ctx.kind === "special"
-    ? "学年ごとの単元" : "教科ごとの単元と授業数";
+    ? "学年ごとの単元を作成/削除する" : "教科ごとの単元を作成/削除する";
   /* 「確定する」は畳みに単元のチップがあるときだけ出す。
      単元が無い面で終わらせるボタンを置いても、押せるものが無い */
   const bf = $("unitBakeFold");
@@ -13085,7 +13153,7 @@ function upBakeOne_(unit, done){
   const st = unit.start || {};
   if(!st.date){ if(done) done(); return; }
   const mons = upMons_(st.date, upRangeEnd_(unit));
-  const wid = Wait.begin("「" + unit.name + "」の番号を備考欄に移しています");
+  const wid = Wait.begin("「" + unit.name + "」の仮番号を備考欄に転記しています");
   Backend.readWeeks(mons, () => {
     const r = upScan_(unit, upRangeEnd_(unit));
     const name4 = (unit.name || "").slice(0, 4) || "単元";
@@ -13128,11 +13196,11 @@ function bakeConfirm_(u, targets){
   if(!(u.start || {}).date)
     return toast("まだ置いていない単元は、移す番号がありません");
   askOk({
-    title:"「" + u.name + "」の番号を備考欄に移しますか",
+    title:"「" + u.name + "」の仮番号を備考欄に転記しますか",
     lines:[(targets.length > 1
               ? "学年の各クラス分（" + targets.length + "クラス）まとめて行います。"
               : "")
-           + "<b>いま出ている番号を、各コマの備考欄に字として入れます</b>"
+           + "<b>いま出ている仮番号を、各コマの備考欄に字として入れます</b>"
            + "（「" + escText(u.name.slice(0, 4)) + " 3/" + u.lessonCount + "」のように）。",
            "仮置きの印は外れ、単元そのものも消えます。<b>この単元のコマ読みは、もう要りません。</b>",
            "戻せません。番号を数え続けたいときは、この操作をしないでください。"],
@@ -13151,11 +13219,11 @@ function bakeConfirm_(u, targets){
           if($("unitDlg").open){
             renderUnitList_();
             $("unitStat").textContent =
-              "番号を備考欄に移して、「" + u.name + "」を終わらせました。";
+              "仮番号を備考欄に転記して、「" + u.name + "」を確定しました。";
           }
           UP.seq = {}; paintSheet();
           if(typeof drawPalette === "function") drawPalette();
-          toast("番号を備考欄に移して、<b>「" + escText(u.name) + "」</b>を終わらせました。");
+          toast("仮番号を備考欄に転記して、<b>「" + escText(u.name) + "」</b>を確定しました。");
           return;
         }
         upBakeOne_(targets[i], () => seq(i + 1));
@@ -14642,8 +14710,9 @@ function tallyGrid(){
         if(!(s.id in t.cols)) continue;
         /* 特別校時の日は朝学習が無い。紙に出ていないものを数えない */
         if(!slotShown(d, s)) continue;
-        const sub = countSub(compose(list[r], d, s.id));
-        line[t.cols[s.id]] = sub ? sub.short : "";
+        /* 欄に出ている字をそのまま写す（コマの時数欄で直した字が
+           そのまま表に出る。「と」は図書、数えるのは Excel 側で国語として） */
+        line[t.cols[s.id]] = tallyCharOf(compose(list[r], d, s.id));
       }
     }
     rows.push(line);
@@ -14800,11 +14869,17 @@ const HELP = {
   tally3: {t:"時数",
     b:["<b>書いていない日は基本時間割どおりとして数えます。</b>",
        "朝学習は3回ぶんで1コマとして数えます。",
+       "数えるのは題名の右の小さい欄（時数欄）の字です。図書の「と」は国語に、"
+       + "教科に載っていないものは「特」に入ります。欄の字は直せます。",
        "「年度始めから読み直す」で、確かな数に直せます。"]},
+  tallyCol: {t:"題名の右の小さい欄（時数欄）",
+    b:["<b>時数表・集計に出る1文字です。</b>教科は自動で出ます。",
+       "直した字がそのまま集計の列になります。",
+       "教科に載っていないもの（行事名など）には「特」が入ります。"]},
   imptally: {t:"時数表から取り込む",
     b:["<b>時数表の1週ぶんを、今のクラスの週案に入れます。</b>",
        "表の左上のマスを選んで貼ると、1回で入ります。",
-       "入るのは、今のクラスの行だけ・この週だけ・変えた欄だけです。",
+       "入るのは、表に載っている学年の各クラスの行・この週だけ・変えた欄だけです。",
        "入れる前に一覧で確認できます。「／」は授業なしになります。"]},
   impev: {t:"年間行事からコマを作る",
     b:["<b>「連携シートを開く」で専用シートを開き、行事計画をそのまま貼ります。</b>",
