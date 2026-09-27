@@ -25,8 +25,14 @@ try{
   await p.evaluate(()=>{
     tpTargets=[{url:'https://docs.google.com/spreadsheets/d/123456789012345678901234567890/edit',def:true}];
     const s=tpSubmitInfo('5-1');s.exports={'123456789012345678901234567890':'previous'};
+    s.dirty=true;
     openView({kind:'tanpopo'});
   });
+  /* 提出のあとに直していて再提出まだ → 変未（黄）。再提出ずみ → 変（紫） */
+  assert.equal(await p.locator('.tpin.st-chgwait em').innerText(),'変未');
+  assert.equal(await p.locator('.tpin.st-chgwait em').evaluate(e=>getComputedStyle(e).color),'rgb(168, 88, 0)');
+  assert.equal(await p.locator('.tpin.st-chgwait').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(247, 233, 168)');
+  await p.evaluate(()=>{const s=tpSubmitInfo('5-1');s.dirty=false;drawTanpopoView();});
   assert.equal(await p.locator('.tpin.st-changed em').innerText(),'変');
   assert.equal(await p.locator('.tpin.st-changed em').evaluate(e=>getComputedStyle(e).color),'rgb(105, 65, 137)');
   await p.evaluate(()=>{const s=tpSubmitInfo('5-1');s.exports['123456789012345678901234567890']=s.at;drawTanpopoView();});

@@ -102,9 +102,10 @@ let tpPick = "1";              /* 窓でいま選んでいる組。押して入�
    どのクラスのことか分からなかった。
    **色だけに頼らない。** 短い字と左端の太い線を必ず添える。 */
 const TP_ST = {
-  ok:   {mark:"済", why:"担任が「今週ぶんは書き終えた」と出している"},
-  changed: {mark:"変", why:"この出力先へ出したあとに変わっている。出し直しが要る"},
-  base: {mark:"未", why:"担任がまだ出していない"}
+  ok:   {mark:"済",   why:"担任が「今週ぶんは書き終えた」と出している"},
+  chgwait: {mark:"変未", why:"提出したあとに直している。担任の再提出を待つ"},
+  changed: {mark:"変",  why:"再提出ずみ。この出力先へはまだ出し直していない。出し直しが要る"},
+  base: {mark:"未",   why:"担任がまだ出していない"}
 };
 /* **1コマでも書いてあれば済、にはしない。**
    ちょっと触っただけの週と、出してよい週を、たんぽぽ担当が見分けられない。
@@ -118,22 +119,24 @@ const TP_ST = {
      ① まだ何もしていない      未
      ② 担任が提出した          済
      ③ たんぽぽへ出力した      済
-     ④ そのあと担任が直した    未 ←ここが「①と同じ」に見えていた
+     ④ そのあと担任が直した    変未 ←ここが「①と同じ」に見えていた
      ⑤ 担任が再提出した        変
      ⑥ もう一度出力した        済
 
-   ④と⑤は印で分けない（どちらも「出し直しが要る」）。分かれるのはそのあとの
-   手順で、④は担任の再提出を待つ必要がある（④のまま出しても止めないが、
-   印は「変」のまま残る）。そこは出す前の窓が名指しで言う（tpNotYetBox）。 */
+   ④と⑤は印で分ける ── 取るべき手が違う。④は担任の再提出を待つ（変未・黄）、
+   ⑤はたんぽぽ担当が出し直す（変・紫）。④のまま出しても止めないが、印は
+   「変未」のまま残る ── 出す前の窓が名指しで言う（tpNotYetBox）。 */
 const tpState = cls => {
   const s = tpSubmitInfo(cls);
   if(!s) return 'base';                       /* 一度も提出していない */
   const target = tpTargetNow();
   const key = target ? (String(target.url).match(/[-\w]{25,}/) || [target.url])[0] : '';
   const done = (s.exports || {})[key];
-  /* この出力先へ出したあとに変わった。直しの途中（dirty）でも、再提出後でも */
-  if(done && (s.dirty || done !== s.at)) return 'changed';
-  if(s.dirty) return 'base';                  /* 直しているが、まだ一度も出していない */
+  /* 提出のあとに直していて、まだ再提出していない。出力先へ出したかどうかは
+     見ない ── 出す前でも「再提出を待つ」に変わりはない */
+  if(s.dirty) return 'chgwait';
+  /* 再提出ずみ。この出力先へはまだ出し直していない（出した時刻 ≠ 提出の時刻） */
+  if(done && done !== s.at) return 'changed';
   return 'ok';
 };
 
@@ -359,7 +362,7 @@ function drawTpGroupDlg(){
   box.innerHTML =
     "<div class='tpplace'><div class='tpto'>"
     + "<div class='tpleg'><b>今週の提出</b>"
-    + ["ok","base","changed"].map(k =>
+    + ["ok","base","chgwait","changed"].map(k =>
         "<span class='st-" + k + "'><i></i>" + TP_ST[k].mark + "</span>").join("")
     + "</div>"
     + tpGroupList(true)
@@ -415,7 +418,7 @@ function drawTanpopoView(){
   /* 組の並びだけを出す。**読むだけ。** 直すのは「組分けを直す」の窓 */
   $("tpSel").innerHTML =
     "<div class='tpleg'><b>今週の提出</b>"
-    + ["ok","base","changed"].map(k =>
+    + ["ok","base","chgwait","changed"].map(k =>
         "<span class='st-" + k + "'><i></i>" + TP_ST[k].mark + "</span>").join("")
     + "<span class='hint'>チップを押すと、そのクラスの面を開く</span>"
     + "</div><div class='tponly'>" + tpGroupList(false) + "</div>";
@@ -515,12 +518,12 @@ function tpNotYetBox(){
       + "このまま出すと、書き終えていない週をたんぽぽへ配ることになります。</div>");
   /* **止めない。何が入るかを言う。** 前は提出したあとに直したクラスが1つでもあると
      サーバが出力そのものを止めていて、1クラスの直しで全学級を出せなくなっていた。
-     いまは直したあとの中身が入り、そのクラスの印は「変」のまま残る
+     いまは直したあとの中身が入り、そのクラスの印は「変未」のまま残る
      （gas/Domain.gs submissionUnchanged）。 */
   if(dirty.length)
     box.push("<div class='box'><b>" + dirty.map(escText).join("・")
       + "</b> は、<b>提出したあとに直しています</b>。<br>"
-      + "出すと<b>直したあとの中身</b>が入り、印は<b>「変」のまま</b>残ります。"
+      + "出すと<b>直したあとの中身</b>が入り、印は<b>「変未」のまま</b>残ります。"
       + "担任が「たんぽぽに再提出」を押したら、もう一度出してください。</div>");
   return box.join("");
 }
