@@ -824,10 +824,12 @@ await p.evaluate(() => $("tpGrpDlg").close()); await p.waitForTimeout(200);
    ほかの面の「？」と同じ押し方にそろえる */
 ok("説明は ？ から読める", await (async () => {
      await p.locator(".tphead .helpq").click(); await p.waitForTimeout(250);
-     const open = await p.locator("#helpDlg").evaluate(d => d.open);
-     const txt = await p.locator("#helpBody").innerText();
+     const st = await p.evaluate(() => ({
+       open: !!$("helpDlg") && $("helpDlg").open,
+       txt: $("helpBody") ? $("helpBody").innerText : ""
+     }));
      await p.locator("#helpDlg .dlgx").click(); await p.waitForTimeout(200);
-     return open && txt.indexOf("たんぽぽ") >= 0;
+     return st.open && st.txt.indexOf("たんぽぽ") >= 0 ? true : st;
    })() === true);
 ok("出す先のシート名を面にも出す",
    /\d+月\d+週/.test(await p.locator("#tpCount").innerText()),
@@ -942,7 +944,7 @@ ok("今週以降：前の週は変わらない", await baseAt("2026-09-14", "0|p
 ok("今週以降：9/28 から使う版ができる",
    await p.evaluate(() => (Y().baseFrom["3-1"] || []).map(v => v.from).join()) === "2026-09-28",
    await p.evaluate(() => Y().baseFrom["3-1"]));
-ok("提出ずみの週で字が変わった週（10/12・B週）は「未」に戻る",
+ok("提出ずみの週で字が変わった週（10/12・B週）は「変未」に戻る",
    await p.evaluate(() => Y().weeks["2026-10-12"].tpSub["3-1"].dirty) === true);
 ok("変わっていない週（9/14・前の週）は戻さない",
    await p.evaluate(() => Y().weeks["2026-09-14"].tpSub["3-1"].dirty) === false);
@@ -962,7 +964,7 @@ await p.locator("#baseSave").click(); await p.waitForTimeout(400);
 ok("今年度全体：前の週も変わる", await baseAt("2026-09-14", "0|p2") === pick2Name);
 ok("今年度全体：途中からの版も変わる", await baseAt("2026-10-12", "0|p2") === pick2Name);
 ok("今年度全体：途中からの版のほかのコマは残る", await baseAt("2026-10-12", "0|p1") === pickName);
-ok("今年度全体：提出ずみの前の週（9/14）も「未」に戻る",
+ok("今年度全体：提出ずみの前の週（9/14）も「変未」に戻る",
    await p.evaluate(() => Y().weeks["2026-09-14"].tpSub["3-1"].dirty) === true);
 
 /* 戻したら、同じ中身の版は残さない */
@@ -1755,8 +1757,8 @@ const tpMark = await p.evaluate(() => {
   return out;
 });
 for(const [k, want] of [["① 何もしていない","未"], ["② 提出した","済"], ["③ 出力した","済"],
-                        ["④ そのあと直した","変"], ["⑤ 再提出した","変"],
-                        ["⑥ もう一度出力した","済"], ["提出→出力前に直した","未"]])
+                        ["④ そのあと直した","変未"], ["⑤ 再提出した","変"],
+                        ["⑥ もう一度出力した","済"], ["提出→出力前に直した","変未"]])
   ok(k + " → " + want, tpMark[k] === want, tpMark[k]);
 /* 出す先も元へ戻す（手元では1本も無いのがふだんの姿） */
 await p.evaluate(() => { tpTargets = []; });

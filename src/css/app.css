@@ -479,6 +479,12 @@ button.tpin.go:hover{border-color:var(--ink-link);color:var(--ink-link)}
 .tpin.st-base{background:#FDF0EC}
 .tpin.st-base::before{background:var(--cat-clash)}
 .tpin.st-base em{color:var(--cat-clash)}
+/* 「変未」＝提出したあとに直していて、まだ再提出していない。**黄色は「待つ」。**
+   再提出ずみで出し直しが要る「変」（紫）と、まだ出していない「未」（赤）と
+   見分けるために、黄い地に濃い琥珀の線と字を添える */
+.tpin.st-chgwait{background:var(--grade-2,#F7E9A8)}
+.tpin.st-chgwait::before{background:var(--apply,#A85800)}
+.tpin.st-chgwait em{color:var(--apply,#A85800)}
 
 /* 見分け方は組の**上**に置く。下に置くと、組を読んだあとで下まで目を運ぶ */
 .tpleg{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
@@ -489,6 +495,7 @@ button.tpin.go:hover{border-color:var(--ink-link);color:var(--ink-link)}
 .tpleg .st-ok i{background:var(--ok,#2F6E4E)}
 .tpleg .st-upper i{background:var(--cat-grade)}
 .tpleg .st-base i{background:var(--cat-clash)}
+.tpleg .st-chgwait i{background:var(--apply,#A85800)}
 
 /* 出す先をひらくリンク。**出したあと「入ったか」をその場で見に行ける。** */
 .tptopen{font-size:12.5px;color:var(--ink-link);text-underline-offset:3px;
