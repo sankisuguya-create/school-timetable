@@ -176,6 +176,13 @@ function fakeSheetOn(grid0, name){
             FORMS[name + "/" + (r + i) + "," + (c + j)] = f;
             const m = f.match(/^=IF\('([^']+)'!\$?([A-Z]+)\$?(\d+)="","([^"]*)",'\1'!\$?\2\$?\3\)$/);
             let val = f;
+            const k = f.match(/^=IF\(LEFT\('([^']+)'!([A-Z]+)(\d+),1\)="交","た"&MID\('\1'!\2\3,2,999\),'\1'!\2\3&""\)$/);
+            if(k){
+              const src = TPFILE.sheets[k[1]] || [];
+              const ci = k[2].split("").reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0);
+              const rv = String((src[+k[3] - 1] || [])[ci - 1] ?? "");
+              val = rv.charAt(0) === "交" ? "た" + rv.slice(1) : rv;
+            }
             if(m){
               const src = TPFILE.sheets[m[1]] || [];
               const ci = m[2].split("").reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0);
@@ -1112,6 +1119,21 @@ ok("骨は +5 中休み・+10 給食・+11 昼休み",
 ok("授業直下の同座標を転記し、空欄と改行を保つ",
    SH()[3][1] === "田中" && SH()[5][1] === "" && SH()[19][2] === "支援員\n佐藤"
    && SH()[80][1] === "金曜6校時");
+ok("国語・算数の直下は「教師わりあて」への参照の式",
+   (FORMS[ex.sheet + "/4,2"] || "").indexOf("'教師わりあて'!B4") >= 0
+   && (FORMS[ex.sheet + "/6,2"] || "").indexOf("'教師わりあて'!B6") >= 0, FORMS[ex.sheet + "/4,2"]);
+ok("国語・算数以外の直下は式にしない（値の転記のまま）",
+   !FORMS[ex.sheet + "/10,2"] && !FORMS[ex.sheet + "/4,3"] && !FORMS[ex.sheet + "/20,3"]);
+ok("頭の「交」は「た」に読み替え、「た:」はそのまま", (() => {
+  assignments.getRange(4, 2).setValue("交:山田");
+  assignments.getRange(6, 2).setValue("た:鈴木");
+  const r = ev("Store.exportWeek(2026, '2026-11-23', " + JSON.stringify(titles)
+             + ", " + JSON.stringify(cols2) + ", " + JSON.stringify(SLOT6) + ")");
+  const sh = TPFILE.sheets[r.sheet];
+  assignments.getRange(4, 2).setValue("田中");
+  assignments.getRange(6, 2).setValue("");
+  return sh[3][1] === "た:山田" && sh[5][1] === "た:鈴木";
+})());
 ok("参照シートがないと既存週を変更せず止まる", (() => {
   const keep = TPFILE.sheets["教師わりあて"], before = SH(), names = Object.keys(TPFILE.sheets).join();
   delete TPFILE.sheets["教師わりあて"];
