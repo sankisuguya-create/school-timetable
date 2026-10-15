@@ -1858,6 +1858,8 @@ const Store = (function(){
   const TP_COL_W = 50, TP_LABEL_W = 92;
   /* 日ブロックの先頭からの相対行。授業名の行だけを持つ（担当者・場所は書かない） */
   const TP_TITLE_OFF = [1, 3, 6, 8, 12, 14];
+  /* 直下の担当者を「教師わりあて」への参照にする授業名（前方一致） */
+  const TP_REF_TITLES = ["国語", "算数"];
 
   /* シート名。**「9月1週」。** その月の何番目の月曜かで数える。
      日付をそのまま名前にすると、たんぽぽ担当が「何週目のぶんか」を
@@ -1939,7 +1941,7 @@ const Store = (function(){
 
     /* 中身を組む。**先に全部の値を作ってから1回で書く。**
        1コマずつ書くと、26列×5日で百回以上の往復になる。 */
-    const rows = [];
+    const rows = [], refCells = [];
     rows.push([sheetName].concat(new Array(width - 1).fill("")));
     let wrote = 0, empty = 0;
     for(let d = 0; d < 5; d++){
@@ -1954,6 +1956,7 @@ const Store = (function(){
       /* 授業名と、その直下の担当者を別々に入れる。担当者は出力後も手で編集できる。 */
       for(let i = 0; i < TP_TITLE_OFF.length; i++){
         const r = body[TP_TITLE_OFF[i] - 1];          /* body は +1 から始まる */
+        const top = rows.length;                      /* この日の見出し行（シートの行番号） */
         const source = teachers[rows.length + TP_TITLE_OFF[i]] || [];
         for(let c = 1; c < width; c++){
           const text = source[c] || "";
@@ -1965,6 +1968,8 @@ const Store = (function(){
           const t = (v === undefined || v === null) ? "" : String(v);
           r[1 + c] = t;
           if(t) wrote++; else empty++;
+          if(TP_REF_TITLES.some(function(w){ return t.indexOf(w) === 0; }))
+            refCells.push([top + TP_TITLE_OFF[i] + 1, 2 + c]);
         }
       }
       for(const b of body) rows.push(b);
@@ -2009,6 +2014,16 @@ const Store = (function(){
         refs.push('=IF(' + a1 + '="","' + alt + '",' + a1 + ')');
       }
       nw.getRange(hr, 2, 1, width - 1).setFormulas([refs]);
+    }
+    /* **国語・算数の直下の担当者は「教師わりあて」への参照で置く。**
+       たんぽぽの中で受けるコマなので、頭の「交」は「た」に読み替える
+       （「た:山田」はそのまま、「交:山田」は「た:山田」）。
+       参照元を直せば出したシートにも出る。手で書き換えれば式は消える。
+       **前方一致にする。** 「外国語」は国語に入れない。 */
+    for(const rc of refCells){
+      const a1 = "'教師わりあて'!" + colLetter_(rc[1]) + rc[0];
+      nw.getRange(rc[0], rc[1], 1, 1).setFormulas([[
+        '=IF(LEFT(' + a1 + ',1)="交","た"&MID(' + a1 + ',2,999),' + a1 + '&"")']]);
     }
     nw.setFrozenColumns(1);
     nw.setFrozenRows(1);
