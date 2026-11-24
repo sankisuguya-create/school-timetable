@@ -111,7 +111,7 @@ function openUnitManager(){
   unitState.editIds = [];
   drawUnitContext_();
   $("unitForm").hidden = true;
-  $("unitStat").textContent = "読み込んでいます…";
+  setMsg($("unitStat"), "読み込んでいます…");
   $("unitList").innerHTML = "";
   $("unitDlg").showModal();
   loadUnitManager();
@@ -134,7 +134,7 @@ function drawUnitContext_(){
 function loadUnitManager(after){
   if(unitState.loading) return;
   unitState.loading = true;
-  $("unitStat").textContent = "読み込んでいます…";
+  setMsg($("unitStat"), "読み込んでいます…");
   const ctx = unitContext_();
   /* 専科は学年で持つので、クラスを絞らずこの枠の単元をぜんぶ読む */
   const owner = ctx.kind === "special"
@@ -300,7 +300,7 @@ function saveUnitForm_(){
               name:name, lessonCount:n, hasTest:$("unitTest").checked};
     });
     $("unitSave").disabled = true;
-    $("unitStat").textContent = "学年の各クラスに保存しています…";
+    setMsg($("unitStat"), "学年の各クラスに保存しています…");
     saveUnitFanout_(inputs, 0, () => {
       $("unitSave").disabled = false;
       const grp = unitGroupOf_(name);
@@ -330,7 +330,7 @@ function saveUnitForm_(){
     name:name, lessonCount:n, hasTest:$("unitTest").checked
   };
   $("unitSave").disabled = true;
-  $("unitStat").textContent = "保存しています…";
+  setMsg($("unitStat"), "保存しています…");
   Backend.saveUnit(input, saved => {
     $("unitSave").disabled = false;
     if(saved){
@@ -616,7 +616,7 @@ function drawTermRows_(){
 function saveTermRows_(){
   const rows = termDraft.filter(t => t.name || t.start || t.end);
   $("termSave").disabled = true;
-  $("termStat").textContent = "保存しています…";
+  setMsg($("termStat"), "保存しています…");
   Backend.saveUnitTerms(rows, UP.termVersion, r => {
     $("termSave").disabled = false;
     UP.terms = (r && r.terms) || [];

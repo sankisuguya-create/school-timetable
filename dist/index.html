@@ -1768,6 +1768,11 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
 /* 出す面の中の列は1つ。自動のままだと紙のなかの広がりに引っ張られて
    画面より広くなるので、外の幅に合わせる */
 .mview,.gvview,.cvview,.spmview{grid-template-columns:minmax(0,1fr)}
+/* 待ちの表示：点を0〜3個で回す（正本は - の skills/ui-layout/SKILL.md「待ちの表示」） */
+.ldots{display:inline-block;width:1.6em;text-align:left}
+.ldots::after{content:'';animation:ldots 1.2s steps(1,end) infinite}
+@keyframes ldots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+@media (prefers-reduced-motion:reduce){.ldots::after{animation:none;content:'...'}}
 /* ▲ src/css/app.css ▲ */
 /* ▼ src/css/sheet.css ▼ */
 /* 紙。**刷られる面はここだけ。** 印刷の版面は動かさない。
@@ -3816,6 +3821,15 @@ const SLASH_SVG = '<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hi
 /* 文字・リンク・日付の道具。ここは状態を持たない。 */
 
 const $ = id => document.getElementById(id);
+/* 待ちの表示：文の終わりの「…」を、回る点（.ldots）に置き換えて出す。
+   規格の正本は - の skills/ui-layout/SKILL.md「待ちの表示」 */
+function setMsg(el, t){
+  if(!el) return;
+  t = String(t); const w = /…$/.test(t);
+  el.textContent = w ? t.slice(0, -1) : t;
+  if(w) el.insertAdjacentHTML("beforeend", "<span class='ldots' aria-hidden='true'></span>");
+}
+const WAIT_DOTS = "<span class='ldots' aria-hidden='true'></span>";
 const el = (tag, cls, html) => {
   const e = document.createElement(tag);
   if(cls) e.className = cls;
@@ -12927,7 +12941,7 @@ function openUnitManager(){
   unitState.editIds = [];
   drawUnitContext_();
   $("unitForm").hidden = true;
-  $("unitStat").textContent = "読み込んでいます…";
+  setMsg($("unitStat"), "読み込んでいます…");
   $("unitList").innerHTML = "";
   $("unitDlg").showModal();
   loadUnitManager();
@@ -12950,7 +12964,7 @@ function drawUnitContext_(){
 function loadUnitManager(after){
   if(unitState.loading) return;
   unitState.loading = true;
-  $("unitStat").textContent = "読み込んでいます…";
+  setMsg($("unitStat"), "読み込んでいます…");
   const ctx = unitContext_();
   /* 専科は学年で持つので、クラスを絞らずこの枠の単元をぜんぶ読む */
   const owner = ctx.kind === "special"
@@ -13116,7 +13130,7 @@ function saveUnitForm_(){
               name:name, lessonCount:n, hasTest:$("unitTest").checked};
     });
     $("unitSave").disabled = true;
-    $("unitStat").textContent = "学年の各クラスに保存しています…";
+    setMsg($("unitStat"), "学年の各クラスに保存しています…");
     saveUnitFanout_(inputs, 0, () => {
       $("unitSave").disabled = false;
       const grp = unitGroupOf_(name);
@@ -13146,7 +13160,7 @@ function saveUnitForm_(){
     name:name, lessonCount:n, hasTest:$("unitTest").checked
   };
   $("unitSave").disabled = true;
-  $("unitStat").textContent = "保存しています…";
+  setMsg($("unitStat"), "保存しています…");
   Backend.saveUnit(input, saved => {
     $("unitSave").disabled = false;
     if(saved){
@@ -13432,7 +13446,7 @@ function drawTermRows_(){
 function saveTermRows_(){
   const rows = termDraft.filter(t => t.name || t.start || t.end);
   $("termSave").disabled = true;
-  $("termStat").textContent = "保存しています…";
+  setMsg($("termStat"), "保存しています…");
   Backend.saveUnitTerms(rows, UP.termVersion, r => {
     $("termSave").disabled = false;
     UP.terms = (r && r.terms) || [];
@@ -13682,7 +13696,7 @@ function drawTargets(){
     return;
   }
   if(tpTargets === null){
-    box.innerHTML = "<div class='tptline'><b>出す先</b><span class='hint'>読んでいます…</span></div>";
+    box.innerHTML = "<div class='tptline'><b>出す先</b><span class='hint'>読んでいます<span class='ldots' aria-hidden='true'></span></span></div>";
     return;
   }
   if(!tpTgtEdit){
@@ -13753,7 +13767,7 @@ function drawTargets(){
     b.onclick = () => {
       read();
       const x = tpTargets[+b.dataset.i];
-      $("tpTgtWhy").innerHTML = "<div class='box'>試しています…</div>";
+      $("tpTgtWhy").innerHTML = "<div class='box'>試しています<span class='ldots' aria-hidden='true'></span></div>";
       Backend.testTpTarget(x.url,
         r => $("tpTgtWhy").innerHTML = r.ok
           ? "<div class='box ok'><b>開けました。</b>" + escText(r.file)
@@ -14107,7 +14121,7 @@ function doExportTanpopo(){
   }
   /* 先に、書いたぶんをシートへ送る。送る前に出すと、出した紙と週案が食い違う */
   $("tpGo").disabled = true;
-  $("tpCount").innerHTML = "たんぽぽ時間割へ書いている…";
+  $("tpCount").innerHTML = "たんぽぽ時間割へ書いている" + WAIT_DOTS;
   const w = Wait.begin("たんぽぽ時間割へ出しています", true);
   Backend.flush(saved => {
     if(!saved){
@@ -15206,8 +15220,9 @@ async function nodePng(node, name){
 function openOutWindow(kind){
   const w = window.open("", "_blank");
   if(w){
-    w.document.write("<body style='font-family:sans-serif;color:#666;padding:2em'>"
-      + (kind || "作っています") + "…</body>");
+    w.document.write("<style>.ldots{display:inline-block;width:1.6em}.ldots::after{content:'';animation:ldots 1.2s steps(1,end) infinite}@keyframes ldots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}@media (prefers-reduced-motion:reduce){.ldots::after{animation:none;content:'...'}}</style>"
+      + "<body style='font-family:sans-serif;color:#666;padding:2em'>"
+      + (kind || "作っています") + WAIT_DOTS + "</body>"); // 新しい窓には CSS が無いので点の規格をその場で書く
     w.document.close();
   }
   return w;
@@ -15539,7 +15554,7 @@ function readImp(){
     impRes = parseFixed(tsvGrid(t));
     return drawImp();
   }
-  $("impStat").textContent = "シートを読んで入る…";
+  setMsg($("impStat"), "シートを読んで入る…");
   Backend.readPaste(
     g => { impRes = g.length ? parseFixed(g) : {error:"シートが空だった"}; drawImp(); },
     why => { impRes = {error:why}; drawImp(); });
@@ -15712,7 +15727,7 @@ function openNewYearDlg(){
     $("nyDlg").showModal();
     return;
   }
-  $("nyStat").textContent = "読んでいます…";
+  setMsg($("nyStat"), "読んでいます…");
   $("nyOut").innerHTML = "";
   $("nyDlg").showModal();
   loadNewYear();
@@ -15966,7 +15981,7 @@ function drawCheck(r){
 function runCheck(){
   if(!Wait.guard()) return;
   $("ckGo").disabled = true;
-  $("ckStat").textContent = "検査しています…";
+  setMsg($("ckStat"), "検査しています…");
   const w = Wait.begin("この年度を検査しています");
   Backend.checkYear(
     r => { Wait.end(w); $("ckGo").disabled = false; drawCheck(r); },
@@ -16000,7 +16015,7 @@ function arYear(){ return +$("arYear").value || fy() - 1; }
 function arRunCount(){
   if(!Wait.guard()) return;
   const y = arYear();
-  $("arStat").textContent = "数えています…";
+  setMsg($("arStat"), "数えています…");
   $("arStep2").hidden = true; $("arStep4").hidden = true; arChecked = null;
   const w = Wait.begin(y + "年度を数えています");
   Backend.archiveCount(y, r => {
@@ -16035,7 +16050,7 @@ function arRunVerify(){
   if(!Wait.guard()) return;
   const y = arYear(), url = $("arUrl").value.trim();
   if(!url) return void ($("arWhy").textContent = "保管先のURLを貼る");
-  $("arWhy").textContent = "照合しています…";
+  setMsg($("arWhy"), "照合しています…");
   $("arStep4").hidden = true; arChecked = null;
   const w = Wait.begin("保管先と照合しています");
   Backend.archiveVerify(y, url, r => {
@@ -16060,7 +16075,7 @@ function arRunPurge(){
   if(!arChecked) return;
   const typed = $("arTyped").value.trim();
   $("arGo").disabled = true;
-  $("arWhy").textContent = "消しています…";
+  setMsg($("arWhy"), "消しています…");
   const w = Wait.begin("本体から消しています", true);
   Backend.archivePurge(arChecked.year, arChecked.url, typed, r => {
     Wait.end(w);
@@ -16513,11 +16528,11 @@ function paintSave(){
   /* **送っているあいだは「途中で閉じると送信されません」を付ける。**
      閉じても控えに残るので起き直しで再送は効くが、いまの表示が
      止まっている間に消えると、本人は届いたと思い込んだままになる */
-  t.textContent = busy ? "保存中…"
+  setMsg(t, busy ? "保存中…"
                 : err  ? "保存できていない"
                 : n    ? (wide ? "保存・反映（" + n + "）" : "保存（" + n + "）")
                 : wide ? "保存・反映"
-                       : "保存ずみ";
+                       : "保存ずみ");
   const sub = $("saveSub");
   if(sub) sub.textContent = busy ? "途中で閉じると送信されません" : "";
   /* **端末内の控えデータの小さな知らせ。** シートに届いていないぶんが
@@ -16791,7 +16806,7 @@ function setBusy(on, what){
   busyN = Math.max(0, busyN + (on ? 1 : -1));
   if(on && what) busyWhat = what;
   const e = $("busy"), t = $("busyTxt");
-  if(t) t.textContent = busyWhat || "読み込み中";
+  if(t){ t.textContent = busyWhat || "読み込み中"; t.insertAdjacentHTML("beforeend", WAIT_DOTS); }
   if(e) e.hidden = !busyN;
   document.querySelector(".app").classList.toggle("busy-on", !!busyN);
   if(!busyN) busyWhat = "";
