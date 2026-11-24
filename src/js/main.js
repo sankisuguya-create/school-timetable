@@ -37,11 +37,11 @@ function paintSave(){
   /* **送っているあいだは「途中で閉じると送信されません」を付ける。**
      閉じても控えに残るので起き直しで再送は効くが、いまの表示が
      止まっている間に消えると、本人は届いたと思い込んだままになる */
-  t.textContent = busy ? "保存中…"
+  setMsg(t, busy ? "保存中…"
                 : err  ? "保存できていない"
                 : n    ? (wide ? "保存・反映（" + n + "）" : "保存（" + n + "）")
                 : wide ? "保存・反映"
-                       : "保存ずみ";
+                       : "保存ずみ");
   const sub = $("saveSub");
   if(sub) sub.textContent = busy ? "途中で閉じると送信されません" : "";
   /* **端末内の控えデータの小さな知らせ。** シートに届いていないぶんが
@@ -315,7 +315,7 @@ function setBusy(on, what){
   busyN = Math.max(0, busyN + (on ? 1 : -1));
   if(on && what) busyWhat = what;
   const e = $("busy"), t = $("busyTxt");
-  if(t) t.textContent = busyWhat || "読み込み中";
+  if(t){ t.textContent = busyWhat || "読み込み中"; t.insertAdjacentHTML("beforeend", WAIT_DOTS); }
   if(e) e.hidden = !busyN;
   document.querySelector(".app").classList.toggle("busy-on", !!busyN);
   if(!busyN) busyWhat = "";

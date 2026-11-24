@@ -166,7 +166,7 @@ function drawTargets(){
     return;
   }
   if(tpTargets === null){
-    box.innerHTML = "<div class='tptline'><b>出す先</b><span class='hint'>読んでいます…</span></div>";
+    box.innerHTML = "<div class='tptline'><b>出す先</b><span class='hint'>読んでいます<span class='ldots' aria-hidden='true'></span></span></div>";
     return;
   }
   if(!tpTgtEdit){
@@ -237,7 +237,7 @@ function drawTargets(){
     b.onclick = () => {
       read();
       const x = tpTargets[+b.dataset.i];
-      $("tpTgtWhy").innerHTML = "<div class='box'>試しています…</div>";
+      $("tpTgtWhy").innerHTML = "<div class='box'>試しています<span class='ldots' aria-hidden='true'></span></div>";
       Backend.testTpTarget(x.url,
         r => $("tpTgtWhy").innerHTML = r.ok
           ? "<div class='box ok'><b>開けました。</b>" + escText(r.file)
@@ -591,7 +591,7 @@ function doExportTanpopo(){
   }
   /* 先に、書いたぶんをシートへ送る。送る前に出すと、出した紙と週案が食い違う */
   $("tpGo").disabled = true;
-  $("tpCount").innerHTML = "たんぽぽ時間割へ書いている…";
+  $("tpCount").innerHTML = "たんぽぽ時間割へ書いている" + WAIT_DOTS;
   const w = Wait.begin("たんぽぽ時間割へ出しています", true);
   Backend.flush(saved => {
     if(!saved){

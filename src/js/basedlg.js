@@ -123,8 +123,9 @@ async function nodePng(node, name){
 function openOutWindow(kind){
   const w = window.open("", "_blank");
   if(w){
-    w.document.write("<body style='font-family:sans-serif;color:#666;padding:2em'>"
-      + (kind || "作っています") + "…</body>");
+    w.document.write("<style>.ldots{display:inline-block;width:1.6em}.ldots::after{content:'';animation:ldots 1.2s steps(1,end) infinite}@keyframes ldots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}@media (prefers-reduced-motion:reduce){.ldots::after{animation:none;content:'...'}}</style>"
+      + "<body style='font-family:sans-serif;color:#666;padding:2em'>"
+      + (kind || "作っています") + WAIT_DOTS + "</body>"); // 新しい窓には CSS が無いので点の規格をその場で書く
     w.document.close();
   }
   return w;
@@ -456,7 +457,7 @@ function readImp(){
     impRes = parseFixed(tsvGrid(t));
     return drawImp();
   }
-  $("impStat").textContent = "シートを読んで入る…";
+  setMsg($("impStat"), "シートを読んで入る…");
   Backend.readPaste(
     g => { impRes = g.length ? parseFixed(g) : {error:"シートが空だった"}; drawImp(); },
     why => { impRes = {error:why}; drawImp(); });

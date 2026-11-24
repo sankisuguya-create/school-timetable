@@ -1637,3 +1637,8 @@ body.mob .mpaper,body.mob .gvpaper,body.mob .cvpaper{place-self:center}
 /* 出す面の中の列は1つ。自動のままだと紙のなかの広がりに引っ張られて
    画面より広くなるので、外の幅に合わせる */
 .mview,.gvview,.cvview,.spmview{grid-template-columns:minmax(0,1fr)}
+/* 待ちの表示：点を0〜3個で回す（正本は - の skills/ui-layout/SKILL.md「待ちの表示」） */
+.ldots{display:inline-block;width:1.6em;text-align:left}
+.ldots::after{content:'';animation:ldots 1.2s steps(1,end) infinite}
+@keyframes ldots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+@media (prefers-reduced-motion:reduce){.ldots::after{animation:none;content:'...'}}

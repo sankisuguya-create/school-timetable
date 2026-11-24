@@ -1,6 +1,15 @@
 /* 文字・リンク・日付の道具。ここは状態を持たない。 */
 
 const $ = id => document.getElementById(id);
+/* 待ちの表示：文の終わりの「…」を、回る点（.ldots）に置き換えて出す。
+   規格の正本は - の skills/ui-layout/SKILL.md「待ちの表示」 */
+function setMsg(el, t){
+  if(!el) return;
+  t = String(t); const w = /…$/.test(t);
+  el.textContent = w ? t.slice(0, -1) : t;
+  if(w) el.insertAdjacentHTML("beforeend", "<span class='ldots' aria-hidden='true'></span>");
+}
+const WAIT_DOTS = "<span class='ldots' aria-hidden='true'></span>";
 const el = (tag, cls, html) => {
   const e = document.createElement(tag);
   if(cls) e.className = cls;
