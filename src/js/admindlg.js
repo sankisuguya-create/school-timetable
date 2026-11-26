@@ -295,7 +295,7 @@ function drawCheck(r){
 function runCheck(){
   if(!Wait.guard()) return;
   $("ckGo").disabled = true;
-  setMsg($("ckStat"), "検査しています…");
+  $("ckStat").textContent = "";   /* 処理中の表示は全面の窓だけが出す（二重にしない） */
   const w = Wait.begin("この年度を検査しています");
   Backend.checkYear(
     r => { Wait.end(w); $("ckGo").disabled = false; drawCheck(r); },
@@ -329,7 +329,7 @@ function arYear(){ return +$("arYear").value || fy() - 1; }
 function arRunCount(){
   if(!Wait.guard()) return;
   const y = arYear();
-  setMsg($("arStat"), "数えています…");
+  $("arStat").textContent = "";   /* 処理中の表示は全面の窓だけが出す（二重にしない） */
   $("arStep2").hidden = true; $("arStep4").hidden = true; arChecked = null;
   const w = Wait.begin(y + "年度を数えています");
   Backend.archiveCount(y, r => {
@@ -364,7 +364,7 @@ function arRunVerify(){
   if(!Wait.guard()) return;
   const y = arYear(), url = $("arUrl").value.trim();
   if(!url) return void ($("arWhy").textContent = "保管先のURLを貼る");
-  setMsg($("arWhy"), "照合しています…");
+  $("arWhy").textContent = "";   /* 処理中の表示は全面の窓だけが出す（二重にしない） */
   $("arStep4").hidden = true; arChecked = null;
   const w = Wait.begin("保管先と照合しています");
   Backend.archiveVerify(y, url, r => {
@@ -389,7 +389,7 @@ function arRunPurge(){
   if(!arChecked) return;
   const typed = $("arTyped").value.trim();
   $("arGo").disabled = true;
-  setMsg($("arWhy"), "消しています…");
+  $("arWhy").textContent = "";   /* 処理中の表示は全面の窓だけが出す（二重にしない） */
   const w = Wait.begin("本体から消しています", true);
   Backend.archivePurge(arChecked.year, arChecked.url, typed, r => {
     Wait.end(w);

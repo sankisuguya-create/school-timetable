@@ -34,16 +34,15 @@ function paintSave(){
   b.classList.toggle("dirty", !!n && !err);
   b.classList.toggle("bad", !!err);
   b.disabled = busy;
-  /* **送っているあいだは「途中で閉じると送信されません」を付ける。**
-     閉じても控えに残るので起き直しで再送は効くが、いまの表示が
-     止まっている間に消えると、本人は届いたと思い込んだままになる */
-  setMsg(t, busy ? "保存中…"
-                : err  ? "保存できていない"
+  /* **送っているあいだの「保存中」と「途中で閉じると送信されません」は、
+     全面の窓（Wait）だけが出す。** ここでも出すと、窓の後ろに透けて二重に見える。
+     ボタンは押せなくなる（disabled）だけで、文言は送る前のまま */
+  setMsg(t, err  ? "保存できていない"
                 : n    ? (wide ? "保存・反映（" + n + "）" : "保存（" + n + "）")
                 : wide ? "保存・反映"
                        : "保存ずみ");
   const sub = $("saveSub");
-  if(sub) sub.textContent = busy ? "途中で閉じると送信されません" : "";
+  if(sub) sub.textContent = "";
   /* **端末内の控えデータの小さな知らせ。** シートに届いていないぶんが
      残っているあいだだけ出す（前に閉じたときの持ち越しも数に入る） */
   const pn = $("pendNote");

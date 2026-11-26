@@ -591,7 +591,7 @@ function doExportTanpopo(){
   }
   /* 先に、書いたぶんをシートへ送る。送る前に出すと、出した紙と週案が食い違う */
   $("tpGo").disabled = true;
-  $("tpCount").innerHTML = "たんぽぽ時間割へ書いている" + WAIT_DOTS;
+  $("tpCount").textContent = "";   /* 処理中の表示は全面の窓だけが出す（二重にしない） */
   const w = Wait.begin("たんぽぽ時間割へ出しています", true);
   Backend.flush(saved => {
     if(!saved){
