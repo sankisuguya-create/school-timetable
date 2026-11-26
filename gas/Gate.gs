@@ -200,9 +200,9 @@ function doGet(e){
 
   const t = HtmlService.createTemplateFromFile("plan");
   t.boot = JSON.stringify({email: j.email});
-  return t.evaluate()
+  return withIcon_(t.evaluate()
     .setTitle("週案")
-    .addMetaTag("viewport", "width=device-width, initial-scale=1");
+    .addMetaTag("viewport", "width=device-width, initial-scale=1"));
 }
 
 /* 画面から呼ぶ関数は、**すべて1行目で Gate.check() を呼ぶ**。

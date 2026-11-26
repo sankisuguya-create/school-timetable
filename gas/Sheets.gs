@@ -874,6 +874,7 @@ function setupSheets(){
      教科の2列が無いと、起動の読みが落ちて「開けなかった」しか出ない */
   r.added = Sheets.fillAfterRow();
   r.subject = Sheets.fillSubjectCols();
+  try { ensureIcon_(); } catch (e) { console.log("タブのアイコンを作れなかった: " + e.message); }
   const msg = "作った: " + (r.made.join("、") || "なし")
             + "\nもうあった: " + (r.kept.join("、") || "なし")
             + (r.added ? "\n「時程」シートに「" + r.added + "」の行を足した" : "")
